@@ -1,0 +1,28 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Go
+bin/
+coverage.out
+*.test
+
+# Web
+web/node_modules/
+web/dist/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# AI-specific local preferences
+CLAUDE.local.md
+CODEBUDDY.local.md
+
+# Obsidian workspace state, if docs are opened as a vault
+docs/.obsidian/workspace.json
+docs/.obsidian/workspaces.json
