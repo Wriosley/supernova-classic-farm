@@ -37,7 +37,7 @@ Independently build and demonstrate a classic farm H5 game with a Go backend, th
 
 ## Delivery strategy
 
-### Phase 1: single-player vertical slice
+### Phase 1: target architecture and single-player core prototype
 
 ```text
 register/login
@@ -50,13 +50,16 @@ register/login
 → claim basic task reward
 ```
 
-### Later phases
+### Confirmed delivery sequence
 
-1. Friendship and invitation links.
-2. Up to three users in one farm.
-3. Realtime synchronization and concurrency control.
-4. Reconnect, weak-network behavior, and idempotency.
-5. Capacity model, load testing, and evidence-driven optimization.
+1. Write the 30-million-DAU target architecture before product implementation.
+2. Implement the single-player transaction, idempotency, and Outbox core.
+3. Add two stateless Zone instances and simulated player database shards.
+4. Add asynchronous task processing and cross-shard reward delivery with mail fallback.
+5. Add two realtime gateways, room subscriptions, version recovery, and three-client synchronization.
+6. Run HTTP, messaging, WebSocket, and failure experiments; use evidence to revise the capacity model.
+
+The production target and local prototype are separate claims. The prototype validates mechanisms and single-instance baselines; it does not claim to run 30 million DAU locally.
 
 ## Knowledge boundary
 

@@ -7,90 +7,83 @@ updated: 2026-07-27
 
 ## Resume here
 
-The overall design is in `docs/architecture/architecture.md`; module capabilities and cross-module flows are in `docs/architecture/module-design-and-flows.md`. The owner's inline review and the resulting resolutions are preserved in `docs/ai-workflow/2026-07-27-module-rules-review.md`.
+The 30-million-DAU production target is now the architecture starting point, not a final optional capacity chapter. Read:
 
-At the next session:
+1. `docs/context/PROJECT.md`;
+2. `docs/architecture/target-30m-dau-architecture.md`;
+3. `docs/decisions/ADR-0002-target-scale-hybrid-architecture.md`;
+4. `docs/architecture/architecture.md` and the module companion.
 
-1. Read `AGENTS.md`, `docs/context/PROJECT.md`, this file, and the two architecture documents.
-2. Do not reopen decisions listed as confirmed unless new evidence appears.
-3. Let the owner explain the chosen rule before adding implementation detail, so the design remains learnable and defensible.
-4. Resolve the remaining small product constants, then write the first single-player vertical-slice implementation plan.
-5. Do not start pet, collection, or mail implementation in the current phase.
+Do not start implementation until the owner has reviewed the written target architecture. Redis and Kafka-compatible messaging remain product candidates, not accepted technology decisions.
 
-## Work completed on 2026-07-27
+## Direction change on 2026-07-27
 
-### Overall design integration
+- The mentor requested a design that directly explains how a 30-million-DAU service would be implemented.
+- The earlier documents mainly covered business correctness and treated distribution as a future evidence-driven evolution.
+- The owner chose a dual delivery: a complete production target architecture plus a scaled-down distributed prototype and load/failure evidence.
+- ADR-0001 remains the earliest local business-loop decision but no longer represents the production target.
+- ADR-0002 proposes a hybrid architecture centered on stateless player Zone shards; it remains proposed until written review.
 
-- Reviewed the 2026-07-26 Obsidian drafts for requirements, architecture, module relationships, account, farm, inventory, shop, task, cross-module flows, technology options, and risks.
-- Integrated system-level content into the overall design and added uniform summaries, capability catalogs, internal contracts, transaction ownership, and cross-module data flows.
-- Kept Obsidian drafts as discussion material; only owner-confirmed conclusions enter the formal architecture.
+## Confirmed capacity assumptions
 
-### Accepted architecture decision
+- China mainland, single region, three availability zones; no global active-active design.
+- 30 million DAU.
+- Four sessions per active player per day, 15 minutes per session.
+- 1.25 million average concurrent users and 3.75 million normal peak concurrent users.
+- About 60 external requests per player per day, approximately 2:1 reads to writes.
+- About 20,833 average external QPS and 62,500 normal peak external QPS.
+- Shared-farm WebSocket connections: 750,000 normal and 1.125 million extreme.
+- Thirty-second heartbeat; heartbeats stay in realtime gateway memory.
+- Online history retains 30 days, then archives asynchronously.
 
-- The first version is a modular monolith: one Go application and one MySQL instance.
-- Modules keep explicit ownership and independent tests, and split only after concurrency or performance evidence justifies it.
-- Recorded as `docs/decisions/ADR-0001-modular-monolith-first.md`.
+## Confirmed target architecture
 
-### Module-rules review
+- API gateway plus trusted `player_id` routing.
+- Stateless Zone instances; player truth does not live only in Go process memory.
+- 1,024 logical player shards mapped to expandable physical MySQL clusters.
+- Player farm, asset, idempotency, and Outbox data are co-sharded.
+- MySQL is the final truth; only active/hot snapshots are cached.
+- Account, friend, task, mail, realtime, and archive workloads have independent boundaries.
+- Normal players have at most 200 friends.
+- Task progress and rewards are reliable asynchronous flows; task failures do not roll back core farm actions.
+- Cross-shard steal commits the owner's theft fact first, then delivers the thief reward asynchronously.
+- A full thief inventory redirects the reward to a non-expiring system reward mail.
+- HTTP handles commands and authoritative snapshots; WebSocket pushes committed changes.
+- Core HTTP target is 99.95%; realtime target is 99.9%; normal asynchronous reward target is 99% within five seconds and eventual delivery.
 
-- Answered the owner's Session and registration-failure questions.
-- Converted the owner's inline notes into confirmed design rules and preserved the original feedback in the AI workflow record.
-- Removed the obsolete manual task-claim flow.
-- Added the friend-steal flow and made Farm, rather than Realtime, the transaction owner.
-- Kept three-client access as an acceptance baseline without introducing a product hard room limit.
-- Marked pet, collection, and mail as deferred current-stage scope.
+## Candidate technologies, not accepted
+
+- Redis for hot snapshots, Session, rate limits, and short-lived state.
+- Kafka-compatible durable event log for partition ordering, consumer groups, retention, and replay.
+- Alternatives to compare include Memcached/database reads for caching and RabbitMQ, NATS JetStream, Redis Streams, or Pulsar for messaging.
+- Specific products, partition counts, retention, and single-instance capacities require prototype evidence.
+
+## Distributed prototype sequence
+
+1. Single-player local transactions, `request_id`, and Outbox.
+2. Two stateless Zone instances, logical routing, and two simulated MySQL shards.
+3. Asynchronous task processing, duplicate messages, and backlog catch-up.
+4. Cross-shard stealing, asynchronous reward, full-inventory mail fallback, and idempotent mail claims.
+5. Two realtime gateways, one room service, three clients, version gaps, and reconnect recovery.
+6. HTTP, messaging, WebSocket, Redis-degradation, and process-failure evidence.
 
 ## Product code state
 
 - No backend or frontend product code exists yet.
-- No database schema or exact HTTP DTO has been accepted.
-- No runtime, correctness, or performance claim has been verified.
+- No database schema, exact HTTP DTO, message broker, or cache product has been accepted.
+- No runtime, correctness, availability, or performance claim has been verified.
 - Tests and evidence do not yet exist.
 
-## Confirmed project choices
+## Next actions
 
-- Repository name: `supernova-classic-farm`.
-- Backend language: Go; minimal Vue 3 H5 client; local-machine demonstration.
-- Project-owned account data instead of company authentication.
-- First-version deployment: one Go application and one MySQL modular monolith.
-- Asset module owns coins and items. Initial coins: 10. Inventory: 100 occupied item types, 300 units per type.
-- Single-device login. Session Token has a fixed one-hour lifetime; a new login revokes the old Session.
-- Registration creates account, player, wallet, farm, and initial plots in one transaction; any failure rolls everything back.
-- Shop phase one buys seeds and sells mature crops, using the current server price at submission.
-- Owner harvest clears the plot and preserves planting/harvest history.
-- Tasks auto-complete and auto-grant coin rewards with a visible reward record in the triggering transaction; no manual claim.
-- Invitation links are multi-use by different players for 30 minutes.
-- A mature crop cycle can be stolen once. Demo yield 10 gives 3 to the friend and leaves 7 for the owner.
-- Steal and owner harvest lock/recheck the same plot; Realtime only broadcasts committed state.
-- No product hard room limit; three simultaneous clients are the initial acceptance baseline.
-- Pet, collection, and mail remain final-scope records but are not developed in the current phase.
-
-## High-priority design candidates
-
-- Vue 3 H5, HTTP JSON, and MySQL details.
-- Persisted `mature_at` with maturity derived from server time.
-- Top-level `request_id` plus business unique keys for idempotency.
-- MySQL transactions, conditional updates, row locks, and unique constraints for first-version concurrency correctness.
-
-## Remaining questions before implementation
-
-1. Initial plot count and whether registration grants seeds.
-2. The first task list, target values, and coin reward amounts.
-3. Rounding for 30% steal quantity when yield is not 10.
-4. Whether deleting friends enters the first version.
-5. `request_id` scope, retention, and cleanup.
-6. Local visible-latency target and when deferred modules re-enter planning.
-
-## Next three actions
-
-1. Owner reads the confirmed rules in sections 3 and 6 of the module document and explains the purchase, harvest, automatic-task, and steal transaction boundaries in their own words.
-2. Resolve initial plots/seeds, the first task list, and steal rounding; record an ADR for the crop-maturity mechanism if accepted.
-3. Write the first single-player vertical-slice implementation plan before creating product code.
+1. Owner reviews `docs/architecture/target-30m-dau-architecture.md` and requests corrections.
+2. Owner explains Kafka Topic/Partition/Consumer Group/offset and why Redis is a cache rather than truth.
+3. Compare the smallest viable local Kafka-compatible, NATS JetStream, and RabbitMQ prototypes before accepting the broker.
+4. After written-spec approval, create the detailed six-stage implementation plan.
 
 ## Verification state
 
-- Documentation sources and owner feedback: inspected.
-- Architecture documents: updated to reflect confirmed rules; still design, not implementation evidence.
-- Modular-monolith decision: accepted and recorded.
-- Product behavior: not implemented.
-- Tests and performance evidence: none.
+- Business and target-architecture discussion: recorded.
+- Written target architecture and ADR: drafted in this change.
+- Technology products: candidates only.
+- Product behavior and capacity: not implemented or measured.
