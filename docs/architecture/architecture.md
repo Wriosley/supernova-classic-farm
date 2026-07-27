@@ -1,6 +1,6 @@
 ---
 status: proposed
-version: 0.1
+version: 0.2
 updated: 2026-07-27
 ---
 
@@ -286,6 +286,7 @@ Session/配置缓存、农场分片、WebSocket 网关、可靠事件、读副�
 
 ## 18. 文档入口
 
+- 模块设计、接口能力与数据流：`docs/architecture/module-design-and-flows.md`
 - 稳定项目事实：`docs/context/PROJECT.md`
 - 当前工作交接：`docs/context/CURRENT.md`
 - 架构决策：`docs/decisions/`

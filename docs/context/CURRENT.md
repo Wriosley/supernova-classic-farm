@@ -7,7 +7,7 @@ updated: 2026-07-27
 
 ## Resume here
 
-The project now has an integrated overall-design draft at `docs/architecture/architecture.md`.
+The project now has an integrated overall-design draft at `docs/architecture/architecture.md` and a module/interface companion at `docs/architecture/module-design-and-flows.md`.
 
 At the next session:
 
@@ -26,6 +26,8 @@ At the next session:
 - Integrated their system-level content into `docs/architecture/architecture.md` version 0.1.
 - Added explicit labels for confirmed, candidate, unverified, unresolved, and later-stage content.
 - Added a guided reading method so the owner can learn the design without reading every draft field first.
+- After the owner's first review found later modules too implicit, added uniform summaries for all ten modules.
+- Added external capability catalogs, internal module contracts, transaction ownership, and eight cross-module data flows.
 
 ### Accepted architecture decision
 
