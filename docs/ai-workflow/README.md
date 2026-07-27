@@ -16,3 +16,5 @@ Do not copy full transcripts. For each meaningful task, record:
 - Related commit, ADR, or evidence.
 
 Use `session-template.md`.
+
+AI workflow records are traceability material, not the source of formal product, architecture, interface, or performance truth.

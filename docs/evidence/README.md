@@ -15,3 +15,5 @@ Distinguish:
 3. Statistical evidence: repeated measurements under a defined load.
 
 Never present code evidence as proof of performance improvement.
+
+Evidence records observed results and limitations; it does not silently convert a proposed design into an accepted decision.

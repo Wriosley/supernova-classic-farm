@@ -8,9 +8,10 @@ Build a demonstrable H5 classic farm game with a Go backend. The implementation 
 
 Before doing project work, read:
 
-1. `docs/context/PROJECT.md`
-2. `docs/context/CURRENT.md`
-3. Only the plan, ADR, requirement, or architecture files relevant to the current task
+1. `docs/README.md`
+2. `docs/context/PROJECT.md`
+3. `docs/context/CURRENT.md`
+4. Only the requirement, architecture, module, contract, ADR, plan, or evidence files relevant to the current task
 
 Do not treat chat history, `ai-context`, UC backend notes, or pre-opening predictions as decisions adopted by this project. They are reference material only.
 
@@ -47,9 +48,13 @@ For each task:
 
 ## Documentation boundaries
 
+- `docs/README.md`: documentation map, reading order, and source-of-truth rules.
 - `docs/context/PROJECT.md`: stable facts and project boundaries.
 - `docs/context/CURRENT.md`: mutable handoff, current state, and next actions.
+- `docs/requirements/`: product and non-functional requirements.
 - `docs/architecture/architecture.md`: current effective architecture.
+- `docs/modules/`: business ownership, capabilities, invariants, and module flows.
+- `docs/contracts/`: precise implementation-facing HTTP, WebSocket, event, data, error, and idempotency rules.
 - `docs/decisions/`: significant decisions and tradeoffs.
 - `docs/plans/`: execution plans.
 - `docs/evidence/`: reproducible tests, measurements, and result summaries.

@@ -9,10 +9,15 @@
 ## 文档入口
 
 - `AGENTS.md`：所有 AI 和开发者共同遵守的工作规则。
+- `docs/README.md`：文档地图、阅读顺序和事实来源规则。
 - `docs/context/PROJECT.md`：稳定的项目目标、边界与事实。
 - `docs/context/CURRENT.md`：当前进度、问题和下一步。
-- `docs/architecture/architecture.md`：当前有效架构。
+- `docs/architecture/`：系统总览与跨模块设计。
+- `docs/modules/`：业务模块所有权、能力和不变量。
+- `docs/contracts/`：HTTP、WebSocket、事件、数据和幂等契约。
 - `docs/decisions/`：架构决策记录。
+- `docs/plans/`：开放问题看板和实施计划。
+- `docs/evidence/`：测试、压测和故障实验证据。
 
 ## 计划中的目录
 

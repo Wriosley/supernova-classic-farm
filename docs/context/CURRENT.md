@@ -9,12 +9,19 @@ updated: 2026-07-27
 
 The 30-million-DAU production target is now the architecture starting point, not a final optional capacity chapter. Read:
 
-1. `docs/context/PROJECT.md`;
-2. `docs/architecture/target-30m-dau-architecture.md`;
-3. `docs/decisions/ADR-0002-target-scale-hybrid-architecture.md`;
-4. `docs/architecture/architecture.md` and the module companion.
+1. `docs/README.md`;
+2. `docs/context/PROJECT.md` and this file;
+3. `docs/plans/2026-07-27-30m-dau-architecture-strategy-and-open-questions-plan.md` for unresolved architecture work;
+4. only the architecture, module, contract, ADR, or evidence files relevant to the current task.
 
 Do not start implementation until the owner has reviewed the written target architecture. Redis and Kafka-compatible messaging remain product candidates, not accepted technology decisions.
+
+## Documentation workflow
+
+- The workflow-based architecture plan is the open-question board, not the final design.
+- Confirmed cross-cutting conclusions move to `docs/architecture/`; confirmed business ownership and behavior move to `docs/modules/`; exact implementation formats move to `docs/contracts/`.
+- Major tradeoffs receive ADRs, implementation order stays in `docs/plans/`, and executed tests or measurements go to `docs/evidence/`.
+- `docs/architecture/documentation-system.md` defines the migration and AI handoff rules.
 
 ## Direction change on 2026-07-27
 
@@ -76,10 +83,10 @@ Do not start implementation until the owner has reviewed the written target arch
 
 ## Next actions
 
-1. Owner reviews `docs/architecture/target-30m-dau-architecture.md` and requests corrections.
-2. Owner explains Kafka Topic/Partition/Consumer Group/offset and why Redis is a cache rather than truth.
-3. Compare the smallest viable local Kafka-compatible, NATS JetStream, and RabbitMQ prototypes before accepting the broker.
-4. After written-spec approval, create the detailed six-stage implementation plan.
+1. Normalize and commit the architecture open-question board without staging unrelated target-architecture diagrams.
+2. Record the confirmed subscribe-first realtime initial-sync design in architecture and contract documents after its remaining fields and failure limits are reviewed.
+3. Resolve the capacity, gateway/routing, multi-AZ, shard-migration, idempotency-retention, and data-ownership work items in the board.
+4. Create a phase-specific implementation plan only when the required module and contract documents meet the documentation-system completion standard.
 
 ## Verification state
 
