@@ -7,85 +7,90 @@ updated: 2026-07-27
 
 ## Resume here
 
-The project now has an integrated overall-design draft at `docs/architecture/architecture.md` and a module/interface companion at `docs/architecture/module-design-and-flows.md`.
+The overall design is in `docs/architecture/architecture.md`; module capabilities and cross-module flows are in `docs/architecture/module-design-and-flows.md`. The owner's inline review and the resulting resolutions are preserved in `docs/ai-workflow/2026-07-27-module-rules-review.md`.
 
 At the next session:
 
-1. Read `AGENTS.md`, `docs/context/PROJECT.md`, this file, and the overall design.
-2. Ask the owner to perform the first-pass review described in section 17 of the overall design.
-3. Focus on five topics: module boundaries, data ownership and transactions, crop maturity, idempotency and concurrency, and target-scale evolution. Do not ask the owner to approve every field.
-4. Let the owner state an initial view before presenting a complete answer.
-5. Accept a decision only after the owner can explain the problem, alternatives, rationale, costs, and validation method.
+1. Read `AGENTS.md`, `docs/context/PROJECT.md`, this file, and the two architecture documents.
+2. Do not reopen decisions listed as confirmed unless new evidence appears.
+3. Let the owner explain the chosen rule before adding implementation detail, so the design remains learnable and defensible.
+4. Resolve the remaining small product constants, then write the first single-player vertical-slice implementation plan.
+5. Do not start pet, collection, or mail implementation in the current phase.
 
 ## Work completed on 2026-07-27
 
 ### Overall design integration
 
 - Reviewed the 2026-07-26 Obsidian drafts for requirements, architecture, module relationships, account, farm, inventory, shop, task, cross-module flows, technology options, and risks.
-- Confirmed that Obsidian module documents are discussion material, not accepted architecture.
-- Integrated their system-level content into `docs/architecture/architecture.md` version 0.1.
-- Added explicit labels for confirmed, candidate, unverified, unresolved, and later-stage content.
-- Added a guided reading method so the owner can learn the design without reading every draft field first.
-- After the owner's first review found later modules too implicit, added uniform summaries for all ten modules.
-- Added external capability catalogs, internal module contracts, transaction ownership, and eight cross-module data flows.
+- Integrated system-level content into the overall design and added uniform summaries, capability catalogs, internal contracts, transaction ownership, and cross-module data flows.
+- Kept Obsidian drafts as discussion material; only owner-confirmed conclusions enter the formal architecture.
 
 ### Accepted architecture decision
 
-- The owner initially proposed separate services for future scalability and module testing.
-- The discussion tested that idea against purchase, planting, harvest, reward, and mail-attachment transactions.
-- The owner concluded that the first version should keep modules in one Go application, get the basic flow working, preserve code/test boundaries, and split only after concurrency or performance evidence justifies it.
-- Recorded this as `docs/decisions/ADR-0001-modular-monolith-first.md`.
+- The first version is a modular monolith: one Go application and one MySQL instance.
+- Modules keep explicit ownership and independent tests, and split only after concurrency or performance evidence justifies it.
+- Recorded as `docs/decisions/ADR-0001-modular-monolith-first.md`.
+
+### Module-rules review
+
+- Answered the owner's Session and registration-failure questions.
+- Converted the owner's inline notes into confirmed design rules and preserved the original feedback in the AI workflow record.
+- Removed the obsolete manual task-claim flow.
+- Added the friend-steal flow and made Farm, rather than Realtime, the transaction owner.
+- Kept three-client access as an acceptance baseline without introducing a product hard room limit.
+- Marked pet, collection, and mail as deferred current-stage scope.
 
 ## Product code state
 
 - No backend or frontend product code exists yet.
-- No database schema or API contract has been accepted.
+- No database schema or exact HTTP DTO has been accepted.
 - No runtime, correctness, or performance claim has been verified.
 - Tests and evidence do not yet exist.
 
 ## Confirmed project choices
 
 - Repository name: `supernova-classic-farm`.
-- Backend language: Go.
-- Minimal Vue 3 H5 client is the current baseline.
-- Demonstration target: local machine.
-- Project-owned account data will be used instead of company authentication.
-- Single-player behavior comes before friends and multiplayer.
-- First-version deployment is a modular monolith: one Go application and one MySQL instance, with explicit module boundaries and tests.
+- Backend language: Go; minimal Vue 3 H5 client; local-machine demonstration.
+- Project-owned account data instead of company authentication.
+- First-version deployment: one Go application and one MySQL modular monolith.
+- Asset module owns coins and items. Initial coins: 10. Inventory: 100 occupied item types, 300 units per type.
+- Single-device login. Session Token has a fixed one-hour lifetime; a new login revokes the old Session.
+- Registration creates account, player, wallet, farm, and initial plots in one transaction; any failure rolls everything back.
+- Shop phase one buys seeds and sells mature crops, using the current server price at submission.
+- Owner harvest clears the plot and preserves planting/harvest history.
+- Tasks auto-complete and auto-grant coin rewards with a visible reward record in the triggering transaction; no manual claim.
+- Invitation links are multi-use by different players for 30 minutes.
+- A mature crop cycle can be stolen once. Demo yield 10 gives 3 to the friend and leaves 7 for the owner.
+- Steal and owner harvest lock/recheck the same plot; Realtime only broadcasts committed state.
+- No product hard room limit; three simultaneous clients are the initial acceptance baseline.
+- Pet, collection, and mail remain final-scope records but are not developed in the current phase.
 
-## Proposed, not accepted
+## High-priority design candidates
 
-- MySQL details and data-access approach.
-- HTTP JSON details for the single-player API.
-- Server-side Session Token and exact single-device/session-expiry rules.
-- Warehouse/asset ownership of coins and items versus a broader economy module.
-- Timestamp-based crop maturity using persisted `mature_at`.
+- Vue 3 H5, HTTP JSON, and MySQL details.
+- Persisted `mature_at` with maturity derived from server time.
 - Top-level `request_id` plus business unique keys for idempotency.
-- Synchronous task progress in the core business transaction.
-- WebSocket snapshots, versions, and room broadcasts for later multiplayer.
+- MySQL transactions, conditional updates, row locks, and unique constraints for first-version concurrency correctness.
 
-## Highest-priority open questions
+## Remaining questions before implementation
 
-1. Final data ownership for wallet, items, and shop orchestration.
-2. Crop maturity teach-back and ADR acceptance.
-3. Single-account multi-device behavior and Session lifetime.
-4. Initial coins, plots, seeds, and new-player initialization failure semantics.
-5. Whether task progress failure rolls back the core action.
-6. Friend access permissions and invitation-link rules.
-7. Minimum acceptance rules for pet, collection, and mail.
-8. `request_id` scope, retention, and cleanup.
+1. Initial plot count and whether registration grants seeds.
+2. The first task list, target values, and coin reward amounts.
+3. Rounding for 30% steal quantity when yield is not 10.
+4. Whether deleting friends enters the first version.
+5. `request_id` scope, retention, and cleanup.
+6. Local visible-latency target and when deferred modules re-enter planning.
 
 ## Next three actions
 
-1. Owner reads the first-pass sections of the overall design and marks only unclear or disagreeable statements.
-2. Resolve data ownership and crop maturity, then create the next ADR where appropriate.
-3. Use accepted design to write the first single-player vertical-slice implementation plan before creating product code.
+1. Owner reads the confirmed rules in sections 3 and 6 of the module document and explains the purchase, harvest, automatic-task, and steal transaction boundaries in their own words.
+2. Resolve initial plots/seeds, the first task list, and steal rounding; record an ADR for the crop-maturity mechanism if accepted.
+3. Write the first single-player vertical-slice implementation plan before creating product code.
 
 ## Verification state
 
-- Documentation sources: inspected.
-- Overall design: drafted, not yet owner-reviewed as a whole.
-- Modular monolith decision: accepted and recorded.
+- Documentation sources and owner feedback: inspected.
+- Architecture documents: updated to reflect confirmed rules; still design, not implementation evidence.
+- Modular-monolith decision: accepted and recorded.
 - Product behavior: not implemented.
-- Tests: none.
-- Performance evidence: none.
+- Tests and performance evidence: none.
