@@ -4,6 +4,7 @@ status: recorded
 related:
   - ../architecture/stateful-zone-v2-architecture.md
   - ../decisions/ADR-0003-stateful-player-actor-zone.md
+  - ../decisions/ADR-0005-kafka-journal-and-mysql-prototype.md
 ---
 
 # V2 有状态架构采用与文档接力更新
@@ -26,7 +27,7 @@ related:
 - 使用有状态 Player Actor、响应前可靠 Journal、异步 Snapshot。
 - 逻辑分片统一为 4096。
 - V1 保留作为设计演进材料，不删除。
-- 具体 Journal、消息、缓存和 Coordinator 产品尚未选定。
+- 生产 Journal 采用分区写入层 + Kafka 三副本，三周原型使用 MySQL 追加表；具体 Kafka fencing、恢复索引和集群参数仍待设计与验证。
 
 ## AI 完成的整理
 
@@ -36,6 +37,7 @@ related:
 - 更新架构入口、稳定项目上下文和 `CURRENT.md` 接力记忆。
 - 说明 `ai-context` 只保留学习资料和指针，项目决策以仓库 ADR 和当前架构为准。
 - 补充分片位置规划：Rendezvous Hashing 与负载修正只产生候选 Zone，多数派提交才授予 Owner；项目不从零实现 Raft。
+- 补全 Journal 选型：生产目标采用 Journal 写入层 + Kafka 三副本，三周原型通过统一 `AppendMutation` 接口落到 MySQL `journal_events` 追加表。
 
 ## 验证与限制
 

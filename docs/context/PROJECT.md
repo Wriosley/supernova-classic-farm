@@ -56,10 +56,10 @@ register/login
 
 1. Finish reviewing the V2 target architecture and map every opening requirement to an owner, request flow, state transition, and validation method.
 2. Define the minimum V2 contracts: command envelope, `request_id`, Journal record, Snapshot record, route entry, `route_epoch`, and error semantics.
-3. Implement one player's Actor loop, deterministic Decide/Apply behavior, durable Journal-before-response, restart replay, and asynchronous Snapshot.
+3. Implement one player's Actor loop and common `AppendMutation` interface; use a MySQL `journal_events` append table for commit-before-response, deterministic replay, idempotency, epoch rejection, and asynchronous Snapshot.
 4. Add two stateful Zone instances, 4096 logical-shard routing, single-owner fencing, route refresh, migration, and rollback experiments.
 5. Add asynchronous task processing, cross-player reward delivery with mail fallback, and subscribe-first realtime synchronization for three clients.
-6. Run Actor memory, Zone throughput, Journal, replay, Snapshot, WebSocket, and failure experiments; use evidence to replace capacity assumptions.
+6. Add and benchmark the production Kafka Journal adapter, then run Actor memory, Zone throughput, Journal, replay, Snapshot, WebSocket, and failure experiments; use evidence to replace capacity assumptions.
 
 The production target and local prototype are separate claims. The prototype validates mechanisms and single-instance baselines; it does not claim to run 30 million DAU locally.
 

@@ -8,6 +8,7 @@ Use ADRs only for decisions that materially affect architecture, data correctnes
 - `ADR-0002-target-scale-hybrid-architecture.md`: superseded stateless V1 production target.
 - `ADR-0003-stateful-player-actor-zone.md`: accepted current production target.
 - `ADR-0004-shard-placement-and-control-plane-consensus.md`: accepted Shard placement and ownership-authority model.
+- `ADR-0005-kafka-journal-and-mysql-prototype.md`: accepted production Kafka Journal and three-week MySQL prototype boundary.
 
 ## Lifecycle
 

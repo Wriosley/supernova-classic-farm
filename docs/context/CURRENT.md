@@ -23,12 +23,12 @@ Do not resume the stateless V1 architecture or its old open-question plan. They 
 - One logical shard has exactly one write-authorized Active Zone Owner at a time; one Zone owns many logical shards.
 - The Gateway routes by the target player's stable logical shard. Rendezvous Hashing plus load correction proposes a candidate Zone, but only a Coordinator majority can commit the authoritative owner and `route_epoch`; stale writers are fenced.
 - Commands for one player enter one Actor mailbox and execute serially.
-- A successful write follows `Decide → Journal committed → Apply memory → reply`. Acknowledged writes must be recoverable.
+- A successful write follows `Decide → Journal committed → Apply memory → reply`. Production uses a Shard-partitioned Journal layer backed by three-replica Kafka; the three-week prototype uses a MySQL `journal_events` append table behind the same interface.
 - Snapshot DB is an asynchronous recovery checkpoint, not the real-time write path. Recovery loads a snapshot and replays later Journal entries.
 - Task, mail, friend, realtime, and cross-player flows keep independent boundaries and use reliable, idempotent asynchronous delivery where a single-player atomic write is impossible.
 - HTTP carries commands and authoritative snapshots. WebSocket carries committed changes; entering a friend's farm uses subscribe-first, then an HTTP snapshot, then versioned pushes.
 - The project implements Shard hashing, placement planning, route caching, Owner state, migration, and epoch integration; it does not implement Raft or consensus replication from scratch.
-- Redis, Kafka-compatible messaging, the Journal engine, the consensus store/library, and the Coordinator implementation are still product candidates, not accepted technology selections.
+- Kafka-compatible logging is accepted for the production Journal and downstream event backbone. The exact distribution, Broker count, 4096-Partition cost, recovery index, and producer-fencing integration remain to be validated; Redis, the consensus store/library, and Coordinator implementation remain product candidates.
 
 ## Current capacity planning values
 
@@ -50,10 +50,11 @@ The 4096 shard count is versioned cluster configuration, not a scattered code co
 - `stateful-zone-v2-architecture.md`: current target architecture, accepted as direction and still awaiting prototype evidence.
 - ADR-0003: accepted decision replacing the stateless V1 production target.
 - ADR-0004: accepted decision separating hash-based placement planning from quorum-authorized ownership.
+- ADR-0005: accepted decision using a partitioned Journal layer plus Kafka in production and a MySQL append table in the prototype.
 - `target-30m-dau-architecture.md`: superseded V1 history.
 - `2026-07-27-30m-dau-architecture-strategy-and-open-questions-plan.md`: superseded V1 plan; do not execute it.
 - `architecture.md`: business rules and navigation; V2 controls any distributed-architecture conflict.
-- No exact protocol, schema, Journal product, message product, or cache product has been frozen.
+- The Kafka-compatible Journal direction is frozen, but exact protocols, schemas, Kafka distribution/configuration, recovery index, fencing integration, and cache product are not.
 
 ## Product code and evidence state
 
@@ -67,7 +68,7 @@ The 4096 shard count is versioned cluster configuration, not a scattered code co
 1. Read V2 once from the request path, ownership model, write path, recovery path, migration path, and capacity model perspectives.
 2. Create a requirement-coverage matrix for account/login, farm loop, shop/warehouse, share-link friends, three-person synchronization, tasks, pet, catalog, mail, weak network, and smooth updates.
 3. Turn the first single-player V2 slice into exact contracts and a bounded implementation plan.
-4. Prototype the Journal-before-response and replay path before adding the full asynchronous and realtime systems.
+4. Implement the common `AppendMutation` interface with a MySQL `journal_events` append table, then test commit-before-reply, replay, idempotency, and epoch rejection before adding the Kafka adapter.
 5. Store measurements and failure results under `docs/evidence/`, then revise capacity assumptions.
 
 ## AI memory rule
@@ -81,5 +82,6 @@ The 4096 shard count is versioned cluster configuration, not a scattered code co
 
 - V2 architecture discussion and capacity model: recorded.
 - V2 direction and 4096 logical shards: accepted by the owner.
-- Technology products: candidates only.
+- Kafka-compatible logging: accepted direction; exact product and configuration remain unverified.
+- Other technology products: candidates only.
 - Product behavior and target capacity: not implemented or measured.

@@ -13,7 +13,7 @@ This directory separates current project truth, design reasoning, executable con
 ## Current architecture
 
 - Current production target: stateful Player Actor Zone V2.
-- Accepted decisions: `decisions/ADR-0003-stateful-player-actor-zone.md` and `decisions/ADR-0004-shard-placement-and-control-plane-consensus.md`.
+- Accepted decisions: `decisions/ADR-0003-stateful-player-actor-zone.md`, `decisions/ADR-0004-shard-placement-and-control-plane-consensus.md`, and `decisions/ADR-0005-kafka-journal-and-mysql-prototype.md`.
 - Historical comparison only: stateless V1 in `architecture/target-30m-dau-architecture.md` and its old open-question plan.
 - Target numbers and component choices remain planning assumptions until supported by evidence.
 

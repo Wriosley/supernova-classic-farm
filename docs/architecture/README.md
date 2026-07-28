@@ -4,7 +4,7 @@ Architecture documents explain how the whole system collaborates. They define to
 
 ## Current source of truth
 
-- `stateful-zone-v2-architecture.md`: current accepted production target. It defines Player Actor ownership, Journal-before-response, asynchronous snapshots, 4096 logical shards, capacity assumptions, migration, and failure recovery. ADR-0003 selects V2; ADR-0004 separates hash-based placement planning from quorum-authorized ownership.
+- `stateful-zone-v2-architecture.md`: current accepted production target. It defines Player Actor ownership, Journal-before-response, asynchronous snapshots, 4096 logical shards, capacity assumptions, migration, and failure recovery. ADR-0003 selects V2; ADR-0004 separates hash-based placement planning from quorum-authorized ownership; ADR-0005 selects the production Kafka Journal and MySQL prototype boundary.
 - `architecture.md`: business design overview and navigation. When an older distributed statement conflicts with V2 or ADR-0003, V2 and ADR-0003 win.
 
 “Accepted target” means the owner selected this direction. It does not mean the system is implemented, measured, or proven to carry 30 million DAU.

@@ -7,6 +7,7 @@ owners:
 related:
   - ../decisions/ADR-0003-stateful-player-actor-zone.md
   - ../decisions/ADR-0004-shard-placement-and-control-plane-consensus.md
+  - ../decisions/ADR-0005-kafka-journal-and-mysql-prototype.md
   - ../decisions/ADR-0002-target-scale-hybrid-architecture.md
   - target-30m-dau-architecture.md
 ---
@@ -60,14 +61,15 @@ flowchart TB
     end
 
     subgraph DURABLE["可靠存储层"]
-        JOURNAL["Durable Journal<br/>请求、顺序、所有权与恢复事实"]
-        SNAPSHOT["Snapshot DB<br/>玩家快照与 snapshot_seq"]
+        JOURNAL["Journal 写入层<br/>epoch、顺序、幂等校验"]
+        KAFKAJ["Kafka player-journal<br/>三副本顺序日志"]
+        SNAPSHOT["MySQL Snapshot DB<br/>玩家快照与 snapshot_seq"]
         SW["Snapshot Writer<br/>合并脏状态"]
     end
 
     subgraph ASYNC["异步服务层"]
         RELAY["Event Relay"]
-        MQ["Kafka 兼容事件总线候选"]
+        MQ["Kafka domain-events<br/>多消费组与积压"]
         FRIEND["Friend Service"]
         MAIL["Mail Service"]
         RANK["Rank Service"]
@@ -82,15 +84,17 @@ flowchart TB
     COORD --> ROUTE
     COORD --> OWNER
     OWNER --> AM --> MB --> DECIDE
-    DECIDE -->|"确定性事件"| JOURNAL
-    JOURNAL -->|"可靠提交"| APPLY
+    DECIDE -->|"确定性 mutation"| JOURNAL
+    JOURNAL -->|"按 shard_id 分区追加"| KAFKAJ
+    KAFKAJ -->|"多副本确认"| JOURNAL
+    JOURNAL -->|"committed"| APPLY
     APPLY --> MODULES
     APPLY -->|"响应"| GW
     AM -->|"加载快照"| SNAPSHOT
-    AM -->|"重放尾部事件"| JOURNAL
+    AM -->|"经 Journal 层重放尾部"| KAFKAJ
     APPLY -->|"标记脏状态"| SW
     SW -->|"异步检查点"| SNAPSHOT
-    JOURNAL --> RELAY --> MQ
+    KAFKAJ --> RELAY --> MQ
     MQ --> MAIL
     MQ --> RANK
     MQ --> ANALYTICS
@@ -103,7 +107,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     M["Player Actor 内存<br/>当前运行时状态"]
-    J["Durable Journal<br/>已确认操作的持久化事实"]
+    J["Journal 写入层 + Kafka<br/>已确认操作的持久化事实"]
     S["Snapshot DB<br/>恢复检查点"]
     J -->|"按序 Apply"| M
     M -->|"异步生成"| S
@@ -401,7 +405,76 @@ classDiagram
 - `(player_id, request_id)` 唯一；
 - 旧 `epoch` 写入被拒绝；
 - 只有满足目标多副本持久化条件才返回 committed；
-- Journal 后端产品、分片数、保留期和清理方式仍待选型与验证。
+- 生产目标已选择“按 Shard 分区的 Journal 写入层 + Kafka 三副本顺序日志”；原型使用 MySQL `journal_events` 追加表实现同一接口。具体 Kafka 发行版、Broker 数、保留期、索引和 fencing 方案仍需原型验证。
+
+### 5.4 Journal 选型与实现边界
+
+并非所有玩家请求都写 Journal：
+
+| 请求 | 是否写 Journal |
+|---|---|
+| 查看农场、仓库、好友列表 | 否 |
+| 心跳、WebSocket 订阅 | 否 |
+| 查询作物是否成熟 | 否，成熟状态由服务端时间与 `mature_at` 计算 |
+| 种植、收获、购买、出售、领奖 | 是 |
+| 修改金币、种子、作物和道具 | 是 |
+
+生产目标把 Journal 视为逻辑写入服务，底层采用 Kafka 兼容的分布式顺序日志：
+
+```mermaid
+flowchart LR
+    Z["Zone / Player Actor"]
+    JS["Journal 写入层<br/>epoch、顺序、幂等校验"]
+    K["Kafka player-journal<br/>三副本顺序日志"]
+    SC["Snapshot Consumer"]
+    DB["MySQL<br/>玩家完整快照"]
+
+    Z -->|"mutation<br/>等待可靠确认"| JS
+    JS -->|"按 shard_id 分区追加"| K
+    K -->|"多副本确认"| JS
+    JS --> Z
+    K --> SC
+    SC -->|"异步合并<br/>只允许新 seq 覆盖"| DB
+```
+
+Journal 写入层按 Shard 分区部署，负责 Kafka 不理解的业务约束：
+
+- 校验 `owner_epoch`，拒绝旧 Owner；
+- 校验 `request_id`，重复请求返回原结果；
+- 校验 `player_seq` 连续，拒绝或重试乱序；
+- 把同一逻辑 Shard 的记录固定写入同一 Kafka Partition；
+- 等到 Kafka 达到可靠确认条件后才返回 committed。
+
+规划基线为 Kafka 三副本、Producer `acks=all`、Topic `min.insync.replicas=2`、启用幂等 Producer，并禁止可能丢数据的 unclean leader election。多个玩家记录可以批量顺序追加，但每个命令仍等待包含自己的批次被确认。Kafka 的传输幂等不替代 `request_id` 业务幂等。
+
+```text
+shard_id 0    → partition 0
+shard_id 1    → partition 1
+...
+shard_id 4095 → partition 4095
+```
+
+4096 个 Partition 是与逻辑 Shard 一一对应的规划值，必须压测其元数据、文件句柄、重分配和恢复成本。若压测不满足，再通过 Journal 写入层引入映射，不能直接修改玩家逻辑分片函数。
+
+生产与原型使用同一接口：
+
+```go
+AppendMutation(shardID, ownerEpoch, playerSeq, requestID, mutation)
+```
+
+```mermaid
+flowchart TD
+    API["统一 Journal 接口"]
+    PROD["生产目标<br/>分区 Journal 写入层 + Kafka"]
+    MVP["三周原型<br/>MySQL journal_events 追加表"]
+
+    API --> PROD
+    API --> MVP
+```
+
+原型的 `journal_events` 至少保存 `shard_id`、`player_id`、`owner_epoch`、`player_seq`、`request_id`、`mutation` 和 `result`，并用唯一约束验证幂等与顺序。它验证语义，不代表生产环境使用 MySQL 承担全部 Journal 流量。
+
+Kafka 原生日志按 Partition/Offset 读取，并不天然提供按玩家随机查询。生产 Journal 写入层还需要设计“玩家快照 → Kafka partition/offset”和按玩家恢复索引，或者在迁移时按 Shard 重放尾部；该索引、快照截断和 Kafka Producer fencing 与 `owner_epoch` 的结合是后续专项设计，不能声称 Kafka 会自动拒绝旧业务 epoch。
 
 ## 6. 快照、加载与恢复
 
@@ -415,6 +488,15 @@ flowchart LR
     E104["Event 104"] --> A
     A --> W["Snapshot Writer<br/>合并脏状态"]
     W --> DB["Snapshot DB<br/>snapshot_seq=104"]
+```
+
+快照写入必须使用玩家序号防止旧 Zone 的延迟结果覆盖新状态：
+
+```sql
+UPDATE player_snapshot
+SET data = ?, snapshot_seq = ?
+WHERE player_id = ?
+  AND snapshot_seq < ?;
 ```
 
 快照失败时 Journal 仍保证恢复，但日志尾部会增长。系统必须监控最老快照落后时间、最大版本差、脏 Actor 数、重试数和预计恢复耗时；超过保护阈值时限制相关分片写入。
@@ -465,8 +547,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    J["Durable Journal<br/>玩家恢复与幂等事实"] --> R["Event Relay"]
-    R --> Q["Kafka 兼容事件总线候选<br/>多消费组与积压"]
+    J["Journal 写入层"] --> KJ["Kafka player-journal<br/>恢复与幂等事实"]
+    KJ --> R["Event Relay"]
+    R --> Q["Kafka domain-events<br/>规范化领域事件"]
     Q --> T["任务规则处理"]
     Q --> M["邮件"]
     Q --> RK["排行榜"]
@@ -474,7 +557,7 @@ flowchart LR
     Q --> A["统计与归档"]
 ```
 
-Kafka 类系统不直接被定义为第一版唯一的玩家随机恢复存储；它承担下游传播。若未来希望合并 Journal 与消息系统，必须先解决按玩家随机恢复、快照截断、长期保留和所有权 fencing。
+生产目标使用 Kafka 兼容日志，但保留两个逻辑 Topic：`player-journal` 是响应前提交的恢复事实，`domain-events` 是 Relay 派生的下游事件。它们可以先部署在同一 Kafka 集群，物理集群是否拆分由故障隔离、容量和成本证据决定。任务、邮件和统计消费者不直接修改 Journal，也不参与玩家写请求的成功条件。
 
 任务规则处理器消费农场事件并生成幂等的 `AdvanceTaskProgress` 命令，再按玩家路由回 Player Actor。Player Actor 保存玩家任务进度和领奖幂等状态；任务规则处理器只负责规则计算，不形成第二份可写任务状态。
 
@@ -787,7 +870,7 @@ Journal 逻辑条目/日
 = 9.54 亿条/日
 ```
 
-若条目平均 500 B，则约 477 GB/日逻辑数据；三副本约 1.43 TB/日物理写入。按 72 小时热保留并加 30% 索引、协议和段文件余量，Journal 热存储规划量约 5.6 TB。该数字对条目大小非常敏感，原型必须记录真实序列化大小。若 Journal 同时承担下游事件流，不应再把同一份事件总线存储重复计费；若两者分开，事件总线按约 20 条事件/DAU/日、平均 300 B、三副本估算约 540 GB/日物理写入。
+若条目平均 500 B，则约 477 GB/日逻辑数据；三副本约 1.43 TB/日物理写入。按 72 小时热保留并加 30% 索引、协议和段文件余量，`player-journal` 热存储规划量约 5.6 TB。该数字对条目大小非常敏感，原型必须记录真实序列化大小。V2 使用独立的 `domain-events` Topic，因此还要按约 20 条事件/DAU/日、平均 300 B、三副本估算约 540 GB/日物理写入；其保留期、总热存储和是否拆物理集群仍待确定。
 
 ### 11.5 快照数据库
 
@@ -931,7 +1014,8 @@ V2 获得了同玩家串行、状态局部性和异步快照，但承担了新�
 
 尚未接受的产品和参数：
 
-- Durable Journal 的具体后端及三可用区复制协议；
+- Kafka 发行版、Broker 数量、4096 Partition 开销、批量/压缩参数和三可用区部署；
+- Journal 写入层的玩家恢复索引，以及 Kafka Producer fencing 与业务 `owner_epoch` 的结合；
 - Snapshot DB 产品、数据模型和快照频率；
 - Coordinator 元数据实现；
 - Journal 保留、归档与安全清理期限；
@@ -955,4 +1039,4 @@ flowchart TD
 
 ## 15. 文档演进
 
-V1 保持原样作为历史对照。ADR-0003 已记录从无状态 Zone 改为有状态 Player Actor 的理由、代价和验证方法，并在生产目标层面取代 ADR-0002；`architecture.md` 与项目接力上下文应以本文为当前目标架构。具体 Journal、消息、缓存和协调服务产品仍是候选，必须通过原型证据后才能写成已选型。
+V1 保持原样作为历史对照。ADR-0003 已记录从无状态 Zone 改为有状态 Player Actor 的理由、代价和验证方法，并在生产目标层面取代 ADR-0002；`architecture.md` 与项目接力上下文应以本文为当前目标架构。ADR-0005 已选定生产 Journal 的逻辑架构为“分区 Journal 写入层 + Kafka 三副本”，三周原型使用 MySQL 追加表实现同一接口；Kafka 发行版和集群参数、业务事件总线、缓存及协调服务的具体产品与部署参数仍需通过原型证据确认。

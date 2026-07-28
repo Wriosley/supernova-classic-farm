@@ -124,7 +124,7 @@ flowchart LR
 
 生产目标采用 [ADR-0003](../decisions/ADR-0003-stateful-player-actor-zone.md)：网关按目标玩家路由到逻辑分片的 Active Zone Owner；Zone 在内存中持有 Player Actor，同玩家命令由邮箱串行执行，写操作只有在可靠 Journal 提交后才应用并返回成功，Snapshot DB 异步生成恢复检查点。账号、好友、任务、邮件、实时连接和归档仍按流量与一致性特征独立。
 
-目标容量、路由与所有权、写入恢复、迁移和三可用区设计统一见 [V2 目标架构文档](stateful-zone-v2-architecture.md)。具体 Journal、消息、缓存和协调服务产品、单实例能力及实例数仍待原型和压测验证。
+目标容量、路由与所有权、写入恢复、迁移和三可用区设计统一见 [V2 目标架构文档](stateful-zone-v2-architecture.md)。生产 Journal 已选择“分区写入层 + Kafka 三副本”，三周原型使用 MySQL 追加表；具体 Kafka 发行版、Broker 数、fencing、缓存和协调服务产品、单实例能力及实例数仍待原型和压测验证。
 
 ## 5. 模块职责与数据归属
 
@@ -246,7 +246,7 @@ flowchart LR
 
 当前规划假设为 3000 万 DAU、375 万正常峰值在线、约 500 万峰值驻留 Actor、约 6.94 万正常规划峰值外部 QPS、75 万正常 WebSocket 连接。目标采用单地域三可用区、有状态 Player Actor Zone、4096 个逻辑玩家分片、响应前可靠 Journal 和异步 Snapshot；中档压测前设计点为约 60 个 Zone，30～120 个仅作敏感性区间。以上均是规划值而非实测能力。
 
-具体 Journal、缓存和事件系统产品尚未接受；必须与替代方案比较，并用单实例压测、Journal 提交与重放、Snapshot 落后、消息积压恢复、断线重连和故障实验形成证据。完整推导见 [V2 目标架构文档](stateful-zone-v2-architecture.md)。
+生产 Journal 与事件骨干采用 Kafka 兼容日志，原型使用 MySQL `journal_events` 追加表；具体 Kafka 配置、fencing、恢复索引和容量仍必须用 Journal 提交与重放、Snapshot 落后、消息积压和故障实验形成证据。完整推导见 [V2 目标架构文档](stateful-zone-v2-architecture.md)。
 ## 15. 开发顺序与完成标准
 
 1. **目标设计基线**：容量模型、服务边界、玩家分片、可靠事件、实时同步、可用性和原型范围完成书面评审；
@@ -272,14 +272,14 @@ flowchart LR
 
 - Vue 3 H5、HTTP JSON、MySQL；
 - Redis 作为热点缓存、Session 和限流候选；
-- Kafka 兼容日志、NATS JetStream、RabbitMQ 等可靠事件候选；
+- Kafka 兼容日志已接受为生产 Journal 与事件骨干；具体发行版和配置待验证；
 - 种植时固化 `mature_at`，查询时派生成熟状态；
 - 顶层 `request_id` + 业务唯一键 + Outbox/幂等消费者。
 
 ### 16.3 实施前仍待确认
 
 1. Redis 与替代缓存的原型复杂度和压测结果；
-2. Kafka 兼容日志与 NATS JetStream、RabbitMQ 的最终选择；
+2. Kafka Journal 的 Broker/Partition/保留参数、玩家恢复索引和业务 epoch fencing；
 3. 初始地块数、赠送种子、任务清单和奖励数值；
 4. 偷菜 30% 的取整规则和删除好友是否进入第一版；
 5. `request_id`、事件、幂等记录和消息的保留/清理策略；
