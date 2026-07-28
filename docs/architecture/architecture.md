@@ -1,14 +1,16 @@
 ---
-status: proposed
-version: 0.4
-updated: 2026-07-27
+status: active
+version: 0.5
+updated: 2026-07-28
 ---
 
 # Classic Farm 整体设计
 
 ## 1. 文档用途与状态
 
-本文是经典农场项目的开发设计总纲，面向项目负责人和后续参与开发的 AI。它说明系统边界、模块职责、核心流程、一致性原则、验证方式和开发顺序，不替代模块实施计划、数据库迁移或 API 详细定义。
+本文是经典农场项目的业务设计总纲和架构导航，面向项目负责人和后续参与开发的 AI。它说明系统边界、模块职责、核心流程、一致性原则、验证方式和开发顺序，不替代模块实施计划、数据库迁移或 API 详细定义。
+
+当前生效的生产目标拓扑是 [有状态 Player Actor V2](stateful-zone-v2-architecture.md)，对应 [ADR-0003](../decisions/ADR-0003-stateful-player-actor-zone.md)。本文中的业务规则继续有效；凡涉及无状态 Zone、MySQL 实时事实、1024 分片或 Outbox 主写链路的旧描述，均以 V2 和 ADR-0003 为准。
 
 | 标记 | 含义 |
 |---|---|
@@ -18,7 +20,7 @@ updated: 2026-07-27
 | 【待确认】 | 会改变产品行为或技术方向，需要后续讨论 |
 | 【后续】 | 属于最终交付范围，但不阻塞当前单人闭环 |
 
-“本地原型”是可演示和可故障验证的缩小实现，不等于 3000 万 DAU 生产系统。生产目标架构见 [3000 万 DAU 目标架构与分布式原型设计](target-30m-dau-architecture.md)。容量目标、候选中间件和规划实例数不能写成已具备能力。
+“本地原型”是可演示和可故障验证的缩小实现，不等于 3000 万 DAU 生产系统。当前生产目标架构见 [有状态 Player Actor V2](stateful-zone-v2-architecture.md)；[无状态 V1](target-30m-dau-architecture.md) 只作为历史对照。容量目标、候选中间件和规划实例数不能写成已具备能力。
 
 ## 2. 项目目标、约束与非目标
 
@@ -120,9 +122,9 @@ flowchart LR
 
 ### 4.2 3000 万 DAU 生产目标【已确认方向】
 
-生产目标采用 [ADR-0002](../decisions/ADR-0002-target-scale-hybrid-architecture.md)：网关后是无状态 Zone 集群，玩家农场、资产、幂等和 Outbox 按 `player_id` 共同分片；账号、好友、任务、邮件、实时连接和归档按流量与一致性特征独立。跨玩家奖励和非核心任务通过可靠事件与幂等消费者最终一致。
+生产目标采用 [ADR-0003](../decisions/ADR-0003-stateful-player-actor-zone.md)：网关按目标玩家路由到逻辑分片的 Active Zone Owner；Zone 在内存中持有 Player Actor，同玩家命令由邮箱串行执行，写操作只有在可靠 Journal 提交后才应用并返回成功，Snapshot DB 异步生成恢复检查点。账号、好友、任务、邮件、实时连接和归档仍按流量与一致性特征独立。
 
-目标容量、数据流、Kafka/Redis 候选比较、三可用区降级和六阶段分布式原型统一见 [目标架构文档](target-30m-dau-architecture.md)。具体中间件产品、单实例能力和实例数仍待压测。
+目标容量、路由与所有权、写入恢复、迁移和三可用区设计统一见 [V2 目标架构文档](stateful-zone-v2-architecture.md)。具体 Journal、消息、缓存和协调服务产品、单实例能力及实例数仍待原型和压测验证。
 
 ## 5. 模块职责与数据归属
 
@@ -228,12 +230,12 @@ flowchart LR
 
 ## 12. 目标服务与多人演进
 
-- 生产目标以无状态 Zone 和玩家分片为核心；账号、好友、任务、邮件、实时和归档按流量与一致性特征拆分。
+- 生产目标以有状态 Player Actor Zone 和 4096 个逻辑分片为核心；账号、好友、任务、邮件、实时和归档按流量与一致性特征拆分。
 - 好友/邀请：30 分钟随机 Token 可由不同玩家多次使用，普通玩家最多 200 名好友；关系、邀请和访问授权由好友服务拥有。
 - 任务：消费 Zone 的可靠行为事件，异步更新进度和发奖；任务故障不回滚种植、收获或交易。
 - 邮件：满仓偷菜奖励必须转为不自动过期的系统奖励邮件；完整运营邮件能力后续扩展。
 - 多人同步：HTTP 提交命令和拉权威快照；WebSocket 只推送已提交变化；版本缺口重新拉快照。
-- 容量、分片、中间件候选、可用性和原型验证见 [3000 万 DAU 目标架构](target-30m-dau-architecture.md)。
+- 容量、分片、Journal、中间件候选、可用性和原型验证见 [V2 目标架构](stateful-zone-v2-architecture.md)。
 ## 13. 测试与证据
 
 测试层次：领域单元测试、模块集成测试、跨模块事务测试、API 测试、端到端测试和单实例压测。
@@ -242,14 +244,14 @@ flowchart LR
 
 ## 14. 3000 万 DAU 设计基线【目标，待实测】
 
-已确认规划假设为 3000 万 DAU、375 万正常峰值在线、6.25 万正常峰值外部 QPS、75 万正常 WebSocket 连接、30 天热历史。目标采用单地域三可用区、无状态 Zone、1024 个逻辑玩家分片、热点缓存、MySQL 最终事实、Outbox 和可靠异步消费者。
+当前规划假设为 3000 万 DAU、375 万正常峰值在线、约 500 万峰值驻留 Actor、约 6.94 万正常规划峰值外部 QPS、75 万正常 WebSocket 连接。目标采用单地域三可用区、有状态 Player Actor Zone、4096 个逻辑玩家分片、响应前可靠 Journal 和异步 Snapshot；中档压测前设计点为约 60 个 Zone，30～120 个仅作敏感性区间。以上均是规划值而非实测能力。
 
-Redis 和 Kafka 兼容日志只是当前能力候选，不是已接受产品选型；必须与替代方案比较，并用单实例压测、消息积压恢复、重复消费、断线重连和故障实验形成证据。完整推导见 [目标架构文档](target-30m-dau-architecture.md)。
+具体 Journal、缓存和事件系统产品尚未接受；必须与替代方案比较，并用单实例压测、Journal 提交与重放、Snapshot 落后、消息积压恢复、断线重连和故障实验形成证据。完整推导见 [V2 目标架构文档](stateful-zone-v2-architecture.md)。
 ## 15. 开发顺序与完成标准
 
 1. **目标设计基线**：容量模型、服务边界、玩家分片、可靠事件、实时同步、可用性和原型范围完成书面评审；
-2. **单玩家核心原型**：最小 Go/MySQL/Vue 骨架，完成购买、种植、收获、出售、幂等和 Outbox；
-3. **分片原型**：两个无状态 Zone、逻辑路由和两个 MySQL 分片；
+2. **单玩家 Actor 原型**：最小 Go/Vue 骨架，完成购买、种植、收获、出售、命令幂等、事件决定与内存应用；
+3. **持久化与所有权原型**：响应前 Journal、重启重放、异步 Snapshot、两个有状态 Zone、4096 逻辑分片路由、epoch fencing 和迁移；
 4. **异步原型**：任务消费、跨分片偷菜奖励、满仓邮件和重复消息验证；
 5. **实时原型**：两个实时网关、三个客户端、版本缺口和断线恢复；
 6. **证据与修订**：HTTP/消息/WebSocket 压测、故障实验、容量外推和架构修订。
@@ -257,9 +259,9 @@ Redis 和 Kafka 兼容日志只是当前能力候选，不是已接受产品选�
 
 ### 16.1 已确认
 
-- 本地最早业务闭环保持模块化单体代码边界；生产目标采用 [ADR-0002](../decisions/ADR-0002-target-scale-hybrid-architecture.md) 的玩家分片混合架构。
-- 容量规划采用 3000 万 DAU、375 万正常峰值在线、6.25 万正常峰值外部 QPS和 75 万正常长连接。
-- Zone 无状态；玩家核心数据共同分片；1024 个逻辑分片映射到物理 MySQL。
+- 本地业务代码保持模块化边界；生产目标采用 [ADR-0003](../decisions/ADR-0003-stateful-player-actor-zone.md) 的有状态 Player Actor Zone 架构。
+- 容量规划采用 3000 万 DAU、375 万正常峰值在线、约 6.94 万正常规划峰值外部 QPS 和 75 万正常长连接；这些数值仍需实测替换。
+- 一个逻辑分片同一时刻只有一个具备写权限的 Active Zone Owner；一个 Zone 可持有多个分片；当前规划为 4096 个逻辑分片。
 - 最近 30 天历史在线保留，之后异步归档；普通玩家最多 200 名好友。
 - 任务和跨玩家奖励可靠异步处理；满仓偷菜奖励转不自动过期的系统邮件。
 - HTTP 负责命令与快照，WebSocket 负责推送已提交变化。
@@ -290,7 +292,8 @@ Redis 和 Kafka 兼容日志只是当前能力候选，不是已接受产品选�
 
 ## 18. 文档入口
 
-- 3000 万 DAU 目标架构：`docs/architecture/target-30m-dau-architecture.md`
+- 当前 V2 目标架构：`docs/architecture/stateful-zone-v2-architecture.md`
+- 无状态 V1 历史方案：`docs/architecture/target-30m-dau-architecture.md`
 - 模块设计、接口能力与数据流：`docs/architecture/module-design-and-flows.md`
 - 稳定项目事实：`docs/context/PROJECT.md`
 - 当前工作交接：`docs/context/CURRENT.md`

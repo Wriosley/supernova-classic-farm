@@ -2,6 +2,13 @@
 
 Use ADRs only for decisions that materially affect architecture, data correctness, interfaces, non-functional requirements, dependencies, or the project's ability to meet its delivery goals.
 
+## Current records
+
+- `ADR-0001-modular-monolith-first.md`: accepted for local code organization and the earliest single-player slice.
+- `ADR-0002-target-scale-hybrid-architecture.md`: superseded stateless V1 production target.
+- `ADR-0003-stateful-player-actor-zone.md`: accepted current production target.
+- `ADR-0004-shard-placement-and-control-plane-consensus.md`: accepted Shard placement and ownership-authority model.
+
 ## Lifecycle
 
 ```text

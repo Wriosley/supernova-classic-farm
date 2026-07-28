@@ -1,7 +1,10 @@
 ---
-status: proposed
+status: superseded
 created: 2026-07-27
-updated: 2026-07-27
+updated: 2026-07-28
+superseded_by:
+  - docs/architecture/stateful-zone-v2-architecture.md
+  - docs/decisions/ADR-0003-stateful-player-actor-zone.md
 owners:
   - project-owner
 source:
@@ -9,7 +12,9 @@ source:
   - docs/decisions/ADR-0002-target-scale-hybrid-architecture.md
 ---
 
-# 3000 万 DAU 架构方案规划与未决问题收敛计划
+# 3000 万 DAU 架构方案规划与未决问题收敛计划（V1 历史计划）
+
+> 本计划基于无状态 V1，已停止执行。可复用的未决问题应重新放入 V2 的实施计划；AI 不得继续按本文的无状态 Zone 步骤推进。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` when executing this plan task-by-task. All work items use checkbox (`- [ ]`) syntax for tracking.
 

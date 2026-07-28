@@ -29,9 +29,10 @@ Do not treat chat history, `ai-context`, UC backend notes, or pre-opening predic
 
 - The first vertical slice is the farm owner's single-player loop.
 - Friends and multiplayer synchronization come after that loop is correct.
-- Prefer a modular monolith until evidence shows a need for distribution.
+- The accepted production target is the stateful Player Actor Zone V2 in `docs/architecture/stateful-zone-v2-architecture.md` and ADR-0003.
+- Keep business code modular, but make the local prototype exercise the smallest V2 path: routing, Actor serialization, durable Journal-before-response, replay, and asynchronous snapshots.
 - The current technical baseline is Go for the backend and a minimal Vue 3 H5 client.
-- The final demonstration only needs to run locally.
+- The final demonstration only needs to run locally; it validates mechanisms and measured single-instance baselines, not an actual 30-million-DAU deployment.
 
 ## Working method
 

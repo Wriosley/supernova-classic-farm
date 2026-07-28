@@ -1,12 +1,17 @@
 ---
-status: proposed
+status: superseded
 version: 0.1
-updated: 2026-07-27
+updated: 2026-07-28
+superseded_by:
+  - stateful-zone-v2-architecture.md
+  - ../decisions/ADR-0003-stateful-player-actor-zone.md
 owners:
   - project-owner
 ---
 
-# 经典农场 3000 万 DAU 目标架构与分布式原型设计
+# 经典农场 3000 万 DAU 目标架构与分布式原型设计（V1 历史方案）
+
+> 本文保留为无状态 V1 的讨论与对照资料，已被 [有状态 Player Actor V2](stateful-zone-v2-architecture.md) 和 [ADR-0003](../decisions/ADR-0003-stateful-player-actor-zone.md) 取代。不要从本文恢复当前架构决策。
 
 ## 1. 文档定位
 
@@ -153,6 +158,8 @@ H5 → 网关鉴权 → player_id → 逻辑分片 → 任意 Zone → MySQL 分
 
 Zone 实例故障后，负载均衡器摘除实例；客户端用相同 `request_id` 重试到其他 Zone。
 
+
+
 ### 5.2 逻辑分片
 
 目标先固定 1024 个逻辑玩家分片：
@@ -294,6 +301,25 @@ Zone 在同一个 MySQL 事务内提交业务状态和 Outbox。Publisher 不断
 ### 8.2 单玩家核心操作
 
 购买、种植、收获和出售只修改一个玩家分片，在一个 MySQL 本地事务内提交业务状态、资产、幂等结果和 Outbox。任何一步失败整体回滚。
+```mermaid
+sequenceDiagram
+    participant Z as Zone
+    participant MQ as 消息系统
+    participant T as 任务服务
+    participant R as 玩家 Zone
+
+    Z->>Z: 收获状态 + Outbox 同事务
+    Z-->>Z: 核心收获成功
+    Z->>MQ: CropHarvested(event_id)
+    MQ->>T: 至少一次投递
+    T->>T: 按 event_id 去重并更新任务
+    alt 任务达到目标
+        T->>T: 任务状态改为 completed
+        T->>MQ: TaskRewardGranted(reward_id)
+        MQ->>R: 发放金币或物品
+        R->>R: 按 reward_id 幂等入账
+    end
+```
 
 ### 8.3 任务最终一致
 
@@ -302,10 +328,47 @@ Zone 提交核心操作和行为 Outbox 后立即返回。任务服务异步消�
 ### 8.4 跨分片偷菜
 
 农场主分片锁定地块并提交偷菜事实、`theft_order` 和 Outbox。好友奖励异步投递：仓库有容量则按 `theft_id` 幂等入库；仓库满则创建不自动过期的系统奖励邮件。偷菜事实不因奖励延迟回滚。
+```mermaid
+sequenceDiagram
+    participant H as 好友客户端
+    participant O as 农场主 Zone/分片
+    participant M as 消息系统
+    participant T as 好友 Zone/分片
+
+    H->>O: StealCrop(plot_id, request_id)
+    O->>O: 锁地块，校验成熟/好友/未被偷
+    O->>O: 标记已偷 + 写 theft_order + 写 Outbox
+    O-->>H: 偷菜已受理，reward_pending
+    O->>M: 投递 CropStolen 事件
+    M->>T: 至少一次投递
+    T->>T: 按 theft_id 幂等增加 3 个作物
+    T-->>M: 确认处理
+```
 
 ### 8.5 邮件领取
 
 邮件服务生成固定 `claim_id` 请求玩家 Zone 入账。若资产已入账但响应丢失，邮件服务用同一 `claim_id` 重试，Zone 返回原结果；确认后邮件标记已领取。仓库仍满时领取失败，邮件保持未领取。
+```mermaid
+sequenceDiagram
+    participant O as 农场主分片
+    participant MQ as 消息系统
+    participant T as 偷菜者 Zone
+    participant Mail as 邮件服务
+
+    O->>O: 地块已偷 + theft_order + Outbox
+    O->>MQ: CropStolen(theft_id)
+    MQ->>T: 投递偷菜奖励
+    alt 仓库有容量
+        T->>T: 按 theft_id 幂等增加作物
+        T-->>MQ: delivered_to_inventory
+    else 仓库已满
+        T->>T: 写 mail_pending + Outbox
+        T->>MQ: CreateRewardMail(theft_id)
+        MQ->>Mail: 创建带附件邮件
+        Mail->>Mail: 按 theft_id 幂等去重
+        Mail-->>MQ: delivered_to_mail
+    end
+```
 
 ## 9. HTTP 与 WebSocket 实时同步
 
@@ -316,6 +379,20 @@ HTTP 用于登录、快照和业务命令；WebSocket 用于服务器主动推�
 实时网关只持有连接和有限发送队列，房间服务只持有临时订阅，二者都不拥有农场最终状态。慢客户端队列溢出时合并旧状态或断开连接，客户端重连恢复。
 
 规划起点是假设单实时网关 5 万连接：正常最低 15 个实例；考虑约 50% 余量和单可用区故障，正常可从约 24 个实例规划，极端从约 36 个实例规划。该能力必须由 WebSocket 压测修正。
+```mermaid
+sequenceDiagram
+    participant Z as Zone
+    participant MQ as 消息系统
+    participant R as 房间服务
+    participant G as 实时网关
+    participant H as H5
+
+    Z->>Z: 地块事务提交，version 递增
+    Z->>MQ: PlotChanged(farm_id, version)
+    MQ->>R: 按 farm_id 有序投递
+    R->>G: 广播新版本
+    G->>H: plot delta + version
+```
 
 ## 10. 可用性、降级与多可用区
 

@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-07-24
+updated: 2026-07-28
 ---
 
 # Project Context
@@ -37,7 +37,9 @@ Independently build and demonstrate a classic farm H5 game with a Go backend, th
 
 ## Delivery strategy
 
-### Phase 1: target architecture and single-player core prototype
+The production target uses the accepted stateful Player Actor Zone V2. The local deliverable is a scaled-down implementation of the same critical mechanisms, not a separate stateless architecture.
+
+The first product slice remains:
 
 ```text
 register/login
@@ -47,23 +49,23 @@ register/login
 → grow while offline
 → harvest
 → store/sell
-→ claim basic task reward
+→ update a basic task
 ```
 
 ### Confirmed delivery sequence
 
-1. Write the 30-million-DAU target architecture before product implementation.
-2. Implement the single-player transaction, idempotency, and Outbox core.
-3. Add two stateless Zone instances and simulated player database shards.
-4. Add asynchronous task processing and cross-shard reward delivery with mail fallback.
-5. Add two realtime gateways, room subscriptions, version recovery, and three-client synchronization.
-6. Run HTTP, messaging, WebSocket, and failure experiments; use evidence to revise the capacity model.
+1. Finish reviewing the V2 target architecture and map every opening requirement to an owner, request flow, state transition, and validation method.
+2. Define the minimum V2 contracts: command envelope, `request_id`, Journal record, Snapshot record, route entry, `route_epoch`, and error semantics.
+3. Implement one player's Actor loop, deterministic Decide/Apply behavior, durable Journal-before-response, restart replay, and asynchronous Snapshot.
+4. Add two stateful Zone instances, 4096 logical-shard routing, single-owner fencing, route refresh, migration, and rollback experiments.
+5. Add asynchronous task processing, cross-player reward delivery with mail fallback, and subscribe-first realtime synchronization for three clients.
+6. Run Actor memory, Zone throughput, Journal, replay, Snapshot, WebSocket, and failure experiments; use evidence to replace capacity assumptions.
 
 The production target and local prototype are separate claims. The prototype validates mechanisms and single-instance baselines; it does not claim to run 30 million DAU locally.
 
 ## Knowledge boundary
 
-UC backend, xRPC, Actor, Proxyless, and related `ai-context` documents are reference material. The project must not adopt those techniques unless the farm's requirements and evidence justify them.
+UC backend, xRPC, Actor, Proxyless, and related `ai-context` documents are reference material. The project adopts the Player Actor direction only through ADR-0003 and the farm's own constraints; company implementation details must not be copied into this repository.
 
 ## Documentation rule
 

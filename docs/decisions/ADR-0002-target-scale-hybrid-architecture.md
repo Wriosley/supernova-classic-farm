@@ -1,13 +1,17 @@
 ---
-status: proposed
+status: superseded
 date: 2026-07-27
+superseded_by:
+  - ADR-0003-stateful-player-actor-zone
 owners:
   - project-owner
 supersedes:
   - ADR-0001-for-production-target-only
 ---
 
-# ADR-0002：生产目标采用玩家分片混合架构
+# ADR-0002：生产目标采用玩家分片混合架构（V1 历史决策）
+
+本文已被 [ADR-0003](ADR-0003-stateful-player-actor-zone.md) 在生产目标层面取代，保留用于解释从无状态 V1 到有状态 V2 的演进。
 
 ## 背景
 
