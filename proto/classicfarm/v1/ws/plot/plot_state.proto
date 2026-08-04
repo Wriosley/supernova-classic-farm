@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package classicfarm.ws.v1.plot;
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot;plotv1";
+
+enum PlotState {
+  UNSPECIFIED = 0;
+  EMPTY = 1;
+  GROWING = 2;
+  MATURE = 3;
+  NEED_CLEANUP = 4;
+}

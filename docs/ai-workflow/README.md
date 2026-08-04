@@ -2,6 +2,8 @@
 
 This directory preserves concise, reviewable evidence of AI-assisted development for the final defense.
 
+These files are a chronological collaboration log. Older records may describe V1 or V2 because they preserve what the project believed and changed at that time. They are not instructions to resume an obsolete architecture.
+
 Do not copy full transcripts. For each meaningful task, record:
 
 - Goal and boundaries.
@@ -18,3 +20,25 @@ Do not copy full transcripts. For each meaningful task, record:
 Use `session-template.md`.
 
 AI workflow records are traceability material, not the source of formal product, architecture, interface, or performance truth.
+
+Before starting or handing off work, an AI must first read `../context/CURRENT.md`. If an older workflow record conflicts with it, preserve the old record and follow `CURRENT.md`; do not rewrite history.
+
+The latest architecture handoff is `2026-07-30-v3-context-and-ai-handoff.md`.
+
+The 2026-07-31 MT progress-sync speaking outline is `2026-07-31-mt-progress-sync.md`. It is a draft communication aid and must be updated from actual evidence before use.
+
+The latest runtime and owner-handoff record is `2026-07-31-first-runtime-slice-and-owner-handoff.md`.
+
+The MySQL registration/checkpoint implementation record is `2026-07-31-mysql-registration-checkpoint-slice.md`.
+
+The minimum Zone configuration and shop-read record is `2026-07-31-zone-config-and-get-shop.md`.
+
+The PLANT and Dirty restart-recovery record is `2026-07-31-plant-dirty-recovery.md`.
+
+The fixed-point growth and maturity record is `2026-07-31-growth-and-maturity.md`.
+
+The fertilizer interval and restart-recovery record is `2026-07-31-fertilizer-effect-recovery.md`.
+
+The online maturity Push, Gate snapshot buffering and H5 gap-recovery record is `2026-07-31-maturity-push-and-gap-recovery.md`.
+
+The all-or-nothing HARVEST and checkpoint record is `2026-07-31-harvest-command.md`.

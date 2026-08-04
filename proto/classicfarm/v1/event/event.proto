@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package classicfarm.event.v1;
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/event;eventv1";
+
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  CREATE_REWARD_MAIL = 1;
+  reserved 2 to 99;
+}
+
+enum ConsumeResultCode {
+  CONSUME_RESULT_UNSPECIFIED = 0;
+  APPLIED = 1;
+  ALREADY_APPLIED = 2;
+  RETRYABLE_FAILURE = 3;
+  CORRUPT_CONFLICT = 4;
+  INVALID_EVENT = 5;
+}
+
+message EventEnvelopeV1 {
+  uint32 event_contract_version = 1;
+  bytes event_id = 2;
+  EventType event_type = 3;
+  uint64 aggregate_player_id = 4;
+  bytes caused_by_request_id = 5;
+  uint64 created_owner_epoch = 6;
+  uint64 created_player_seq = 7;
+  int64 created_at_ms = 8;
+  bytes payload = 9;
+  bytes payload_sha256 = 10;
+  reserved 11 to 99;
+}
+
+message CreateRewardMailV1 {
+  uint64 recipient_player_id = 1;
+  repeated RewardMailAttachmentV1 attachments = 2;
+  string subject_text_key = 3;
+  string body_text_key = 4;
+  RewardMailSourceV1 source = 5;
+  reserved 6 to 19;
+}
+
+message RewardMailAttachmentV1 {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+  reserved 3 to 9;
+}
+
+message RewardMailSourceV1 {
+  uint32 chapter_id = 1;
+  uint64 chapter_config_version = 2;
+  bytes request_id = 3;
+  reserved 4 to 9;
+}

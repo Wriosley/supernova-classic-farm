@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-07-28
+updated: 2026-07-30
 ---
 
 # Project Context
@@ -16,11 +16,11 @@ Independently build and demonstrate a classic farm H5 game with a Go backend, th
 - H5 experience: beginner.
 - Demonstration environment: local machine.
 - Midterm review: 2026-07-31.
-- Midterm materials should be prepared by 2026-07-29.
-- Final defense: 2026-08-21.
-- Final materials should be frozen by 2026-08-18.
-- Capacity design target: 30 million DAU.
-- Multiplayer scope will initially target at most three simultaneous users in one farm, after the single-player loop is complete.
+- First-stage minimum protocol, data-model and runnable-framework milestone: 2026-08-02.
+- Final defense: 2026-08-21; final materials should be frozen by 2026-08-18.
+- Capacity design target: 30 million DAU. This is a design target, not a locally verified capability.
+- The first implementation slice is the farm owner's single-player loop. Friends and multiplayer follow after this loop is correct.
+- Multiplayer scope initially targets at most three simultaneous users in one farm.
 
 ## Delivery requirements
 
@@ -35,38 +35,56 @@ Independently build and demonstrate a classic farm H5 game with a Go backend, th
 - AI Coding Workflow artifacts.
 - Optional value: weak-network experience and smooth updates.
 
-## Delivery strategy
+## Current delivery strategy
 
-The production target uses the accepted stateful Player Actor Zone V2. The local deliverable is a scaled-down implementation of the same critical mechanisms, not a separate stateless architecture.
+The only current production-target architecture is the accepted stateful Player Actor Zone V3:
 
-The first product slice remains:
+- Player state is held in a Zone's Player Actor and same-player commands execute serially.
+- Successful ordinary game commands update Actor memory first, mark the Actor Dirty, and reply without waiting for MySQL.
+- A Zone flusher asynchronously batches versioned player checkpoints to MySQL.
+- An abnormal Zone exit may lose the latest unflushed ordinary game state; normal shutdown, Actor eviction, and controlled migration must flush Dirty state first.
+- A versioned 4096-logical-shard map, leases, `owner_epoch`, database fencing, and a majority-authorized production Coordinator preserve single-Owner semantics.
+- The production target uses a three-node majority Coordinator. The local prototype uses a compatible single-node implementation and does not claim control-plane high availability.
+- V1 and V2 remain design-history evidence only. In particular, V2's Journal-before-response and Kafka recovery path are not part of the current V3 write path.
+
+The first product slice is:
 
 ```text
 register/login
-→ enter own farm
-→ buy seeds
-→ plant
-→ grow while offline
-→ harvest
-→ store/sell
-→ update a basic task
+-> enter own farm
+-> buy seeds
+-> plant
+-> fertilize and grow while online/offline
+-> harvest
+-> store/sell
+-> update and claim a chapter task
+-> clean the plot
 ```
 
-### Confirmed delivery sequence
+The first-slice business rules are defined by `../architecture/single-player-vertical-loop-business-architecture.md`.
 
-1. Finish reviewing the V2 target architecture and map every opening requirement to an owner, request flow, state transition, and validation method.
-2. Define the minimum V2 contracts: command envelope, `request_id`, Journal record, Snapshot record, route entry, `route_epoch`, and error semantics.
-3. Implement one player's Actor loop and common `AppendMutation` interface; use a MySQL `journal_events` append table for commit-before-response, deterministic replay, idempotency, epoch rejection, and asynchronous Snapshot.
-4. Add two stateful Zone instances, 4096 logical-shard routing, single-owner fencing, route refresh, migration, and rollback experiments.
-5. Add asynchronous task processing, cross-player reward delivery with mail fallback, and subscribe-first realtime synchronization for three clients.
-6. Add and benchmark the production Kafka Journal adapter, then run Actor memory, Zone throughput, Journal, replay, Snapshot, WebSocket, and failure experiments; use evidence to replace capacity assumptions.
+The first-stage completion standard is:
 
-The production target and local prototype are separate claims. The prototype validates mechanisms and single-instance baselines; it does not claim to run 30 million DAU locally.
+```text
+the H5 client can register/login
+-> establish an authenticated Protobuf WebSocket
+-> send one game command through GateSvr
+-> route it to the correct Player Actor
+-> receive a correlated response
+```
+
+Before implementation, this milestone requires frozen minimum contracts for HTTP login and WS tickets, WebSocket commands and errors, client/player views, Player checkpoints, ShardMap, Dirty batches, Outbox and state versions.
+
+## Prototype evidence boundary
+
+The local prototype should exercise the smallest V3 path: WebSocket routing, Actor serialization, in-Actor task progress, Dirty batching, MySQL checkpoint recovery, a single-node Coordinator-compatible control plane, leases, and epoch rejection.
+
+The production target and local prototype are separate claims. The prototype validates mechanisms and measured single-instance baselines; it does not claim to run 30 million DAU locally.
 
 ## Knowledge boundary
 
-UC backend, xRPC, Actor, Proxyless, and related `ai-context` documents are reference material. The project adopts the Player Actor direction only through ADR-0003 and the farm's own constraints; company implementation details must not be copied into this repository.
+UC backend, xRPC, Actor, Proxyless, and related `ai-context` documents are reference material. The project adopts ideas only after recording them in the farm's current architecture or decisions. Company implementation details must not be copied into this repository.
 
 ## Documentation rule
 
-The repository is the source of truth for project facts and accepted decisions. Personal reasoning and learning journals may live in Obsidian, but must link to rather than duplicate accepted project documents.
+The repository is the source of truth for project facts and accepted current design. Personal reasoning and learning journals may live in Obsidian, but must link to rather than duplicate current project documents. `docs/decisions/` is a chronological decision-history ledger; the directory as a whole is not a list of simultaneously active decisions.

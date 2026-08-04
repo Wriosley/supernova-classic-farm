@@ -1,0 +1,95 @@
+/* Mermaid Zoom Plugin Styles */
+
+.mermaid-zoom-container svg,
+.mermaid-zoom-modal-wrapper svg {
+	display: block;
+}
+
+/* Keep stroke width constant under CSS zoom scaling.
+   Without this, fit-to-container (which scales the diagram down) makes
+   connector lines thin and faint. non-scaling-stroke renders strokes at a
+   fixed screen width regardless of the transform scale, so lines stay
+   crisp and visible at any zoom level. Applies to both inline and modal. */
+.mermaid-zoom-content svg *,
+.mermaid-zoom-modal-wrapper svg * {
+	vector-effect: non-scaling-stroke;
+}
+
+/* Mermaid ships with a light "default" theme (dark text #333, light node
+   fills). In dark mode Obsidian makes native diagrams readable by applying an
+   invert filter; the zoom container doesn't inherit that, so the raw light
+   theme shows up as gray text/lines and wrong node colors on a dark backdrop.
+   Re-apply the same standard dark-mode invert here (inline + modal).
+   invert flips light<->dark, hue-rotate(180deg) keeps colors natural. */
+.theme-dark .mermaid-zoom-content svg,
+.theme-dark .mermaid-zoom-modal-wrapper svg {
+	filter: invert(1) hue-rotate(180deg);
+}
+
+/* Container cursor states */
+.mermaid-zoom-content {
+	cursor: grab;
+}
+
+.mermaid-zoom-content.dragging {
+	cursor: grabbing;
+}
+
+/* Resizing cursor states. Applied to body AND all descendants so the cursor
+   stays locked during a resize drag, overriding per-element cursors (e.g. the
+   grab cursor on .mermaid-zoom-content) via higher specificity. */
+body.mermaid-zoom-resizing-nwse,
+body.mermaid-zoom-resizing-nwse * {
+	cursor: nwse-resize;
+	user-select: none;
+}
+
+body.mermaid-zoom-resizing-nesw,
+body.mermaid-zoom-resizing-nesw * {
+	cursor: nesw-resize;
+	user-select: none;
+}
+
+body.mermaid-zoom-resizing-ns,
+body.mermaid-zoom-resizing-ns * {
+	cursor: ns-resize;
+	user-select: none;
+}
+
+body.mermaid-zoom-resizing-ew,
+body.mermaid-zoom-resizing-ew * {
+	cursor: ew-resize;
+	user-select: none;
+}
+
+/* Modal close button. Background lives in CSS (not inline) so :hover can
+   override it through the normal cascade. */
+.mermaid-zoom-modal-close {
+	background: var(--interactive-normal);
+}
+
+.mermaid-zoom-modal-close:hover {
+	background: var(--interactive-hover);
+}
+
+/* Zoom buttons — same reason: background declared here, not as an inline style. */
+.mermaid-zoom-btn {
+	background: var(--interactive-normal);
+}
+
+.mermaid-zoom-btn:hover {
+	background: var(--interactive-hover);
+}
+
+/* Fullscreen button padding (compound selector raises specificity above
+   Obsidian's generic button reset). */
+.mermaid-zoom-btn.mermaid-fullscreen-btn {
+	padding: 6px;
+}
+
+/* Close button in the modal controls bar. Compound selector keeps specificity
+   above .mermaid-zoom-btn:hover so the red tint wins, reading as a
+   destructive/dismiss affordance that stands out from the zoom controls. */
+.mermaid-zoom-btn.mermaid-modal-close-btn:hover {
+	background: var(--background-modifier-error);
+}

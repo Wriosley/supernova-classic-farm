@@ -1,0 +1,259 @@
+syntax = "proto3";
+
+package classicfarm.data.v1;
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data;datav1";
+
+enum PlotRecordState {
+  PLOT_RECORD_STATE_UNSPECIFIED = 0;
+  EMPTY = 1;
+  GROWING = 2;
+  MATURE = 3;
+  NEED_CLEANUP = 4;
+}
+
+enum EffectKind {
+  EFFECT_KIND_UNSPECIFIED = 0;
+  FERTILIZER = 1;
+  PEST = 2;
+}
+
+enum ChapterRecordStatus {
+  CHAPTER_RECORD_STATUS_UNSPECIFIED = 0;
+  IN_PROGRESS = 1;
+  CLAIMABLE = 2;
+  CLAIMED = 3;
+}
+
+enum TaskMetric {
+  TASK_METRIC_UNSPECIFIED = 0;
+  TASK_BUY_SEEDS = 1;
+  TASK_PLANT = 2;
+  TASK_APPLY_FERTILIZER = 3;
+  TASK_HARVEST = 4;
+  TASK_SELL_CROP = 5;
+}
+
+enum OutboxEventType {
+  OUTBOX_EVENT_TYPE_UNSPECIFIED = 0;
+  CREATE_REWARD_MAIL = 1;
+}
+
+enum ShardRouteState {
+  SHARD_ROUTE_STATE_UNSPECIFIED = 0;
+  UNASSIGNED = 1;
+  PREPARING = 2;
+  ACTIVE = 3;
+}
+
+enum CheckpointWriteStatus {
+  CHECKPOINT_WRITE_STATUS_UNSPECIFIED = 0;
+  APPLIED = 1;
+  ALREADY_APPLIED = 2;
+  STALE_COPY = 3;
+  FENCED = 4;
+  RETRYABLE_FAILURE = 5;
+  CORRUPT_CONFLICT = 6;
+}
+
+message RateDecimal6 {
+  int64 scaled_value = 1;
+}
+
+message GrowthDecimal9 {
+  int64 scaled_value = 1;
+}
+
+message PlayerCheckpointV1 {
+  uint32 schema_version = 1;
+  uint64 player_id = 2;
+  uint32 logical_shard_id = 3;
+  uint64 owner_epoch = 4;
+  uint64 player_seq = 5;
+  uint64 checkpoint_revision = 6;
+  int64 coin_balance = 7;
+  repeated InventoryStack inventory = 8;
+  repeated PlotStateRecord plots = 9;
+  ChapterStateRecord current_chapter = 10;
+  repeated IdempotencyResultRecord recent_results = 11;
+  repeated PendingOutboxRecord pending_outbox = 12;
+  uint64 last_applied_config_version = 13;
+  int64 created_at_ms = 14;
+  int64 updated_at_ms = 15;
+}
+
+message InventoryStack {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+}
+
+message PlotStateRecord {
+  uint32 plot_id = 1;
+  PlotRecordState state = 2;
+  uint32 crop_id = 3;
+  uint32 crop_item_id = 4;
+  uint64 crop_config_version = 5;
+  int64 planted_at_ms = 6;
+  GrowthDecimal9 maturity_value = 7;
+  RateDecimal6 base_growth_rate = 8;
+  uint32 base_yield = 9;
+  uint32 stolen_quantity = 10;
+  GrowthDecimal9 settled_growth_value = 11;
+  int64 last_settled_at_ms = 12;
+  optional int64 estimated_mature_at_ms = 13;
+  optional TimedEffectRecord fertilizer_effect = 14;
+  optional TimedEffectRecord pest_effect = 15;
+}
+
+message TimedEffectRecord {
+  bytes effect_instance_id = 1;
+  EffectKind effect_kind = 2;
+  uint32 effect_item_or_pest_id = 3;
+  optional uint64 source_player_id = 4;
+  uint64 config_version = 5;
+  RateDecimal6 modifier = 6;
+  int64 start_at_ms = 7;
+  int64 end_at_ms = 8;
+}
+
+message ChapterStateRecord {
+  uint32 chapter_id = 1;
+  uint64 chapter_config_version = 2;
+  ChapterRecordStatus status = 3;
+  int64 activated_at_ms = 4;
+  optional int64 claimed_at_ms = 5;
+  repeated TaskStateRecord tasks = 6;
+  optional uint32 next_chapter_id = 7;
+}
+
+message TaskStateRecord {
+  uint32 task_id = 1;
+  uint64 task_config_version = 2;
+  TaskMetric metric = 3;
+  uint32 current_value = 4;
+  uint32 target_value = 5;
+  bool completed = 6;
+}
+
+message IdempotencyResultRecord {
+  uint64 caller_player_id = 1;
+  bytes request_id = 2;
+  uint32 fingerprint_schema_version = 3;
+  uint32 protocol_version = 4;
+  uint32 action = 5;
+  uint64 target_player_id = 6;
+  bytes payload_fingerprint_sha256 = 7;
+  int64 completed_at_ms = 8;
+  bool success = 9;
+  uint64 result_owner_epoch = 10;
+  uint64 result_player_seq = 11;
+  uint32 response_payload_type = 12;
+  bytes response_payload = 13;
+  optional bytes error_payload = 14;
+  repeated bytes outbox_ids = 15;
+}
+
+message PendingOutboxRecord {
+  bytes event_id = 1;
+  OutboxEventType event_type = 2;
+  uint32 event_contract_version = 3;
+  uint64 aggregate_player_id = 4;
+  bytes caused_by_request_id = 5;
+  uint64 created_owner_epoch = 6;
+  uint64 created_player_seq = 7;
+  int64 created_at_ms = 8;
+  bytes payload = 9;
+  bytes payload_sha256 = 10;
+}
+
+message OutboxRow {
+  bytes event_id = 1;
+  uint32 db_shard_id = 2;
+  uint64 aggregate_player_id = 3;
+  uint32 logical_shard_id = 4;
+  OutboxEventType event_type = 5;
+  uint32 event_contract_version = 6;
+  bytes caused_by_request_id = 7;
+  uint64 created_owner_epoch = 8;
+  uint64 created_player_seq = 9;
+  int64 created_at_ms = 10;
+  bytes payload = 11;
+  bytes payload_sha256 = 12;
+}
+
+message ShardMapSnapshot {
+  uint32 shard_count = 1;
+  uint32 hash_algorithm_version = 2;
+  uint64 map_version = 3;
+  uint64 committed_term = 4;
+  uint64 committed_index = 5;
+  repeated ShardRouteEntry entries = 6;
+}
+
+message ShardRouteEntry {
+  uint32 shard_id = 1;
+  optional string owner_zone_id = 2;
+  uint64 owner_epoch = 3;
+  uint64 route_version = 4;
+  ShardRouteState state = 5;
+  uint64 lease_term = 6;
+  bytes lease_id = 7;
+  int64 lease_expires_at_ms = 8;
+  optional string previous_owner_zone_id = 9;
+  optional bytes transition_id = 10;
+  int64 updated_at_ms = 11;
+}
+
+message ShardFence {
+  uint32 logical_shard_id = 1;
+  string owner_zone_id = 2;
+  uint64 owner_epoch = 3;
+  uint64 route_version = 4;
+  bytes transition_id = 5;
+  int64 fenced_at_ms = 6;
+}
+
+message DirtyQueueEntry {
+  uint64 player_id = 1;
+  uint32 db_shard_id = 2;
+  uint32 logical_shard_id = 3;
+  string owner_zone_id = 4;
+  uint64 owner_epoch = 5;
+  uint64 latest_checkpoint_revision = 6;
+  int64 first_dirty_at_ms = 7;
+  int64 last_dirty_at_ms = 8;
+  int64 next_attempt_at_ms = 9;
+  uint32 attempt_count = 10;
+  optional uint64 in_flight_revision = 11;
+}
+
+message DirtyBatchWriteRequest {
+  bytes batch_id = 1;
+  uint32 db_shard_id = 2;
+  string owner_zone_id = 3;
+  int64 created_at_ms = 4;
+  repeated PlayerCheckpointWrite entries = 5;
+}
+
+message PlayerCheckpointWrite {
+  uint64 player_id = 1;
+  uint32 db_shard_id = 2;
+  uint32 logical_shard_id = 3;
+  string owner_zone_id = 4;
+  uint64 owner_epoch = 5;
+  uint64 player_seq = 6;
+  uint64 checkpoint_revision = 7;
+  uint32 checkpoint_schema_version = 8;
+  bytes checkpoint_blob = 9;
+  bytes checkpoint_sha256 = 10;
+  uint64 last_applied_config_version = 11;
+  int64 created_at_ms = 12;
+  int64 updated_at_ms = 13;
+  repeated OutboxRow outbox_rows = 14;
+}
+
+message PlayerCheckpointWriteResult {
+  uint64 player_id = 1;
+  uint64 copied_checkpoint_revision = 2;
+  CheckpointWriteStatus status = 3;
+}

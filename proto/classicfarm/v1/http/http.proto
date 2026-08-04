@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package classicfarm.http.v1;
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/http;httpv1";
+
+message ErrorParam {
+  string key = 1;
+  string value = 2;
+}
+
+enum HttpErrorCode {
+  HTTP_ERROR_UNSPECIFIED = 0;
+  INVALID_ARGUMENT = 100;
+  UNSUPPORTED_MEDIA_TYPE = 101;
+  NOT_ACCEPTABLE = 102;
+  PAYLOAD_TOO_LARGE = 103;
+  UNAUTHENTICATED = 200;
+  INVALID_CREDENTIALS = 201;
+  FORBIDDEN = 202;
+  CSRF_REJECTED = 203;
+  ACCOUNT_NAME_UNAVAILABLE = 204;
+  GATEWAY_NOT_FOUND = 300;
+  TICKET_REQUEST_CONFLICT = 301;
+  TICKET_REPLAY_EXPIRED = 302;
+  CLIENT_CONFIG_UNAVAILABLE = 303;
+  RATE_LIMITED = 400;
+  SERVICE_UNAVAILABLE = 500;
+  INTERNAL_ERROR = 501;
+}
+
+message HttpError {
+  HttpErrorCode code = 1;
+  repeated ErrorParam params = 2;
+  bool retryable = 3;
+  optional uint32 retry_after_ms = 4;
+  string correlation_id = 5;
+  optional string debug_message = 6;
+}
+
+message SessionView {
+  uint64 player_id = 1;
+  string account_name = 2;
+  int64 created_at_ms = 3;
+  int64 idle_expires_at_ms = 4;
+  int64 absolute_expires_at_ms = 5;
+}
+
+message CsrfResponse {
+  string csrf_token = 1;
+  int64 expires_at_ms = 2;
+}
+
+message RegisterRequest {
+  string account_name = 1;
+  string password = 2;
+}
+
+message RegisterResponse {
+  SessionView session = 1;
+}
+
+message LoginRequest {
+  string account_name = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  SessionView session = 1;
+}
+
+message SessionResponse {
+  SessionView session = 1;
+  int64 server_time_ms = 2;
+}
+
+message LogoutRequest {}
+
+message LogoutResponse {
+  bool logged_out = 1;
+}
+
+message GatewayEndpoint {
+  string gateway_id = 1;
+  string websocket_url = 2;
+  string region = 3;
+  uint32 priority = 4;
+  int64 expires_at_ms = 5;
+}
+
+message GatewayDiscoveryResponse {
+  repeated GatewayEndpoint gateways = 1;
+  int64 server_time_ms = 2;
+}
+
+message WsTicketRequest {
+  string ticket_request_id = 1;
+  string gateway_id = 2;
+}
+
+message WsTicketResponse {
+  string ws_ticket = 1;
+  int64 expires_at_ms = 2;
+  string gateway_id = 3;
+}
+
+message AuthBootstrap {
+  uint64 player_id = 1;
+  uint32 heartbeat_interval_ms = 2;
+  uint64 client_config_version = 3;
+  string client_config_url = 4;
+  bytes client_config_sha256 = 5;
+  uint32 protocol_min = 6;
+  uint32 protocol_max = 7;
+}
+
+message ClientBootstrapResponse {
+  AuthBootstrap auth_bootstrap = 1;
+  repeated GatewayEndpoint gateways = 2;
+  int64 server_time_ms = 3;
+}
+
+message ClientConfigPackage {
+  uint32 schema_version = 1;
+  uint64 client_config_version = 2;
+  int64 published_at_ms = 3;
+  reserved 4 to 9;
+  repeated LocaleBundle locale_bundles = 10;
+  repeated AssetEntry assets = 11;
+  repeated DisplayRule display_rules = 12;
+}
+
+message LocaleBundle {
+  string locale = 1;
+  repeated TextEntry entries = 2;
+}
+
+message TextEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message AssetEntry {
+  string asset_key = 1;
+  string url = 2;
+  bytes sha256 = 3;
+}
+
+message DisplayRule {
+  string key = 1;
+  bytes value = 2;
+  string value_schema = 3;
+}

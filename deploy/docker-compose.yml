@@ -1,0 +1,32 @@
+name: classic-farm
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-classicfarm}"
+      MYSQL_USER: "${MYSQL_USER:-classicfarm}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-classicfarm}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-classicfarm-root}"
+      TZ: "${TZ:-Asia/Shanghai}"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD} --silent",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+volumes:
+  mysql-data:

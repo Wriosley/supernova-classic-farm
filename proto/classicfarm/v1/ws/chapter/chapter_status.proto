@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package classicfarm.ws.v1.chapter;
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/chapter;chapterv1";
+
+enum ChapterStatus {
+  UNSPECIFIED = 0;
+  IN_PROGRESS = 1;
+  CLAIMABLE = 2;
+  CLAIMED = 3;
+}

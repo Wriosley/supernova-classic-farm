@@ -1,0 +1,451 @@
+package player
+
+import (
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"sort"
+	"time"
+
+	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
+	chapterv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/chapter"
+	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
+	"google.golang.org/protobuf/proto"
+)
+
+const CheckpointSchemaVersion uint32 = 1
+
+// NewInitialCheckpoint creates the durable aggregate committed atomically with
+// a new account and Session by the local MySQL registration path.
+func NewInitialCheckpoint(playerID uint64, now time.Time) *datav1.PlayerCheckpointV1 {
+	nowMS := now.UnixMilli()
+	return &datav1.PlayerCheckpointV1{
+		SchemaVersion:            CheckpointSchemaVersion,
+		PlayerId:                 playerID,
+		LogicalShardId:           routing.ShardForPlayer(playerID),
+		OwnerEpoch:               LocalOwnerEpoch,
+		PlayerSeq:                0,
+		CheckpointRevision:       1,
+		CoinBalance:              InitialCoinBalance,
+		Inventory:                []*datav1.InventoryStack{{ItemId: BasicFertilizerID, Quantity: 1}},
+		Plots:                    []*datav1.PlotStateRecord{{PlotId: InitialPlotID, State: datav1.PlotRecordState_EMPTY}},
+		CurrentChapter:           initialChapter(nowMS),
+		LastAppliedConfigVersion: ServerConfigVersion,
+		CreatedAtMs:              nowMS,
+		UpdatedAtMs:              nowMS,
+	}
+}
+
+func initialChapter(nowMS int64) *datav1.ChapterStateRecord {
+	return &datav1.ChapterStateRecord{
+		ChapterId:            InitialChapterID,
+		ChapterConfigVersion: ServerConfigVersion,
+		Status:               datav1.ChapterRecordStatus_IN_PROGRESS,
+		ActivatedAtMs:        nowMS,
+		Tasks: []*datav1.TaskStateRecord{
+			{TaskId: 1, TaskConfigVersion: ServerConfigVersion, Metric: datav1.TaskMetric_TASK_BUY_SEEDS, TargetValue: 3},
+			{TaskId: 2, TaskConfigVersion: ServerConfigVersion, Metric: datav1.TaskMetric_TASK_PLANT, TargetValue: 1},
+			{TaskId: 3, TaskConfigVersion: ServerConfigVersion, Metric: datav1.TaskMetric_TASK_APPLY_FERTILIZER, TargetValue: 1},
+			{TaskId: 4, TaskConfigVersion: ServerConfigVersion, Metric: datav1.TaskMetric_TASK_HARVEST, TargetValue: 1},
+			{TaskId: 5, TaskConfigVersion: ServerConfigVersion, Metric: datav1.TaskMetric_TASK_SELL_CROP, TargetValue: 1},
+		},
+	}
+}
+
+// MarshalCheckpoint returns the deterministic blob and its exact SHA-256.
+func MarshalCheckpoint(checkpoint *datav1.PlayerCheckpointV1) ([]byte, [32]byte, error) {
+	if err := ValidateCheckpoint(checkpoint); err != nil {
+		return nil, [32]byte{}, err
+	}
+	body, err := (proto.MarshalOptions{Deterministic: true}).Marshal(checkpoint)
+	if err != nil {
+		return nil, [32]byte{}, fmt.Errorf("marshal checkpoint: %w", err)
+	}
+	if len(body) > 4<<20 {
+		return nil, [32]byte{}, errors.New("checkpoint exceeds 4 MiB")
+	}
+	return body, sha256.Sum256(body), nil
+}
+
+// UnmarshalCheckpoint verifies the stored digest before validating the aggregate.
+func UnmarshalCheckpoint(body []byte, digest []byte) (*datav1.PlayerCheckpointV1, error) {
+	if len(body) == 0 || len(body) > 4<<20 {
+		return nil, errors.New("checkpoint blob size is invalid")
+	}
+	actual := sha256.Sum256(body)
+	if len(digest) != len(actual) || !equalBytes(actual[:], digest) {
+		return nil, errors.New("checkpoint SHA-256 mismatch")
+	}
+	checkpoint := &datav1.PlayerCheckpointV1{}
+	if err := proto.Unmarshal(body, checkpoint); err != nil {
+		return nil, fmt.Errorf("unmarshal checkpoint: %w", err)
+	}
+	if err := ValidateCheckpoint(checkpoint); err != nil {
+		return nil, err
+	}
+	return checkpoint, nil
+}
+
+func ValidateCheckpoint(checkpoint *datav1.PlayerCheckpointV1) error {
+	switch {
+	case checkpoint == nil:
+		return errors.New("checkpoint is required")
+	case checkpoint.SchemaVersion != CheckpointSchemaVersion:
+		return fmt.Errorf("unsupported checkpoint schema %d", checkpoint.SchemaVersion)
+	case checkpoint.PlayerId == 0:
+		return errors.New("checkpoint player_id is required")
+	case checkpoint.LogicalShardId != routing.ShardForPlayer(checkpoint.PlayerId):
+		return errors.New("checkpoint logical_shard_id does not match player_id")
+	case checkpoint.OwnerEpoch == 0:
+		return errors.New("checkpoint owner_epoch is required")
+	case checkpoint.CheckpointRevision == 0:
+		return errors.New("checkpoint_revision is required")
+	case checkpoint.CoinBalance < 0:
+		return errors.New("checkpoint coin balance is negative")
+	case checkpoint.CurrentChapter == nil:
+		return errors.New("checkpoint current chapter is required")
+	case checkpoint.LastAppliedConfigVersion == 0:
+		return errors.New("checkpoint config version is required")
+	case checkpoint.CreatedAtMs <= 0 || checkpoint.UpdatedAtMs < checkpoint.CreatedAtMs:
+		return errors.New("checkpoint timestamps are invalid")
+	}
+	if len(checkpoint.Inventory) > 100 {
+		return errors.New("checkpoint inventory type limit exceeded")
+	}
+	inventoryIDs := make(map[uint32]struct{}, len(checkpoint.Inventory))
+	for _, item := range checkpoint.Inventory {
+		if item == nil || item.ItemId == 0 || item.Quantity == 0 || item.Quantity > 300 {
+			return errors.New("checkpoint contains invalid inventory")
+		}
+		if _, duplicate := inventoryIDs[item.ItemId]; duplicate {
+			return errors.New("checkpoint contains duplicate inventory item")
+		}
+		inventoryIDs[item.ItemId] = struct{}{}
+	}
+	plotIDs := make(map[uint32]struct{}, len(checkpoint.Plots))
+	for _, plot := range checkpoint.Plots {
+		if err := validatePlotRecord(plot); err != nil {
+			return err
+		}
+		if _, duplicate := plotIDs[plot.PlotId]; duplicate {
+			return errors.New("checkpoint contains duplicate plot")
+		}
+		plotIDs[plot.PlotId] = struct{}{}
+	}
+	return nil
+}
+
+func validatePlotRecord(plot *datav1.PlotStateRecord) error {
+	if plot == nil || plot.PlotId == 0 {
+		return errors.New("checkpoint contains invalid plot")
+	}
+	switch plot.State {
+	case datav1.PlotRecordState_EMPTY:
+		if plot.CropId != 0 || plot.CropItemId != 0 || plot.CropConfigVersion != 0 ||
+			plot.PlantedAtMs != 0 || plot.MaturityValue != nil ||
+			plot.BaseGrowthRate != nil || plot.BaseYield != 0 ||
+			plot.StolenQuantity != 0 || plot.SettledGrowthValue != nil ||
+			plot.LastSettledAtMs != 0 || plot.EstimatedMatureAtMs != nil ||
+			plot.FertilizerEffect != nil || plot.PestEffect != nil {
+			return errors.New("EMPTY plot contains crop fields")
+		}
+	case datav1.PlotRecordState_GROWING:
+		if !validCropIdentity(plot) ||
+			plot.MaturityValue == nil || plot.MaturityValue.ScaledValue <= 0 ||
+			plot.BaseGrowthRate == nil || plot.BaseGrowthRate.ScaledValue <= 0 ||
+			plot.SettledGrowthValue == nil || plot.SettledGrowthValue.ScaledValue < 0 ||
+			plot.SettledGrowthValue.ScaledValue >= plot.MaturityValue.ScaledValue ||
+			plot.LastSettledAtMs < plot.PlantedAtMs ||
+			plot.EstimatedMatureAtMs == nil ||
+			plot.GetEstimatedMatureAtMs() <= plot.LastSettledAtMs {
+			return errors.New("GROWING plot fields are invalid")
+		}
+		if err := validateTimedEffect(plot.FertilizerEffect, datav1.EffectKind_FERTILIZER, plot.PlantedAtMs); err != nil {
+			return err
+		}
+		if err := validateTimedEffect(plot.PestEffect, datav1.EffectKind_PEST, plot.PlantedAtMs); err != nil {
+			return err
+		}
+	case datav1.PlotRecordState_MATURE:
+		if !validCropIdentity(plot) ||
+			plot.MaturityValue == nil || plot.MaturityValue.ScaledValue <= 0 ||
+			plot.BaseGrowthRate == nil || plot.BaseGrowthRate.ScaledValue <= 0 ||
+			plot.SettledGrowthValue == nil ||
+			plot.SettledGrowthValue.ScaledValue != plot.MaturityValue.ScaledValue ||
+			plot.LastSettledAtMs < plot.PlantedAtMs ||
+			plot.EstimatedMatureAtMs != nil ||
+			plot.FertilizerEffect != nil || plot.PestEffect != nil {
+			return errors.New("MATURE plot fields are invalid")
+		}
+	case datav1.PlotRecordState_NEED_CLEANUP:
+		if !validCropIdentity(plot) ||
+			plot.MaturityValue != nil || plot.BaseGrowthRate != nil ||
+			plot.SettledGrowthValue != nil || plot.LastSettledAtMs != 0 ||
+			plot.EstimatedMatureAtMs != nil ||
+			plot.FertilizerEffect != nil || plot.PestEffect != nil {
+			return errors.New("NEED_CLEANUP plot fields are invalid")
+		}
+	default:
+		return errors.New("checkpoint plot state is invalid")
+	}
+	return nil
+}
+
+func validateTimedEffect(effect *datav1.TimedEffectRecord, kind datav1.EffectKind, plantedAtMS int64) error {
+	if effect == nil {
+		return nil
+	}
+	if len(effect.EffectInstanceId) != 16 || effect.EffectKind != kind ||
+		effect.EffectItemOrPestId == 0 || effect.ConfigVersion == 0 ||
+		effect.Modifier == nil || effect.Modifier.ScaledValue == 0 ||
+		effect.StartAtMs < plantedAtMS || effect.EndAtMs <= effect.StartAtMs {
+		return errors.New("plot timed effect is invalid")
+	}
+	if kind == datav1.EffectKind_FERTILIZER && effect.SourcePlayerId != nil {
+		return errors.New("fertilizer effect has source player")
+	}
+	if kind == datav1.EffectKind_FERTILIZER && effect.Modifier.ScaledValue <= 0 {
+		return errors.New("fertilizer effect modifier is not positive")
+	}
+	return nil
+}
+
+func validCropIdentity(plot *datav1.PlotStateRecord) bool {
+	return plot.CropId != 0 && plot.CropItemId != 0 &&
+		plot.CropConfigVersion != 0 && plot.PlantedAtMs > 0 &&
+		plot.BaseYield > 0 && plot.StolenQuantity <= plot.BaseYield
+}
+
+// StateFromCheckpoint builds the online projection after the persisted
+// checkpoint has passed envelope and digest validation.
+func StateFromCheckpoint(checkpoint *datav1.PlayerCheckpointV1) (*State, error) {
+	if err := ValidateCheckpoint(checkpoint); err != nil {
+		return nil, err
+	}
+	state := &State{
+		PlayerID:           checkpoint.PlayerId,
+		PlayerSeq:          checkpoint.PlayerSeq,
+		CheckpointRevision: checkpoint.CheckpointRevision,
+		Coins:              checkpoint.CoinBalance,
+		Inventory:          make(map[uint32]uint32, len(checkpoint.Inventory)),
+		Plots:              make(map[uint32]*Plot, len(checkpoint.Plots)),
+		ChapterID:          checkpoint.CurrentChapter.ChapterId,
+		Chapter:            chapterv1.ChapterStatus_IN_PROGRESS,
+		ConfigVersion:      checkpoint.LastAppliedConfigVersion,
+		CreatedAtMS:        checkpoint.CreatedAtMs,
+		UpdatedAtMS:        checkpoint.UpdatedAtMs,
+	}
+	for _, item := range checkpoint.Inventory {
+		if item == nil || item.ItemId == 0 || item.Quantity == 0 {
+			return nil, errors.New("checkpoint contains invalid inventory")
+		}
+		if _, exists := state.Inventory[item.ItemId]; exists {
+			return nil, errors.New("checkpoint contains duplicate inventory item")
+		}
+		state.Inventory[item.ItemId] = item.Quantity
+	}
+	for _, plot := range checkpoint.Plots {
+		if plot == nil || plot.PlotId == 0 {
+			return nil, errors.New("checkpoint contains invalid plot")
+		}
+		if _, exists := state.Plots[plot.PlotId]; exists {
+			return nil, errors.New("checkpoint contains duplicate plot")
+		}
+		state.Plots[plot.PlotId] = plotFromRecord(plot)
+	}
+	for _, task := range checkpoint.CurrentChapter.Tasks {
+		if task == nil || task.TaskId == 0 || task.TargetValue == 0 {
+			return nil, errors.New("checkpoint contains invalid task")
+		}
+		state.Tasks = append(state.Tasks, Task{ID: task.TaskId, Current: task.CurrentValue, Target: task.TargetValue})
+	}
+	for _, result := range checkpoint.RecentResults {
+		if result == nil {
+			return nil, errors.New("checkpoint contains nil idempotency result")
+		}
+		state.RecentResults = append(state.RecentResults, proto.Clone(result).(*datav1.IdempotencyResultRecord))
+	}
+	return state, nil
+}
+
+func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
+	if s == nil {
+		return nil, errors.New("state is required")
+	}
+	inventoryIDs := make([]int, 0, len(s.Inventory))
+	for itemID, quantity := range s.Inventory {
+		if itemID == 0 || quantity == 0 {
+			return nil, errors.New("state contains invalid inventory")
+		}
+		inventoryIDs = append(inventoryIDs, int(itemID))
+	}
+	sort.Ints(inventoryIDs)
+	inventory := make([]*datav1.InventoryStack, 0, len(inventoryIDs))
+	for _, itemID := range inventoryIDs {
+		inventory = append(inventory, &datav1.InventoryStack{
+			ItemId: uint32(itemID), Quantity: s.Inventory[uint32(itemID)],
+		})
+	}
+	plotIDs := make([]uint32, 0, len(s.Plots))
+	for plotID := range s.Plots {
+		plotIDs = append(plotIDs, plotID)
+	}
+	sort.Slice(plotIDs, func(i, j int) bool { return plotIDs[i] < plotIDs[j] })
+	plots := make([]*datav1.PlotStateRecord, 0, len(plotIDs))
+	for _, plotID := range plotIDs {
+		record, err := s.Plots[plotID].Record()
+		if err != nil {
+			return nil, err
+		}
+		plots = append(plots, record)
+	}
+	tasks := append([]Task(nil), s.Tasks...)
+	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
+	taskRecords := make([]*datav1.TaskStateRecord, 0, len(tasks))
+	for _, task := range tasks {
+		taskRecords = append(taskRecords, &datav1.TaskStateRecord{
+			TaskId: task.ID, TaskConfigVersion: s.ConfigVersion,
+			Metric: taskMetric(task.ID), CurrentValue: task.Current,
+			TargetValue: task.Target, Completed: task.Current >= task.Target,
+		})
+	}
+	recent := make([]*datav1.IdempotencyResultRecord, 0, len(s.RecentResults))
+	for _, result := range s.RecentResults {
+		recent = append(recent, proto.Clone(result).(*datav1.IdempotencyResultRecord))
+	}
+	checkpoint := &datav1.PlayerCheckpointV1{
+		SchemaVersion: CheckpointSchemaVersion, PlayerId: s.PlayerID,
+		LogicalShardId: routing.ShardForPlayer(s.PlayerID), OwnerEpoch: LocalOwnerEpoch,
+		PlayerSeq: s.PlayerSeq, CheckpointRevision: s.CheckpointRevision,
+		CoinBalance: s.Coins, Inventory: inventory, Plots: plots,
+		CurrentChapter: &datav1.ChapterStateRecord{
+			ChapterId: s.ChapterID, ChapterConfigVersion: s.ConfigVersion,
+			Status:        datav1.ChapterRecordStatus_IN_PROGRESS,
+			ActivatedAtMs: s.CreatedAtMS, Tasks: taskRecords,
+		},
+		RecentResults: recent, LastAppliedConfigVersion: s.ConfigVersion,
+		CreatedAtMs: s.CreatedAtMS, UpdatedAtMs: s.UpdatedAtMS,
+	}
+	if err := ValidateCheckpoint(checkpoint); err != nil {
+		return nil, err
+	}
+	return checkpoint, nil
+}
+
+func plotFromRecord(record *datav1.PlotStateRecord) *Plot {
+	plot := &Plot{
+		ID: record.PlotId, State: plotStateFromRecord(record.State),
+		CropID: record.CropId, CropItemID: record.CropItemId,
+		CropConfigVersion: record.CropConfigVersion, PlantedAtMS: record.PlantedAtMs,
+		BaseYield: record.BaseYield, StolenQuantity: record.StolenQuantity,
+		LastSettledAtMS: record.LastSettledAtMs,
+	}
+	if record.MaturityValue != nil {
+		plot.MaturityValueScaled9 = record.MaturityValue.ScaledValue
+	}
+	if record.BaseGrowthRate != nil {
+		plot.BaseGrowthRateScaled6 = record.BaseGrowthRate.ScaledValue
+	}
+	if record.SettledGrowthValue != nil {
+		plot.SettledGrowthValueScaled9 = record.SettledGrowthValue.ScaledValue
+	}
+	if record.EstimatedMatureAtMs != nil {
+		estimate := record.GetEstimatedMatureAtMs()
+		plot.EstimatedMatureAtMS = &estimate
+	}
+	if record.FertilizerEffect != nil {
+		plot.FertilizerEffect = proto.Clone(record.FertilizerEffect).(*datav1.TimedEffectRecord)
+	}
+	if record.PestEffect != nil {
+		plot.PestEffect = proto.Clone(record.PestEffect).(*datav1.TimedEffectRecord)
+	}
+	return plot
+}
+
+func (p *Plot) Record() (*datav1.PlotStateRecord, error) {
+	if p == nil || p.ID == 0 {
+		return nil, errors.New("state contains invalid plot")
+	}
+	record := &datav1.PlotStateRecord{
+		PlotId: p.ID, State: plotStateToRecord(p.State),
+		CropId: p.CropID, CropItemId: p.CropItemID,
+		CropConfigVersion: p.CropConfigVersion, PlantedAtMs: p.PlantedAtMS,
+		BaseYield: p.BaseYield, StolenQuantity: p.StolenQuantity,
+		LastSettledAtMs: p.LastSettledAtMS,
+	}
+	if p.State == plotv1.PlotState_GROWING || p.State == plotv1.PlotState_MATURE {
+		record.MaturityValue = &datav1.GrowthDecimal9{ScaledValue: p.MaturityValueScaled9}
+		record.BaseGrowthRate = &datav1.RateDecimal6{ScaledValue: p.BaseGrowthRateScaled6}
+		record.SettledGrowthValue = &datav1.GrowthDecimal9{ScaledValue: p.SettledGrowthValueScaled9}
+	}
+	if p.EstimatedMatureAtMS != nil {
+		estimate := *p.EstimatedMatureAtMS
+		record.EstimatedMatureAtMs = &estimate
+	}
+	if p.FertilizerEffect != nil {
+		record.FertilizerEffect = proto.Clone(p.FertilizerEffect).(*datav1.TimedEffectRecord)
+	}
+	if p.PestEffect != nil {
+		record.PestEffect = proto.Clone(p.PestEffect).(*datav1.TimedEffectRecord)
+	}
+	return record, nil
+}
+
+func plotStateFromRecord(state datav1.PlotRecordState) plotv1.PlotState {
+	switch state {
+	case datav1.PlotRecordState_EMPTY:
+		return plotv1.PlotState_EMPTY
+	case datav1.PlotRecordState_GROWING:
+		return plotv1.PlotState_GROWING
+	case datav1.PlotRecordState_MATURE:
+		return plotv1.PlotState_MATURE
+	case datav1.PlotRecordState_NEED_CLEANUP:
+		return plotv1.PlotState_NEED_CLEANUP
+	default:
+		return plotv1.PlotState_UNSPECIFIED
+	}
+}
+
+func plotStateToRecord(state plotv1.PlotState) datav1.PlotRecordState {
+	switch state {
+	case plotv1.PlotState_EMPTY:
+		return datav1.PlotRecordState_EMPTY
+	case plotv1.PlotState_GROWING:
+		return datav1.PlotRecordState_GROWING
+	case plotv1.PlotState_MATURE:
+		return datav1.PlotRecordState_MATURE
+	case plotv1.PlotState_NEED_CLEANUP:
+		return datav1.PlotRecordState_NEED_CLEANUP
+	default:
+		return datav1.PlotRecordState_PLOT_RECORD_STATE_UNSPECIFIED
+	}
+}
+
+func taskMetric(taskID uint32) datav1.TaskMetric {
+	switch taskID {
+	case 1:
+		return datav1.TaskMetric_TASK_BUY_SEEDS
+	case 2:
+		return datav1.TaskMetric_TASK_PLANT
+	case 3:
+		return datav1.TaskMetric_TASK_APPLY_FERTILIZER
+	case 4:
+		return datav1.TaskMetric_TASK_HARVEST
+	case 5:
+		return datav1.TaskMetric_TASK_SELL_CROP
+	default:
+		return datav1.TaskMetric_TASK_METRIC_UNSPECIFIED
+	}
+}
+
+func equalBytes(left, right []byte) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	var different byte
+	for i := range left {
+		different |= left[i] ^ right[i]
+	}
+	return different == 0
+}

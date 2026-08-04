@@ -1,0 +1,316 @@
+syntax = "proto3";
+
+package classicfarm.ws.v1;
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws;wsv1";
+
+import "classicfarm/v1/ws/chapter/chapter_status.proto";
+import "classicfarm/v1/ws/plot/plot_state.proto";
+import "classicfarm/v1/ws/reason/state_change_reason.proto";
+
+enum MessageKind {
+  MESSAGE_KIND_UNSPECIFIED = 0;
+  REQUEST = 1;
+  RESPONSE = 2;
+  PUSH = 3;
+}
+
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  AUTH = 1;
+  PING = 2;
+  reserved 3 to 99;
+  GET_PLAYER_SNAPSHOT = 100;
+  GET_SHOP = 101;
+  reserved 102 to 199;
+  BUY_SEEDS = 200;
+  PLANT = 201;
+  APPLY_FERTILIZER = 202;
+  HARVEST = 203;
+  CLEAN_PLOT = 204;
+  SELL_CROP = 205;
+  CLAIM_CHAPTER_REWARD = 206;
+  reserved 207 to 999;
+  PLAYER_STATE_CHANGED = 1000;
+  reserved 1001 to 1999;
+}
+
+enum ErrorCode {
+  ERROR_UNSPECIFIED = 0;
+  INVALID_ARGUMENT = 100;
+  UNKNOWN_ACTION = 101;
+  UNSUPPORTED_PROTOCOL_VERSION = 102;
+  UNAUTHENTICATED = 103;
+  FORBIDDEN = 104;
+  REQUEST_ID_CONFLICT = 105;
+  RATE_LIMITED = 106;
+  SERVICE_UNAVAILABLE = 200;
+  SERVER_BUSY = 201;
+  REQUEST_OUTCOME_UNKNOWN = 202;
+  CONFIG_UNAVAILABLE = 203;
+  SHOP_ENTRY_NOT_FOUND = 300;
+  SHOP_ENTRY_DISABLED = 301;
+  PRICE_CHANGED = 302;
+  CONFIG_ENTRY_DISABLED = 303;
+  INSUFFICIENT_COINS = 400;
+  INVENTORY_TYPE_LIMIT = 401;
+  INVENTORY_STACK_LIMIT = 402;
+  ITEM_NOT_OWNED = 403;
+  INSUFFICIENT_ITEM_QUANTITY = 404;
+  ITEM_NOT_SELLABLE = 405;
+  PLOT_NOT_FOUND = 500;
+  PLOT_STATE_CONFLICT = 501;
+  FERTILIZER_ALREADY_ACTIVE = 502;
+  CROP_NOT_MATURE = 503;
+  CHAPTER_NOT_FOUND = 600;
+  CHAPTER_NOT_CLAIMABLE = 601;
+  CHAPTER_REWARD_ALREADY_CLAIMED = 602;
+}
+
+message WsEnvelope {
+  uint32 protocol_version = 1;
+  MessageKind message_kind = 2;
+  Action action = 3;
+  string request_id = 4;
+  uint64 target_player_id = 5;
+  StateVersion state_version = 6;
+  int64 server_time_ms = 7;
+  bool replayed = 8;
+  Error error = 9;
+  oneof payload {
+    AuthRequest auth_request = 10;
+    AuthResponse auth_response = 11;
+    PingRequest ping_request = 12;
+    PingResponse ping_response = 13;
+    GetPlayerSnapshotRequest get_player_snapshot_request = 14;
+    GetPlayerSnapshotResponse get_player_snapshot_response = 15;
+    GetShopRequest get_shop_request = 16;
+    GetShopResponse get_shop_response = 17;
+    BuySeedsRequest buy_seeds_request = 18;
+    BuySeedsResponse buy_seeds_response = 19;
+    PlantRequest plant_request = 20;
+    PlantResponse plant_response = 21;
+    ApplyFertilizerRequest apply_fertilizer_request = 22;
+    ApplyFertilizerResponse apply_fertilizer_response = 23;
+    HarvestRequest harvest_request = 24;
+    HarvestResponse harvest_response = 25;
+    CleanPlotRequest clean_plot_request = 26;
+    CleanPlotResponse clean_plot_response = 27;
+    SellCropRequest sell_crop_request = 28;
+    SellCropResponse sell_crop_response = 29;
+    ClaimChapterRewardRequest claim_chapter_reward_request = 30;
+    ClaimChapterRewardResponse claim_chapter_reward_response = 31;
+    PlayerStateChangedPush player_state_changed_push = 32;
+  }
+  reserved 33 to 99;
+}
+
+message StateVersion {
+  uint64 owner_epoch = 1;
+  uint64 player_seq = 2;
+}
+
+message ErrorParam {
+  string key = 1;
+  string value = 2;
+}
+
+message Error {
+  ErrorCode code = 1;
+  repeated ErrorParam params = 2;
+  bool retryable = 3;
+  optional uint32 retry_after_ms = 4;
+  optional ShopEntryView latest_shop_entry = 5;
+  optional PlotView current_plot = 6;
+  optional string debug_message = 7;
+}
+
+message AuthRequest {
+  string ws_ticket = 1;
+}
+
+message AuthResponse {
+  uint64 player_id = 1;
+  uint32 heartbeat_interval_ms = 2;
+  uint64 client_config_version = 3;
+  string client_config_url = 4;
+  bytes client_config_sha256 = 5;
+  uint32 protocol_min = 6;
+  uint32 protocol_max = 7;
+}
+
+message PingRequest {
+  uint64 ping_id = 1;
+  int64 client_sent_at_ms = 2;
+}
+
+message PingResponse {
+  uint64 ping_id = 1;
+  int64 client_sent_at_ms = 2;
+}
+
+message GetShopRequest {}
+
+message GetShopResponse {
+  uint64 server_config_version = 1;
+  repeated ShopEntryView entries = 2;
+}
+
+message ShopEntryView {
+  uint32 shop_entry_id = 1;
+  uint32 item_id = 2;
+  int64 unit_price = 3;
+  uint64 price_version = 4;
+  bool enabled = 5;
+}
+
+message GetPlayerSnapshotRequest {}
+
+message GetPlayerSnapshotResponse {
+  PlayerSnapshot snapshot = 1;
+}
+
+message PlayerSnapshot {
+  uint64 player_id = 1;
+  int64 coin_balance = 2;
+  repeated ItemStackView inventory = 3;
+  repeated PlotView plots = 4;
+  ChapterView current_chapter = 5;
+  uint64 server_config_version = 6;
+}
+
+message ItemStackView {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+}
+
+message EffectView {
+  string effect_instance_id = 1;
+  uint32 effect_item_id = 2;
+  uint64 effect_config_version = 3;
+  int64 start_at_ms = 4;
+  int64 end_at_ms = 5;
+  optional uint64 source_player_id = 6;
+}
+
+message PlotView {
+  uint32 plot_id = 1;
+  .classicfarm.ws.v1.plot.PlotState plot_state = 2;
+  uint32 crop_id = 3;
+  uint64 crop_config_version = 4;
+  int64 planted_at_ms = 5;
+  int64 estimated_mature_at_ms = 6;
+  uint32 harvestable_quantity = 7;
+  EffectView fertilizer_effect = 8;
+  EffectView pest_effect = 9;
+}
+
+message ChapterView {
+  uint32 chapter_id = 1;
+  .classicfarm.ws.v1.chapter.ChapterStatus status = 2;
+  repeated TaskProgressView tasks = 3;
+}
+
+message TaskProgressView {
+  uint32 task_id = 1;
+  uint32 current_value = 2;
+  uint32 target_value = 3;
+  bool completed = 4;
+}
+
+message PlayerStatePatch {
+  optional int64 coin_balance = 1;
+  repeated ItemStackView inventory_upserts = 2;
+  repeated uint32 inventory_removed_item_ids = 3;
+  repeated PlotView plot_upserts = 4;
+  optional ChapterView current_chapter = 5;
+}
+
+message BuySeedsRequest {
+  uint32 shop_entry_id = 1;
+  uint32 quantity = 2;
+  uint64 expected_price_version = 3;
+}
+
+message BuySeedsResponse {
+  uint32 shop_entry_id = 1;
+  uint32 item_id = 2;
+  uint32 quantity = 3;
+  int64 unit_price = 4;
+  int64 total_price = 5;
+  PlayerStatePatch patch = 6;
+}
+
+message PlantRequest {
+  uint32 plot_id = 1;
+  uint32 seed_item_id = 2;
+}
+
+message PlantResponse {
+  uint32 consumed_seed_item_id = 1;
+  PlayerStatePatch patch = 2;
+}
+
+message ApplyFertilizerRequest {
+  uint32 plot_id = 1;
+  uint32 fertilizer_item_id = 2;
+}
+
+message ApplyFertilizerResponse {
+  uint32 consumed_fertilizer_item_id = 1;
+  string effect_instance_id = 2;
+  PlayerStatePatch patch = 3;
+}
+
+message HarvestRequest {
+  uint32 plot_id = 1;
+}
+
+message HarvestResponse {
+  uint32 crop_item_id = 1;
+  uint32 harvested_quantity = 2;
+  PlayerStatePatch patch = 3;
+}
+
+message CleanPlotRequest {
+  uint32 plot_id = 1;
+}
+
+message CleanPlotResponse {
+  PlayerStatePatch patch = 1;
+}
+
+message SellCropRequest {
+  uint32 crop_item_id = 1;
+  uint64 expected_price_version = 2;
+  oneof amount {
+    uint32 quantity = 3;
+    bool sell_all = 4;
+  }
+}
+
+message SellCropResponse {
+  uint32 crop_item_id = 1;
+  uint32 sold_quantity = 2;
+  int64 unit_price = 3;
+  int64 total_price = 4;
+  PlayerStatePatch patch = 5;
+}
+
+message ClaimChapterRewardRequest {
+  uint32 chapter_id = 1;
+}
+
+message ClaimChapterRewardResponse {
+  uint32 chapter_id = 1;
+  int64 coin_granted = 2;
+  repeated ItemStackView items_added_to_inventory = 3;
+  repeated ItemStackView items_pending_mail = 4;
+  PlayerStatePatch patch = 5;
+}
+
+message PlayerStateChangedPush {
+  .classicfarm.ws.v1.reason.StateChangeReason reason = 1;
+  optional string caused_by_request_id = 2;
+  PlayerStatePatch patch = 3;
+}

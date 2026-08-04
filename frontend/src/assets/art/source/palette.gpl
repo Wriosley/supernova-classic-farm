@@ -1,0 +1,20 @@
+GIMP Palette
+Name: Classic Farm MVP
+Columns: 8
+#
+ 36  46  51 dark-outline
+ 62  73  62 dark-green
+ 80 126  75 leaf
+111 166  88 grass
+157 200 104 grass-light
+ 91  63  48 soil-dark
+139  91  59 soil
+181 125  75 soil-light
+ 82  53  42 wood-dark
+139  83  54 wood
+215 160  82 straw
+238 198  93 gold
+244 226 159 cream
+193  63  60 red
+ 70 126 180 blue
+236 239 224 highlight
