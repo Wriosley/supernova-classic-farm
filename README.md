@@ -33,6 +33,46 @@ Zone 还实现了最小不可变版本化配置快照；`GET_SHOP` 返回当前�
 
 ## 本地启动
 
+### Linux
+
+首次启动先创建本地配置并填写密码、端口：
+
+```bash
+cp .env.example .env
+```
+
+后端和 Vite H5 都读取仓库根目录这份 `.env`。可通过 `WEB_PORT`、
+`LOGIN_PORT`、`GATE_PORT`、`ZONE_PORT`、`ZONE_B_PORT`、
+`COORDINATOR_PORT` 和 `MYSQL_PORT` 统一调整端口。
+
+启动 MySQL 并应用迁移：
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d mysql
+./deploy/migrate.sh
+```
+
+启动 Linux 双 Zone + MySQL 基线：
+
+```bash
+./start-servers.sh --dual-zone --mysql
+```
+
+脚本优先读取进程中的 `MYSQL_DSN`；未提供时，使用仓库根目录 `.env`
+里的 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER` 和
+`MYSQL_PASSWORD` 构造本地连接。脚本不会打印 DSN 或密码。按 `Ctrl+C`
+会向后端发送正常终止信号，并等待 Zone 最终刷 Dirty。
+
+另开一个终端启动 H5：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+### Windows
+
 启动全部 Go 后端（Login、Gate、Zone、Coordinator）：
 
 ```powershell

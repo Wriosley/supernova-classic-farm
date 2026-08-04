@@ -4,6 +4,15 @@ Local development uses MySQL 8.4 when Docker is available.
 
 From the repository root:
 
+Linux:
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d mysql
+./deploy/migrate.sh
+```
+
+Windows:
+
 ```powershell
 Copy-Item .env.example .env
 .\dev.ps1 -Action migrate

@@ -128,7 +128,6 @@ function localConfigUrl(advertisedUrl: string): string {
   if (
     import.meta.env.DEV &&
     isLoopback &&
-    url.port === '8080' &&
     url.pathname.startsWith('/v1/')
   ) {
     return `${url.pathname}${url.search}`
