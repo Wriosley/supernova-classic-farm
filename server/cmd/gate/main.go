@@ -46,14 +46,25 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	routeSource := &gateway.HTTPRouteResolver{
+		Client: client, BaseURL: envOr("COORDINATOR_URL", "http://127.0.0.1:8083"),
+	}
+	routeCache, err := gateway.NewCachedRouteResolver(routeSource, time.Now)
+	if err != nil {
+		return err
+	}
+	warmCtx, warmCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err = routeCache.Warm(warmCtx)
+	warmCancel()
+	if err != nil {
+		return fmt.Errorf("warm route cache: %w", err)
+	}
 	wsHandler, err := gateway.NewHandler(gateway.Config{
 		Tickets: &gateway.HTTPTicketConsumer{
 			Client: client, Endpoint: envOr("LOGIN_TICKET_CONSUME_URL", "http://127.0.0.1:8080/internal/v1/ws-tickets/consume"),
 			GatewayID: gateway.DefaultGatewayID,
 		},
-		Routes: &gateway.HTTPRouteResolver{
-			Client: client, BaseURL: envOr("COORDINATOR_URL", "http://127.0.0.1:8083"),
-		},
+		Routes:          routeCache,
 		Zone:            &gateway.HTTPZoneCommander{Client: client},
 		ClientConfigURL: clientConfigURL,
 		ClientConfigSHA: configSHA,

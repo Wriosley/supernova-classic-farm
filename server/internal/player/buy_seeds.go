@@ -115,14 +115,14 @@ func (r *Runtime) buySeeds(
 		FingerprintSchemaVersion: idempotencyFingerprintSchemaVersion,
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
-		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: LocalOwnerEpoch,
+		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: a.state.OwnerEpoch,
 		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_BUY_SEEDS),
 		ResponsePayload: body,
 	}, now)
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
 		Action: request.Action, RequestId: request.RequestId, TargetPlayerId: request.TargetPlayerId,
-		StateVersion: &wsv1.StateVersion{OwnerEpoch: LocalOwnerEpoch, PlayerSeq: a.state.PlayerSeq},
+		StateVersion: &wsv1.StateVersion{OwnerEpoch: a.state.OwnerEpoch, PlayerSeq: a.state.PlayerSeq},
 		ServerTimeMs: now.UnixMilli(),
 		Payload:      &wsv1.WsEnvelope_BuySeedsResponse{BuySeedsResponse: payload},
 	}, true
@@ -146,7 +146,7 @@ func (r *Runtime) storeBuySeedsFailure(
 		FingerprintSchemaVersion: idempotencyFingerprintSchemaVersion,
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
-		CompletedAtMs: now.UnixMilli(), Success: false, ResultOwnerEpoch: LocalOwnerEpoch,
+		CompletedAtMs: now.UnixMilli(), Success: false, ResultOwnerEpoch: a.state.OwnerEpoch,
 		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_BUY_SEEDS),
 		ErrorPayload: body,
 	}, now)
@@ -195,7 +195,7 @@ func errorEnvelope(request *wsv1.WsEnvelope, state *State, now time.Time, failur
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
 		Action: request.Action, RequestId: request.RequestId, TargetPlayerId: request.TargetPlayerId,
-		StateVersion: &wsv1.StateVersion{OwnerEpoch: LocalOwnerEpoch, PlayerSeq: state.PlayerSeq},
+		StateVersion: &wsv1.StateVersion{OwnerEpoch: state.OwnerEpoch, PlayerSeq: state.PlayerSeq},
 		ServerTimeMs: now.UnixMilli(), Error: failure,
 	}
 }

@@ -314,6 +314,7 @@ func StateFromCheckpoint(checkpoint *datav1.PlayerCheckpointV1) (*State, error) 
 	}
 	state := &State{
 		PlayerID:             checkpoint.PlayerId,
+		OwnerEpoch:           checkpoint.OwnerEpoch,
 		PlayerSeq:            checkpoint.PlayerSeq,
 		CheckpointRevision:   checkpoint.CheckpointRevision,
 		Coins:                checkpoint.CoinBalance,
@@ -426,7 +427,7 @@ func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
 	})
 	checkpoint := &datav1.PlayerCheckpointV1{
 		SchemaVersion: CheckpointSchemaVersion, PlayerId: s.PlayerID,
-		LogicalShardId: routing.ShardForPlayer(s.PlayerID), OwnerEpoch: LocalOwnerEpoch,
+		LogicalShardId: routing.ShardForPlayer(s.PlayerID), OwnerEpoch: s.OwnerEpoch,
 		PlayerSeq: s.PlayerSeq, CheckpointRevision: s.CheckpointRevision,
 		CoinBalance: s.Coins, Inventory: inventory, Plots: plots,
 		CurrentChapter: &datav1.ChapterStateRecord{

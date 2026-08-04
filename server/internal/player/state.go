@@ -46,6 +46,7 @@ type Plot struct {
 
 type State struct {
 	PlayerID             uint64
+	OwnerEpoch           uint64
 	PlayerSeq            uint64
 	CheckpointRevision   uint64
 	Coins                int64
@@ -69,6 +70,7 @@ func NewDevelopmentState(playerID uint64) *State {
 	nowMS := time.Now().UnixMilli()
 	return &State{
 		PlayerID:             playerID,
+		OwnerEpoch:           LocalOwnerEpoch,
 		CheckpointRevision:   1,
 		Coins:                InitialCoinBalance,
 		Inventory:            map[uint32]uint32{BasicFertilizerID: 1},

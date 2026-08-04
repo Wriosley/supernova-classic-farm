@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
@@ -21,6 +23,11 @@ import (
 )
 
 const defaultLeaseDuration = 30 * time.Second
+
+const (
+	routingModeLocal          = "local"
+	routingModeStaticDualZone = "static-dual-zone"
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -46,19 +53,117 @@ func run() error {
 	if err != nil {
 		return err
 	}
-
-	now := time.Now().UTC()
-	routes, err := routing.NewLocalMap(now, leaseDuration)
+	mode, zones, err := routingConfigurationFromEnvironment()
 	if err != nil {
 		return err
 	}
 
+	now := time.Now().UTC()
+	routes, err := routing.NewStaticMap(now, leaseDuration, zones)
+	if err != nil {
+		return err
+	}
+	var mysqlDB *sql.DB
+	var migrations *migrationHandler
+	if mode == routingModeStaticDualZone {
+		migrations = newMigrationHandler(
+			routes, zones, &http.Client{Timeout: 5 * time.Second},
+			time.Now, leaseDuration,
+		)
+		if dsn := strings.TrimSpace(os.Getenv("MYSQL_DSN")); dsn != "" {
+			if strings.TrimSpace(os.Getenv("DUAL_ZONE_FENCE_BOOTSTRAP")) != "1" {
+				return errors.New(
+					"dual-Zone MySQL requires DUAL_ZONE_FENCE_BOOTSTRAP=1",
+				)
+			}
+			db, openErr := database.OpenMySQL(context.Background(), dsn)
+			if openErr != nil {
+				return openErr
+			}
+			mysqlDB = db
+			defer db.Close()
+			fenceCtx, fenceCancel := context.WithTimeout(
+				context.Background(), 30*time.Second,
+			)
+			fences, loadErr := routing.LoadMySQLFences(fenceCtx, db)
+			if loadErr != nil {
+				fenceCancel()
+				return loadErr
+			}
+			if routing.FencesAreEpochOneBootstrap(fences, routes.Snapshot()) {
+				updated, reconcileErr := routing.ReconcileStaticMySQLFences(
+					fenceCtx, db, routes.Snapshot(), now,
+				)
+				fenceCancel()
+				if reconcileErr != nil {
+					return reconcileErr
+				}
+				logger.Info(
+					"static dual-Zone MySQL fences aligned",
+					"updated_shards", updated,
+				)
+			} else {
+				hydrateErr := routing.HydrateActiveRoutesFromFences(
+					routes, fences, zones, now, leaseDuration,
+				)
+				fenceCancel()
+				if hydrateErr != nil {
+					return hydrateErr
+				}
+				logger.Info("dual-Zone MySQL routes hydrated from fences")
+			}
+			migrations.db = mysqlDB
+			migrations.advanceFence = func(
+				ctx context.Context,
+				prepared routing.RouteEntry,
+			) error {
+				return routing.AdvanceMySQLFence(ctx, mysqlDB, prepared)
+			}
+			overlayCtx, overlayCancel := context.WithTimeout(
+				context.Background(), 10*time.Second,
+			)
+			openCount, overlayErr := migrations.loadOpenProgress(overlayCtx, now)
+			overlayCancel()
+			if overlayErr != nil {
+				return overlayErr
+			}
+			if openCount > 0 {
+				logger.Warn(
+					"loaded open PREPARING migrations; fail-closed until continue or abandon",
+					"open_migrations", openCount,
+				)
+			}
+		}
+	}
+
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
-	go renewLocalLeases(ctx, routes, leaseDuration, logger)
+	go renewOwnedLeases(ctx, routes, zones, leaseDuration, logger)
 
 	mux := http.NewServeMux()
-	mux.Handle("/internal/v1/routes/", routing.NewHTTPHandler(routes, time.Now))
+	mux.Handle("/internal/v1/", routing.NewHTTPHandler(routes, time.Now))
+	if mode == routingModeStaticDualZone && migrations != nil {
+		mux.HandleFunc(
+			"POST /internal/v1/shards/{shard_id}/move",
+			migrations.move,
+		)
+		mux.HandleFunc(
+			"GET /internal/v1/shards/{shard_id}/migration",
+			migrations.inspect,
+		)
+		mux.HandleFunc(
+			"GET /internal/v1/migrations",
+			migrations.listOpen,
+		)
+		mux.HandleFunc(
+			"POST /internal/v1/shards/{shard_id}/migration/continue",
+			migrations.continueMigration,
+		)
+		mux.HandleFunc(
+			"POST /internal/v1/shards/{shard_id}/migration/abandon",
+			migrations.abandonMigration,
+		)
+	}
 	mux.Handle("/", health.NewHandler(health.Check{
 		Name: "shard_map",
 		Run: func(context.Context) error {
@@ -66,8 +171,16 @@ func run() error {
 			if len(snapshot.Entries) != int(routing.ShardCount) {
 				return fmt.Errorf("expected %d routes, got %d", routing.ShardCount, len(snapshot.Entries))
 			}
-			_, err := routes.Route(0, time.Now())
-			return err
+			active := 0
+			for _, entry := range snapshot.Entries {
+				if entry.State == routing.RouteStateActive {
+					active++
+				}
+			}
+			if active == 0 {
+				return errors.New("no ACTIVE shard routes are committed")
+			}
+			return nil
 		},
 	}))
 
@@ -82,9 +195,9 @@ func run() error {
 	logger.Info(
 		"single-node coordinator listening",
 		"address", cfg.HTTPAddress,
+		"routing_mode", mode,
 		"shard_count", routing.ShardCount,
-		"zone_id", routing.DefaultZoneID,
-		"zone_endpoint", routing.DefaultZoneEndpoint,
+		"zone_count", len(zones),
 		"lease_duration", leaseDuration.String(),
 		"consensus", false,
 		"high_availability", false,
@@ -92,9 +205,10 @@ func run() error {
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
 }
 
-func renewLocalLeases(
+func renewOwnedLeases(
 	ctx context.Context,
 	routes *routing.Map,
+	zones []routing.ZoneCandidate,
 	leaseDuration time.Duration,
 	logger *slog.Logger,
 ) {
@@ -105,18 +219,60 @@ func renewLocalLeases(
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			renewed, err := routes.RenewOwnedLeases(
-				routing.DefaultZoneID,
-				now.UTC(),
-				leaseDuration,
-			)
-			if err != nil {
-				logger.Error("local lease renewal failed", "error", err)
-				continue
+			for _, zone := range zones {
+				renewed, err := routes.RenewOwnedLeases(
+					zone.ZoneID,
+					now.UTC(),
+					leaseDuration,
+				)
+				if err != nil {
+					logger.Error("lease renewal failed",
+						"zone_id", zone.ZoneID, "error", err)
+					continue
+				}
+				logger.Debug("leases renewed",
+					"zone_id", zone.ZoneID, "route_count", renewed)
 			}
-			logger.Debug("local leases renewed", "route_count", renewed)
 		}
 	}
+}
+
+func routingConfigurationFromEnvironment() (
+	string,
+	[]routing.ZoneCandidate,
+	error,
+) {
+	mode := strings.TrimSpace(os.Getenv("ROUTING_MODE"))
+	if mode == "" {
+		mode = routingModeLocal
+	}
+	switch mode {
+	case routingModeLocal:
+		return mode, []routing.ZoneCandidate{{
+			ZoneID: routing.DefaultZoneID, Endpoint: routing.DefaultZoneEndpoint,
+		}}, nil
+	case routingModeStaticDualZone:
+		zones := []routing.ZoneCandidate{
+			{
+				ZoneID:   environmentOr("ZONE_A_ID", "zone-a"),
+				Endpoint: environmentOr("ZONE_A_ENDPOINT", "http://127.0.0.1:8082"),
+			},
+			{
+				ZoneID:   environmentOr("ZONE_B_ID", "zone-b"),
+				Endpoint: environmentOr("ZONE_B_ENDPOINT", "http://127.0.0.1:8084"),
+			},
+		}
+		return mode, zones, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported ROUTING_MODE %q", mode)
+	}
+}
+
+func environmentOr(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func leaseDurationFromEnvironment() (time.Duration, error) {

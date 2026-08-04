@@ -1,9 +1,11 @@
 package player
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -12,6 +14,7 @@ import (
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/actor"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
 
 const (
@@ -31,6 +34,12 @@ type runtimeActor struct {
 	mailbox           *actor.Mailbox
 	state             *State
 	persistedRevision uint64
+}
+
+type DrainedPlayer struct {
+	PlayerID           uint64 `json:"player_id"`
+	OwnerEpoch         uint64 `json:"owner_epoch"`
+	CheckpointRevision uint64 `json:"checkpoint_revision"`
 }
 
 type CheckpointLoader interface {
@@ -55,6 +64,7 @@ type Runtime struct {
 	backgroundCtx context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+	shardLocks    [routing.ShardCount]sync.RWMutex
 }
 
 func NewRuntime() *Runtime {
@@ -109,10 +119,13 @@ func (r *Runtime) materializeOnlineMaturities(ctx context.Context) error {
 	r.mu.Unlock()
 	sort.Slice(playerIDs, func(i, j int) bool { return playerIDs[i] < playerIDs[j] })
 	for _, playerID := range playerIDs {
+		shardID := routing.ShardForPlayer(playerID)
+		r.shardLocks[shardID].RLock()
 		r.mu.Lock()
 		a := r.actors[playerID]
 		r.mu.Unlock()
 		if a == nil {
+			r.shardLocks[shardID].RUnlock()
 			continue
 		}
 		var events []MaturityEvent
@@ -122,17 +135,21 @@ func (r *Runtime) materializeOnlineMaturities(ctx context.Context) error {
 			events, maturityErr = a.state.materializeDueMaturities(r.now())
 			revision = a.state.CheckpointRevision
 		}); err != nil {
+			r.shardLocks[shardID].RUnlock()
 			return fmt.Errorf("schedule maturity for player %d: %w", playerID, err)
 		}
 		if maturityErr != nil {
+			r.shardLocks[shardID].RUnlock()
 			return fmt.Errorf("materialize maturity for player %d: %w", playerID, maturityErr)
 		}
 		if len(events) > 0 {
 			r.markDirty(playerID, revision)
 			if err := r.forwardMaturityEvents(ctx, events); err != nil {
+				r.shardLocks[shardID].RUnlock()
 				return err
 			}
 		}
+		r.shardLocks[shardID].RUnlock()
 	}
 	return nil
 }
@@ -196,6 +213,13 @@ func (r *Runtime) flushDirty(ctx context.Context) error {
 }
 
 func (r *Runtime) flushPlayer(ctx context.Context, playerID uint64) error {
+	shardID := routing.ShardForPlayer(playerID)
+	r.shardLocks[shardID].RLock()
+	defer r.shardLocks[shardID].RUnlock()
+	return r.flushPlayerLocked(ctx, playerID)
+}
+
+func (r *Runtime) flushPlayerLocked(ctx context.Context, playerID uint64) error {
 	r.mu.Lock()
 	a := r.actors[playerID]
 	targetRevision, dirty := r.dirtyRevision[playerID]
@@ -239,10 +263,17 @@ func (r *Runtime) flushPlayer(ctx context.Context, playerID uint64) error {
 	return nil
 }
 
-func (r *Runtime) actorFor(ctx context.Context, playerID uint64) (*runtimeActor, error) {
+func (r *Runtime) actorFor(
+	ctx context.Context,
+	playerID uint64,
+	ownerEpoch uint64,
+) (*runtimeActor, error) {
 	r.mu.Lock()
 	if existing := r.actors[playerID]; existing != nil {
 		r.mu.Unlock()
+		if existing.state.OwnerEpoch != ownerEpoch {
+			return nil, ErrNotOwner
+		}
 		return existing, nil
 	}
 	r.mu.Unlock()
@@ -256,7 +287,18 @@ func (r *Runtime) actorFor(ctx context.Context, playerID uint64) (*runtimeActor,
 		}
 	}
 	persistedRevision := state.CheckpointRevision
-	maturityEvents, err := state.materializeDueMaturities(r.now())
+	if state.OwnerEpoch > ownerEpoch {
+		return nil, ErrNotOwner
+	}
+	if state.OwnerEpoch != ownerEpoch {
+		if state.CheckpointRevision == math.MaxUint64 {
+			return nil, errors.New("checkpoint revision exhausted during epoch adoption")
+		}
+		state.OwnerEpoch = ownerEpoch
+		state.CheckpointRevision++
+		state.UpdatedAtMS = r.now().UTC().UnixMilli()
+	}
+	_, err := state.materializeDueMaturities(r.now())
 	if err != nil {
 		return nil, fmt.Errorf("activate player maturity: %w", err)
 	}
@@ -269,11 +311,14 @@ func (r *Runtime) actorFor(ctx context.Context, playerID uint64) (*runtimeActor,
 	if existing := r.actors[playerID]; existing != nil {
 		r.mu.Unlock()
 		created.mailbox.Close()
+		if existing.state.OwnerEpoch != ownerEpoch {
+			return nil, ErrNotOwner
+		}
 		return existing, nil
 	}
 	r.actors[playerID] = created
 	r.mu.Unlock()
-	if len(maturityEvents) > 0 {
+	if state.CheckpointRevision > persistedRevision {
 		r.markDirty(playerID, state.CheckpointRevision)
 	}
 	return created, nil
@@ -282,7 +327,7 @@ func (r *Runtime) actorFor(ctx context.Context, playerID uint64) (*runtimeActor,
 // Handle validates the authenticated internal command boundary and executes the
 // snapshot projection on the target player's mailbox.
 func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64, request *wsv1.WsEnvelope) (*wsv1.WsEnvelope, error) {
-	if ownerEpoch != LocalOwnerEpoch {
+	if ownerEpoch == 0 {
 		return nil, ErrNotOwner
 	}
 	if request == nil ||
@@ -294,6 +339,9 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	if request.TargetPlayerId == 0 || request.TargetPlayerId != callerPlayerID {
 		return nil, ErrForbiddenTarget
 	}
+	shardID := routing.ShardForPlayer(request.TargetPlayerId)
+	r.shardLocks[shardID].RLock()
+	defer r.shardLocks[shardID].RUnlock()
 	serverNow := r.now()
 	config := r.config.Load()
 	if config == nil {
@@ -339,7 +387,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		}, nil
 	}
 
-	a, err := r.actorFor(ctx, callerPlayerID)
+	a, err := r.actorFor(ctx, callerPlayerID, ownerEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +469,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 			RequestId:       request.RequestId,
 			TargetPlayerId:  callerPlayerID,
 			StateVersion: &wsv1.StateVersion{
-				OwnerEpoch: LocalOwnerEpoch,
+				OwnerEpoch: a.state.OwnerEpoch,
 				PlayerSeq:  a.state.PlayerSeq,
 			},
 			ServerTimeMs: serverNow.UnixMilli(),
@@ -445,6 +493,204 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		_ = r.forwardMaturityEvents(ctx, maturityEvents)
 	}
 	return response, nil
+}
+
+// HasActiveActorsForShard reports whether this process has materialized any
+// Player Actor in the shard. The memory-only migration prototype refuses to
+// hand off such shards because it has no durable checkpoint transfer yet.
+func (r *Runtime) HasActiveActorsForShard(shardID uint32) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for playerID := range r.actors {
+		if routing.ShardForPlayer(playerID) == shardID {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runtime) SupportsActiveMigration() bool {
+	return r.loader != nil && r.writer != nil
+}
+
+// DrainShardForMigration settles, durably flushes and evicts every active
+// Actor in one shard while excluding commands, maturity work and background
+// flushes for that shard.
+func (r *Runtime) DrainShardForMigration(
+	ctx context.Context,
+	shardID uint32,
+	ownerEpoch uint64,
+) ([]DrainedPlayer, error) {
+	if shardID >= routing.ShardCount || ownerEpoch == 0 {
+		return nil, ErrNotOwner
+	}
+	r.shardLocks[shardID].Lock()
+	defer r.shardLocks[shardID].Unlock()
+
+	r.mu.Lock()
+	playerIDs := make([]uint64, 0)
+	for playerID := range r.actors {
+		if routing.ShardForPlayer(playerID) == shardID {
+			playerIDs = append(playerIDs, playerID)
+		}
+	}
+	r.mu.Unlock()
+	sort.Slice(playerIDs, func(i, j int) bool { return playerIDs[i] < playerIDs[j] })
+	if len(playerIDs) > 0 && r.writer == nil {
+		return nil, errors.New("active Actor migration requires a checkpoint writer")
+	}
+
+	actors := make([]*runtimeActor, 0, len(playerIDs))
+	manifest := make([]DrainedPlayer, 0, len(playerIDs))
+	for _, playerID := range playerIDs {
+		r.mu.Lock()
+		a := r.actors[playerID]
+		r.mu.Unlock()
+		if a == nil {
+			return nil, fmt.Errorf("player %d disappeared during shard drain", playerID)
+		}
+		var checkpoint *datav1.PlayerCheckpointV1
+		var expectedRevision uint64
+		var checkpointErr error
+		if err := a.mailbox.Do(ctx, func() {
+			if a.state.OwnerEpoch != ownerEpoch {
+				checkpointErr = ErrNotOwner
+				return
+			}
+			_, checkpointErr = a.state.materializeDueMaturities(r.now())
+			if checkpointErr != nil {
+				return
+			}
+			checkpoint, checkpointErr = a.state.Checkpoint()
+			expectedRevision = a.persistedRevision
+		}); err != nil {
+			return nil, fmt.Errorf("drain player %d mailbox: %w", playerID, err)
+		}
+		if checkpointErr != nil {
+			return nil, fmt.Errorf("drain player %d checkpoint: %w", playerID, checkpointErr)
+		}
+		if checkpoint.CheckpointRevision > expectedRevision {
+			r.markDirty(playerID, checkpoint.CheckpointRevision)
+			if err := r.writer.Save(ctx, checkpoint, expectedRevision); err != nil {
+				if !r.checkpointWasCommitted(ctx, playerID, checkpoint) {
+					return nil, fmt.Errorf("final flush player %d: %w", playerID, err)
+				}
+			}
+			if err := a.mailbox.Do(ctx, func() {
+				a.persistedRevision = checkpoint.CheckpointRevision
+			}); err != nil {
+				return nil, fmt.Errorf("acknowledge final flush player %d: %w", playerID, err)
+			}
+			r.mu.Lock()
+			if r.dirtyRevision[playerID] <= checkpoint.CheckpointRevision {
+				delete(r.dirtyRevision, playerID)
+			}
+			r.mu.Unlock()
+		}
+		actors = append(actors, a)
+		manifest = append(manifest, DrainedPlayer{
+			PlayerID: playerID, OwnerEpoch: ownerEpoch,
+			CheckpointRevision: checkpoint.CheckpointRevision,
+		})
+	}
+
+	r.mu.Lock()
+	for index, playerID := range playerIDs {
+		if r.actors[playerID] != actors[index] {
+			r.mu.Unlock()
+			return nil, fmt.Errorf("player %d changed during shard drain", playerID)
+		}
+		delete(r.actors, playerID)
+		delete(r.dirtyRevision, playerID)
+	}
+	r.mu.Unlock()
+	for _, a := range actors {
+		a.mailbox.Close()
+	}
+	return manifest, nil
+}
+
+func (r *Runtime) checkpointWasCommitted(
+	_ context.Context,
+	playerID uint64,
+	expected *datav1.PlayerCheckpointV1,
+) bool {
+	if r.loader == nil || expected == nil {
+		return false
+	}
+	reconcileCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	state, err := r.loader.Load(reconcileCtx, playerID)
+	if err != nil {
+		return false
+	}
+	actual, err := state.Checkpoint()
+	if err != nil {
+		return false
+	}
+	_, actualDigest, err := MarshalCheckpoint(actual)
+	if err != nil {
+		return false
+	}
+	_, expectedDigest, err := MarshalCheckpoint(expected)
+	return err == nil && bytes.Equal(actualDigest[:], expectedDigest[:])
+}
+
+// PrepareShardForMigration validates the old Owner's durable manifest and
+// rewrites those checkpoints to the newly fenced epoch without activating
+// target Actors before the route becomes ACTIVE.
+func (r *Runtime) PrepareShardForMigration(
+	ctx context.Context,
+	shardID uint32,
+	ownerEpoch uint64,
+	manifest []DrainedPlayer,
+) error {
+	if shardID >= routing.ShardCount || ownerEpoch < 2 ||
+		r.loader == nil || r.writer == nil {
+		return errors.New("checkpoint-backed target preparation is required")
+	}
+	r.shardLocks[shardID].Lock()
+	defer r.shardLocks[shardID].Unlock()
+	if r.HasActiveActorsForShard(shardID) {
+		return errors.New("target shard already has active Actors")
+	}
+	players := append([]DrainedPlayer(nil), manifest...)
+	sort.Slice(players, func(i, j int) bool { return players[i].PlayerID < players[j].PlayerID })
+	for index, item := range players {
+		if item.PlayerID == 0 ||
+			routing.ShardForPlayer(item.PlayerID) != shardID ||
+			item.OwnerEpoch == 0 ||
+			item.OwnerEpoch+1 != ownerEpoch ||
+			(index > 0 && players[index-1].PlayerID == item.PlayerID) {
+			return errors.New("drained player manifest is invalid")
+		}
+		state, err := r.loader.Load(ctx, item.PlayerID)
+		if err != nil {
+			return fmt.Errorf("load migrated player %d: %w", item.PlayerID, err)
+		}
+		if state.OwnerEpoch == ownerEpoch &&
+			item.CheckpointRevision < math.MaxUint64 &&
+			state.CheckpointRevision == item.CheckpointRevision+1 {
+			continue
+		}
+		if state.OwnerEpoch != item.OwnerEpoch ||
+			state.CheckpointRevision != item.CheckpointRevision ||
+			state.CheckpointRevision == math.MaxUint64 {
+			return fmt.Errorf("migrated player %d checkpoint does not match manifest", item.PlayerID)
+		}
+		expectedRevision := state.CheckpointRevision
+		state.OwnerEpoch = ownerEpoch
+		state.CheckpointRevision++
+		state.UpdatedAtMS = r.now().UTC().UnixMilli()
+		checkpoint, err := state.Checkpoint()
+		if err != nil {
+			return fmt.Errorf("build migrated player %d checkpoint: %w", item.PlayerID, err)
+		}
+		if err := r.writer.Save(ctx, checkpoint, expectedRevision); err != nil {
+			return fmt.Errorf("prepare migrated player %d: %w", item.PlayerID, err)
+		}
+	}
+	return nil
 }
 
 func (r *Runtime) forwardMaturityEvents(ctx context.Context, events []MaturityEvent) error {

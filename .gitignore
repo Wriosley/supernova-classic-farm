@@ -13,6 +13,11 @@ coverage.out
 web/node_modules/
 web/dist/
 
+# Local test platform
+tests/platform/web/node_modules/
+tests/platform/web/dist/
+tests/platform/.history/
+
 # IDE and OS
 .idea/
 .vscode/

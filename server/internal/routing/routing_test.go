@@ -20,6 +20,10 @@ func TestNewLocalMapInitializesAllShardsActive(t *testing.T) {
 	if snapshot.HashAlgorithmVersion != 1 {
 		t.Fatalf("hash version = %d, want 1", snapshot.HashAlgorithmVersion)
 	}
+	if snapshot.AssignmentAlgorithmVersion != AssignmentAlgorithmVersion {
+		t.Fatalf("assignment version = %d, want %d",
+			snapshot.AssignmentAlgorithmVersion, AssignmentAlgorithmVersion)
+	}
 	if len(snapshot.Entries) != int(ShardCount) {
 		t.Fatalf("entries = %d, want %d", len(snapshot.Entries), ShardCount)
 	}
@@ -36,6 +40,84 @@ func TestNewLocalMapInitializesAllShardsActive(t *testing.T) {
 		}
 		if entry.LeaseID == "" || !entry.LeaseExpiresAt.Equal(now.Add(30*time.Second)) {
 			t.Fatalf("invalid initial lease for route %d: %+v", shardID, entry)
+		}
+	}
+}
+
+func TestStaticMapUsesStableRendezvousPlacement(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	zones := []ZoneCandidate{
+		{ZoneID: "zone-b", Endpoint: "http://127.0.0.1:8084"},
+		{ZoneID: "zone-a", Endpoint: "http://127.0.0.1:8082"},
+	}
+	routes, err := NewStaticMap(now, time.Minute, zones)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reordered, err := NewStaticMap(now, time.Minute, []ZoneCandidate{zones[1], zones[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	counts := map[string]int{}
+	snapshot := routes.Snapshot()
+	reorderedSnapshot := reordered.Snapshot()
+	for shardID := uint32(0); shardID < ShardCount; shardID++ {
+		entry := snapshot.Entries[shardID]
+		other := reorderedSnapshot.Entries[shardID]
+		if entry.OwnerZoneID != other.OwnerZoneID ||
+			entry.OwnerEndpoint != other.OwnerEndpoint {
+			t.Fatalf("candidate order changed shard %d placement", shardID)
+		}
+		counts[entry.OwnerZoneID]++
+	}
+	if counts["zone-a"] == 0 || counts["zone-b"] == 0 {
+		t.Fatalf("Rendezvous did not distribute shards: %+v", counts)
+	}
+	if owner := RendezvousOwner(1631, zones); owner.ZoneID != "zone-a" {
+		t.Fatalf("assignment V1 vector shard 1631 = %s, want zone-a", owner.ZoneID)
+	}
+	if owner := RendezvousOwner(2066, zones); owner.ZoneID != "zone-b" {
+		t.Fatalf("assignment V1 vector shard 2066 = %s, want zone-b", owner.ZoneID)
+	}
+}
+
+func TestRendezvousAdditionAndRemovalMinimizeRemapping(t *testing.T) {
+	base := []ZoneCandidate{
+		{ZoneID: "zone-a", Endpoint: "http://127.0.0.1:8082"},
+		{ZoneID: "zone-b", Endpoint: "http://127.0.0.1:8084"},
+	}
+	expanded := append(append([]ZoneCandidate(nil), base...),
+		ZoneCandidate{ZoneID: "zone-c", Endpoint: "http://127.0.0.1:8085"})
+	for shardID := uint32(0); shardID < ShardCount; shardID++ {
+		before := RendezvousOwner(shardID, base)
+		after := RendezvousOwner(shardID, expanded)
+		if after.ZoneID != before.ZoneID && after.ZoneID != "zone-c" {
+			t.Fatalf("adding zone-c moved shard %d from %s to existing %s",
+				shardID, before.ZoneID, after.ZoneID)
+		}
+		withoutB := []ZoneCandidate{expanded[0], expanded[2]}
+		removed := RendezvousOwner(shardID, withoutB)
+		if after.ZoneID != "zone-b" && removed.ZoneID != after.ZoneID {
+			t.Fatalf("removing zone-b moved shard %d owned by %s to %s",
+				shardID, after.ZoneID, removed.ZoneID)
+		}
+	}
+}
+
+func TestStaticMapRejectsInvalidCandidates(t *testing.T) {
+	now := time.Now().UTC()
+	for _, zones := range [][]ZoneCandidate{
+		nil,
+		{{ZoneID: "", Endpoint: "http://127.0.0.1:8082"}},
+		{{ZoneID: "zone-a", Endpoint: ""}},
+		{
+			{ZoneID: "zone-a", Endpoint: "http://127.0.0.1:8082"},
+			{ZoneID: "zone-a", Endpoint: "http://127.0.0.1:8084"},
+		},
+	} {
+		if _, err := NewStaticMap(now, time.Minute, zones); err == nil {
+			t.Fatalf("NewStaticMap accepted invalid candidates: %+v", zones)
 		}
 	}
 }
@@ -109,6 +191,19 @@ func TestTransitionConsumesEpochAndPreparingIsNotRoutable(t *testing.T) {
 	}
 	if err := routes.ValidateOwner(23, "zone-next", 2, now); !IsNotOwner(err) {
 		t.Fatalf("PREPARING owner validation = %v, want NOT_OWNER", err)
+	}
+	if renewed, err := routes.RenewOwnedLeases(
+		"zone-next", now.Add(500*time.Millisecond), time.Minute,
+	); err != nil || renewed != 0 {
+		t.Fatalf("PREPARING lease renewal = %d, %v; want 0, nil", renewed, err)
+	}
+	stillPreparing, err := routes.Entry(23)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stillPreparing.RouteVersion != preparing.RouteVersion ||
+		stillPreparing.LeaseExpiresAt != preparing.LeaseExpiresAt {
+		t.Fatalf("PREPARING route changed during lease renewal: %+v", stillPreparing)
 	}
 
 	active, err := routes.Activate(23, preparing.TransitionID, now.Add(time.Second), time.Minute)

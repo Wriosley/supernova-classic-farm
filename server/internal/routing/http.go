@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,7 +18,29 @@ func NewHTTPHandler(routes *Map, clock Clock) http.Handler {
 		clock = time.Now
 	}
 	mux := http.NewServeMux()
+	var snapshotLookups atomic.Uint64
+	var shardLookups atomic.Uint64
+	mux.HandleFunc("GET /internal/v1/routes", func(w http.ResponseWriter, r *http.Request) {
+		snapshotLookups.Add(1)
+		now := clock().UTC()
+		snapshot := routes.Snapshot()
+		response := snapshotResponse{
+			ShardCount:                 snapshot.ShardCount,
+			HashAlgorithmVersion:       snapshot.HashAlgorithmVersion,
+			AssignmentAlgorithmVersion: snapshot.AssignmentAlgorithmVersion,
+			MapVersion:                 strconv.FormatUint(snapshot.MapVersion, 10),
+			CommittedTerm:              strconv.FormatUint(snapshot.CommittedTerm, 10),
+			CommittedIndex:             strconv.FormatUint(snapshot.CommittedIndex, 10),
+			Entries:                    make([]routeResponse, len(snapshot.Entries)),
+		}
+		for index, entry := range snapshot.Entries {
+			routable := entry.State == RouteStateActive && now.Before(entry.LeaseExpiresAt)
+			response.Entries[index] = routeResponseFrom(entry, snapshot.MapVersion, routable)
+		}
+		writeJSON(w, http.StatusOK, response)
+	})
 	mux.HandleFunc("GET /internal/v1/routes/{shard_id}", func(w http.ResponseWriter, r *http.Request) {
+		shardLookups.Add(1)
 		shardValue, err := strconv.ParseUint(r.PathValue("shard_id"), 10, 32)
 		if err != nil || shardValue >= uint64(ShardCount) {
 			writeJSON(w, http.StatusBadRequest, errorResponse{
@@ -27,15 +50,15 @@ func NewHTTPHandler(routes *Map, clock Clock) http.Handler {
 			return
 		}
 		shardID := uint32(shardValue)
-		entry, err := routes.Route(shardID, clock())
+		entry, mapVersion, err := routes.RouteWithMapVersion(shardID, clock())
 		if err == nil {
-			writeJSON(w, http.StatusOK, routeResponseFrom(entry, true))
+			writeJSON(w, http.StatusOK, routeResponseFrom(entry, mapVersion, true))
 			return
 		}
 
 		var notOwner *NotOwnerError
 		if errors.As(err, &notOwner) {
-			response := routeResponseFrom(notOwner.Current, false)
+			response := routeResponseFrom(notOwner.Current, mapVersion, false)
 			response.Error = &errorResponse{
 				Code:    notOwner.Code,
 				Message: notOwner.Reason,
@@ -48,24 +71,46 @@ func NewHTTPHandler(routes *Map, clock Clock) http.Handler {
 			Message: "route lookup failed",
 		})
 	})
+	mux.HandleFunc("GET /internal/v1/debug/route-lookups", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, routeLookupStats{
+			Snapshot: snapshotLookups.Load(),
+			Shard:    shardLookups.Load(),
+		})
+	})
 	return mux
 }
 
 type routeResponse struct {
 	ShardID             uint32         `json:"shard_id"`
-	OwnerZoneID          string         `json:"owner_zone_id,omitempty"`
-	OwnerEndpoint        string         `json:"owner_endpoint,omitempty"`
-	OwnerEpoch           string         `json:"owner_epoch"`
-	RouteVersion         string         `json:"route_version"`
-	State                RouteState     `json:"state"`
-	LeaseTerm            string         `json:"lease_term"`
-	LeaseID              string         `json:"lease_id,omitempty"`
-	LeaseExpiresAtMS     int64          `json:"lease_expires_at_ms"`
-	PreviousOwnerZoneID  string         `json:"previous_owner_zone_id,omitempty"`
-	TransitionID         string         `json:"transition_id,omitempty"`
-	UpdatedAtMS          int64          `json:"updated_at_ms"`
-	Routable             bool           `json:"routable"`
-	Error                *errorResponse `json:"error,omitempty"`
+	OwnerZoneID         string         `json:"owner_zone_id,omitempty"`
+	OwnerEndpoint       string         `json:"owner_endpoint,omitempty"`
+	OwnerEpoch          string         `json:"owner_epoch"`
+	RouteVersion        string         `json:"route_version"`
+	MapVersion          string         `json:"map_version"`
+	State               RouteState     `json:"state"`
+	LeaseTerm           string         `json:"lease_term"`
+	LeaseID             string         `json:"lease_id,omitempty"`
+	LeaseExpiresAtMS    int64          `json:"lease_expires_at_ms"`
+	PreviousOwnerZoneID string         `json:"previous_owner_zone_id,omitempty"`
+	TransitionID        string         `json:"transition_id,omitempty"`
+	UpdatedAtMS         int64          `json:"updated_at_ms"`
+	Routable            bool           `json:"routable"`
+	Error               *errorResponse `json:"error,omitempty"`
+}
+
+type snapshotResponse struct {
+	ShardCount                 uint32          `json:"shard_count"`
+	HashAlgorithmVersion       uint32          `json:"hash_algorithm_version"`
+	AssignmentAlgorithmVersion uint32          `json:"assignment_algorithm_version"`
+	MapVersion                 string          `json:"map_version"`
+	CommittedTerm              string          `json:"committed_term"`
+	CommittedIndex             string          `json:"committed_index"`
+	Entries                    []routeResponse `json:"entries"`
+}
+
+type routeLookupStats struct {
+	Snapshot uint64 `json:"snapshot"`
+	Shard    uint64 `json:"shard"`
 }
 
 type errorResponse struct {
@@ -73,13 +118,14 @@ type errorResponse struct {
 	Message string `json:"message"`
 }
 
-func routeResponseFrom(entry RouteEntry, routable bool) routeResponse {
+func routeResponseFrom(entry RouteEntry, mapVersion uint64, routable bool) routeResponse {
 	return routeResponse{
-		ShardID:            entry.ShardID,
+		ShardID:             entry.ShardID,
 		OwnerZoneID:         entry.OwnerZoneID,
 		OwnerEndpoint:       entry.OwnerEndpoint,
 		OwnerEpoch:          strconv.FormatUint(entry.OwnerEpoch, 10),
 		RouteVersion:        strconv.FormatUint(entry.RouteVersion, 10),
+		MapVersion:          strconv.FormatUint(mapVersion, 10),
 		State:               entry.State,
 		LeaseTerm:           strconv.FormatUint(entry.LeaseTerm, 10),
 		LeaseID:             entry.LeaseID,

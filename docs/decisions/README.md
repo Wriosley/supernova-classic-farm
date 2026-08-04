@@ -28,6 +28,7 @@ Current-state entry points:
 | ADR-0006 | Use asynchronous Dirty checkpoint writeback | Current V3 persistence decision. |
 | ADR-0008 | Retain majority-authorized Shard Coordinator in V3 | Current V3 ownership decision. |
 | ADR-0009 | Keep current chapter-task progress in Player Actor | Current first-slice task decision. |
+| ADR-0010 | Freeze short-lived WS Ticket/CSRF restart-loss for the local prototype | Current local auth durability boundary; unused tickets stay process-local even with MySQL Sessions. |
 
 The table is a navigation aid. If it conflicts with `CURRENT.md` or a newer accepted architecture/ADR, update this README rather than rewriting historical ADR content.
 

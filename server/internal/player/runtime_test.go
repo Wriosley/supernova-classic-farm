@@ -10,6 +10,7 @@ import (
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -23,6 +24,31 @@ type recordingCheckpointStore struct {
 	state            *State
 	saved            []*datav1.PlayerCheckpointV1
 	expectedRevision []uint64
+}
+
+type ambiguousCheckpointStore struct {
+	state *State
+}
+
+func (s *ambiguousCheckpointStore) Load(context.Context, uint64) (*State, error) {
+	checkpoint, err := s.state.Checkpoint()
+	if err != nil {
+		return nil, err
+	}
+	return StateFromCheckpoint(checkpoint)
+}
+
+func (s *ambiguousCheckpointStore) Save(
+	_ context.Context,
+	checkpoint *datav1.PlayerCheckpointV1,
+	_ uint64,
+) error {
+	state, err := StateFromCheckpoint(checkpoint)
+	if err != nil {
+		return err
+	}
+	s.state = state
+	return errors.New("connection lost after commit")
 }
 
 func (s *recordingCheckpointStore) Load(context.Context, uint64) (*State, error) {
@@ -153,15 +179,137 @@ func TestHandleReturnsCorrelatedInitialSnapshot(t *testing.T) {
 	}
 }
 
-func TestHandleRejectsTargetAndEpoch(t *testing.T) {
+func TestHandleUsesActivationEpochAndRejectsMismatchedExistingActor(t *testing.T) {
 	runtime := NewRuntime()
 	defer runtime.Close()
 
-	if _, err := runtime.Handle(context.Background(), 42, 2, snapshotRequest(42, "epoch")); !errors.Is(err, ErrNotOwner) {
-		t.Fatalf("wrong epoch error = %v, want ErrNotOwner", err)
+	response, err := runtime.Handle(context.Background(), 42, 2, snapshotRequest(42, "epoch-2"))
+	if err != nil || response.GetStateVersion().GetOwnerEpoch() != 2 {
+		t.Fatalf("epoch-2 activation = %+v, %v", response, err)
+	}
+	if _, err := runtime.Handle(context.Background(), 42, 1,
+		snapshotRequest(42, "stale-epoch")); !errors.Is(err, ErrNotOwner) {
+		t.Fatalf("stale epoch error = %v, want ErrNotOwner", err)
 	}
 	if _, err := runtime.Handle(context.Background(), 42, LocalOwnerEpoch, snapshotRequest(43, "target")); !errors.Is(err, ErrForbiddenTarget) {
 		t.Fatalf("wrong target error = %v, want ErrForbiddenTarget", err)
+	}
+}
+
+func TestRuntimeReportsActiveActorsByShard(t *testing.T) {
+	runtime := NewRuntime()
+	defer runtime.Close()
+	const playerID = uint64(42)
+	shardID := routing.ShardForPlayer(playerID)
+	if runtime.HasActiveActorsForShard(shardID) {
+		t.Fatal("inactive shard reported an Actor")
+	}
+	if _, err := runtime.Handle(context.Background(), playerID, 2,
+		snapshotRequest(playerID, "activate-for-drain")); err != nil {
+		t.Fatal(err)
+	}
+	if !runtime.HasActiveActorsForShard(shardID) {
+		t.Fatal("activated shard did not report an Actor")
+	}
+	checkpoint, err := runtime.actors[playerID].state.Checkpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpoint.OwnerEpoch != 2 {
+		t.Fatalf("checkpoint owner_epoch = %d, want 2", checkpoint.OwnerEpoch)
+	}
+}
+
+func TestRuntimeDrainShardFlushesAndEvictsActiveActor(t *testing.T) {
+	const playerID = uint64(42)
+	state := NewDevelopmentState(playerID)
+	store := &recordingCheckpointStore{state: state}
+	runtime, err := NewRuntimeWithLoader(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	response, err := runtime.Handle(
+		context.Background(), playerID, 1,
+		buySeedsRequest(playerID, "00112233-4455-6677-8899-aabbccddee21", 1),
+	)
+	if err != nil || response.GetError() != nil {
+		t.Fatalf("buy before drain failed: response=%+v error=%v", response, err)
+	}
+	manifest, err := runtime.DrainShardForMigration(
+		context.Background(), routing.ShardForPlayer(playerID), 1,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest) != 1 ||
+		manifest[0].PlayerID != playerID ||
+		manifest[0].CheckpointRevision != 2 ||
+		runtime.HasActiveActorsForShard(routing.ShardForPlayer(playerID)) {
+		t.Fatalf("unexpected drain manifest/state: %+v", manifest)
+	}
+	if len(store.saved) != 1 ||
+		store.saved[0].CoinBalance != 8 ||
+		store.expectedRevision[0] != 1 {
+		t.Fatalf("unexpected final checkpoint: %+v", store.saved)
+	}
+}
+
+func TestRuntimeLazyEpochAdoptionAdvancesOnlyCheckpointRevision(t *testing.T) {
+	const playerID = uint64(42)
+	state := NewDevelopmentState(playerID)
+	store := &recordingCheckpointStore{state: state}
+	runtime, err := NewRuntimeWithLoader(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	response, err := runtime.Handle(
+		context.Background(), playerID, 2,
+		snapshotRequest(playerID, "epoch-adoption"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.GetStateVersion().GetOwnerEpoch() != 2 ||
+		response.GetStateVersion().GetPlayerSeq() != 0 {
+		t.Fatalf("unexpected adopted state version: %+v", response.StateVersion)
+	}
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.saved) != 1 ||
+		store.saved[0].OwnerEpoch != 2 ||
+		store.saved[0].PlayerSeq != 0 ||
+		store.saved[0].CheckpointRevision != 2 {
+		t.Fatalf("unexpected epoch-adoption checkpoint: %+v", store.saved)
+	}
+}
+
+func TestRuntimeDrainReconcilesAmbiguousFinalFlushCommit(t *testing.T) {
+	const playerID = uint64(42)
+	store := &ambiguousCheckpointStore{state: NewDevelopmentState(playerID)}
+	runtime, err := NewRuntimeWithLoader(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	response, err := runtime.Handle(
+		context.Background(), playerID, 1,
+		buySeedsRequest(playerID, "00112233-4455-6677-8899-aabbccddee22", 1),
+	)
+	if err != nil || response.GetError() != nil {
+		t.Fatalf("buy before ambiguous drain failed: response=%+v error=%v", response, err)
+	}
+	manifest, err := runtime.DrainShardForMigration(
+		context.Background(), routing.ShardForPlayer(playerID), 1,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest) != 1 || store.state.Coins != 8 ||
+		runtime.HasActiveActorsForShard(routing.ShardForPlayer(playerID)) {
+		t.Fatalf("ambiguous commit was not reconciled: %+v", manifest)
 	}
 }
 

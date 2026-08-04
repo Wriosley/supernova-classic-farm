@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-07-31
+updated: 2026-08-03
 ---
 
 # Current Handoff
@@ -24,7 +24,15 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 - One logical shard has exactly one write-authorized Active Zone Owner at a time; one Zone owns many logical shards.
 - Player IDs map to 4096 versioned logical shards. Placement may use Rendezvous Hashing and load correction, but only the production Coordinator's majority-committed route grants ownership.
 - GateSvr routes from a local cache of committed `ACTIVE` routes; ordinary commands do not call the Coordinator.
-- The local prototype target is Coordinator-compatible route, lease, epoch, state-transition and fencing semantics with one Coordinator process. The runtime implements the in-memory route/lease/epoch/state-transition subset and exact local MySQL Fence checks on registration and Dirty checkpoint flush; stale-owner Fence rejection is not yet live-tested, and production consensus is not implemented.
+- The local prototype implements `static-dual-zone` with either in-memory
+  Players or a newly added MySQL epoch-one bootstrap path. Coordinator
+  materializes versioned Rendezvous candidates into 4096 committed routes for
+  `zone-a` and `zone-b`; Gate warms a complete immutable Snapshot and Zones
+  atomically refresh read-only authorization Snapshots.
+- The MySQL bootstrap implementation transactionally aligns only original
+  `zone-local/epoch=1/route_version=1` Fence rows to that committed assignment.
+  Full Go regression, vet and a live two-Owner MySQL persistence E2E pass.
+- The local prototype target is Coordinator-compatible route, lease, epoch, state-transition and fencing semantics with one Coordinator process. The runtime implements the in-memory route/lease/epoch/state-transition subset and exact assigned-Zone MySQL Fence checks on registration and Dirty checkpoint flush; stale-owner Fence rejection is not yet live-tested, and production consensus is not implemented.
 - Commands for one player enter one Actor mailbox and execute serially.
 - A successful ordinary write follows `validate -> apply Actor memory -> update task if matched -> player_seq++ -> save idempotency result/outbox -> checkpoint_revision++ -> mark Dirty -> reply`.
 - `checkpoint_revision` orders persistence CAS and is not client-visible. Saving a terminal business failure, pruning idempotency results, or reconciling Outbox increments it without incrementing `player_seq`.
@@ -78,6 +86,8 @@ Current supporting decisions referenced by V3:
 - ADR-0006: asynchronous Dirty writeback supersedes ADR-0005's Journal write path.
 - ADR-0008: V3 retains majority-authorized Shard ownership, replacing ADR-0004 as the current V3 statement.
 - ADR-0009: current chapter-task progress belongs to Player Actor.
+- ADR-0010: local prototype keeps unused WS tickets and CSRF nonce records
+  process-local; Login restart drops them even when MySQL Sessions survive.
 
 Historical design evidence:
 
@@ -155,6 +165,49 @@ Current milestone status:
 - New development Player state and registration checkpoints now contain four stable `EMPTY` plots (`plot_id=1..4`). Commands still patch only their requested plot; snapshot and checkpoint ordering remain stable. Existing development checkpoints are not migrated online and must be reset/re-registered locally.
 - A browser-driven four-plot run used plot 2 for plant, fertilizer, natural maturity Push, harvest and cleanup while plots 1/3/4 remained empty. It also exercised an explicit one-crop sale followed by `sell_all`, verified the 1/50 purchase boundaries and tool cursor URL, completed at 29 coins with all four plots empty, and reported no horizontal overflow at 320 CSS pixels.
 - An owner-run MySQL 8.4 two-stack E2E registered `player_id=11`, completed the command loop to `player_seq=8`, stopped all four services, then recovered the same checkpoint from fresh processes. The updated snapshot assertions validated four ordered plots and kept plots 2–4 `EMPTY`.
+- `start-servers.ps1 -DualZone` starts Coordinator, Login, Zone A on 8082,
+  Zone B on 8084 and Gate in dependency order. With `MYSQL_DSN`, Coordinator
+  requires explicit bootstrap authorization and aligns all Fences before Login
+  accepts registrations.
+- Assignment algorithm V1 uses deterministic SHA-256 Rendezvous scoring over
+  `shard_id` and stable `zone_id`. Gate and Zone do not treat that calculation
+  as authority; only the Coordinator's committed Route with Zone, endpoint,
+  epoch, route version, state, Lease and map version is routable.
+- Gate forwards trusted Shard/Zone/epoch/version metadata. Zone recomputes the
+  target player's Shard and rejects wrong Shard, wrong Zone, stale epoch,
+  non-`ACTIVE` state or expired Lease before Actor activation.
+- A five-process dual-Zone E2E routed `player_id=2/shard=1631` to Zone A and
+  `player_id=1/shard=2066` to Zone B, kept the other player isolated after one
+  purchase, rejected a direct wrong-Zone command with `409 NOT_OWNER`, and
+  observed zero Coordinator single-Shard lookups during ordinary commands.
+- Gate cache tests cover immutable Snapshot warmup, concurrent miss collapse,
+  conditional route-version invalidation and one same-`request_id` retry after
+  `NOT_OWNER`.
+- The dual-Zone prototype now supports loopback-triggered migration of an
+  inactive Shard. Zone takes an exclusive per-Shard execution gate, blocks new
+  commands, rejects migration if any Player Actor is active, and otherwise
+  allows Coordinator to commit `PREPARING` and `ACTIVE` with epoch increment.
+- Actor epoch is activation-scoped and now flows through snapshots, command
+  results, idempotency records, pending Outbox, checkpoints and maturity Push.
+  The migration E2E moved `player_id=7/shard=3552` from Zone A epoch 1 to Zone B
+  epoch 2; Gate refreshed exactly one stale cached Route and the snapshot
+  completed on B. An active Shard migration was rejected without changing its
+  Route.
+- MySQL mode now supports controlled active-Shard migration. Zone first blocks
+  new commands; Coordinator commits `PREPARING`; the old Zone excludes
+  command, maturity and background-flush races, settles and final-flushes every
+  active Actor, returns a durable manifest and evicts only after all succeed.
+  Coordinator then advances the exact transition-bound MySQL Fence, the target
+  rewrites and validates those checkpoints at the new epoch, and only then
+  commits `ACTIVE`.
+- Fence CAS and target preparation are idempotent. MySQL mode persists
+  per-Shard migration progress through drain, Fence and target preparation.
+  Coordinator restart rebuilds `ACTIVE` routes from fences, overlays open
+  `PREPARING` fail-closed, and exposes loopback inspect/continue/abandon.
+  Abandon before Fence restores the source Owner and burns the prepared
+  epoch; abandon after Fence is refused. Before `PREPARING`, failure resumes
+  the old Owner; after it, failure remains non-routable and never reuses the
+  epoch.
 
 Work order for this milestone:
 
@@ -170,24 +223,53 @@ Without `MYSQL_DSN`, the runnable code deliberately uses development-only in-mem
 - LoginSvr stores accounts, Argon2id password hashes, Sessions, CSRF records and one-time tickets in process-local Go maps. Registration allocates a sequential `player_id`; restarting LoginSvr loses all of these records.
 - Registration does not yet create a durable Player checkpoint and does not call Zone.
 - ZoneSvr stores one lazily created Player Actor per `player_id` in a process-local map. The first player command creates the development state with 10 coins, one basic fertilizer, four empty plots and chapter-one tasks.
-- `GET_PLAYER_SNAPSHOT` is routed by Gate through the single-node Coordinator-compatible route, executes on the Player Actor mailbox and projects the snapshot from current Actor memory.
+- `GET_PLAYER_SNAPSHOT` is routed by Gate through its locally cached committed
+  Route, executes on the selected Zone's Player Actor mailbox and projects the
+  snapshot from current Actor memory. The default mode still uses one local
+  Zone; `static-dual-zone` uses two independent Actor runtimes, backed either
+  by process memory alone or by assigned-Fence MySQL checkpoints.
 - Gate keeps authenticated player subscriptions in process memory. Online maturity travels from Zone to Gate over loopback HTTP and is forwarded as a Protobuf Push; reconnect or any detected version gap uses a fresh snapshot rather than replaying Push history.
 - `GET_SHOP` is routed to Zone and reads the pinned global configuration snapshot without activating a Player Actor.
-- Coordinator route state is also process-local. This mode does not use the available MySQL registration/checkpoint path; Dirty writeback, database fences and restart recovery are not implemented.
+- Coordinator route state is also process-local. Without `MYSQL_DSN`, Dirty
+  writeback, database Fences and restart recovery are not implemented.
 - `deploy/migrations/000001_platform.up.sql` creates the migration ledger.
 
 With `MYSQL_DSN`, the new code path:
 
 - uses `deploy/migrations/000002_auth_player_checkpoint.up.sql` for account, HTTP Session and Player checkpoint envelopes;
-- uses `deploy/migrations/000003_local_shard_fences.up.sql` to bootstrap the 4096 local development Fence rows;
-- makes registration externally atomic by committing the account, first Session and initial checkpoint in one local MySQL transaction;
+- uses `deploy/migrations/000003_local_shard_fences.up.sql` to bootstrap 4096
+  epoch-one Fence rows; static dual-Zone startup can atomically align those
+  untouched rows to the committed Zone A/B assignment;
+- uses `deploy/migrations/000005_shard_migration_progress.up.sql` for open or
+  abandoned migration progress; completed migrations delete the OPEN row;
+- makes registration externally atomic by locking the player's assigned Fence
+  and committing the account, first Session and initial checkpoint in one
+  local MySQL transaction;
 - stores only the Session digest, not the raw cookie value;
 - validates the deterministic checkpoint blob, SHA-256 and relational envelope before activating a Zone Actor;
 - fails Actor activation instead of silently creating default state when a configured checkpoint load fails;
 - executes `BUY_SEEDS`, `PLANT`, `APPLY_FERTILIZER`, `HARVEST`, `SELL_CROP`, `CLAIM_CHAPTER_REWARD` and `CLEAN_PLOT` inside the Player Actor mailbox, retains their idempotency results and marks the aggregate Dirty;
-- asynchronously writes the whole checkpoint under exact local Fence validation and checkpoint-revision CAS, including atomic relational Outbox creation when a reward overflows inventory.
+- asynchronously writes the whole checkpoint under exact process-Zone and
+  epoch Fence validation plus checkpoint-revision CAS, including atomic
+  relational Outbox creation when a reward overflows inventory.
 
-This path has live MySQL registration-to-Actor-load and fresh-process restart evidence for the complete server owner loop at `player_seq=8`. WS Ticket and CSRF records, Coordinator routes and online Actors remain process-local. The local Fence success path and online fertilizer expiry/maturity were exercised; live reward-overflow Outbox insertion, stale-owner rejection, abnormal termination inside the Dirty-loss window, restart while still crossing an active effect/maturity boundary and multi-Actor batching remain unverified.
+The single-Zone path has live MySQL registration-to-Actor-load and fresh-process
+restart evidence for the complete server owner loop at `player_seq=8`. The
+static dual-Zone path has live active migration evidence: `player_id=14`,
+Shard 3371 moved from Zone A epoch one to Zone B epoch two, preserved its first
+write and persisted a second write on B at `player_seq=2`. A direct old-Zone
+command and a delayed Zone-A checkpoint write were rejected. Unused WS tickets
+and CSRF nonce records remain process-local by ADR-0010 even when MySQL stores
+accounts and Sessions; Login restart requires a new CSRF bootstrap and ticket
+(or a fresh login). Online Actors remain process-local. Coordinator routes are
+rebuilt from fences plus durable migration progress on MySQL restart. Live
+reward-overflow Outbox insertion, abnormal termination inside the Dirty-loss
+window, restart while still crossing an active effect/maturity boundary and
+multi-Actor batching remain unverified.
+
+The static bootstrap is deliberately mode-specific: after `zone-local` Fences
+are converted to Zone A/B, that database must not be reused for local
+single-Zone MySQL writes without a separately designed safe conversion.
 
 The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, initial `checkpoint_revision = 1`, `owner_epoch = 1`, four empty plots, seed quote `(shop_entry_id=5001, item_id=1001, unit_price=2, price_version=8)`, crop `(crop_id=2001, crop_item_id=1002, maturity=100, rate=1, base_yield=3)`, and fertilizer `(item_id=1, modifier=+0.5, duration=60s)` are proposed implementation conventions, not accepted contract decisions.
 
@@ -217,15 +299,37 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 - `../evidence/2026-07-31-clean-plot-e2e.md` records cleanup preconditions, complete field reset, retained replay and live in-memory/MySQL server-loop completion with fresh-process recovery at `player_seq=8`.
 - `../evidence/2026-07-31-h5-farm-loop-browser.md` records the browser-driven H5 owner loop, maturity Push, final state and 320-pixel layout check.
 - `../evidence/2026-08-03-four-plot-tools.md` records the four-plot, tool-driven and quantity-control implementation plus its static and browser verification.
-- Automated browser behavior in MySQL mode, distributed/retriable Push delivery, stale-owner Fence rejection, abnormal Dirty-window loss, availability and performance remain unverified.
+- `../evidence/2026-08-03-dual-zone-routing.md` records deterministic placement,
+  Gate cache behavior, wrong-Owner rejection and the passing five-process
+  memory-only dual-Zone E2E.
+- `../evidence/2026-08-03-manual-inactive-shard-migration.md` records
+  per-Shard drain exclusion, epoch-two stale-cache recovery and active-Shard
+  migration refusal.
+- `../evidence/2026-08-03-static-dual-zone-mysql-fence.md` records the
+  verified epoch-one Fence alignment and one persisted write through each
+  Zone.
+- `../evidence/2026-08-03-active-shard-mysql-migration.md` records final Actor
+  flush, epoch-two Fence transfer, Gate recovery, target persistence and stale
+  old-Owner rejection.
+- `../evidence/2026-08-03-coordinator-preparing-recovery.md` records durable
+  migration progress, fail-closed PREPARING overlay, continue/abandon controls
+  and post-migration Coordinator Fence hydration after restart.
+- `../evidence/2026-08-03-ws-ticket-restart-boundary.md` and ADR-0010 freeze
+  unused WS tickets/CSRF as process-local across Login restart.
+- Automated browser behavior in MySQL mode, distributed/retriable Push delivery, abnormal Dirty-window loss, availability and performance remain unverified.
+- A loopback-only local test platform exists under `tests/catalog.json` and
+  `server/cmd/testrunner`. It wraps existing Go/PowerShell checks with tiered
+  safety controls; platform history does not replace `docs/evidence/`.
 
 ## Next actions
 
-1. Explicitly freeze the short-lived WS Ticket restart-loss boundary or persist Ticket consumption before treating the MySQL authentication path as complete.
-2. Add a live stale-owner Fence rejection test plus normal-shutdown and multiple-mutation Dirty flush tests before claiming the local V3 ownership/persistence mechanism complete.
-3. Run one owner browser flow against MySQL to combine the H5 interaction proof with durable restart recovery.
-4. Add stale-owner Fence rejection and normal-shutdown/multi-mutation Dirty tests before friends or multiplayer.
-5. Measure Gate, Actor, Push and Dirty behavior.
+The full remaining-phase map and iteration table live in
+`../plans/2026-08-03-remaining-roadmap-and-iterations.md`. Immediate P0 order:
+
+1. Run one owner browser flow against MySQL to combine the H5 interaction proof
+   with durable restart recovery (roadmap R2).
+2. Measure Gate, Actor, Push and Dirty behavior (roadmap R3).
+3. Continue optional hardening and defense freeze work per the roadmap.
 
 ## AI memory and handoff rule
 

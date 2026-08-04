@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -31,7 +33,11 @@ func commandRequest(t *testing.T, playerID, epoch uint64) *http.Request {
 	request := httptest.NewRequest(http.MethodPost, "/internal/v1/command", bytes.NewReader(body))
 	request.RemoteAddr = "127.0.0.1:45678"
 	request.Header.Set("X-Caller-Player-ID", "42")
+	request.Header.Set("X-Shard-ID", strconv.FormatUint(
+		uint64(routing.ShardForPlayer(playerID)), 10))
+	request.Header.Set("X-Owner-Zone-ID", routing.DefaultZoneID)
 	request.Header.Set("X-Owner-Epoch", "1")
+	request.Header.Set("X-Route-Version", "1")
 	if epoch != 1 {
 		request.Header.Set("X-Owner-Epoch", "2")
 	}

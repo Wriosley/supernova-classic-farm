@@ -3,6 +3,7 @@ package player
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestMySQLCheckpointWriterChecksFenceAndCheckpointCAS(t *testing.T) {
 	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
 		WithArgs(checkpoint.LogicalShardId).
 		WillReturnRows(sqlmock.NewRows([]string{"owner_zone_id", "owner_epoch"}).
-			AddRow(DefaultZoneID, LocalOwnerEpoch))
+			AddRow("zone-b", LocalOwnerEpoch))
 	mock.ExpectExec(`(?s)UPDATE player_checkpoints`).
 		WithArgs(
 			checkpoint.LogicalShardId, checkpoint.OwnerEpoch, checkpoint.PlayerSeq,
@@ -103,8 +104,43 @@ func TestMySQLCheckpointWriterChecksFenceAndCheckpointCAS(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	if err := (&MySQLCheckpointLoader{DB: db}).Save(context.Background(), checkpoint, 1); err != nil {
+	if err := (&MySQLCheckpointLoader{
+		DB: db, OwnerZoneID: "zone-b",
+	}).Save(context.Background(), checkpoint, 1); err != nil {
 		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLCheckpointWriterRejectsWrongZoneFence(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	checkpoint := NewInitialCheckpoint(
+		42, time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC),
+	)
+	checkpoint.PlayerSeq = 1
+	checkpoint.CheckpointRevision = 2
+	checkpoint.UpdatedAtMs++
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
+		WithArgs(checkpoint.LogicalShardId).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"owner_zone_id", "owner_epoch"}).
+				AddRow("zone-a", checkpoint.OwnerEpoch),
+		)
+	mock.ExpectRollback()
+
+	err = (&MySQLCheckpointLoader{
+		DB: db, OwnerZoneID: "zone-b",
+	}).Save(context.Background(), checkpoint, 1)
+	if !errors.Is(err, ErrCheckpointFenced) {
+		t.Fatalf("Save error = %v, want ErrCheckpointFenced", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -133,7 +169,7 @@ func TestMySQLCheckpointWriterCommitsOutboxWithCheckpoint(t *testing.T) {
 	pending, err := buildRewardMailOutbox(
 		42, requestID, chapter,
 		[]*wsv1.ItemStackView{{ItemId: developmentNextSeedItemID, Quantity: 3}},
-		1, now,
+		LocalOwnerEpoch, 1, now,
 	)
 	if err != nil {
 		t.Fatal(err)

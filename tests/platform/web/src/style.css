@@ -1,0 +1,48 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f0e8;
+  --panel: #fffdf8;
+  --ink: #1f2430;
+  --muted: #5c6578;
+  --line: #d7d0c2;
+  --accent: #1f6b4a;
+  --danger: #a12622;
+  --danger-bg: #fdeceb;
+  --warn: #8a5a00;
+  --ok: #1f6b4a;
+  --mono: "Cascadia Mono", "Consolas", "SFMono-Regular", monospace;
+  --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(31, 107, 74, 0.12), transparent 40%),
+    linear-gradient(180deg, #efe8da 0%, var(--bg) 40%, #e7e2d6 100%);
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}

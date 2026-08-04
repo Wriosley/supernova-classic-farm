@@ -116,14 +116,14 @@ func (r *Runtime) harvest(
 		FingerprintSchemaVersion: idempotencyFingerprintSchemaVersion,
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
-		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: LocalOwnerEpoch,
+		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: a.state.OwnerEpoch,
 		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_HARVEST),
 		ResponsePayload: body,
 	}, now)
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
 		Action: request.Action, RequestId: request.RequestId, TargetPlayerId: request.TargetPlayerId,
-		StateVersion: &wsv1.StateVersion{OwnerEpoch: LocalOwnerEpoch, PlayerSeq: a.state.PlayerSeq},
+		StateVersion: &wsv1.StateVersion{OwnerEpoch: a.state.OwnerEpoch, PlayerSeq: a.state.PlayerSeq},
 		ServerTimeMs: now.UnixMilli(),
 		Payload:      &wsv1.WsEnvelope_HarvestResponse{HarvestResponse: payload},
 	}, true
@@ -147,7 +147,7 @@ func (r *Runtime) storeHarvestFailure(
 		FingerprintSchemaVersion: idempotencyFingerprintSchemaVersion,
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
-		CompletedAtMs: now.UnixMilli(), Success: false, ResultOwnerEpoch: LocalOwnerEpoch,
+		CompletedAtMs: now.UnixMilli(), Success: false, ResultOwnerEpoch: a.state.OwnerEpoch,
 		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_HARVEST),
 		ErrorPayload: body,
 	}, now)

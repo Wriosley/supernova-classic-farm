@@ -52,3 +52,24 @@ The CLEAN_PLOT and server-side owner-loop completion record is `2026-07-31-clean
 The responsive H5 farm interface and browser-completed owner-loop record is `2026-07-31-h5-farm-loop.md`.
 
 The four authoritative plots, tool-first H5 controls and buy/sell quantity record is `2026-08-03-four-plot-tools.md`.
+
+The static dual-Zone Rendezvous placement, Gate RouteCache and ownership
+rejection record is `2026-08-03-dual-zone-routing.md`.
+
+The manual inactive-Shard drain, epoch increment and stale Gate-cache recovery
+record is `2026-08-03-manual-inactive-shard-migration.md`.
+
+The staged and verified static dual-Zone MySQL Fence-alignment record is
+`2026-08-03-static-dual-zone-mysql-fence.md`.
+
+The verified active-Actor final-flush, Fence-CAS and target-preparation record
+is `2026-08-03-active-shard-mysql-migration.md`.
+
+The persistent migration-progress and Coordinator PREPARING recovery record is
+`2026-08-03-coordinator-preparing-recovery.md`.
+
+The short-lived WS Ticket/CSRF restart-loss boundary record is
+`2026-08-03-ws-ticket-restart-boundary.md`.
+
+The loopback local test platform catalog/runner record is
+`2026-08-03-local-test-platform.md`.

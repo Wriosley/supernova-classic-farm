@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "tests": [
+    {
+      "id": "go-unit",
+      "name": "Go unit/mock suite",
+      "type": "go-test",
+      "purpose": "Run hermetic Go unit and mock tests under server/",
+      "tiers": ["safe"],
+      "preconditions": ["Go toolchain available", "Working directory resolves to server/"],
+      "estimatedDurationSec": 30,
+      "impact": "No external ports or database mutation",
+      "files": ["server/go.mod"],
+      "command": {
+        "kind": "go-test",
+        "workdir": "server",
+        "args": ["./..."]
+      },
+      "ports": [],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "go-vet",
+      "name": "Go vet",
+      "type": "go-vet",
+      "purpose": "Static checks via go vet ./...",
+      "tiers": ["safe"],
+      "preconditions": ["Go toolchain available"],
+      "estimatedDurationSec": 20,
+      "impact": "No external ports or database mutation",
+      "files": ["server/go.mod"],
+      "command": {
+        "kind": "go-vet",
+        "workdir": "server",
+        "args": ["./..."]
+      },
+      "ports": [],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "web-typecheck",
+      "name": "Frontend typecheck",
+      "type": "npm",
+      "purpose": "Vue/TypeScript type-check for the H5 client",
+      "tiers": ["safe"],
+      "preconditions": ["Node.js and web/node_modules installed"],
+      "estimatedDurationSec": 30,
+      "impact": "No external ports or database mutation",
+      "files": ["web/package.json"],
+      "command": {
+        "kind": "npm",
+        "workdir": "web",
+        "args": ["run", "typecheck"]
+      },
+      "ports": [],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "web-build",
+      "name": "Frontend production build",
+      "type": "npm",
+      "purpose": "Production build of the Vue 3 H5 client",
+      "tiers": ["safe"],
+      "preconditions": ["Node.js and web/node_modules installed"],
+      "estimatedDurationSec": 45,
+      "impact": "Writes web/dist only",
+      "files": ["web/package.json"],
+      "command": {
+        "kind": "npm",
+        "workdir": "web",
+        "args": ["run", "build"]
+      },
+      "ports": [],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "e2e-auth-snapshot",
+      "name": "Authenticated snapshot E2E",
+      "type": "e2e-ps1",
+      "purpose": "Four-process in-memory HTTP/WS authenticated snapshot path",
+      "tiers": ["service"],
+      "preconditions": ["Ports 8080-8083 free", "Go toolchain available"],
+      "estimatedDurationSec": 60,
+      "impact": "Starts temporary Login/Gate/Zone/Coordinator on local ports; cleans up on exit",
+      "files": [
+        "tests/e2e/run-authenticated-snapshot.ps1",
+        "server/test/e2e/authenticated_snapshot_test.go"
+      ],
+      "command": {
+        "kind": "powershell",
+        "workdir": ".",
+        "script": "tests/e2e/run-authenticated-snapshot.ps1",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "e2e-maturity-push",
+      "name": "Maturity push owner loop",
+      "type": "e2e-ps1",
+      "purpose": "In-memory owner loop through natural maturity Push and remaining commands",
+      "tiers": ["service"],
+      "preconditions": ["Ports 8080-8083 free", "Go toolchain available"],
+      "estimatedDurationSec": 90,
+      "impact": "Starts temporary four-process stack; waits for natural maturity",
+      "files": [
+        "tests/e2e/run-maturity-push.ps1",
+        "tests/e2e/run-authenticated-snapshot.ps1",
+        "server/test/e2e/authenticated_snapshot_test.go"
+      ],
+      "command": {
+        "kind": "powershell",
+        "workdir": ".",
+        "script": "tests/e2e/run-maturity-push.ps1",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "e2e-dual-zone-memory",
+      "name": "Dual-Zone routing (memory)",
+      "type": "e2e-ps1",
+      "purpose": "Five-process static dual-Zone routing, cache refresh and inactive-shard handoff without MySQL",
+      "tiers": ["service"],
+      "preconditions": ["Ports 8080-8084 free", "Go toolchain available"],
+      "estimatedDurationSec": 90,
+      "impact": "Starts temporary five-process stack; process-local Coordinator state only",
+      "files": [
+        "tests/e2e/run-dual-zone-routing.ps1",
+        "server/test/e2e/dual_zone_routing_test.go"
+      ],
+      "command": {
+        "kind": "powershell",
+        "workdir": ".",
+        "script": "tests/e2e/run-dual-zone-routing.ps1",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083, 8084],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "e2e-mysql-auth-snapshot",
+      "name": "MySQL authenticated snapshot",
+      "type": "e2e-ps1",
+      "purpose": "MySQL-backed registration and checkpoint load through the four-process stack",
+      "tiers": ["service", "mysql"],
+      "preconditions": [
+        "Local MySQL from repo-root .env",
+        "Ports 8080-8083 free",
+        "Migrations already applied or compatible schema"
+      ],
+      "estimatedDurationSec": 90,
+      "impact": "Writes a new E2E account and Player checkpoint to the configured database",
+      "files": [
+        "tests/e2e/run-mysql-authenticated-snapshot.ps1",
+        "tests/e2e/run-authenticated-snapshot.ps1",
+        "tests/e2e/_mysql-env.ps1",
+        "server/test/e2e/authenticated_snapshot_test.go"
+      ],
+      "command": {
+        "kind": "powershell",
+        "workdir": ".",
+        "script": "tests/e2e/run-mysql-authenticated-snapshot.ps1",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083],
+      "needsMysql": true,
+      "clearMysqlDsn": false,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "e2e-mysql-restart-recovery",
+      "name": "MySQL restart recovery",
+      "type": "e2e-ps1",
+      "purpose": "Full MySQL owner loop, apply migrations, restart four processes and recover player_seq=8",
+      "tiers": ["service", "mysql"],
+      "preconditions": [
+        "Local MySQL from repo-root .env",
+        "Ports 8080-8083 free",
+        "mysql client available for migration apply"
+      ],
+      "estimatedDurationSec": 180,
+      "impact": "Applies deploy/migrations/*.up.sql and writes persistent player state; database remains reusable for similar runs",
+      "files": [
+        "tests/e2e/run-mysql-restart-recovery.ps1",
+        "tests/e2e/run-authenticated-snapshot.ps1",
+        "tests/e2e/_mysql-env.ps1",
+        "server/test/e2e/authenticated_snapshot_test.go"
+      ],
+      "command": {
+        "kind": "powershell",
+        "workdir": ".",
+        "script": "tests/e2e/run-mysql-restart-recovery.ps1",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083],
+      "needsMysql": true,
+      "clearMysqlDsn": false,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "e2e-dual-zone-mysql",
+      "name": "Active Shard MySQL Migration",
+      "type": "e2e-ps1",
+      "purpose": "Five-process MySQL dual-Zone routing, active Shard migration to epoch 2, and Coordinator Fence hydrate after restart",
+      "tiers": ["service", "mysql", "destructive"],
+      "preconditions": [
+        "Local MySQL from repo-root .env",
+        "Ports 8080-8084 free",
+        "Migrations through 000005 applied",
+        "Disposable DB; not for later epoch-one bootstrap claims"
+      ],
+      "estimatedDurationSec": 120,
+      "impact": "Advances at least one shard_fences row to epoch 2; writes players/checkpoints; restarts Coordinator and hydrates advanced fences",
+      "files": [
+        "tests/e2e/run-dual-zone-mysql.ps1",
+        "tests/e2e/run-dual-zone-routing.ps1",
+        "tests/e2e/_mysql-env.ps1",
+        "server/test/e2e/dual_zone_routing_test.go"
+      ],
+      "command": {
+        "kind": "powershell",
+        "workdir": ".",
+        "script": "tests/e2e/run-dual-zone-mysql.ps1",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083, 8084],
+      "needsMysql": true,
+      "clearMysqlDsn": false,
+      "destructive": true,
+      "repeatable": false,
+      "runnable": true,
+      "postRunWarning": "This database must not be reused for epoch-one bootstrap tests."
+    },
+    {
+      "id": "manual-browser-h5",
+      "name": "Browser H5 smoke",
+      "type": "manual",
+      "purpose": "Owner/manual browser verification of the H5 owner loop; not automated in v1",
+      "tiers": ["safe"],
+      "preconditions": ["Local services started separately", "Browser available"],
+      "estimatedDurationSec": 300,
+      "impact": "Manual only; record results under docs/evidence/",
+      "files": [
+        "docs/evidence/2026-07-31-h5-farm-loop-browser.md",
+        "web/src/App.vue"
+      ],
+      "command": {
+        "kind": "manual",
+        "workdir": ".",
+        "args": []
+      },
+      "ports": [],
+      "needsMysql": false,
+      "clearMysqlDsn": false,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": false,
+      "postRunWarning": "Platform history cannot replace docs/evidence/."
+    }
+  ]
+}

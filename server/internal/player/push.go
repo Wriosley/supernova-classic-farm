@@ -19,19 +19,24 @@ import (
 
 type MaturityEvent struct {
 	PlayerID     uint64
+	OwnerEpoch   uint64
 	PlayerSeq    uint64
 	ServerTimeMS int64
 	Plot         *wsv1.PlotView
 }
 
 func (e MaturityEvent) Envelope() *wsv1.WsEnvelope {
+	ownerEpoch := e.OwnerEpoch
+	if ownerEpoch == 0 {
+		ownerEpoch = LocalOwnerEpoch
+	}
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion,
 		MessageKind:     wsv1.MessageKind_PUSH,
 		Action:          wsv1.Action_PLAYER_STATE_CHANGED,
 		TargetPlayerId:  e.PlayerID,
 		StateVersion: &wsv1.StateVersion{
-			OwnerEpoch: LocalOwnerEpoch,
+			OwnerEpoch: ownerEpoch,
 			PlayerSeq:  e.PlayerSeq,
 		},
 		ServerTimeMs: e.ServerTimeMS,

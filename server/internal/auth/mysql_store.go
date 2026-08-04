@@ -68,19 +68,24 @@ func (m *mysqlStore) register(name string, hash passwordHash, now time.Time) (st
 	session.PlayerID = uint64(playerID)
 
 	checkpoint := player.NewInitialCheckpoint(session.PlayerID, now)
+	var fenceOwnerZoneID string
+	var fenceOwnerEpoch uint64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT owner_zone_id, owner_epoch
+		FROM shard_fences
+		WHERE logical_shard_id = ?
+		FOR UPDATE`,
+		checkpoint.LogicalShardId,
+	).Scan(&fenceOwnerZoneID, &fenceOwnerEpoch); err != nil {
+		return "", nil, fmt.Errorf("verify initial checkpoint fence: %w", err)
+	}
+	if fenceOwnerZoneID == "" || fenceOwnerEpoch == 0 {
+		return "", nil, errors.New("initial checkpoint fence is invalid")
+	}
+	checkpoint.OwnerEpoch = fenceOwnerEpoch
 	blob, checkpointSHA, err := player.MarshalCheckpoint(checkpoint)
 	if err != nil {
 		return "", nil, fmt.Errorf("create initial checkpoint: %w", err)
-	}
-	var fencePresent int
-	if err := tx.QueryRowContext(ctx, `
-		SELECT 1
-		FROM shard_fences
-		WHERE logical_shard_id = ? AND owner_zone_id = ? AND owner_epoch = ?
-		FOR UPDATE`,
-		checkpoint.LogicalShardId, player.DefaultZoneID, checkpoint.OwnerEpoch,
-	).Scan(&fencePresent); err != nil || fencePresent != 1 {
-		return "", nil, fmt.Errorf("verify initial checkpoint fence: %w", err)
 	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO player_checkpoints (

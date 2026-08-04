@@ -34,9 +34,13 @@ type TicketConsumer interface {
 }
 
 type Route struct {
-	ShardID       uint32
-	OwnerEpoch    uint64
-	OwnerEndpoint string
+	ShardID        uint32
+	OwnerZoneID    string
+	OwnerEpoch     uint64
+	RouteVersion   uint64
+	MapVersion     uint64
+	LeaseExpiresAt time.Time
+	OwnerEndpoint  string
 }
 
 type RouteResolver interface {
@@ -354,6 +358,9 @@ func (h *Handler) handleGame(
 		var response []byte
 		response, err = h.zone.Command(ctx, route, caller, raw)
 		if errors.Is(err, ErrNotOwner) {
+			if invalidator, ok := h.routes.(RouteInvalidator); ok {
+				invalidator.InvalidateIfVersion(shardID, route.RouteVersion)
+			}
 			route, err = h.routes.Resolve(ctx, shardID)
 			if err == nil {
 				response, err = h.zone.Command(ctx, route, caller, raw)

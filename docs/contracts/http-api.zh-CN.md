@@ -365,6 +365,15 @@ Ticket 签发成功不代表 WebSocket 已认证。仍必须按照 `websocket-pr
 
 只有在显式开发 Profile 验证全部 Listener 和发布 URL 都仅限 Loopback 时，本地开发才可以使用 `http://localhost`、Loopback IP 和 `ws://`。由于 `__Host-` Cookie 要求 `Secure`，本地明文使用明确分离、Host-only 的 `cf_session_dev` 和 `cf_csrf_dev` Cookie。开发环境可以省略 HSTS 和 Secure，但必须保留 Session 的 HttpOnly、SameSite、Origin/CSRF 校验、不透明 Session、密码哈希、Ticket 生命周期/单次使用、通用凭据错误和重复登录撤销。任何 Bind 或发布地址超出 Loopback 时，开发 Profile 必须启动失败；绝不能由客户端 Header 开启该 Profile。
 
+### 13.1 本地原型：Session 与 Ticket 的耐久边界
+
+本地原型按 ADR-0010 接受如下边界：
+
+- 未启用耐久 Login 存储时，重启 LoginSvr 会丢失账号、Session、未使用 Ticket 和 CSRF Nonce 记录。
+- 启用可选 MySQL Login 路径时，账号与 HTTP Session 可以在 LoginSvr 重启后恢复。未使用的 `ws_ticket` 签发/消费记录以及 CSRF Nonce 记录仍是进程内状态，LoginSvr 重启后必须视为已丢失。
+- 发生此类重启后：若 Session Cookie 仍有效，客户端必须重新 bootstrap CSRF 并申请新 Ticket，不得复用重启前的 Ticket；若 Session 已失效，客户端重新登录。
+- 因此「MySQL 认证路径完成」指账号、Session 与 Player 检查点可持久化，并不包含未使用 Ticket 跨 LoginSvr 重启仍然有效。
+
 ## 14. 必需验收与安全测试
 
 实现测试必须证明：

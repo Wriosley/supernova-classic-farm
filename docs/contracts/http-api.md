@@ -364,6 +364,15 @@ Production MUST:
 
 Local development MAY use `http://localhost`, loopback IPs, and `ws://` only when an explicit development profile verifies that every listener and advertised URL is loopback-only. Because `__Host-` cookies require `Secure`, local plaintext uses clearly separate `cf_session_dev` and `cf_csrf_dev` host-only cookies. It may omit HSTS and Secure, but MUST retain HttpOnly on Session, SameSite, Origin/CSRF checks, opaque Sessions, password hashing, ticket lifetime/single use, generic credential errors, and duplicate-login revocation. The development profile MUST fail startup if bound or advertised beyond loopback and MUST never be enabled by a client-controlled header.
 
+### 13.1 Local prototype durability of Sessions versus tickets
+
+Accepted by ADR-0010 for the local prototype:
+
+- Without durable Login storage, restarting LoginSvr loses accounts, Sessions, unused tickets, and CSRF nonce records.
+- With the optional MySQL Login path, accounts and HTTP Sessions MAY survive LoginSvr restart. Unused `ws_ticket` issue/consume records and CSRF nonce records remain process-local and MUST be treated as lost after LoginSvr restart.
+- After such a restart, a client whose Session cookie is still valid MUST re-bootstrap CSRF and request a new ticket; it MUST NOT reuse a pre-restart ticket. If the Session is gone, the client logs in again.
+- Completing the MySQL authentication path therefore means durable account, Session, and Player checkpoint provisioning—not durable unused tickets across LoginSvr restarts.
+
 ## 14. Required acceptance and security tests
 
 Implementation tests MUST prove:

@@ -15,7 +15,8 @@ The migrations create:
 - durable accounts and Session generations;
 - HTTP Session rows;
 - the V3 `player_checkpoints` envelope and deterministic Protobuf blob;
-- 4096 local development `shard_fences` rows for exact Owner/epoch checks.
+- 4096 local development `shard_fences` rows for exact Owner/epoch checks;
+- `shard_migration_progress` rows for open or abandoned Shard handoffs.
 
 Registration commits the account, initial Player checkpoint and first Session
 in one MySQL transaction. The local single-database transaction is permitted by

@@ -9,8 +9,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$securePassword = Read-Host "MySQL password for $User" -AsSecureString
-$passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+. (Join-Path $PSScriptRoot "_mysql-env.ps1")
+
 $previousDSN = $env:MYSQL_DSN
 $previousAccount = $env:E2E_ACCOUNT_NAME
 $previousMode = $env:E2E_AUTH_MODE
@@ -25,6 +25,7 @@ $previousCleanPlot = $env:E2E_CLEAN_PLOT
 $previousExpectedPlayerSeq = $env:E2E_EXPECT_PLAYER_SEQ
 $previousMySQLPassword = $env:MYSQL_PWD
 $accountName = "restart_$([Guid]::NewGuid().ToString('N').Substring(0, 12))"
+$connection = $null
 
 function Resolve-MySQLClient {
     if (-not [string]::IsNullOrWhiteSpace($MySQLClient)) {
@@ -99,28 +100,36 @@ function Invoke-RestartPhase {
 }
 
 try {
+    $connection = Resolve-MySQLConnection -HostName $HostName -Port $Port -Database $Database -User $User -AllowPrompt
+    if ($connection.Source -eq "constructed") {
+        $HostName = $connection.HostName
+        $Port = [int]$connection.Port
+        $Database = $connection.Database
+        $User = $connection.User
+    }
+
     $mysqlExecutable = Resolve-MySQLClient
     Write-Host "MYSQL_CLIENT path=$mysqlExecutable"
-    $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
-    $escapedPassword = [Uri]::EscapeDataString($plainPassword)
-    $env:MYSQL_DSN = "${User}:${escapedPassword}@tcp(${HostName}:${Port})/${Database}?charset=utf8mb4&parseTime=true&loc=Local"
+    $env:MYSQL_DSN = $connection.Dsn
     $env:E2E_ACCOUNT_NAME = $accountName
-    $env:MYSQL_PWD = $plainPassword
-    foreach ($migration in (Get-ChildItem (Join-Path $PSScriptRoot "..\..\deploy\migrations") -Filter "*.up.sql" | Sort-Object Name)) {
-        Write-Host "MIGRATE file=$($migration.Name)"
-        Get-Content -Raw $migration.FullName | & $mysqlExecutable `
-            --host=$HostName --port=$Port --user=$User --default-character-set=utf8mb4 $Database
-        if ($LASTEXITCODE -ne 0) {
-            throw "MySQL migration $($migration.Name) failed with exit code $LASTEXITCODE"
+
+    if ([string]::IsNullOrWhiteSpace($connection.PlainPassword)) {
+        throw "MYSQL_PASSWORD is required to apply migrations via mysql.exe (set in .env or environment)"
+    }
+    $env:MYSQL_PWD = $connection.PlainPassword
+    try {
+        foreach ($migration in (Get-ChildItem (Join-Path $PSScriptRoot "..\..\deploy\migrations") -Filter "*.up.sql" | Sort-Object Name)) {
+            Write-Host "MIGRATE file=$($migration.Name)"
+            Get-Content -Raw $migration.FullName | & $mysqlExecutable `
+                --host=$HostName --port=$Port --user=$User --default-character-set=utf8mb4 $Database
+            if ($LASTEXITCODE -ne 0) {
+                throw "MySQL migration $($migration.Name) failed with exit code $LASTEXITCODE"
+            }
         }
     }
-    if ($null -eq $previousMySQLPassword) {
-        Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue
+    finally {
+        Restore-EnvVar -Name "MYSQL_PWD" -PreviousValue $previousMySQLPassword
     }
-    else {
-        $env:MYSQL_PWD = $previousMySQLPassword
-    }
-    Remove-Variable plainPassword -ErrorAction SilentlyContinue
 
     Invoke-RestartPhase -Mode "register"
     Write-Host "RESTART boundary=fresh-four-process-stack"
@@ -128,8 +137,7 @@ try {
     Write-Host "RESULT mysql_restart_recovery_e2e=PASS account=$accountName"
 }
 finally {
-    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer)
-    Remove-Variable securePassword, escapedPassword -ErrorAction SilentlyContinue
+    Remove-Variable connection -Force -ErrorAction SilentlyContinue
     foreach ($entry in @(
         @{ Name = "MYSQL_DSN"; Value = $previousDSN },
         @{ Name = "E2E_ACCOUNT_NAME"; Value = $previousAccount },
@@ -145,11 +153,6 @@ finally {
         @{ Name = "E2E_EXPECT_PLAYER_SEQ"; Value = $previousExpectedPlayerSeq },
         @{ Name = "MYSQL_PWD"; Value = $previousMySQLPassword }
     )) {
-        if ($null -eq $entry.Value) {
-            Remove-Item "Env:$($entry.Name)" -ErrorAction SilentlyContinue
-        }
-        else {
-            Set-Item "Env:$($entry.Name)" $entry.Value
-        }
+        Restore-EnvVar -Name $entry.Name -PreviousValue $entry.Value
     }
 }

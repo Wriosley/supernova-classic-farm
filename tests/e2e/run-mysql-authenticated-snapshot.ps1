@@ -8,15 +8,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$securePassword = Read-Host "MySQL password for $User" -AsSecureString
-$passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+. (Join-Path $PSScriptRoot "_mysql-env.ps1")
+
 $previousDSN = $env:MYSQL_DSN
+$connection = $null
 
 try {
-    $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
-    $escapedPassword = [Uri]::EscapeDataString($plainPassword)
-    $env:MYSQL_DSN = "${User}:${escapedPassword}@tcp(${HostName}:${Port})/${Database}?charset=utf8mb4&parseTime=true&loc=Local"
-    Remove-Variable plainPassword -ErrorAction SilentlyContinue
+    $connection = Resolve-MySQLConnection -HostName $HostName -Port $Port -Database $Database -User $User -AllowPrompt
+    $env:MYSQL_DSN = $connection.Dsn
 
     & (Join-Path $PSScriptRoot "run-authenticated-snapshot.ps1") -Adapter "mysql-checkpoint"
     if ($LASTEXITCODE -ne 0) {
@@ -24,12 +23,8 @@ try {
     }
 }
 finally {
-    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer)
-    Remove-Variable securePassword, escapedPassword -ErrorAction SilentlyContinue
-    if ($null -eq $previousDSN) {
-        Remove-Item Env:MYSQL_DSN -ErrorAction SilentlyContinue
+    if ($null -ne $connection -and $null -ne $connection.PlainPassword) {
+        Remove-Variable -Name connection -Force -ErrorAction SilentlyContinue
     }
-    else {
-        $env:MYSQL_DSN = $previousDSN
-    }
+    Restore-EnvVar -Name "MYSQL_DSN" -PreviousValue $previousDSN
 }

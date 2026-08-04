@@ -17,7 +17,8 @@ var (
 )
 
 type MySQLCheckpointLoader struct {
-	DB *sql.DB
+	DB          *sql.DB
+	OwnerZoneID string
 }
 
 func (l *MySQLCheckpointLoader) Load(ctx context.Context, playerID uint64) (*State, error) {
@@ -95,7 +96,7 @@ func (l *MySQLCheckpointLoader) Save(ctx context.Context, checkpoint *datav1.Pla
 	if err != nil {
 		return fmt.Errorf("read checkpoint fence: %w", err)
 	}
-	if ownerZoneID != DefaultZoneID || ownerEpoch != checkpoint.OwnerEpoch {
+	if ownerZoneID != l.ownerZoneID() || ownerEpoch != checkpoint.OwnerEpoch {
 		return ErrCheckpointFenced
 	}
 	if checkpoint.CheckpointRevision <= expectedRevision {
@@ -132,6 +133,13 @@ func (l *MySQLCheckpointLoader) Save(ctx context.Context, checkpoint *datav1.Pla
 		return fmt.Errorf("commit checkpoint flush: %w", err)
 	}
 	return nil
+}
+
+func (l *MySQLCheckpointLoader) ownerZoneID() string {
+	if l.OwnerZoneID == "" {
+		return DefaultZoneID
+	}
+	return l.OwnerZoneID
 }
 
 func persistPendingOutbox(

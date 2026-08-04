@@ -111,7 +111,8 @@ func (r *Runtime) claimChapterReward(
 	var pendingRecord *datav1.PendingOutboxRecord
 	if len(itemsPending) > 0 {
 		pendingRecord, err = buildRewardMailOutbox(
-			callerPlayerID, requestID, chapter, itemsPending, nextPlayerSeq, now,
+			callerPlayerID, requestID, chapter, itemsPending,
+			a.state.OwnerEpoch, nextPlayerSeq, now,
 		)
 		if err != nil {
 			return r.storeClaimRewardFailure(a, request, requestID, fingerprint, config.Version(), now,
@@ -155,7 +156,7 @@ func (r *Runtime) claimChapterReward(
 		FingerprintSchemaVersion: idempotencyFingerprintSchemaVersion,
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
-		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: LocalOwnerEpoch,
+		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: a.state.OwnerEpoch,
 		ResultPlayerSeq:     a.state.PlayerSeq,
 		ResponsePayloadType: uint32(wsv1.Action_CLAIM_CHAPTER_REWARD),
 		ResponsePayload:     body,
@@ -167,7 +168,7 @@ func (r *Runtime) claimChapterReward(
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
 		Action: request.Action, RequestId: request.RequestId, TargetPlayerId: request.TargetPlayerId,
-		StateVersion: &wsv1.StateVersion{OwnerEpoch: LocalOwnerEpoch, PlayerSeq: a.state.PlayerSeq},
+		StateVersion: &wsv1.StateVersion{OwnerEpoch: a.state.OwnerEpoch, PlayerSeq: a.state.PlayerSeq},
 		ServerTimeMs: now.UnixMilli(),
 		Payload: &wsv1.WsEnvelope_ClaimChapterRewardResponse{
 			ClaimChapterRewardResponse: payload,
@@ -180,6 +181,7 @@ func buildRewardMailOutbox(
 	requestID []byte,
 	chapter ChapterConfig,
 	pending []*wsv1.ItemStackView,
+	ownerEpoch uint64,
 	playerSeq uint64,
 	now time.Time,
 ) (*datav1.PendingOutboxRecord, error) {
@@ -210,7 +212,7 @@ func buildRewardMailOutbox(
 		EventType:            datav1.OutboxEventType_CREATE_REWARD_MAIL,
 		EventContractVersion: 1, AggregatePlayerId: playerID,
 		CausedByRequestId: append([]byte(nil), requestID...),
-		CreatedOwnerEpoch: LocalOwnerEpoch, CreatedPlayerSeq: playerSeq,
+		CreatedOwnerEpoch: ownerEpoch, CreatedPlayerSeq: playerSeq,
 		CreatedAtMs: now.UnixMilli(), Payload: body, PayloadSha256: digest[:],
 	}, nil
 }
@@ -245,7 +247,7 @@ func (r *Runtime) storeClaimRewardFailure(
 		FingerprintSchemaVersion: idempotencyFingerprintSchemaVersion,
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
-		CompletedAtMs: now.UnixMilli(), Success: false, ResultOwnerEpoch: LocalOwnerEpoch,
+		CompletedAtMs: now.UnixMilli(), Success: false, ResultOwnerEpoch: a.state.OwnerEpoch,
 		ResultPlayerSeq:     a.state.PlayerSeq,
 		ResponsePayloadType: uint32(wsv1.Action_CLAIM_CHAPTER_REWARD),
 		ErrorPayload:        body,
