@@ -127,7 +127,8 @@ func (h *Handler) csrf(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
-	if !h.validateMutation(w, r, nil) {
+	_, currentSession := h.optionalSession(r)
+	if !h.validateMutation(w, r, currentSession) {
 		return
 	}
 	var request httpv1.RegisterRequest
@@ -153,7 +154,8 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
-	if !h.validateMutation(w, r, nil) {
+	_, currentSession := h.optionalSession(r)
+	if !h.validateMutation(w, r, currentSession) {
 		return
 	}
 	var request httpv1.LoginRequest

@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
@@ -184,11 +186,24 @@ type HTTPZoneCommander struct {
 	Client *http.Client
 }
 
+type zoneCommandError struct {
+	kind string
+	err  error
+}
+
+func (e *zoneCommandError) Error() string {
+	return e.err.Error()
+}
+
+func (e *zoneCommandError) Unwrap() error {
+	return e.err
+}
+
 func (z *HTTPZoneCommander) Command(ctx context.Context, route Route, caller uint64, body []byte) ([]byte, error) {
 	endpoint := strings.TrimRight(route.OwnerEndpoint, "/") + "/internal/v1/command"
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, &zoneCommandError{kind: "request", err: err}
 	}
 	request.Header.Set("Content-Type", "application/x-protobuf")
 	request.Header.Set("X-Caller-Player-ID", strconv.FormatUint(caller, 10))
@@ -198,7 +213,7 @@ func (z *HTTPZoneCommander) Command(ctx context.Context, route Route, caller uin
 	request.Header.Set("X-Route-Version", strconv.FormatUint(route.RouteVersion, 10))
 	response, err := clientOrDefault(z.Client).Do(request)
 	if err != nil {
-		return nil, err
+		return nil, &zoneCommandError{kind: "transport_" + classifyTransportError(err), err: err}
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusConflict {
@@ -207,16 +222,39 @@ func (z *HTTPZoneCommander) Command(ctx context.Context, route Route, caller uin
 	}
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return nil, fmt.Errorf("Zone returned %s", response.Status)
+		return nil, &zoneCommandError{
+			kind: fmt.Sprintf("http_%d", response.StatusCode),
+			err:  fmt.Errorf("Zone returned %s", response.Status),
+		}
 	}
 	body, err = io.ReadAll(io.LimitReader(response.Body, MaxMessageBytes+1))
 	if err != nil {
-		return nil, err
+		return nil, &zoneCommandError{kind: "read", err: err}
 	}
 	if len(body) > MaxMessageBytes {
-		return nil, errors.New("Zone response exceeds 64 KiB")
+		return nil, &zoneCommandError{kind: "too_large", err: errors.New("Zone response exceeds 64 KiB")}
 	}
 	return body, nil
+}
+
+func classifyTransportError(err error) string {
+	var networkError net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.As(err, &networkError) && networkError.Timeout():
+		return "timeout"
+	case errors.Is(err, syscall.ECONNRESET):
+		return "connection_reset"
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "connection_refused"
+	case errors.Is(err, syscall.EPIPE):
+		return "broken_pipe"
+	case errors.Is(err, io.EOF):
+		return "eof"
+	default:
+		return "other"
+	}
 }
 
 func clientOrDefault(client *http.Client) *http.Client {

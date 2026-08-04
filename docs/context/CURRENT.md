@@ -159,7 +159,8 @@ Current milestone status:
 - Reward overflow is deterministic by `item_id`. A full warehouse keeps the fitting quantities in Actor state and records one `CreateRewardMailV1` pending Outbox event for all remaining items; the response says `items_pending_mail`, not that a mail was delivered.
 - `deploy/migrations/000004_player_outbox.up.sql` adds the relational relay table. A Dirty flush validates pending event payloads and atomically inserts or immutable-compares each `player_outbox` row in the same MySQL transaction as checkpoint CAS. The relay, Mail Service and delivered-event reconciliation are not implemented.
 - Live in-memory and owner-run MySQL four-process flows completed claim at `player_seq=7`, 29 coins, one fertilizer, three next-chapter seeds and chapter two `IN_PROGRESS`. After all four MySQL-backed services stopped, a fresh stack recovered the same `player_id=9` checkpoint, including the `NEED_CLEANUP` plot.
-- `CLEAN_PLOT` is implemented as an idempotent Actor command. It requires `NEED_CLEANUP`, consumes and grants nothing, advances no task, clears every frozen crop/growth/effect field and returns the plot to `EMPTY`.
+- `CLEAN_PLOT` is implemented as an idempotent Actor command. It requires `NEED_CLEANUP`, consumes and grants nothing, advances no task, clears every frozen crop/growth/effect field and returns the plot to `EMPTY`. The H5 no longer blocks cleaning until the chapter-one reward is claimed.
+- The development shop now returns three active entries in stable entry-ID order: seed sale (`1001`, 2 coins), crop buyback (`1002`, 5 coins), and basic fertilizer sale (`item_id=1`, 2 coins). `BUY_FERTILIZER` has its own idempotent Actor command, shares the 1–50 quantity and 300-stack rules, and does not advance the seed-purchase task.
 - Live in-memory and owner-run MySQL four-process flows completed the server-side owner loop at `player_seq=8` and replayed cleanup without applying twice. After all four MySQL-backed services stopped, a fresh stack recovered the same `player_id=10`, 29 coins, expected inventory, chapter two and the `EMPTY` plot.
 - A browser-driven in-memory H5 run registered `player_id=1`, bought, planted, fertilized, received one natural maturity Push, harvested, sold, claimed and cleaned through `state_version=1/8`. The final UI showed 29 coins, two old seeds, one fertilizer, three next-chapter seeds, chapter two and an empty plot; gap recovery remained zero. A 320 CSS-pixel viewport check reported no horizontal overflow.
 - New development Player state and registration checkpoints now contain four stable `EMPTY` plots (`plot_id=1..4`). Commands still patch only their requested plot; snapshot and checkpoint ordering remain stable. Existing development checkpoints are not migrated online and must be reset/re-registered locally.
@@ -208,6 +209,27 @@ Current milestone status:
   epoch; abandon after Fence is refused. Before `PREPARING`, failure resumes
   the old Owner; after it, failure remains non-routable and never reuses the
   epoch.
+- R3 now has a first local protocol benchmark scaffold:
+  `server/cmd/benchrunner` creates isolated `bench_` accounts, establishes the
+  actual HTTP/CSRF/Ticket/Protobuf WebSocket path, and measures closed-loop
+  `GET_PLAYER_SNAPSHOT` latency for configurable 1–100 virtual users. It
+  writes JSON, CSV and Markdown under ignored `benchmark/results/`, persists
+  each completed stage, classifies errors and stops a virtual user after its
+  first failure.
+- The MySQL-backed snapshot baseline used 10-second warmup and 60-second
+  samples. Successful QPS for 1/10/25/50/100 virtual users was respectively
+  3,094.83 / 13,250.00 / 15,046.84 / 16,080.84 / 13,846.43, with zero errors
+  after the fix. P99 was 1.029 / 2.090 / 4.523 / 9.225 / 23.256 ms. The
+  observed throughput knee was 50 users on this host.
+- R3 exposed a Gate-to-Zone HTTP pool defect: Go's default client retained too
+  few idle connections and could select connections after Zone's shorter
+  server idle timeout, producing six repeatable `SERVICE_UNAVAILABLE` results.
+  Gate now allows 64 idle connections per host and retires them at 20 seconds,
+  before Zone's 30-second close. Local failure counters remained zero across
+  the post-fix matrix. This remains a single-host read-path baseline, not a
+  production or 30-million-DAU claim. Actor contention, Push, Dirty, CPU and
+  memory measurement remain next. See
+  `../evidence/2026-08-03-r3-snapshot-read-baseline.md`.
 
 Work order for this milestone:
 

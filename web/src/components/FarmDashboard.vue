@@ -27,6 +27,7 @@ import handTool from '../../../frontend/src/assets/art/runtime/tools/hand.png'
 
 export type FarmAction =
   | 'buy'
+  | 'buy-fertilizer'
   | 'plant'
   | 'fertilize'
   | 'harvest'
@@ -59,11 +60,13 @@ const emit = defineEmits<{
 
 const selectedTool = ref<FarmTool>('seed')
 const buyQuantity = ref(3)
+const fertilizerBuyQuantity = ref(1)
 const sellQuantity = ref(1)
 const localMessage = ref('')
 const chapter = computed(() => props.snapshot?.currentChapter)
 const plots = computed(() => [...(props.snapshot?.plots ?? [])].sort((a, b) => a.plotId - b.plotId))
 const seedQuote = computed(() => props.shopEntries.find((entry) => entry.itemId === 1001))
+const fertilizerQuote = computed(() => props.shopEntries.find((entry) => entry.itemId === 1))
 const cropQuote = computed(() => props.shopEntries.find((entry) => entry.itemId === 1002))
 const inventory = computed(() => {
   const quantities = new Map<number, number>()
@@ -77,6 +80,9 @@ const cropQuantity = computed(() => inventory.value.get(1002) ?? 0)
 const fertilizerQuantity = computed(() => inventory.value.get(1) ?? 0)
 const nextSeedQuantity = computed(() => inventory.value.get(1003) ?? 0)
 const buyTotal = computed(() => (seedQuote.value?.unitPrice ?? 0n) * BigInt(buyQuantity.value))
+const fertilizerBuyTotal = computed(
+  () => (fertilizerQuote.value?.unitPrice ?? 0n) * BigInt(fertilizerBuyQuantity.value),
+)
 const sellTotal = computed(() => (cropQuote.value?.unitPrice ?? 0n) * BigInt(sellQuantity.value))
 const chapterStatusLabel = computed(() => {
   switch (chapter.value?.status) {
@@ -96,6 +102,15 @@ const canBuy = computed(() => Boolean(
   buyQuantity.value <= 50 &&
   seedQuantity.value + buyQuantity.value <= 300 &&
   props.snapshot.coinBalance >= buyTotal.value,
+))
+const canBuyFertilizer = computed(() => Boolean(
+  props.connected &&
+  fertilizerQuote.value?.enabled &&
+  props.snapshot &&
+  fertilizerBuyQuantity.value >= 1 &&
+  fertilizerBuyQuantity.value <= 50 &&
+  fertilizerQuantity.value + fertilizerBuyQuantity.value <= 300 &&
+  props.snapshot.coinBalance >= fertilizerBuyTotal.value,
 ))
 const canSell = computed(() => Boolean(
   props.connected &&
@@ -128,6 +143,13 @@ watch(cropQuantity, (quantity) => {
 
 function clampBuy(): void {
   buyQuantity.value = Math.min(50, Math.max(1, Math.trunc(Number(buyQuantity.value) || 1)))
+}
+
+function clampFertilizerBuy(): void {
+  fertilizerBuyQuantity.value = Math.min(
+    50,
+    Math.max(1, Math.trunc(Number(fertilizerBuyQuantity.value) || 1)),
+  )
 }
 
 function clampSell(): void {
@@ -201,16 +223,10 @@ function targetAction(plot: PlotView): FarmActionRequest | undefined {
       localMessage.value = '手只能收获已经成熟的作物。'
       return undefined
     case 'shovel':
-      if (
-        plot.plotState === PlotState.NEED_CLEANUP &&
-        (chapter.value?.chapterId ?? 0) >= 2
-      ) {
+      if (plot.plotState === PlotState.NEED_CLEANUP) {
         return { action: 'clean', plotId: plot.plotId }
       }
-      localMessage.value =
-        plot.plotState !== PlotState.NEED_CLEANUP
-          ? '铲子只能清理收获后的地块。'
-          : '请先领取章节奖励再清理地块。'
+      localMessage.value = '铲子只能清理收获后的地块。'
       return undefined
   }
 }
@@ -228,10 +244,7 @@ function isValidTarget(plot: PlotView): boolean {
     case 'hand':
       return plot.plotState === PlotState.MATURE
     case 'shovel':
-      return (
-        plot.plotState === PlotState.NEED_CLEANUP &&
-        (chapter.value?.chapterId ?? 0) >= 2
-      )
+      return plot.plotState === PlotState.NEED_CLEANUP
   }
 }
 
@@ -353,7 +366,7 @@ function run(request: FarmActionRequest): void {
           <div class="panel-heading">
             <div>
               <span class="panel-kicker">SHOP</span>
-              <h3>种子商店</h3>
+              <h3>商店</h3>
             </div>
             <span v-if="seedQuote" class="price-tag">{{ seedQuote.unitPrice }} 金币 / 粒</span>
           </div>
@@ -363,6 +376,35 @@ function run(request: FarmActionRequest): void {
               <strong>演示作物种子</strong>
               <small>单次购买 1–50 粒 · 仓库堆叠上限 300</small>
             </div>
+          </div>
+          <div class="shop-item">
+            <img class="item-icon pixel-art" :src="fertilizerIcon" alt="基础肥料" />
+            <div class="shop-copy">
+              <strong>基础肥料</strong>
+              <small>每袋 {{ fertilizerQuote?.unitPrice ?? '—' }} 金币 · 仓库堆叠上限 300</small>
+            </div>
+          </div>
+          <div class="quantity-row">
+            <button type="button" aria-label="减少肥料购买数量" @click="fertilizerBuyQuantity--; clampFertilizerBuy()">−</button>
+            <input
+              v-model.number="fertilizerBuyQuantity"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="50"
+              aria-label="肥料购买数量"
+              @change="clampFertilizerBuy"
+            />
+            <button type="button" aria-label="增加肥料购买数量" @click="fertilizerBuyQuantity++; clampFertilizerBuy()">＋</button>
+            <span>合计 {{ fertilizerBuyTotal }} 金币</span>
+            <button
+              class="primary"
+              type="button"
+              :disabled="!canBuyFertilizer || Boolean(busyAction)"
+              @click="run({ action: 'buy-fertilizer', quantity: fertilizerBuyQuantity })"
+            >
+              {{ busyAction?.action === 'buy-fertilizer' ? '购买中…' : `购买 ${fertilizerBuyQuantity} 袋` }}
+            </button>
           </div>
           <div class="quantity-row">
             <button type="button" aria-label="减少购买数量" @click="buyQuantity--; clampBuy()">−</button>

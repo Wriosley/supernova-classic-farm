@@ -30,7 +30,8 @@ enum Action {
   CLEAN_PLOT = 204;
   SELL_CROP = 205;
   CLAIM_CHAPTER_REWARD = 206;
-  reserved 207 to 999;
+  BUY_FERTILIZER = 207;
+  reserved 208 to 999;
   PLAYER_STATE_CHANGED = 1000;
   reserved 1001 to 1999;
 }
@@ -101,8 +102,10 @@ message WsEnvelope {
     ClaimChapterRewardRequest claim_chapter_reward_request = 30;
     ClaimChapterRewardResponse claim_chapter_reward_response = 31;
     PlayerStateChangedPush player_state_changed_push = 32;
+    BuyFertilizerRequest buy_fertilizer_request = 33;
+    BuyFertilizerResponse buy_fertilizer_response = 34;
   }
-  reserved 33 to 99;
+  reserved 35 to 99;
 }
 
 message StateVersion {
@@ -233,6 +236,21 @@ message BuySeedsRequest {
 }
 
 message BuySeedsResponse {
+  uint32 shop_entry_id = 1;
+  uint32 item_id = 2;
+  uint32 quantity = 3;
+  int64 unit_price = 4;
+  int64 total_price = 5;
+  PlayerStatePatch patch = 6;
+}
+
+message BuyFertilizerRequest {
+  uint32 shop_entry_id = 1;
+  uint32 quantity = 2;
+  uint64 expected_price_version = 3;
+}
+
+message BuyFertilizerResponse {
   uint32 shop_entry_id = 1;
   uint32 item_id = 2;
   uint32 quantity = 3;

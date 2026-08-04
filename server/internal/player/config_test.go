@@ -72,14 +72,18 @@ func TestConfigSnapshotRejectsInvalidAndDuplicateSellRules(t *testing.T) {
 	}
 }
 
-func TestDevelopmentShopIncludesBuyAndSellQuotesInStableOrder(t *testing.T) {
+func TestDevelopmentShopIncludesSeedCropAndFertilizerQuotesInStableOrder(t *testing.T) {
 	entries := NewDevelopmentConfigSnapshot().ActiveShopEntries()
-	if len(entries) != 2 ||
+	if len(entries) != 3 ||
 		entries[0].GetShopEntryId() != developmentShopEntryID ||
 		entries[1].GetShopEntryId() != developmentSellEntryID ||
 		entries[1].GetItemId() != developmentCropItemID ||
 		entries[1].GetUnitPrice() != developmentCropSellUnitPrice ||
-		entries[1].GetPriceVersion() != developmentCropSellPriceVersion {
+		entries[1].GetPriceVersion() != developmentCropSellPriceVersion ||
+		entries[2].GetShopEntryId() != developmentFertilizerShopEntryID ||
+		entries[2].GetItemId() != BasicFertilizerID ||
+		entries[2].GetUnitPrice() != developmentFertilizerUnitPrice ||
+		entries[2].GetPriceVersion() != developmentFertilizerPriceVersion {
 		t.Fatalf("development shop entries = %+v", entries)
 	}
 }

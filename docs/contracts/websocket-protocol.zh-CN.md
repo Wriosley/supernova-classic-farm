@@ -90,9 +90,10 @@ HTTP 注册、登录和 WS Ticket 签发属于后续 `http-api.md`。存储格�
 | 204 | `CLEAN_PLOT` |
 | 205 | `SELL_CROP` |
 | 206 | `CLAIM_CHAPTER_REWARD` |
+| 207 | `BUY_FERTILIZER` |
 | 1000 | `PLAYER_STATE_CHANGED` |
 
-编号 3–99、102–199、207–999 和 1001–1999 保留给后续兼容扩展。已经删除的编号也必须永久保留，不能复用。
+编号 3–99、102–199、208–999 和 1001–1999 保留给后续兼容扩展。已经删除的编号也必须永久保留，不能复用。
 
 ## 5. 公共信封
 
@@ -305,7 +306,14 @@ H5 根据服务端时间和展示配置推导种子、发芽、半成熟图片�
 
 `BuySeedsResponse` 包含 `shop_entry_id`、`item_id`、`quantity`、`unit_price`、`total_price` 和 `patch`。Patch 包含新金币、种子库存和当前章节。
 
-### 10.2 `PLANT`
+### 10.2 `BUY_FERTILIZER`
+
+`BuyFertilizerRequest` 与 `BuyFertilizerResponse` 的字段与 `BUY_SEEDS`
+相同。数量必须在 1–50，单类物品堆叠上限是 300。固定报价必须是肥料；
+服务端推导物品和价格，扣除 `unit_price × quantity`，并在 Patch 返回金币、
+肥料库存和当前章节。该命令不会推进“购买种子”章节任务。
+
+### 10.3 `PLANT`
 
 `PlantRequest` 包含 `plot_id` 和 `seed_item_id`。
 
@@ -313,7 +321,7 @@ H5 根据服务端时间和展示配置推导种子、发芽、半成熟图片�
 
 `PlantResponse` 包含 `consumed_seed_item_id`，Patch 包含种子库存、地块和当前章节。
 
-### 10.3 `APPLY_FERTILIZER`
+### 10.4 `APPLY_FERTILIZER`
 
 `ApplyFertilizerRequest` 包含 `plot_id` 和 `fertilizer_item_id`。
 
@@ -321,7 +329,7 @@ Actor 先使用旧速度结算到当前服务端时间，再应用新效果。�
 
 `ApplyFertilizerResponse` 包含 `consumed_fertilizer_item_id`、`effect_instance_id`，Patch 包含库存、地块和当前章节。
 
-### 10.4 `HARVEST`
+### 10.5 `HARVEST`
 
 `HarvestRequest` 包含 `plot_id`。
 
@@ -329,13 +337,13 @@ Actor 先使用旧速度结算到当前服务端时间，再应用新效果。�
 
 `HarvestResponse` 包含 `crop_item_id`、`harvested_quantity`，Patch 包含库存、NEED_CLEANUP 地块和当前章节。
 
-### 10.5 `CLEAN_PLOT`
+### 10.6 `CLEAN_PLOT`
 
 `CleanPlotRequest` 包含 `plot_id`。
 
-V1 自己清理地块不消耗物品、不发奖励、不推进任务。`CleanPlotResponse` 的 Patch 包含变成 EMPTY 的地块。
+V1 自己清理地块不消耗物品、不发奖励、不推进任务。`NEED_CLEANUP` 地块无需先领取章节奖励即可清理。`CleanPlotResponse` 的 Patch 包含变成 EMPTY 的地块。
 
-### 10.6 `SELL_CROP`
+### 10.7 `SELL_CROP`
 
 `SellCropRequest`：
 
@@ -349,7 +357,7 @@ V1 自己清理地块不消耗物品、不发奖励、不推进任务。`CleanPl
 
 `SellCropResponse` 包含 `crop_item_id`、`sold_quantity`、`unit_price`、`total_price`，Patch 包含库存、金币和当前章节。
 
-### 10.7 `CLAIM_CHAPTER_REWARD`
+### 10.8 `CLAIM_CHAPTER_REWARD`
 
 `ClaimChapterRewardRequest` 包含 `chapter_id`。显式章节 ID 可以防止旧界面误领后续章节奖励。
 
@@ -373,7 +381,7 @@ V1 只有一种 Push 动作：`PLAYER_STATE_CHANGED`。
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
-| `reason` | `StateChangeReason` | `BUY_SEEDS`、`PLANT`、`APPLY_FERTILIZER`、`MATURED`、`HARVEST`、`CLEAN_PLOT`、`SELL_CROP`、`CLAIM_CHAPTER_REWARD` |
+| `reason` | `StateChangeReason` | `BUY_SEEDS`、`BUY_FERTILIZER`、`PLANT`、`APPLY_FERTILIZER`、`MATURED`、`HARVEST`、`CLEAN_PLOT`、`SELL_CROP`、`CLAIM_CHAPTER_REWARD` |
 | `caused_by_request_id` | optional `string` | 命令导致变化时存在 |
 | `patch` | `PlayerStatePatch` | 权威增量 |
 

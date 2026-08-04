@@ -73,6 +73,28 @@ func TestAuthenticatedCSRFCreatesSessionBoundProof(t *testing.T) {
 	if ticketResponse.StatusCode != http.StatusCreated {
 		t.Fatalf("ticket status = %d, want %d", ticketResponse.StatusCode, http.StatusCreated)
 	}
+
+	refreshCSRF := getCSRFForTest(t, client, server.URL)
+	loginBody, err := proto.Marshal(&httpv1.LoginRequest{
+		AccountName: "browser_test",
+		Password:    "browser-password-2026",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loginRequest, err := http.NewRequest(http.MethodPost, server.URL+"/v1/auth/login", bytes.NewReader(loginBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	setBrowserHeaders(loginRequest, refreshCSRF)
+	loginResponse, err := client.Do(loginRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loginResponse.Body.Close()
+	if loginResponse.StatusCode != http.StatusOK {
+		t.Fatalf("login with session-bound CSRF status = %d, want %d", loginResponse.StatusCode, http.StatusOK)
+	}
 }
 
 func getCSRFForTest(t *testing.T, client *http.Client, serverURL string) string {

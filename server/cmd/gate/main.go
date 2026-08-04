@@ -40,7 +40,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := newInternalHTTPClient()
 	clientConfigURL := envOr("CLIENT_CONFIG_URL", gateway.DefaultConfigURL)
 	configSHA, err := configuredSHA(client, clientConfigURL)
 	if err != nil {
@@ -76,6 +76,7 @@ func run() error {
 	mux := http.NewServeMux()
 	mux.Handle("GET /ws", wsHandler)
 	mux.Handle("POST /internal/v1/player-state-changes", wsHandler.PushHandler())
+	mux.Handle("GET /internal/v1/debug/command-failures", wsHandler.DebugCommandFailuresHandler())
 	healthHandler := health.NewHandler()
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
@@ -94,6 +95,16 @@ func run() error {
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
+}
+
+func newInternalHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 128
+	transport.MaxIdleConnsPerHost = 64
+	// Zone closes idle connections after 30 seconds. Retire Gate-side pooled
+	// connections first so a non-idempotent command never selects a stale one.
+	transport.IdleConnTimeout = 20 * time.Second
+	return &http.Client{Transport: transport, Timeout: 5 * time.Second}
 }
 
 func configuredSHA(client *http.Client, clientConfigURL string) ([]byte, error) {

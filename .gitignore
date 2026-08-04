@@ -13,6 +13,9 @@ coverage.out
 web/node_modules/
 web/dist/
 
+# Local benchmark outputs
+benchmark/results/
+
 # Local test platform
 tests/platform/web/node_modules/
 tests/platform/web/dist/

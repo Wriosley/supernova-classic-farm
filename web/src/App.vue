@@ -258,6 +258,8 @@ function actionSuccessMessage(action: FarmAction, response: WsEnvelope): string 
   switch (action) {
     case 'buy':
       return `已购买 ${response.payload.case === 'buySeedsResponse' ? response.payload.value.quantity : 0} 粒种子，任务进度已更新。`
+    case 'buy-fertilizer':
+      return `已购买 ${response.payload.case === 'buyFertilizerResponse' ? response.payload.value.quantity : 0} 袋肥料。`
     case 'plant':
       return '种植成功，作物开始成长。'
     case 'fertilize':
@@ -305,6 +307,17 @@ async function runFarmAction(request: FarmActionRequest): Promise<void> {
         const quote = shopEntries.value.find((entry) => entry.itemId === 1001)
         if (!quote) throw new Error('种子报价尚未加载')
         response = await socket.buySeeds(
+          playerId,
+          quote.shopEntryId,
+          request.quantity ?? 1,
+          quote.priceVersion,
+        )
+        break
+      }
+      case 'buy-fertilizer': {
+        const quote = shopEntries.value.find((entry) => entry.itemId === 1)
+        if (!quote) throw new Error('肥料报价尚未加载')
+        response = await socket.buyFertilizer(
           playerId,
           quote.shopEntryId,
           request.quantity ?? 1,
@@ -507,6 +520,9 @@ async function establishSnapshot(): Promise<void> {
 }
 
 async function submitCredentials(): Promise<void> {
+  if (busy.value) {
+    return
+  }
   busy.value = true
   clearResult()
   try {

@@ -353,6 +353,8 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		request.GetGetShopRequest() != nil
 	isBuySeeds := request.Action == wsv1.Action_BUY_SEEDS &&
 		request.GetBuySeedsRequest() != nil
+	isBuyFertilizer := request.Action == wsv1.Action_BUY_FERTILIZER &&
+		request.GetBuyFertilizerRequest() != nil
 	isPlant := request.Action == wsv1.Action_PLANT &&
 		request.GetPlantRequest() != nil
 	isApplyFertilizer := request.Action == wsv1.Action_APPLY_FERTILIZER &&
@@ -365,7 +367,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		request.GetSellCropRequest() != nil
 	isClaimReward := request.Action == wsv1.Action_CLAIM_CHAPTER_REWARD &&
 		request.GetClaimChapterRewardRequest() != nil
-	if !isSnapshot && !isGetShop && !isBuySeeds && !isPlant &&
+	if !isSnapshot && !isGetShop && !isBuySeeds && !isBuyFertilizer && !isPlant &&
 		!isApplyFertilizer && !isHarvest && !isCleanPlot &&
 		!isSellCrop && !isClaimReward {
 		return nil, ErrUnsupportedAction
@@ -410,6 +412,13 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		if isBuySeeds {
 			var commandDirty bool
 			response, commandDirty = r.buySeeds(a, callerPlayerID, request, config, serverNow)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isBuyFertilizer {
+			var commandDirty bool
+			response, commandDirty = r.buyFertilizer(a, callerPlayerID, request, config, serverNow)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return

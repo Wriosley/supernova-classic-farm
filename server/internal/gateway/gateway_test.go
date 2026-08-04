@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +19,18 @@ import (
 	"github.com/coder/websocket"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestClassifyTransportError(t *testing.T) {
+	if got := classifyTransportError(context.DeadlineExceeded); got != "timeout" {
+		t.Fatalf("deadline classification = %q", got)
+	}
+	if got := classifyTransportError(fmt.Errorf("wrapped: %w", context.DeadlineExceeded)); got != "timeout" {
+		t.Fatalf("wrapped deadline classification = %q", got)
+	}
+	if got := classifyTransportError(errors.New("other")); got != "other" {
+		t.Fatalf("other classification = %q", got)
+	}
+}
 
 type ticketFunc func(context.Context, string) (uint64, error)
 

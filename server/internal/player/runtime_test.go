@@ -99,6 +99,22 @@ func buySeedsQuoteRequest(
 	}
 }
 
+func buyFertilizerRequest(playerID uint64, requestID string, quantity uint32) *wsv1.WsEnvelope {
+	return &wsv1.WsEnvelope{
+		ProtocolVersion: ProtocolVersion,
+		MessageKind:     wsv1.MessageKind_REQUEST,
+		Action:          wsv1.Action_BUY_FERTILIZER,
+		RequestId:       requestID,
+		TargetPlayerId:  playerID,
+		Payload: &wsv1.WsEnvelope_BuyFertilizerRequest{
+			BuyFertilizerRequest: &wsv1.BuyFertilizerRequest{
+				ShopEntryId: developmentFertilizerShopEntryID, Quantity: quantity,
+				ExpectedPriceVersion: developmentFertilizerPriceVersion,
+			},
+		},
+	}
+}
+
 func getShopRequest(playerID uint64, requestID string) *wsv1.WsEnvelope {
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion,
@@ -414,6 +430,43 @@ func TestBuySeedsIsIdempotentAndFlushesCheckpointCAS(t *testing.T) {
 	if checkpoint.PlayerSeq != 1 || checkpoint.CheckpointRevision != 2 ||
 		checkpoint.CoinBalance != 4 || len(checkpoint.RecentResults) != 1 {
 		t.Fatalf("unexpected dirty checkpoint: %+v", checkpoint)
+	}
+}
+
+func TestBuyFertilizerIsIdempotentAndDoesNotAdvanceSeedTask(t *testing.T) {
+	const playerID = uint64(42)
+	runtime := NewRuntime()
+	defer runtime.Close()
+	requestID := "00112233-4455-6677-8899-aabbccddee10"
+
+	first, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
+		buyFertilizerRequest(playerID, requestID, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.GetError() != nil || first.GetStateVersion().GetPlayerSeq() != 1 ||
+		first.GetBuyFertilizerResponse().GetTotalPrice() != 4 ||
+		first.GetBuyFertilizerResponse().GetPatch().GetInventoryUpserts()[0].GetQuantity() != 3 {
+		t.Fatalf("unexpected first BUY_FERTILIZER response: %+v", first)
+	}
+	if task := first.GetBuyFertilizerResponse().GetPatch().GetCurrentChapter().GetTasks()[0]; task.GetCurrentValue() != 0 {
+		t.Fatalf("fertilizer purchase advanced seed task: %+v", task)
+	}
+	replay, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
+		buyFertilizerRequest(playerID, requestID, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !replay.GetReplayed() || replay.GetStateVersion().GetPlayerSeq() != 1 {
+		t.Fatalf("unexpected fertilizer replay: %+v", replay)
+	}
+	tooMany, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
+		buyFertilizerRequest(playerID, "00112233-4455-6677-8899-aabbccddee11", 51))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tooMany.GetError().GetCode() != wsv1.ErrorCode_INVALID_ARGUMENT {
+		t.Fatalf("quantity > 50 response: %+v", tooMany)
 	}
 }
 

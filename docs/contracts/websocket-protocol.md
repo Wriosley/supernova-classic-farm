@@ -88,9 +88,10 @@ All display text comes from the versioned client configuration package. IDs and 
 | 204 | `CLEAN_PLOT` |
 | 205 | `SELL_CROP` |
 | 206 | `CLAIM_CHAPTER_REWARD` |
+| 207 | `BUY_FERTILIZER` |
 | 1000 | `PLAYER_STATE_CHANGED` |
 
-Numbers 3–99, 102–199, 207–999 and 1001–1999 are reserved for compatible expansion. Removed values remain reserved.
+Numbers 3–99, 102–199, 208–999 and 1001–1999 are reserved for compatible expansion. Removed values remain reserved.
 
 ## 5. Common envelope
 
@@ -316,7 +317,16 @@ Server derives item and price from the pinned configuration. Client-supplied pri
 
 The patch contains coin balance, changed seed stack and current chapter.
 
-### 10.2 PLANT
+### 10.2 BUY_FERTILIZER
+
+`BuyFertilizerRequest` and `BuyFertilizerResponse` have the same fields as
+`BUY_SEEDS`. Quantity is 1 through 50 and the per-item stack limit is 300.
+The pinned shop entry must identify a fertilizer. The server derives the item
+and price, deducts `unit_price × quantity`, and returns the coin balance,
+changed fertilizer stack and current chapter in the patch. This command does
+not advance the chapter's seed-purchase task.
+
+### 10.3 PLANT
 
 `PlantRequest` contains `plot_id` and `seed_item_id`.
 
@@ -324,7 +334,7 @@ Server maps the seed item to the crop and freezes crop configuration fields. The
 
 `PlantResponse` contains `consumed_seed_item_id` and a patch with the changed seed stack/removal, changed plot and current chapter.
 
-### 10.3 APPLY_FERTILIZER
+### 10.4 APPLY_FERTILIZER
 
 `ApplyFertilizerRequest` contains `plot_id` and `fertilizer_item_id`.
 
@@ -332,7 +342,7 @@ The Actor settles growth to server time under the old rate before applying the n
 
 `ApplyFertilizerResponse` contains `consumed_fertilizer_item_id`, `effect_instance_id` and a patch with inventory, plot and current chapter.
 
-### 10.4 HARVEST
+### 10.5 HARVEST
 
 `HarvestRequest` contains `plot_id`.
 
@@ -340,15 +350,16 @@ Harvest is all-or-nothing. If the complete yield cannot fit, no crop is added, t
 
 `HarvestResponse` contains `crop_item_id`, `harvested_quantity` and a patch with inventory, the NEED_CLEANUP plot and current chapter.
 
-### 10.5 CLEAN_PLOT
+### 10.6 CLEAN_PLOT
 
 `CleanPlotRequest` contains `plot_id`.
 
-V1 self-cleaning consumes no item, grants no reward and advances no task.
+V1 self-cleaning consumes no item, grants no reward and advances no task. A
+`NEED_CLEANUP` plot may be cleaned before its chapter reward is claimed.
 
 `CleanPlotResponse` contains a patch with the EMPTY plot.
 
-### 10.6 SELL_CROP
+### 10.7 SELL_CROP
 
 `SellCropRequest` contains:
 
@@ -362,7 +373,7 @@ For `sell_all`, the Actor resolves the current full stack quantity at execution 
 
 `SellCropResponse` contains `crop_item_id`, `sold_quantity`, `unit_price`, `total_price` and a patch with inventory, coin balance and current chapter.
 
-### 10.7 CLAIM_CHAPTER_REWARD
+### 10.8 CLAIM_CHAPTER_REWARD
 
 `ClaimChapterRewardRequest` contains `chapter_id`. Explicit chapter identity prevents a stale screen from accidentally claiming a later chapter.
 
@@ -386,7 +397,7 @@ V1 uses one Push action: `PLAYER_STATE_CHANGED`.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `reason` | `StateChangeReason` | `BUY_SEEDS`, `PLANT`, `APPLY_FERTILIZER`, `MATURED`, `HARVEST`, `CLEAN_PLOT`, `SELL_CROP`, `CLAIM_CHAPTER_REWARD` |
+| `reason` | `StateChangeReason` | `BUY_SEEDS`, `BUY_FERTILIZER`, `PLANT`, `APPLY_FERTILIZER`, `MATURED`, `HARVEST`, `CLEAN_PLOT`, `SELL_CROP`, `CLAIM_CHAPTER_REWARD` |
 | `caused_by_request_id` | optional `string` | Present for command-caused changes |
 | `patch` | `PlayerStatePatch` | Authoritative delta |
 

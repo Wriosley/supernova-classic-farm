@@ -171,6 +171,18 @@ export class FarmWebSocket {
     })
   }
 
+  async buyFertilizer(
+    playerId: bigint,
+    shopEntryId: number,
+    quantity: number,
+    expectedPriceVersion: bigint,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.BUY_FERTILIZER, {
+      case: 'buyFertilizerRequest',
+      value: { shopEntryId, quantity, expectedPriceVersion },
+    })
+  }
+
   async plant(playerId: bigint, plotId: number, seedItemId: number): Promise<WsEnvelope> {
     return this.sendGameRequest(playerId, Action.PLANT, {
       case: 'plantRequest',

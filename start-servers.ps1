@@ -119,6 +119,9 @@ foreach ($port in $ports) {
     }
 }
 
+if (Test-Path $runRoot) {
+    Remove-Item -Recurse -Force $runRoot
+}
 New-Item -ItemType Directory -Path $runRoot | Out-Null
 $environmentKeys = @(
     "APP_ENV", "H5_ORIGIN", "GATEWAY_ID", "GATEWAY_URL",

@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
-	"errors"
 	"math"
-	"strings"
 	"time"
 
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
@@ -15,12 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	idempotencyFingerprintSchemaVersion uint32 = 1
-	maxRecentResults                           = 100
-)
-
-func (r *Runtime) buySeeds(
+func (r *Runtime) buyFertilizer(
 	a *runtimeActor,
 	callerPlayerID uint64,
 	request *wsv1.WsEnvelope,
@@ -31,8 +23,8 @@ func (r *Runtime) buySeeds(
 	if err != nil {
 		return errorEnvelope(request, a.state, now, &wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false
 	}
-	buy := request.GetBuySeedsRequest()
-	fingerprint := buySeedsFingerprint(callerPlayerID, request, buy)
+	buy := request.GetBuyFertilizerRequest()
+	fingerprint := buyFertilizerFingerprint(callerPlayerID, request, buy)
 	for _, stored := range a.state.RecentResults {
 		if stored.CallerPlayerId != callerPlayerID || !bytes.Equal(stored.RequestId, requestID) {
 			continue
@@ -44,65 +36,51 @@ func (r *Runtime) buySeeds(
 			!bytes.Equal(stored.PayloadFingerprintSha256, fingerprint[:]) {
 			return errorEnvelope(request, a.state, now, &wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false
 		}
-		return replayBuySeeds(request, stored, now), false
+		return replayBuyFertilizer(request, stored, now), false
 	}
 
 	if buy.Quantity == 0 || buy.Quantity > 50 {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
+		return r.storeBuyFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true
 	}
 	entry, exists := config.ShopEntry(buy.ShopEntryId)
-	if !exists {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
+	if !exists || entry.ItemID != BasicFertilizerID {
+		return r.storeBuyFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_SHOP_ENTRY_NOT_FOUND}), true
 	}
 	if !entry.Enabled {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
+		return r.storeBuyFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_SHOP_ENTRY_DISABLED}), true
 	}
-	if entry.ItemID == BasicFertilizerID {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_SHOP_ENTRY_NOT_FOUND}), true
-	}
 	if buy.ExpectedPriceVersion != entry.PriceVersion {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now, &wsv1.Error{
+		return r.storeBuyFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now, &wsv1.Error{
 			Code:            wsv1.ErrorCode_PRICE_CHANGED,
 			LatestShopEntry: entry.View(),
 		}), true
 	}
 	if uint64(buy.Quantity) > uint64(math.MaxInt64/entry.UnitPrice) {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
+		return r.storeBuyFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true
 	}
 	totalPrice := int64(buy.Quantity) * entry.UnitPrice
 	if a.state.Coins < totalPrice {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
+		return r.storeBuyFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_INSUFFICIENT_COINS}), true
 	}
 	currentQuantity := a.state.Inventory[entry.ItemID]
 	if uint64(currentQuantity)+uint64(buy.Quantity) > 300 {
-		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
+		return r.storeBuyFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_INVENTORY_STACK_LIMIT}), true
 	}
 
 	a.state.Coins -= totalPrice
 	a.state.Inventory[entry.ItemID] = currentQuantity + buy.Quantity
-	for index := range a.state.Tasks {
-		if a.state.Tasks[index].ID == 1 {
-			next := uint64(a.state.Tasks[index].Current) + uint64(buy.Quantity)
-			if next > uint64(a.state.Tasks[index].Target) {
-				next = uint64(a.state.Tasks[index].Target)
-			}
-			a.state.Tasks[index].Current = uint32(next)
-			break
-		}
-	}
 	a.state.PlayerSeq++
 	a.state.CheckpointRevision++
 	a.state.ConfigVersion = config.Version()
 	a.state.UpdatedAtMS = now.UnixMilli()
 	coinBalance := a.state.Coins
-	payload := &wsv1.BuySeedsResponse{
+	payload := &wsv1.BuyFertilizerResponse{
 		ShopEntryId: buy.ShopEntryId, ItemId: entry.ItemID, Quantity: buy.Quantity,
 		UnitPrice: entry.UnitPrice, TotalPrice: totalPrice,
 		Patch: &wsv1.PlayerStatePatch{
@@ -120,7 +98,7 @@ func (r *Runtime) buySeeds(
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
 		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: a.state.OwnerEpoch,
-		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_BUY_SEEDS),
+		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_BUY_FERTILIZER),
 		ResponsePayload: body,
 	}, now)
 	return &wsv1.WsEnvelope{
@@ -128,11 +106,11 @@ func (r *Runtime) buySeeds(
 		Action: request.Action, RequestId: request.RequestId, TargetPlayerId: request.TargetPlayerId,
 		StateVersion: &wsv1.StateVersion{OwnerEpoch: a.state.OwnerEpoch, PlayerSeq: a.state.PlayerSeq},
 		ServerTimeMs: now.UnixMilli(),
-		Payload:      &wsv1.WsEnvelope_BuySeedsResponse{BuySeedsResponse: payload},
+		Payload:      &wsv1.WsEnvelope_BuyFertilizerResponse{BuyFertilizerResponse: payload},
 	}, true
 }
 
-func (r *Runtime) storeBuySeedsFailure(
+func (r *Runtime) storeBuyFertilizerFailure(
 	a *runtimeActor,
 	request *wsv1.WsEnvelope,
 	requestID []byte,
@@ -151,27 +129,13 @@ func (r *Runtime) storeBuySeedsFailure(
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
 		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
 		CompletedAtMs: now.UnixMilli(), Success: false, ResultOwnerEpoch: a.state.OwnerEpoch,
-		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_BUY_SEEDS),
+		ResultPlayerSeq: a.state.PlayerSeq, ResponsePayloadType: uint32(wsv1.Action_BUY_FERTILIZER),
 		ErrorPayload: body,
 	}, now)
 	return errorEnvelope(request, a.state, now, failure)
 }
 
-func (s *State) appendResult(result *datav1.IdempotencyResultRecord, now time.Time) {
-	cutoff := now.Add(-24 * time.Hour).UnixMilli()
-	retained := s.RecentResults[:0]
-	for _, existing := range s.RecentResults {
-		if existing.CompletedAtMs >= cutoff {
-			retained = append(retained, existing)
-		}
-	}
-	s.RecentResults = append(retained, result)
-	if len(s.RecentResults) > maxRecentResults {
-		s.RecentResults = s.RecentResults[len(s.RecentResults)-maxRecentResults:]
-	}
-}
-
-func replayBuySeeds(request *wsv1.WsEnvelope, stored *datav1.IdempotencyResultRecord, now time.Time) *wsv1.WsEnvelope {
+func replayBuyFertilizer(request *wsv1.WsEnvelope, stored *datav1.IdempotencyResultRecord, now time.Time) *wsv1.WsEnvelope {
 	response := &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
 		Action: request.Action, RequestId: request.RequestId, TargetPlayerId: request.TargetPlayerId,
@@ -179,9 +143,9 @@ func replayBuySeeds(request *wsv1.WsEnvelope, stored *datav1.IdempotencyResultRe
 		ServerTimeMs: now.UnixMilli(), Replayed: true,
 	}
 	if stored.Success {
-		payload := &wsv1.BuySeedsResponse{}
+		payload := &wsv1.BuyFertilizerResponse{}
 		if proto.Unmarshal(stored.ResponsePayload, payload) == nil {
-			response.Payload = &wsv1.WsEnvelope_BuySeedsResponse{BuySeedsResponse: payload}
+			response.Payload = &wsv1.WsEnvelope_BuyFertilizerResponse{BuyFertilizerResponse: payload}
 			return response
 		}
 	} else {
@@ -195,28 +159,7 @@ func replayBuySeeds(request *wsv1.WsEnvelope, stored *datav1.IdempotencyResultRe
 	return response
 }
 
-func errorEnvelope(request *wsv1.WsEnvelope, state *State, now time.Time, failure *wsv1.Error) *wsv1.WsEnvelope {
-	return &wsv1.WsEnvelope{
-		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
-		Action: request.Action, RequestId: request.RequestId, TargetPlayerId: request.TargetPlayerId,
-		StateVersion: &wsv1.StateVersion{OwnerEpoch: state.OwnerEpoch, PlayerSeq: state.PlayerSeq},
-		ServerTimeMs: now.UnixMilli(), Error: failure,
-	}
-}
-
-func parseRequestID(value string) ([]byte, error) {
-	compact := strings.ReplaceAll(value, "-", "")
-	if len(compact) != 32 {
-		return nil, errors.New("request_id must be a UUID")
-	}
-	decoded, err := hex.DecodeString(compact)
-	if err != nil {
-		return nil, errors.New("request_id must be a UUID")
-	}
-	return decoded, nil
-}
-
-func buySeedsFingerprint(callerPlayerID uint64, envelope *wsv1.WsEnvelope, request *wsv1.BuySeedsRequest) [sha256.Size]byte {
+func buyFertilizerFingerprint(callerPlayerID uint64, envelope *wsv1.WsEnvelope, request *wsv1.BuyFertilizerRequest) [sha256.Size]byte {
 	body := make([]byte, 0, 44)
 	appendUint32 := func(value uint32) { body = binary.BigEndian.AppendUint32(body, value) }
 	appendUint64 := func(value uint64) { body = binary.BigEndian.AppendUint64(body, value) }

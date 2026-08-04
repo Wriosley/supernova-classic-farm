@@ -19,6 +19,10 @@ Plans describe intended work. `docs/context/CURRENT.md` describes the actual cur
 `2026-08-03-ws-ticket-restart-boundary-plan.md` 是已完成的 R1：冻结短命
 WS Ticket/CSRF 重启丢失边界（ADR-0010）。
 
+`2026-08-03-r3-single-instance-performance-baseline-plan.md` 是进行中的 R3：
+建立双 Zone + MySQL 单机协议端到端基线；第一阶段实现快照读路径压测工具，
+后续补 Actor、Push 和 Dirty 指标。
+
 `2026-08-03-static-dual-zone-routing-plan.md` is the completed bounded plan for
 versioned Rendezvous bootstrap placement, two local Zone processes, Gate
 RouteCache and one same-request `NOT_OWNER` recovery. Its inactive-Shard

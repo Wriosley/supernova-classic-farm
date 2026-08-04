@@ -4,6 +4,7 @@ package gateway
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -74,6 +75,13 @@ type Handler struct {
 	clientConfigSHA   []byte
 	now               func() time.Time
 	pushHub           *PushHub
+	failureStats      *commandFailureStats
+}
+
+type commandFailureStats struct {
+	mu         sync.Mutex
+	counts     map[string]uint64
+	lastErrors map[string]string
 }
 
 func NewHandler(cfg Config) (*Handler, error) {
@@ -112,11 +120,35 @@ func NewHandler(cfg Config) (*Handler, error) {
 		clientConfigSHA:   append([]byte(nil), cfg.ClientConfigSHA...),
 		now:               cfg.Now,
 		pushHub:           newPushHub(),
+		failureStats: &commandFailureStats{
+			counts: make(map[string]uint64), lastErrors: make(map[string]string),
+		},
 	}, nil
 }
 
 func (h *Handler) PushHandler() http.Handler {
 	return h.pushHub
+}
+
+// DebugCommandFailuresHandler exposes aggregate local diagnostic counters.
+func (h *Handler) DebugCommandFailuresHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		h.failureStats.mu.Lock()
+		counts := make(map[string]uint64, len(h.failureStats.counts))
+		for source, count := range h.failureStats.counts {
+			counts[source] = count
+		}
+		lastErrors := make(map[string]string, len(h.failureStats.lastErrors))
+		for source, message := range h.failureStats.lastErrors {
+			lastErrors[source] = message
+		}
+		h.failureStats.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Failures   map[string]uint64 `json:"failures"`
+			LastErrors map[string]string `json:"last_errors"`
+		}{Failures: counts, LastErrors: lastErrors})
+	})
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -276,6 +308,10 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 		if request.TargetPlayerId == 0 || request.GetBuySeedsRequest() == nil {
 			return errors.New("invalid buy request")
 		}
+	case wsv1.Action_BUY_FERTILIZER:
+		if request.TargetPlayerId == 0 || request.GetBuyFertilizerRequest() == nil {
+			return errors.New("invalid buy fertilizer request")
+		}
 	case wsv1.Action_PLANT:
 		if request.TargetPlayerId == 0 || request.GetPlantRequest() == nil {
 			return errors.New("invalid plant request")
@@ -352,11 +388,17 @@ func (h *Handler) handleGame(
 		subscription.beginSnapshot()
 		defer subscription.abortSnapshot()
 	}
+	failureSource := "route_resolve"
 	shardID := routing.ShardForPlayer(request.TargetPlayerId)
 	route, err := h.routes.Resolve(ctx, shardID)
 	if err == nil {
+		failureSource = "zone_command"
 		var response []byte
 		response, err = h.zone.Command(ctx, route, caller, raw)
+		var zoneFailure *zoneCommandError
+		if errors.As(err, &zoneFailure) {
+			failureSource = "zone_command_" + zoneFailure.kind
+		}
 		if errors.Is(err, ErrNotOwner) {
 			if invalidator, ok := h.routes.(RouteInvalidator); ok {
 				invalidator.InvalidateIfVersion(shardID, route.RouteVersion)
@@ -367,6 +409,7 @@ func (h *Handler) handleGame(
 			}
 		}
 		if err == nil {
+			failureSource = "zone_response_validation"
 			if validateZoneResponse(response, request) == nil {
 				if isSnapshot {
 					envelope := &wsv1.WsEnvelope{}
@@ -386,6 +429,12 @@ func (h *Handler) handleGame(
 			}
 		}
 	}
+	h.failureStats.mu.Lock()
+	h.failureStats.counts[failureSource]++
+	if err != nil {
+		h.failureStats.lastErrors[failureSource] = err.Error()
+	}
+	h.failureStats.mu.Unlock()
 	code := wsv1.ErrorCode_SERVICE_UNAVAILABLE
 	if errors.Is(err, context.DeadlineExceeded) {
 		code = wsv1.ErrorCode_REQUEST_OUTCOME_UNKNOWN

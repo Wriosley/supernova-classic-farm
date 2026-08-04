@@ -12,6 +12,9 @@ const (
 	developmentSeedItemID                uint32 = 1001
 	developmentSeedUnitPrice             int64  = 2
 	developmentSeedPriceVersion          uint64 = 8
+	developmentFertilizerShopEntryID     uint32 = 5003
+	developmentFertilizerUnitPrice       int64  = 2
+	developmentFertilizerPriceVersion    uint64 = 10
 	developmentCropID                    uint32 = 2001
 	developmentCropItemID                uint32 = 1002
 	developmentMaturityScaled9           int64  = 100_000_000_000
@@ -252,13 +255,22 @@ func NewConfigSnapshotWithChapters(
 }
 
 func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
-	snapshot, err := NewConfigSnapshotWithChapters(ServerConfigVersion, []ShopEntry{{
-		ShopEntryID:  developmentShopEntryID,
-		ItemID:       developmentSeedItemID,
-		UnitPrice:    developmentSeedUnitPrice,
-		PriceVersion: developmentSeedPriceVersion,
-		Enabled:      true,
-	}}, []CropConfig{{
+	snapshot, err := NewConfigSnapshotWithChapters(ServerConfigVersion, []ShopEntry{
+		{
+			ShopEntryID:  developmentShopEntryID,
+			ItemID:       developmentSeedItemID,
+			UnitPrice:    developmentSeedUnitPrice,
+			PriceVersion: developmentSeedPriceVersion,
+			Enabled:      true,
+		},
+		{
+			ShopEntryID:  developmentFertilizerShopEntryID,
+			ItemID:       BasicFertilizerID,
+			UnitPrice:    developmentFertilizerUnitPrice,
+			PriceVersion: developmentFertilizerPriceVersion,
+			Enabled:      true,
+		},
+	}, []CropConfig{{
 		SeedItemID: developmentSeedItemID, CropID: developmentCropID,
 		CropItemID: developmentCropItemID, ConfigVersion: ServerConfigVersion,
 		MaturityValueScaled9:  developmentMaturityScaled9,
