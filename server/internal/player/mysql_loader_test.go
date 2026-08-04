@@ -2,10 +2,13 @@ package player
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
+	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 )
 
 func TestMySQLCheckpointLoaderVerifiesEnvelopeAndRestoresState(t *testing.T) {
@@ -101,6 +104,72 @@ func TestMySQLCheckpointWriterChecksFenceAndCheckpointCAS(t *testing.T) {
 	mock.ExpectCommit()
 
 	if err := (&MySQLCheckpointLoader{DB: db}).Save(context.Background(), checkpoint, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLCheckpointWriterCommitsOutboxWithCheckpoint(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 7, 31, 11, 0, 0, 0, time.UTC)
+	checkpoint := NewInitialCheckpoint(42, now)
+	checkpoint.PlayerSeq = 1
+	checkpoint.CheckpointRevision = 2
+	checkpoint.UpdatedAtMs++
+	chapter, ok := NewDevelopmentConfigSnapshot().Chapter(InitialChapterID)
+	if !ok {
+		t.Fatal("development chapter missing")
+	}
+	requestID := []byte{
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+	}
+	pending, err := buildRewardMailOutbox(
+		42, requestID, chapter,
+		[]*wsv1.ItemStackView{{ItemId: developmentNextSeedItemID, Quantity: 3}},
+		1, now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint.PendingOutbox = []*datav1.PendingOutboxRecord{pending}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
+		WithArgs(checkpoint.LogicalShardId).
+		WillReturnRows(sqlmock.NewRows([]string{"owner_zone_id", "owner_epoch"}).
+			AddRow(DefaultZoneID, LocalOwnerEpoch))
+	mock.ExpectQuery(`(?s)SELECT db_shard_id, aggregate_player_id.*FROM player_outbox`).
+		WithArgs(pending.EventId).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectExec(`(?s)INSERT INTO player_outbox`).
+		WithArgs(
+			pending.EventId, checkpoint.PlayerId, checkpoint.LogicalShardId,
+			uint32(pending.EventType), pending.EventContractVersion,
+			pending.CausedByRequestId, pending.CreatedOwnerEpoch,
+			pending.CreatedPlayerSeq, pending.CreatedAtMs,
+			pending.Payload, pending.PayloadSha256, pending.CreatedAtMs,
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(`(?s)UPDATE player_checkpoints`).
+		WithArgs(
+			checkpoint.LogicalShardId, checkpoint.OwnerEpoch, checkpoint.PlayerSeq,
+			checkpoint.CheckpointRevision, checkpoint.SchemaVersion,
+			sqlmock.AnyArg(), sqlmock.AnyArg(), checkpoint.LastAppliedConfigVersion,
+			checkpoint.UpdatedAtMs, checkpoint.PlayerId, uint64(1),
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := (&MySQLCheckpointLoader{DB: db}).Save(
+		context.Background(), checkpoint, 1,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

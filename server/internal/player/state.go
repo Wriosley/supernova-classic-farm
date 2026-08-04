@@ -15,6 +15,7 @@ const (
 	InitialCoinBalance  int64  = 10
 	BasicFertilizerID   uint32 = 1
 	InitialPlotID       uint32 = 1
+	InitialPlotCount    uint32 = 4
 	InitialChapterID    uint32 = 1
 	ServerConfigVersion uint64 = 1
 )
@@ -44,19 +45,22 @@ type Plot struct {
 }
 
 type State struct {
-	PlayerID           uint64
-	PlayerSeq          uint64
-	CheckpointRevision uint64
-	Coins              int64
-	Inventory          map[uint32]uint32
-	Plots              map[uint32]*Plot
-	ChapterID          uint32
-	Chapter            chapterv1.ChapterStatus
-	Tasks              []Task
-	ConfigVersion      uint64
-	CreatedAtMS        int64
-	UpdatedAtMS        int64
-	RecentResults      []*datav1.IdempotencyResultRecord
+	PlayerID             uint64
+	PlayerSeq            uint64
+	CheckpointRevision   uint64
+	Coins                int64
+	Inventory            map[uint32]uint32
+	Plots                map[uint32]*Plot
+	ChapterID            uint32
+	ChapterConfigVersion uint64
+	Chapter              chapterv1.ChapterStatus
+	ChapterActivatedAtMS int64
+	Tasks                []Task
+	ConfigVersion        uint64
+	CreatedAtMS          int64
+	UpdatedAtMS          int64
+	RecentResults        []*datav1.IdempotencyResultRecord
+	PendingOutbox        []*datav1.PendingOutboxRecord
 }
 
 // NewDevelopmentState is a lazy, in-memory development adapter. It is not
@@ -64,15 +68,15 @@ type State struct {
 func NewDevelopmentState(playerID uint64) *State {
 	nowMS := time.Now().UnixMilli()
 	return &State{
-		PlayerID:           playerID,
-		CheckpointRevision: 1,
-		Coins:              InitialCoinBalance,
-		Inventory:          map[uint32]uint32{BasicFertilizerID: 1},
-		Plots: map[uint32]*Plot{
-			InitialPlotID: {ID: InitialPlotID, State: plotv1.PlotState_EMPTY},
-		},
-		ChapterID: InitialChapterID,
-		Chapter:   chapterv1.ChapterStatus_IN_PROGRESS,
+		PlayerID:             playerID,
+		CheckpointRevision:   1,
+		Coins:                InitialCoinBalance,
+		Inventory:            map[uint32]uint32{BasicFertilizerID: 1},
+		Plots:                newInitialPlots(),
+		ChapterID:            InitialChapterID,
+		ChapterConfigVersion: ServerConfigVersion,
+		Chapter:              chapterv1.ChapterStatus_IN_PROGRESS,
+		ChapterActivatedAtMS: nowMS,
 		Tasks: []Task{
 			{ID: 1, Target: 3}, // buy seeds
 			{ID: 2, Target: 1}, // plant
@@ -84,6 +88,14 @@ func NewDevelopmentState(playerID uint64) *State {
 		CreatedAtMS:   nowMS,
 		UpdatedAtMS:   nowMS,
 	}
+}
+
+func newInitialPlots() map[uint32]*Plot {
+	plots := make(map[uint32]*Plot, InitialPlotCount)
+	for plotID := InitialPlotID; plotID < InitialPlotID+InitialPlotCount; plotID++ {
+		plots[plotID] = &Plot{ID: plotID, State: plotv1.PlotState_EMPTY}
+	}
+	return plots
 }
 
 func (s *State) Snapshot() *wsv1.PlayerSnapshot {

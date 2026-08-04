@@ -167,6 +167,25 @@ def icon(kind: str) -> Canvas:
     return c
 
 
+def tool(kind: str) -> Canvas:
+    if kind == "seed":
+        return icon("seed")
+    if kind == "fertilizer":
+        return icon("fertilizer")
+
+    c = Canvas(16, 16)
+    if kind == "shovel":
+        c.rect(3, 2, 4, 3, C["wood_dark"]).rect(4, 4, 3, 7, C["wood"])
+        c.rect(7, 9, 4, 2, C["outline"]).rect(9, 10, 4, 4, C["highlight"])
+        c.rect(10, 14, 3, 1, C["outline"])
+    elif kind == "hand":
+        c.rect(4, 6, 8, 8, C["outline"]).rect(5, 5, 2, 8, C["cream"])
+        c.rect(7, 3, 2, 9, C["cream"]).rect(9, 4, 2, 8, C["cream"])
+        c.rect(11, 6, 2, 6, C["cream"]).rect(2, 8, 4, 3, C["cream"])
+        c.rect(5, 13, 7, 2, C["soil_light"])
+    return c
+
+
 def ui(kind: str) -> Canvas:
     if kind == "button":
         c = Canvas(32, 16)
@@ -191,6 +210,8 @@ ASSETS = [
     ("item.demo-crop", "items/demo-crop.png", icon("crop"), "local-mvp-placeholders", "center"),
     ("item.fertilizer-basic", "items/fertilizer-basic.png", icon("fertilizer"), "local-mvp-placeholders", "center"),
     ("item.coin", "items/coin.png", icon("coin"), "local-mvp-placeholders", "center"),
+    *[(f"tool.{s}", f"tools/{s}.png", tool(s), "local-mvp-placeholders", "center")
+      for s in ("seed", "fertilizer", "shovel", "hand")],
     ("ui.panel", "ui/panel.png", ui("panel"), "local-mvp-placeholders", "top-left"),
     ("ui.button-primary", "ui/button-primary.png", ui("button"), "local-mvp-placeholders", "center"),
     ("ui.slot", "ui/slot.png", ui("slot"), "local-mvp-placeholders", "center"),

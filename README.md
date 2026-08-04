@@ -6,9 +6,9 @@
 
 项目已完成第一阶段认证快照技术链路：H5 注册/登录、一次性 WS Ticket、Gate 路由、单节点 Coordinator-compatible ShardMap、Zone Player Actor 和关联快照响应。
 
-默认启动仍使用开发内存适配器。MySQL 8.4.11 下的账号、Session、原子注册事务和 Player Checkpoint 已通过真实多进程 E2E；`BUY_SEEDS`、`PLANT` 和 `APPLY_FERTILIZER` 验证了幂等重放、异步 Dirty 写回、checkpoint CAS、本地数据库 Fence 成功路径，以及四个服务全量重启后的 `player_seq=3` 肥料效果恢复。基础/效果区间定点成长、Actor 激活离线成熟和在线成熟扫描已有自动化测试；另一个真实四进程测试验证了 `player_seq=4` 的自然成熟 Push，以及全量收获入仓、收获任务推进和 `player_seq=5` 的 `NEED_CLEANUP` 地块。H5 已支持增量 Patch 和版本缺口快照恢复。收获后 MySQL 重启恢复脚本已扩展但尚待输入本机密码实跑；生产级 Push 重试/跨 Gate 路由、旧 Owner Fence 拒绝、完整单玩家业务闭环和容量验证尚未完成。权威进度与限制见 `docs/context/CURRENT.md`。
+默认启动仍使用开发内存适配器。MySQL 8.4.11 已验证从注册到 `CLEAN_PLOT` 的完整服务端单玩家链路和 `player_seq=8` 重启恢复：29 金币、2 个旧种子、1 个肥料、3 个下一章种子、`EMPTY` 地块和第二章 `IN_PROGRESS`。满仓奖励会原子记录待发送邮件 Outbox，当前没有 Relay、Mail Service 或邮件 UI。H5 已提供商店、地块、仓库和章节任务交互；浏览器实测完成购买到清理的整条内存链路，收到一次成熟 Push，最终到达 `player_seq=8`，320 像素宽度无横向溢出。生产级 Push 重试/跨 Gate 路由、旧 Owner Fence 拒绝和容量验证尚未完成。权威进度与限制见 `docs/context/CURRENT.md`。
 
-Zone 还实现了最小不可变版本化配置快照；`GET_SHOP` 返回当前启用报价，`BUY_SEEDS` 使用同一固定快照推导物品与权威价格。独立 ConfigSvr 和 H5 商店界面尚未实现。
+Zone 还实现了最小不可变版本化配置快照；`GET_SHOP` 返回当前启用的买入/卖出报价，`BUY_SEEDS` 和 `SELL_CROP` 使用同一固定快照推导权威价格。独立 ConfigSvr 和 H5 商店界面尚未实现。
 
 ## 文档入口
 
@@ -50,7 +50,8 @@ Copy-Item .env.example .env
 
 MySQL 模式下，注册会在一个事务内提交账号、Session 和初始
 `PlayerCheckpointV1`；Zone 首次激活 Actor 时从该 Checkpoint 加载，
-后续 `BUY_SEEDS` 通过异步 Dirty flusher 写回。
+后续 Actor 命令通过异步 Dirty flusher 写回；奖励溢出的 checkpoint
+与 `player_outbox` 行在同一个 MySQL 事务提交。
 
 已安装本机 MySQL 并执行迁移后，可运行会安全提示输入应用密码的 E2E：
 

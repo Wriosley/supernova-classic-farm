@@ -22,14 +22,18 @@ This directory separates current project truth, design reasoning, executable con
 
 ## Current implementation boundary
 
-- The first runnable technical slice includes LoginSvr, GateSvr, ZoneSvr, a single-node Coordinator-compatible process, shared Go/TypeScript Protobuf and a Vue 3 snapshot/Push client.
-- A multi-process protocol test and one owner-confirmed browser smoke reached the Player Actor snapshot.
+- The runnable slice includes LoginSvr, GateSvr, ZoneSvr, a single-node Coordinator-compatible process, shared Go/TypeScript Protobuf and a Vue 3 farm client.
+- The H5 exposes the complete owner loop through a responsive shop, plot, inventory and chapter interface. A browser-driven in-memory run reached `player_seq=8`, consumed one maturity Push and completed without version-gap recovery; type-check, production build and a 320-pixel no-overflow check pass.
 - The default no-DSN run keeps accounts, Sessions, tickets, routes and Player Actors in process-local development memory.
-- An optional MySQL code path commits account, first Session and initial Player checkpoint in one transaction, loads it on Actor activation, and asynchronously flushes Actor mutations under checkpoint CAS and a local database Fence. Mocked-SQL tests plus live idempotency replay and fresh-process `player_seq=3` fertilized-state recovery pass on MySQL 8.4.11; the extended harvested-state restart run is prepared but not yet owner-run.
-- Zone has an immutable, atomically replaceable local configuration snapshot. `GET_SHOP` and `BUY_SEEDS` share its versioned quote; standalone ConfigSvr publication is not implemented.
+- An optional MySQL code path commits account, first Session and initial Player checkpoint in one transaction, loads it on Actor activation, and asynchronously flushes Actor mutations under checkpoint CAS and a local database Fence. Mocked-SQL tests plus live idempotency replay and fresh-process full-loop `player_seq=8` recovery pass on MySQL 8.4.11.
+- Zone has an immutable, atomically replaceable local configuration snapshot. `GET_SHOP`, `BUY_SEEDS` and `SELL_CROP` share its versioned buy/sell quotes; standalone ConfigSvr publication is not implemented.
 - Exact base/effect interval growth, activation-time maturity and the local online maturity scan have automated tests. A live four-process run delivered natural maturity from Zone through Gate as an unsolicited `PLAYER_STATE_CHANGED` Push; Gate snapshot buffering and newer-version filtering have unit coverage.
-- `HARVEST` enforces complete-yield warehouse capacity before mutation, advances the task and persists the `NEED_CLEANUP` plot. Unit/checkpoint tests and an in-memory four-process flow through `player_seq=5` pass.
-- The local Push transport is loopback and non-durable; cross-Gate delivery, retry and production backpressure are not implemented. Tickets and CSRF remain process-local in both modes. Live MySQL maturity-boundary recovery, stale-owner Fence rejection, abnormal Dirty-window loss, the rest of the business loop and capacity evidence remain future work.
+- `HARVEST` enforces complete-yield warehouse capacity before mutation, advances the task and persists the `NEED_CLEANUP` plot. Unit/checkpoint tests plus in-memory and MySQL four-process flows through `player_seq=5` pass.
+- `SELL_CROP` supports quantity and sell-all semantics, checked integer pricing, retained idempotency and chapter transition to `CLAIMABLE`. Unit/checkpoint tests plus in-memory and MySQL four-process flows through fresh-process `player_seq=6` recovery pass.
+- `CLAIM_CHAPTER_REWARD` grants the accepted first-chapter reward, activates development chapter two and retains an idempotent receipt. Warehouse overflow creates one deterministic pending reward-mail Outbox record; checkpoint CAS and relational Outbox insertion share one MySQL transaction. Unit tests, mocked SQL and live in-memory/MySQL flows through fresh-process `player_seq=7` recovery pass.
+- `CLEAN_PLOT` requires `NEED_CLEANUP`, clears all frozen crop fields and returns the plot to `EMPTY` without resources or task progress. Unit/checkpoint tests and live in-memory/MySQL full owner loops through fresh-process `player_seq=8` recovery pass.
+- The Outbox relay, Mail Service, delivery reconciliation and mail UI are not implemented, so `items_pending_mail` means only that Actor state recorded a pending event.
+- The local Push transport is loopback and non-durable; cross-Gate delivery, retry and production backpressure are not implemented. Tickets and CSRF remain process-local in both modes. A combined MySQL-backed browser run, stale-owner Fence rejection, abnormal Dirty-window loss and capacity evidence remain future work.
 - Read `context/CURRENT.md` for the exact handoff and the dated files under `evidence/` for observed results and limitations.
 
 ## Directory roles

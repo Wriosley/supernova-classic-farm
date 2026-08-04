@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
+	eventv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/event"
 	chapterv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/chapter"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
@@ -29,12 +31,23 @@ func NewInitialCheckpoint(playerID uint64, now time.Time) *datav1.PlayerCheckpoi
 		CheckpointRevision:       1,
 		CoinBalance:              InitialCoinBalance,
 		Inventory:                []*datav1.InventoryStack{{ItemId: BasicFertilizerID, Quantity: 1}},
-		Plots:                    []*datav1.PlotStateRecord{{PlotId: InitialPlotID, State: datav1.PlotRecordState_EMPTY}},
+		Plots:                    initialPlotRecords(),
 		CurrentChapter:           initialChapter(nowMS),
 		LastAppliedConfigVersion: ServerConfigVersion,
 		CreatedAtMs:              nowMS,
 		UpdatedAtMs:              nowMS,
 	}
+}
+
+func initialPlotRecords() []*datav1.PlotStateRecord {
+	plots := make([]*datav1.PlotStateRecord, 0, InitialPlotCount)
+	for plotID := InitialPlotID; plotID < InitialPlotID+InitialPlotCount; plotID++ {
+		plots = append(plots, &datav1.PlotStateRecord{
+			PlotId: plotID,
+			State:  datav1.PlotRecordState_EMPTY,
+		})
+	}
+	return plots
 }
 
 func initialChapter(nowMS int64) *datav1.ChapterStateRecord {
@@ -105,6 +118,14 @@ func ValidateCheckpoint(checkpoint *datav1.PlayerCheckpointV1) error {
 		return errors.New("checkpoint coin balance is negative")
 	case checkpoint.CurrentChapter == nil:
 		return errors.New("checkpoint current chapter is required")
+	case checkpoint.CurrentChapter.ChapterId == 0 ||
+		checkpoint.CurrentChapter.ChapterConfigVersion == 0 ||
+		checkpoint.CurrentChapter.ActivatedAtMs <= 0:
+		return errors.New("checkpoint current chapter fields are invalid")
+	case checkpoint.CurrentChapter.Status != datav1.ChapterRecordStatus_IN_PROGRESS &&
+		checkpoint.CurrentChapter.Status != datav1.ChapterRecordStatus_CLAIMABLE &&
+		checkpoint.CurrentChapter.Status != datav1.ChapterRecordStatus_CLAIMED:
+		return errors.New("checkpoint chapter status is invalid")
 	case checkpoint.LastAppliedConfigVersion == 0:
 		return errors.New("checkpoint config version is required")
 	case checkpoint.CreatedAtMs <= 0 || checkpoint.UpdatedAtMs < checkpoint.CreatedAtMs:
@@ -133,7 +154,75 @@ func ValidateCheckpoint(checkpoint *datav1.PlayerCheckpointV1) error {
 		}
 		plotIDs[plot.PlotId] = struct{}{}
 	}
+	var previousOutbox *datav1.PendingOutboxRecord
+	outboxIDs := make(map[string]struct{}, len(checkpoint.PendingOutbox))
+	for _, pending := range checkpoint.PendingOutbox {
+		if err := validatePendingOutbox(checkpoint, pending); err != nil {
+			return err
+		}
+		if _, duplicate := outboxIDs[string(pending.EventId)]; duplicate {
+			return errors.New("checkpoint contains duplicate Outbox event")
+		}
+		if previousOutbox != nil &&
+			(previousOutbox.CreatedAtMs > pending.CreatedAtMs ||
+				(previousOutbox.CreatedAtMs == pending.CreatedAtMs &&
+					bytes.Compare(previousOutbox.EventId, pending.EventId) >= 0)) {
+			return errors.New("checkpoint pending Outbox is not sorted")
+		}
+		outboxIDs[string(pending.EventId)] = struct{}{}
+		previousOutbox = pending
+	}
 	return nil
+}
+
+func validatePendingOutbox(
+	checkpoint *datav1.PlayerCheckpointV1,
+	pending *datav1.PendingOutboxRecord,
+) error {
+	if pending == nil || len(pending.EventId) != 16 || allZero(pending.EventId) ||
+		pending.EventType != datav1.OutboxEventType_CREATE_REWARD_MAIL ||
+		pending.EventContractVersion != 1 ||
+		pending.AggregatePlayerId != checkpoint.PlayerId ||
+		len(pending.CausedByRequestId) != 16 || allZero(pending.CausedByRequestId) ||
+		pending.CreatedOwnerEpoch == 0 ||
+		pending.CreatedPlayerSeq == 0 || pending.CreatedPlayerSeq > checkpoint.PlayerSeq ||
+		pending.CreatedAtMs <= 0 || len(pending.Payload) == 0 ||
+		len(pending.Payload) > 48<<10 || len(pending.PayloadSha256) != sha256.Size {
+		return errors.New("checkpoint contains invalid pending Outbox")
+	}
+	digest := sha256.Sum256(pending.Payload)
+	if !bytes.Equal(digest[:], pending.PayloadSha256) {
+		return errors.New("pending Outbox payload digest mismatch")
+	}
+	payload := &eventv1.CreateRewardMailV1{}
+	if proto.Unmarshal(pending.Payload, payload) != nil ||
+		payload.RecipientPlayerId != checkpoint.PlayerId ||
+		payload.SubjectTextKey != "mail.chapter_reward.subject" ||
+		payload.BodyTextKey != "mail.chapter_reward.body" ||
+		payload.Source == nil || payload.Source.ChapterId == 0 ||
+		payload.Source.ChapterConfigVersion == 0 ||
+		!bytes.Equal(payload.Source.RequestId, pending.CausedByRequestId) ||
+		len(payload.Attachments) == 0 || len(payload.Attachments) > 100 {
+		return errors.New("pending reward-mail payload is invalid")
+	}
+	var previousItemID uint32
+	for _, attachment := range payload.Attachments {
+		if attachment == nil || attachment.ItemId == 0 || attachment.Quantity == 0 ||
+			attachment.ItemId <= previousItemID {
+			return errors.New("pending reward-mail attachments are invalid")
+		}
+		previousItemID = attachment.ItemId
+	}
+	return nil
+}
+
+func allZero(value []byte) bool {
+	for _, current := range value {
+		if current != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func validatePlotRecord(plot *datav1.PlotStateRecord) error {
@@ -224,17 +313,19 @@ func StateFromCheckpoint(checkpoint *datav1.PlayerCheckpointV1) (*State, error) 
 		return nil, err
 	}
 	state := &State{
-		PlayerID:           checkpoint.PlayerId,
-		PlayerSeq:          checkpoint.PlayerSeq,
-		CheckpointRevision: checkpoint.CheckpointRevision,
-		Coins:              checkpoint.CoinBalance,
-		Inventory:          make(map[uint32]uint32, len(checkpoint.Inventory)),
-		Plots:              make(map[uint32]*Plot, len(checkpoint.Plots)),
-		ChapterID:          checkpoint.CurrentChapter.ChapterId,
-		Chapter:            chapterv1.ChapterStatus_IN_PROGRESS,
-		ConfigVersion:      checkpoint.LastAppliedConfigVersion,
-		CreatedAtMS:        checkpoint.CreatedAtMs,
-		UpdatedAtMS:        checkpoint.UpdatedAtMs,
+		PlayerID:             checkpoint.PlayerId,
+		PlayerSeq:            checkpoint.PlayerSeq,
+		CheckpointRevision:   checkpoint.CheckpointRevision,
+		Coins:                checkpoint.CoinBalance,
+		Inventory:            make(map[uint32]uint32, len(checkpoint.Inventory)),
+		Plots:                make(map[uint32]*Plot, len(checkpoint.Plots)),
+		ChapterID:            checkpoint.CurrentChapter.ChapterId,
+		ChapterConfigVersion: checkpoint.CurrentChapter.ChapterConfigVersion,
+		Chapter:              chapterStatusFromRecord(checkpoint.CurrentChapter.Status),
+		ChapterActivatedAtMS: checkpoint.CurrentChapter.ActivatedAtMs,
+		ConfigVersion:        checkpoint.LastAppliedConfigVersion,
+		CreatedAtMS:          checkpoint.CreatedAtMs,
+		UpdatedAtMS:          checkpoint.UpdatedAtMs,
 	}
 	for _, item := range checkpoint.Inventory {
 		if item == nil || item.ItemId == 0 || item.Quantity == 0 {
@@ -265,6 +356,12 @@ func StateFromCheckpoint(checkpoint *datav1.PlayerCheckpointV1) (*State, error) 
 			return nil, errors.New("checkpoint contains nil idempotency result")
 		}
 		state.RecentResults = append(state.RecentResults, proto.Clone(result).(*datav1.IdempotencyResultRecord))
+	}
+	for _, pending := range checkpoint.PendingOutbox {
+		state.PendingOutbox = append(
+			state.PendingOutbox,
+			proto.Clone(pending).(*datav1.PendingOutboxRecord),
+		)
 	}
 	return state, nil
 }
@@ -314,18 +411,32 @@ func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
 	for _, result := range s.RecentResults {
 		recent = append(recent, proto.Clone(result).(*datav1.IdempotencyResultRecord))
 	}
+	pendingOutbox := make([]*datav1.PendingOutboxRecord, 0, len(s.PendingOutbox))
+	for _, pending := range s.PendingOutbox {
+		pendingOutbox = append(
+			pendingOutbox,
+			proto.Clone(pending).(*datav1.PendingOutboxRecord),
+		)
+	}
+	sort.Slice(pendingOutbox, func(i, j int) bool {
+		if pendingOutbox[i].CreatedAtMs != pendingOutbox[j].CreatedAtMs {
+			return pendingOutbox[i].CreatedAtMs < pendingOutbox[j].CreatedAtMs
+		}
+		return bytes.Compare(pendingOutbox[i].EventId, pendingOutbox[j].EventId) < 0
+	})
 	checkpoint := &datav1.PlayerCheckpointV1{
 		SchemaVersion: CheckpointSchemaVersion, PlayerId: s.PlayerID,
 		LogicalShardId: routing.ShardForPlayer(s.PlayerID), OwnerEpoch: LocalOwnerEpoch,
 		PlayerSeq: s.PlayerSeq, CheckpointRevision: s.CheckpointRevision,
 		CoinBalance: s.Coins, Inventory: inventory, Plots: plots,
 		CurrentChapter: &datav1.ChapterStateRecord{
-			ChapterId: s.ChapterID, ChapterConfigVersion: s.ConfigVersion,
-			Status:        datav1.ChapterRecordStatus_IN_PROGRESS,
-			ActivatedAtMs: s.CreatedAtMS, Tasks: taskRecords,
+			ChapterId: s.ChapterID, ChapterConfigVersion: s.ChapterConfigVersion,
+			Status:        chapterStatusToRecord(s.Chapter),
+			ActivatedAtMs: s.ChapterActivatedAtMS, Tasks: taskRecords,
 		},
-		RecentResults: recent, LastAppliedConfigVersion: s.ConfigVersion,
-		CreatedAtMs: s.CreatedAtMS, UpdatedAtMs: s.UpdatedAtMS,
+		RecentResults: recent, PendingOutbox: pendingOutbox,
+		LastAppliedConfigVersion: s.ConfigVersion,
+		CreatedAtMs:              s.CreatedAtMS, UpdatedAtMs: s.UpdatedAtMS,
 	}
 	if err := ValidateCheckpoint(checkpoint); err != nil {
 		return nil, err
@@ -436,6 +547,32 @@ func taskMetric(taskID uint32) datav1.TaskMetric {
 		return datav1.TaskMetric_TASK_SELL_CROP
 	default:
 		return datav1.TaskMetric_TASK_METRIC_UNSPECIFIED
+	}
+}
+
+func chapterStatusFromRecord(status datav1.ChapterRecordStatus) chapterv1.ChapterStatus {
+	switch status {
+	case datav1.ChapterRecordStatus_IN_PROGRESS:
+		return chapterv1.ChapterStatus_IN_PROGRESS
+	case datav1.ChapterRecordStatus_CLAIMABLE:
+		return chapterv1.ChapterStatus_CLAIMABLE
+	case datav1.ChapterRecordStatus_CLAIMED:
+		return chapterv1.ChapterStatus_CLAIMED
+	default:
+		return chapterv1.ChapterStatus_UNSPECIFIED
+	}
+}
+
+func chapterStatusToRecord(status chapterv1.ChapterStatus) datav1.ChapterRecordStatus {
+	switch status {
+	case chapterv1.ChapterStatus_IN_PROGRESS:
+		return datav1.ChapterRecordStatus_IN_PROGRESS
+	case chapterv1.ChapterStatus_CLAIMABLE:
+		return datav1.ChapterRecordStatus_CLAIMABLE
+	case chapterv1.ChapterStatus_CLAIMED:
+		return datav1.ChapterRecordStatus_CLAIMED
+	default:
+		return datav1.ChapterRecordStatus_CHAPTER_RECORD_STATUS_UNSPECIFIED
 	}
 }
 

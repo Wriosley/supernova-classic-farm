@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -100,6 +101,11 @@ func (l *MySQLCheckpointLoader) Save(ctx context.Context, checkpoint *datav1.Pla
 	if checkpoint.CheckpointRevision <= expectedRevision {
 		return errors.New("dirty checkpoint revision must advance")
 	}
+	for _, pending := range checkpoint.PendingOutbox {
+		if err := persistPendingOutbox(ctx, tx, checkpoint, pending); err != nil {
+			return err
+		}
+	}
 	result, err := tx.ExecContext(ctx, `
 		UPDATE player_checkpoints
 		SET logical_shard_id = ?, owner_epoch = ?, player_seq = ?,
@@ -124,6 +130,77 @@ func (l *MySQLCheckpointLoader) Save(ctx context.Context, checkpoint *datav1.Pla
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit checkpoint flush: %w", err)
+	}
+	return nil
+}
+
+func persistPendingOutbox(
+	ctx context.Context,
+	tx *sql.Tx,
+	checkpoint *datav1.PlayerCheckpointV1,
+	pending *datav1.PendingOutboxRecord,
+) error {
+	var (
+		dbShardID            uint32
+		aggregatePlayerID    uint64
+		logicalShardID       uint32
+		eventType            uint32
+		eventContractVersion uint32
+		causedByRequestID    []byte
+		createdOwnerEpoch    uint64
+		createdPlayerSeq     uint64
+		createdAtMS          int64
+		payload              []byte
+		payloadSHA256        []byte
+	)
+	err := tx.QueryRowContext(ctx, `
+		SELECT db_shard_id, aggregate_player_id, logical_shard_id, event_type,
+		       event_contract_version, caused_by_request_id, created_owner_epoch,
+		       created_player_seq, created_at_ms, payload, payload_sha256
+		FROM player_outbox
+		WHERE event_id = ?
+		FOR UPDATE`,
+		pending.EventId,
+	).Scan(
+		&dbShardID, &aggregatePlayerID, &logicalShardID, &eventType,
+		&eventContractVersion, &causedByRequestID, &createdOwnerEpoch,
+		&createdPlayerSeq, &createdAtMS, &payload, &payloadSHA256,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO player_outbox (
+			    event_id, db_shard_id, aggregate_player_id, logical_shard_id,
+			    event_type, event_contract_version, caused_by_request_id,
+			    created_owner_epoch, created_player_seq, created_at_ms,
+			    payload, payload_sha256, relay_status, attempt_count,
+			    next_attempt_at_ms
+			) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)`,
+			pending.EventId, checkpoint.PlayerId, checkpoint.LogicalShardId,
+			uint32(pending.EventType), pending.EventContractVersion,
+			pending.CausedByRequestId, pending.CreatedOwnerEpoch,
+			pending.CreatedPlayerSeq, pending.CreatedAtMs,
+			pending.Payload, pending.PayloadSha256, pending.CreatedAtMs,
+		)
+		if err != nil {
+			return fmt.Errorf("insert pending Outbox row: %w", err)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read pending Outbox row: %w", err)
+	}
+	if dbShardID != 0 ||
+		aggregatePlayerID != checkpoint.PlayerId ||
+		logicalShardID != checkpoint.LogicalShardId ||
+		eventType != uint32(pending.EventType) ||
+		eventContractVersion != pending.EventContractVersion ||
+		!bytes.Equal(causedByRequestID, pending.CausedByRequestId) ||
+		createdOwnerEpoch != pending.CreatedOwnerEpoch ||
+		createdPlayerSeq != pending.CreatedPlayerSeq ||
+		createdAtMS != pending.CreatedAtMs ||
+		!bytes.Equal(payload, pending.Payload) ||
+		!bytes.Equal(payloadSHA256, pending.PayloadSha256) {
+		return errors.New("pending Outbox immutable row conflict")
 	}
 	return nil
 }

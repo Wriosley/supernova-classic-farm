@@ -311,7 +311,15 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		request.GetApplyFertilizerRequest() != nil
 	isHarvest := request.Action == wsv1.Action_HARVEST &&
 		request.GetHarvestRequest() != nil
-	if !isSnapshot && !isGetShop && !isBuySeeds && !isPlant && !isApplyFertilizer && !isHarvest {
+	isCleanPlot := request.Action == wsv1.Action_CLEAN_PLOT &&
+		request.GetCleanPlotRequest() != nil
+	isSellCrop := request.Action == wsv1.Action_SELL_CROP &&
+		request.GetSellCropRequest() != nil
+	isClaimReward := request.Action == wsv1.Action_CLAIM_CHAPTER_REWARD &&
+		request.GetClaimChapterRewardRequest() != nil
+	if !isSnapshot && !isGetShop && !isBuySeeds && !isPlant &&
+		!isApplyFertilizer && !isHarvest && !isCleanPlot &&
+		!isSellCrop && !isClaimReward {
 		return nil, ErrUnsupportedAction
 	}
 	if isGetShop {
@@ -375,6 +383,31 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		if isHarvest {
 			var commandDirty bool
 			response, commandDirty = r.harvest(a, callerPlayerID, request, config, serverNow)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isCleanPlot {
+			var commandDirty bool
+			response, commandDirty = r.cleanPlot(
+				a, callerPlayerID, request, config, serverNow,
+			)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isSellCrop {
+			var commandDirty bool
+			response, commandDirty = r.sellCrop(a, callerPlayerID, request, config, serverNow)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isClaimReward {
+			var commandDirty bool
+			response, commandDirty = r.claimChapterReward(
+				a, callerPlayerID, request, config, serverNow,
+			)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return

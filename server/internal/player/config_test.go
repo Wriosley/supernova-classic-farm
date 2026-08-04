@@ -48,3 +48,65 @@ func TestConfigSnapshotRejectsInvalidAndDuplicateFertilizers(t *testing.T) {
 		t.Fatal("duplicate fertilizer item was accepted")
 	}
 }
+
+func TestConfigSnapshotRejectsInvalidAndDuplicateSellRules(t *testing.T) {
+	valid := SellRule{
+		ShopEntryID: 2, ItemID: 1002, UnitPrice: 5, PriceVersion: 9,
+	}
+	if _, err := NewConfigSnapshotWithEconomy(
+		1, nil, nil, nil, []SellRule{{ShopEntryID: 2, ItemID: 1002}},
+	); err == nil {
+		t.Fatal("invalid sell rule was accepted")
+	}
+	if _, err := NewConfigSnapshotWithEconomy(
+		1, nil, nil, nil, []SellRule{valid, valid},
+	); err == nil {
+		t.Fatal("duplicate sell item was accepted")
+	}
+	if _, err := NewConfigSnapshotWithEconomy(
+		1,
+		[]ShopEntry{{ShopEntryID: 2, ItemID: 1001, UnitPrice: 2, PriceVersion: 8}},
+		nil, nil, []SellRule{valid},
+	); err == nil {
+		t.Fatal("duplicate buy/sell shop entry ID was accepted")
+	}
+}
+
+func TestDevelopmentShopIncludesBuyAndSellQuotesInStableOrder(t *testing.T) {
+	entries := NewDevelopmentConfigSnapshot().ActiveShopEntries()
+	if len(entries) != 2 ||
+		entries[0].GetShopEntryId() != developmentShopEntryID ||
+		entries[1].GetShopEntryId() != developmentSellEntryID ||
+		entries[1].GetItemId() != developmentCropItemID ||
+		entries[1].GetUnitPrice() != developmentCropSellUnitPrice ||
+		entries[1].GetPriceVersion() != developmentCropSellPriceVersion {
+		t.Fatalf("development shop entries = %+v", entries)
+	}
+}
+
+func TestConfigSnapshotRejectsInvalidChapterGraph(t *testing.T) {
+	if _, err := NewConfigSnapshotWithChapters(
+		1, nil, nil, nil, nil,
+		[]ChapterConfig{{ChapterID: 1, ConfigVersion: 1, NextChapterID: 2}},
+	); err == nil {
+		t.Fatal("missing next chapter was accepted")
+	}
+	if _, err := NewConfigSnapshotWithChapters(
+		1, nil, nil, nil, nil,
+		[]ChapterConfig{{
+			ChapterID: 1, ConfigVersion: 1,
+			Tasks: []Task{{ID: 1, Target: 1}, {ID: 1, Target: 2}},
+		}},
+	); err == nil {
+		t.Fatal("duplicate chapter task was accepted")
+	}
+	if _, err := NewConfigSnapshotWithChapters(
+		1, nil, nil, nil, nil,
+		[]ChapterConfig{{
+			ChapterID: 1, ConfigVersion: 1,
+			RewardItems: []RewardItem{{ItemID: 1, Quantity: 1}, {ItemID: 1, Quantity: 2}},
+		}},
+	); err == nil {
+		t.Fatal("duplicate chapter reward item was accepted")
+	}
+}

@@ -376,10 +376,16 @@ func TestPlantIsIdempotentAndBatchesWithBuyInOneCheckpoint(t *testing.T) {
 	checkpoint := store.saved[0]
 	if checkpoint.PlayerSeq != 2 || checkpoint.CheckpointRevision != 3 ||
 		len(checkpoint.RecentResults) != 2 ||
+		len(checkpoint.Plots) != int(InitialPlotCount) ||
 		checkpoint.Plots[0].State != datav1.PlotRecordState_GROWING ||
 		checkpoint.Plots[0].CropId != 2001 ||
 		checkpoint.Plots[0].BaseGrowthRate.GetScaledValue() != 1_000_000 {
 		t.Fatalf("unexpected PLANT checkpoint: %+v", checkpoint)
+	}
+	for _, untouched := range checkpoint.Plots[1:] {
+		if untouched.State != datav1.PlotRecordState_EMPTY {
+			t.Fatalf("PLANT modified secondary plot: %+v", untouched)
+		}
 	}
 }
 

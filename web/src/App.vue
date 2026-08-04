@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {
   ClientConfigPackage,
   GatewayEndpoint,
@@ -8,10 +8,12 @@ import type {
 import type {
   PlayerSnapshot,
   PlayerStatePatch,
+  ShopEntryView,
   StateVersion,
   WsEnvelope,
   Error as WsError,
 } from './gen/classicfarm/v1/ws/ws_pb'
+import { ErrorCode } from './gen/classicfarm/v1/ws/ws_pb'
 import {
   authenticate,
   downloadClientConfig,
@@ -22,6 +24,10 @@ import {
 } from './lib/http'
 import { bytesEqual } from './lib/hash'
 import { FarmWebSocket } from './lib/ws'
+import FarmDashboard, {
+  type FarmAction,
+  type FarmActionRequest,
+} from './components/FarmDashboard.vue'
 
 type Phase =
   | 'idle'
@@ -84,6 +90,14 @@ const socket = new FarmWebSocket()
 const pushCount = ref(0)
 const gapRecoveryCount = ref(0)
 const lastPushReason = ref<number>()
+const shopEntries = ref<ShopEntryView[]>([])
+const busyAction = ref<FarmActionRequest>()
+const actionMessage = ref('')
+const actionError = ref('')
+const lastActionRequestId = ref('')
+const nowMs = ref(BigInt(Date.now()))
+let serverClockOffsetMs = 0n
+let clockTimer: ReturnType<typeof setInterval> | undefined
 let gapRecovery: Promise<void> | undefined
 
 socket.setPlayerStateChangedHandler(handlePlayerStateChanged)
@@ -113,6 +127,11 @@ function clearResult(): void {
   pushCount.value = 0
   gapRecoveryCount.value = 0
   lastPushReason.value = undefined
+  shopEntries.value = []
+  busyAction.value = undefined
+  actionMessage.value = ''
+  actionError.value = ''
+  lastActionRequestId.value = ''
 }
 
 function applyPatch(current: PlayerSnapshot, patch: PlayerStatePatch): PlayerSnapshot {
@@ -135,6 +154,202 @@ function applyPatch(current: PlayerSnapshot, patch: PlayerStatePatch): PlayerSna
     inventory: [...inventory.values()].sort((left, right) => left.itemId - right.itemId),
     plots: [...plots.values()].sort((left, right) => left.plotId - right.plotId),
     currentChapter: patch.currentChapter ?? current.currentChapter,
+  }
+}
+
+function setServerClock(serverMs: bigint): void {
+  if (serverMs <= 0n) {
+    return
+  }
+  serverClockOffsetMs = serverMs - BigInt(Date.now())
+  nowMs.value = serverMs
+}
+
+async function refreshShop(): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected) {
+    return
+  }
+  const response = await socket.requestShop(playerId)
+  setServerClock(response.serverTimeMs)
+  if (response.error) {
+    throw new Error(`商店请求失败：${describeWsError(response.error)}`)
+  }
+  if (response.payload.case !== 'getShopResponse') {
+    throw new Error('商店响应 payload 无效')
+  }
+  shopEntries.value = response.payload.value.entries
+}
+
+function describeWsError(error: WsError): string {
+  const labels: Partial<Record<ErrorCode, string>> = {
+    [ErrorCode.INVALID_ARGUMENT]: '请求参数无效',
+    [ErrorCode.REQUEST_ID_CONFLICT]: '请求编号冲突',
+    [ErrorCode.CONFIG_UNAVAILABLE]: '游戏配置暂不可用',
+    [ErrorCode.SHOP_ENTRY_NOT_FOUND]: '商品不存在',
+    [ErrorCode.SHOP_ENTRY_DISABLED]: '商品已下架',
+    [ErrorCode.PRICE_CHANGED]: '价格已经变化，请刷新商店',
+    [ErrorCode.INSUFFICIENT_COINS]: '金币不足',
+    [ErrorCode.INVENTORY_TYPE_LIMIT]: '仓库种类已满',
+    [ErrorCode.INVENTORY_STACK_LIMIT]: '该物品堆叠已满',
+    [ErrorCode.ITEM_NOT_OWNED]: '未拥有该物品',
+    [ErrorCode.INSUFFICIENT_ITEM_QUANTITY]: '物品数量不足',
+    [ErrorCode.PLOT_NOT_FOUND]: '地块不存在',
+    [ErrorCode.PLOT_STATE_CONFLICT]: '当前地块状态不能执行此操作',
+    [ErrorCode.FERTILIZER_ALREADY_ACTIVE]: '肥料效果仍在生效',
+    [ErrorCode.CROP_NOT_MATURE]: '作物尚未成熟',
+    [ErrorCode.CHAPTER_NOT_CLAIMABLE]: '章节任务尚未完成',
+    [ErrorCode.CHAPTER_REWARD_ALREADY_CLAIMED]: '章节奖励已经领取',
+  }
+  return labels[error.code] ?? `WebSocket 错误 ${error.code}`
+}
+
+function responsePatch(response: WsEnvelope): PlayerStatePatch | undefined {
+  switch (response.payload.case) {
+    case 'buySeedsResponse':
+    case 'plantResponse':
+    case 'applyFertilizerResponse':
+    case 'harvestResponse':
+    case 'sellCropResponse':
+    case 'claimChapterRewardResponse':
+    case 'cleanPlotResponse':
+      return response.payload.value.patch
+    default:
+      return undefined
+  }
+}
+
+async function acceptMutationResponse(response: WsEnvelope): Promise<void> {
+  setServerClock(response.serverTimeMs)
+  lastActionRequestId.value = response.requestId
+  wsError.value = response.error
+  if (response.error) {
+    if (response.error.code === ErrorCode.PRICE_CHANGED) {
+      await refreshShop()
+    }
+    throw new Error(describeWsError(response.error))
+  }
+  const patch = responsePatch(response)
+  const nextVersion = response.stateVersion
+  const currentVersion = stateVersion.value
+  const currentSnapshot = snapshot.value
+  if (!patch || !nextVersion || !currentVersion || !currentSnapshot) {
+    throw new Error('写命令响应缺少 patch 或 state_version')
+  }
+  if (
+    nextVersion.ownerEpoch < currentVersion.ownerEpoch ||
+    (nextVersion.ownerEpoch === currentVersion.ownerEpoch &&
+      nextVersion.playerSeq <= currentVersion.playerSeq)
+  ) {
+    return
+  }
+  if (
+    nextVersion.ownerEpoch !== currentVersion.ownerEpoch ||
+    nextVersion.playerSeq !== currentVersion.playerSeq + 1n
+  ) {
+    await recoverSnapshotGap()
+    return
+  }
+  snapshot.value = applyPatch(currentSnapshot, patch)
+  stateVersion.value = nextVersion
+}
+
+function actionSuccessMessage(action: FarmAction, response: WsEnvelope): string {
+  switch (action) {
+    case 'buy':
+      return `已购买 ${response.payload.case === 'buySeedsResponse' ? response.payload.value.quantity : 0} 粒种子，任务进度已更新。`
+    case 'plant':
+      return '种植成功，作物开始成长。'
+    case 'fertilize':
+      return '施肥成功，等待服务器成熟 Push。'
+    case 'harvest':
+      return `收获成功，获得 ${response.payload.case === 'harvestResponse' ? response.payload.value.harvestedQuantity : 0} 个作物。`
+    case 'sell':
+      return response.payload.case === 'sellCropResponse'
+        ? `已出售 ${response.payload.value.soldQuantity} 个作物，获得 ${response.payload.value.totalPrice} 金币。`
+        : '出售成功。'
+    case 'claim': {
+      const pending =
+        response.payload.case === 'claimChapterRewardResponse'
+          ? response.payload.value.itemsPendingMail.length
+          : 0
+      return pending > 0
+        ? '奖励已领取，仓库溢出物品正在等待邮件处理。'
+        : '章节奖励已领取，第二章已激活。'
+    }
+    case 'clean':
+      return '地块清理完成，服务端单玩家闭环已完成。'
+  }
+}
+
+async function runFarmAction(request: FarmActionRequest): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected || busyAction.value) {
+    return
+  }
+  const { action, plotId } = request
+  if (
+    (action === 'plant' || action === 'fertilize' || action === 'harvest' || action === 'clean') &&
+    !plotId
+  ) {
+    actionError.value = '地块编号缺失'
+    return
+  }
+  busyAction.value = request
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    let response: WsEnvelope
+    switch (action) {
+      case 'buy': {
+        const quote = shopEntries.value.find((entry) => entry.itemId === 1001)
+        if (!quote) throw new Error('种子报价尚未加载')
+        response = await socket.buySeeds(
+          playerId,
+          quote.shopEntryId,
+          request.quantity ?? 1,
+          quote.priceVersion,
+        )
+        break
+      }
+      case 'plant':
+        response = await socket.plant(playerId, plotId!, 1001)
+        break
+      case 'fertilize':
+        response = await socket.applyFertilizer(playerId, plotId!, 1)
+        break
+      case 'harvest':
+        response = await socket.harvest(playerId, plotId!)
+        break
+      case 'sell': {
+        const quote = shopEntries.value.find((entry) => entry.itemId === 1002)
+        if (!quote) throw new Error('作物收购报价尚未加载')
+        response = request.sellAll
+          ? await socket.sellAll(playerId, 1002, quote.priceVersion)
+          : await socket.sellQuantity(
+              playerId,
+              1002,
+              request.quantity ?? 1,
+              quote.priceVersion,
+            )
+        break
+      }
+      case 'claim':
+        response = await socket.claimChapterReward(
+          playerId,
+          snapshot.value?.currentChapter?.chapterId ?? 0,
+        )
+        break
+      case 'clean':
+        response = await socket.cleanPlot(playerId, plotId!)
+        break
+    }
+    await acceptMutationResponse(response)
+    actionMessage.value = actionSuccessMessage(action, response)
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    busyAction.value = undefined
   }
 }
 
@@ -170,8 +385,10 @@ function handlePlayerStateChanged(envelope: WsEnvelope): void {
   snapshot.value = applyPatch(currentSnapshot, envelope.payload.value.patch!)
   stateVersion.value = version
   serverTimeMs.value = envelope.serverTimeMs
+  setServerClock(envelope.serverTimeMs)
   lastPushReason.value = envelope.payload.value.reason
   pushCount.value += 1
+  actionMessage.value = '作物已经成熟，可以收获。'
 }
 
 function recoverSnapshotGap(): Promise<void> {
@@ -197,6 +414,7 @@ function recoverSnapshotGap(): Promise<void> {
       snapshot.value = response.payload.value.snapshot
       stateVersion.value = response.stateVersion
       serverTimeMs.value = response.serverTimeMs
+      setServerClock(response.serverTimeMs)
     })
     .catch((error) => {
       phase.value = 'failed'
@@ -267,6 +485,7 @@ async function establishSnapshot(): Promise<void> {
   const response = await socket.requestPlayerSnapshot(connection.auth.playerId)
   snapshotRequestId.value = response.requestId
   serverTimeMs.value = response.serverTimeMs
+  setServerClock(response.serverTimeMs)
   stateVersion.value = response.stateVersion
   wsError.value = response.error
   if (response.error) {
@@ -283,6 +502,7 @@ async function establishSnapshot(): Promise<void> {
     throw new Error('快照 player_id 与认证身份不一致')
   }
   snapshot.value = response.payload.value.snapshot
+  await refreshShop()
   phase.value = 'ready'
 }
 
@@ -329,21 +549,44 @@ function disconnect(): void {
   phase.value = 'disconnected'
 }
 
-onBeforeUnmount(() => socket.disconnect())
+onMounted(() => {
+  clockTimer = setInterval(() => {
+    nowMs.value = BigInt(Date.now()) + serverClockOffsetMs
+  }, 1000)
+})
+
+onBeforeUnmount(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+  }
+  socket.disconnect()
+})
 </script>
 
 <template>
   <main class="shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">V3 · snapshot proof</p>
+        <p class="eyebrow">V3 · PLAYER ACTOR FARM</p>
         <h1>Classic Farm</h1>
         <p class="summary">
-          最小 H5 仅验证注册/登录 → Ticket → WebSocket AUTH → 玩家快照链路。
+          注册或登录后，在同一个 Player Actor 中完成购买、种植、成长、收获、出售、领奖与清理。
         </p>
       </div>
       <span class="phase-badge" :data-phase="phase">{{ phaseLabels[phase] }}</span>
     </header>
+
+    <FarmDashboard
+      v-if="snapshot"
+      :snapshot="snapshot"
+      :shop-entries="shopEntries"
+      :connected="socket.connected"
+      :busy-action="busyAction"
+      :action-message="actionMessage"
+      :action-error="actionError"
+      :now-ms="nowMs"
+      @action="runFarmAction"
+    />
 
     <section class="card auth-card" aria-labelledby="auth-title">
       <div class="section-heading">
@@ -434,16 +677,17 @@ onBeforeUnmount(() => socket.disconnect())
     <section class="card snapshot-card" aria-labelledby="snapshot-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">03 · ACTOR RESPONSE</p>
+          <p class="eyebrow">03 · ACTOR DIAGNOSTICS</p>
           <h2 id="snapshot-title">玩家快照</h2>
         </div>
-        <span class="proof-label">snapshot only</span>
+        <span class="proof-label">live state</span>
       </div>
 
       <dl class="facts">
         <div><dt>Gateway</dt><dd>{{ gateway?.gatewayId ?? '—' }}</dd></div>
         <div><dt>AUTH request_id</dt><dd>{{ authRequestId || '—' }}</dd></div>
         <div><dt>Snapshot request_id</dt><dd>{{ snapshotRequestId || '—' }}</dd></div>
+        <div><dt>Last action request_id</dt><dd>{{ lastActionRequestId || '—' }}</dd></div>
         <div>
           <dt>state_version</dt>
           <dd>

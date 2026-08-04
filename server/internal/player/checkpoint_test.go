@@ -27,9 +27,14 @@ func TestInitialCheckpointRoundTrip(t *testing.T) {
 		state.PlayerSeq != 0 ||
 		state.Coins != InitialCoinBalance ||
 		state.Inventory[BasicFertilizerID] != 1 ||
-		len(state.Plots) != 1 ||
+		len(state.Plots) != int(InitialPlotCount) ||
 		len(state.Tasks) != 5 {
 		t.Fatalf("unexpected restored state: %+v", state)
+	}
+	for plotID := InitialPlotID; plotID < InitialPlotID+InitialPlotCount; plotID++ {
+		if plot := state.Plots[plotID]; plot == nil || plot.State != plotv1.PlotState_EMPTY {
+			t.Fatalf("initial plot %d is invalid: %+v", plotID, plot)
+		}
 	}
 }
 

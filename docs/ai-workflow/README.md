@@ -42,3 +42,13 @@ The fertilizer interval and restart-recovery record is `2026-07-31-fertilizer-ef
 The online maturity Push, Gate snapshot buffering and H5 gap-recovery record is `2026-07-31-maturity-push-and-gap-recovery.md`.
 
 The all-or-nothing HARVEST and checkpoint record is `2026-07-31-harvest-command.md`.
+
+The SELL_CROP, sell-all idempotency and chapter-completion record is `2026-07-31-sell-crop-command.md`.
+
+The chapter reward, full-warehouse pending mail and atomic Outbox-write record is `2026-07-31-claim-chapter-reward.md`.
+
+The CLEAN_PLOT and server-side owner-loop completion record is `2026-07-31-clean-plot.md`.
+
+The responsive H5 farm interface and browser-completed owner-loop record is `2026-07-31-h5-farm-loop.md`.
+
+The four authoritative plots, tool-first H5 controls and buy/sell quantity record is `2026-08-03-four-plot-tools.md`.

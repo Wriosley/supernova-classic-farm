@@ -13,7 +13,7 @@ Plans describe intended work. `docs/context/CURRENT.md` describes the actual cur
 
 ## Current state
 
-`2026-07-31-v3-first-stage-implementation-plan.md` is the active bounded plan for the 2026-08-02 authenticated H5-to-Player-Actor command milestone. Its scope stops at one correlated `GET_PLAYER_SNAPSHOT` path plus the minimum failure evidence; it does not expand friends, multiplayer, full mail, the complete business loop or production-capacity claims.
+`2026-07-31-v3-first-stage-implementation-plan.md` is the completed bounded plan for the 2026-08-02 authenticated H5-to-Player-Actor command milestone. Its scope stopped at one correlated `GET_PLAYER_SNAPSHOT` path plus the minimum failure evidence; the delivered implementation subsequently expanded through the complete single-player loop without changing that plan's historical acceptance boundary.
 
 `2026-07-27-30m-dau-architecture-strategy-and-open-questions-plan.md` is a superseded V1 plan and must not be executed as the current architecture.
 

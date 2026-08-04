@@ -10,6 +10,9 @@ $names = @(
     "E2E_APPLY_FERTILIZER",
     "E2E_WAIT_MATURITY_PUSH",
     "E2E_HARVEST",
+    "E2E_SELL_CROP",
+    "E2E_CLAIM_CHAPTER_REWARD",
+    "E2E_CLEAN_PLOT",
     "E2E_EXPECT_PLAYER_SEQ"
 )
 $previous = @{}
@@ -25,6 +28,9 @@ try {
     $env:E2E_APPLY_FERTILIZER = "1"
     $env:E2E_WAIT_MATURITY_PUSH = "1"
     $env:E2E_HARVEST = "1"
+    $env:E2E_SELL_CROP = "1"
+    $env:E2E_CLAIM_CHAPTER_REWARD = "1"
+    $env:E2E_CLEAN_PLOT = "1"
     $env:E2E_EXPECT_PLAYER_SEQ = "0"
 
     & (Join-Path $PSScriptRoot "run-authenticated-snapshot.ps1") `

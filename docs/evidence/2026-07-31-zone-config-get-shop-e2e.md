@@ -58,3 +58,8 @@ RESULT authenticated_snapshot_e2e=PASS adapter=in-memory-config-shop
 The later MySQL restart run used the same development snapshot for
 `GET_SHOP -> BUY_SEEDS -> PLANT` and recovered the planted checkpoint at
 `player_seq=2`.
+
+A later SELL_CROP slice extended the immutable snapshot with a separately
+validated crop sell rule. `GET_SHOP` now returns seed entry 5001 at price 2
+version 8 and crop entry 5002 at price 5 version 9 in stable order; the newer
+evidence is `2026-07-31-sell-crop-e2e.md`.

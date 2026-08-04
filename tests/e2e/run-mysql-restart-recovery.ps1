@@ -19,6 +19,9 @@ $previousPlant = $env:E2E_PLANT
 $previousApplyFertilizer = $env:E2E_APPLY_FERTILIZER
 $previousWaitMaturityPush = $env:E2E_WAIT_MATURITY_PUSH
 $previousHarvest = $env:E2E_HARVEST
+$previousSellCrop = $env:E2E_SELL_CROP
+$previousClaimChapterReward = $env:E2E_CLAIM_CHAPTER_REWARD
+$previousCleanPlot = $env:E2E_CLEAN_PLOT
 $previousExpectedPlayerSeq = $env:E2E_EXPECT_PLAYER_SEQ
 $previousMySQLPassword = $env:MYSQL_PWD
 $accountName = "restart_$([Guid]::NewGuid().ToString('N').Substring(0, 12))"
@@ -71,6 +74,9 @@ function Invoke-RestartPhase {
         $env:E2E_APPLY_FERTILIZER = "1"
         $env:E2E_WAIT_MATURITY_PUSH = "1"
         $env:E2E_HARVEST = "1"
+        $env:E2E_SELL_CROP = "1"
+        $env:E2E_CLAIM_CHAPTER_REWARD = "1"
+        $env:E2E_CLEAN_PLOT = "1"
         $env:E2E_EXPECT_PLAYER_SEQ = "0"
     }
     else {
@@ -79,7 +85,10 @@ function Invoke-RestartPhase {
         Remove-Item Env:E2E_APPLY_FERTILIZER -ErrorAction SilentlyContinue
         Remove-Item Env:E2E_WAIT_MATURITY_PUSH -ErrorAction SilentlyContinue
         Remove-Item Env:E2E_HARVEST -ErrorAction SilentlyContinue
-        $env:E2E_EXPECT_PLAYER_SEQ = "5"
+        Remove-Item Env:E2E_SELL_CROP -ErrorAction SilentlyContinue
+        Remove-Item Env:E2E_CLAIM_CHAPTER_REWARD -ErrorAction SilentlyContinue
+        Remove-Item Env:E2E_CLEAN_PLOT -ErrorAction SilentlyContinue
+        $env:E2E_EXPECT_PLAYER_SEQ = "8"
     }
     Write-Host "PHASE mode=$Mode account=$accountName"
     & (Join-Path $PSScriptRoot "run-authenticated-snapshot.ps1") `
@@ -130,6 +139,9 @@ finally {
         @{ Name = "E2E_APPLY_FERTILIZER"; Value = $previousApplyFertilizer },
         @{ Name = "E2E_WAIT_MATURITY_PUSH"; Value = $previousWaitMaturityPush },
         @{ Name = "E2E_HARVEST"; Value = $previousHarvest },
+        @{ Name = "E2E_SELL_CROP"; Value = $previousSellCrop },
+        @{ Name = "E2E_CLAIM_CHAPTER_REWARD"; Value = $previousClaimChapterReward },
+        @{ Name = "E2E_CLEAN_PLOT"; Value = $previousCleanPlot },
         @{ Name = "E2E_EXPECT_PLAYER_SEQ"; Value = $previousExpectedPlayerSeq },
         @{ Name = "MYSQL_PWD"; Value = $previousMySQLPassword }
     )) {

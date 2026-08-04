@@ -1,0 +1,35 @@
+CREATE TABLE IF NOT EXISTS player_outbox (
+    event_id BINARY(16) NOT NULL,
+    db_shard_id INT UNSIGNED NOT NULL,
+    aggregate_player_id BIGINT UNSIGNED NOT NULL,
+    logical_shard_id INT UNSIGNED NOT NULL,
+    event_type INT UNSIGNED NOT NULL,
+    event_contract_version INT UNSIGNED NOT NULL,
+    caused_by_request_id BINARY(16) NOT NULL,
+    created_owner_epoch BIGINT UNSIGNED NOT NULL,
+    created_player_seq BIGINT UNSIGNED NOT NULL,
+    created_at_ms BIGINT NOT NULL,
+    payload BLOB NOT NULL,
+    payload_sha256 BINARY(32) NOT NULL,
+    relay_status TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_attempt_at_ms BIGINT NOT NULL,
+    claim_owner VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    claim_until_ms BIGINT NULL,
+    last_error_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    delivered_at_ms BIGINT NULL,
+    PRIMARY KEY (event_id),
+    KEY idx_player_outbox_relay (relay_status, next_attempt_at_ms),
+    KEY idx_player_outbox_player_status (aggregate_player_id, relay_status),
+    CONSTRAINT fk_player_outbox_account
+        FOREIGN KEY (aggregate_player_id) REFERENCES accounts (player_id),
+    CONSTRAINT chk_player_outbox_logical_shard CHECK (logical_shard_id < 4096),
+    CONSTRAINT chk_player_outbox_event_type CHECK (event_type > 0),
+    CONSTRAINT chk_player_outbox_contract_version CHECK (event_contract_version > 0),
+    CONSTRAINT chk_player_outbox_owner_epoch CHECK (created_owner_epoch > 0),
+    CONSTRAINT chk_player_outbox_player_seq CHECK (created_player_seq > 0),
+    CONSTRAINT chk_player_outbox_relay_status CHECK (relay_status IN (1, 2, 3)),
+    CONSTRAINT chk_player_outbox_payload_size CHECK (OCTET_LENGTH(payload) <= 49152)
+) ENGINE = InnoDB;
+
+INSERT IGNORE INTO schema_migrations (version) VALUES (4);

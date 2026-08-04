@@ -1,6 +1,6 @@
 # Art source and license ledger
 
-Checked: 2026-07-30. A candidate is not approved merely because it appears in
+Checked: 2026-07-31. A candidate is not approved merely because it appears in
 this ledger. Before importing external pixels, retain the license bundled with
 the actual download and re-check that its terms match the recorded page.
 
@@ -12,7 +12,8 @@ the actual download and re-check that its terms match the recorded page.
   from geometric pixel primitives; no third-party image was supplied as input.
 - Files: all current files under `runtime/`.
 - License status: project-owned development placeholders.
-- AI record: generated 2026-07-30 with a deterministic local Python script;
+- AI record: generated 2026-07-30 and extended with four tool icons on
+  2026-07-31 using the deterministic local Python script;
   no image-generation model and no third-party training-restricted source.
 - Modification: replace freely when a final visual baseline is selected.
 

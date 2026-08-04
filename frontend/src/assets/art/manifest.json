@@ -186,6 +186,46 @@
       "status": "placeholder"
     },
     {
+      "id": "tool.fertilizer",
+      "file": "runtime/tools/fertilizer.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "tool.hand",
+      "file": "runtime/tools/hand.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "tool.seed",
+      "file": "runtime/tools/seed.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "tool.shovel",
+      "file": "runtime/tools/shovel.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
       "id": "ui.button-primary",
       "file": "runtime/ui/button-primary.png",
       "width": 32,

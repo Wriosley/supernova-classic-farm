@@ -43,9 +43,496 @@ button:disabled {
 }
 
 .shell {
-  width: min(100% - 2rem, 58rem);
+  width: min(100% - 2rem, 76rem);
   margin: 0 auto;
   padding: clamp(2rem, 7vw, 5rem) 0 4rem;
+}
+
+.pixel-art {
+  image-rendering: pixelated;
+}
+
+.farm-dashboard {
+  display: grid;
+  gap: 1rem;
+  margin: 1.4rem 0;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  border: 2px solid #71895e;
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(rgb(255 255 255 / 8%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 8%) 1px, transparent 1px),
+    #8eb86d;
+  background-size: 32px 32px;
+  box-shadow:
+    inset 0 0 0 4px rgb(255 255 255 / 18%),
+    0 1.2rem 3rem rgb(42 61 35 / 18%);
+}
+
+.farm-toolbar,
+.panel-heading,
+.wallet,
+.shop-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.farm-toolbar {
+  padding: 0.3rem 0.3rem 0;
+}
+
+.toolbelt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tool-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(4.5rem, 1fr));
+  gap: 0.55rem;
+}
+
+.tool-button {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  align-items: center;
+  gap: 0 0.35rem;
+  min-height: 3.4rem;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+
+.tool-button img {
+  grid-row: 1 / 3;
+  width: 2rem;
+  height: 2rem;
+}
+
+.tool-button span {
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.tool-button small {
+  color: #6b745e;
+  font-size: 0.65rem;
+}
+
+.tool-button.selected {
+  border-color: #31552d;
+  background: #dfecc2;
+  box-shadow: 0 0 0 3px rgb(49 85 45 / 15%);
+}
+
+.farm-toolbar h2,
+.game-panel h3 {
+  margin: 0;
+  color: #24361f;
+}
+
+.wallet {
+  justify-content: flex-end;
+  min-width: 9rem;
+  padding: 0.55rem 0.85rem;
+  border: 2px solid #76542a;
+  border-radius: 0.8rem;
+  background: #fff4bd;
+  box-shadow: inset 0 -3px 0 rgb(111 73 29 / 15%);
+}
+
+.wallet img {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.wallet strong {
+  font-size: 1.25rem;
+}
+
+.wallet span {
+  color: #745a31;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.farm-layout {
+  display: grid;
+  grid-template-columns: minmax(20rem, 1.15fr) minmax(19rem, 0.85fr);
+  gap: 1rem;
+}
+
+.farm-sidebar {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+.game-panel {
+  padding: 1rem;
+  border: 2px solid #8b6c42;
+  border-radius: 1rem;
+  background: #fff8dc;
+  box-shadow:
+    inset 0 -4px 0 rgb(102 69 31 / 10%),
+    0 0.5rem 1.2rem rgb(44 58 34 / 12%);
+}
+
+.panel-kicker {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #6b7c54;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.state-pill,
+.price-tag {
+  padding: 0.35rem 0.6rem;
+  border-radius: 99rem;
+  background: #e1ebc7;
+  color: #3d5e32;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.plots-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.plot-tile {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 2px solid #9a7a50;
+  background: #f5e7bd;
+  text-align: left;
+}
+
+.plot-tile.valid {
+  border-color: #527b46;
+  box-shadow: 0 0 0 2px rgb(82 123 70 / 12%);
+}
+
+.plot-tile.invalid {
+  filter: saturate(0.72);
+}
+
+.plot-tile.invalid:hover {
+  border-color: #b45f50;
+  box-shadow: 0 0 0 2px rgb(180 95 80 / 12%);
+}
+
+.plots-grid[data-tool="seed"] .plot-tile {
+  cursor: url("../../frontend/src/assets/art/runtime/tools/seed.png") 8 8, pointer;
+}
+
+.plots-grid[data-tool="fertilizer"] .plot-tile {
+  cursor: url("../../frontend/src/assets/art/runtime/tools/fertilizer.png") 8 8, pointer;
+}
+
+.plots-grid[data-tool="shovel"] .plot-tile {
+  cursor: url("../../frontend/src/assets/art/runtime/tools/shovel.png") 8 8, pointer;
+}
+
+.plots-grid[data-tool="hand"] .plot-tile {
+  cursor: url("../../frontend/src/assets/art/runtime/tools/hand.png") 8 8, pointer;
+}
+
+.plot-number {
+  color: #6b7c54;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.plot-tile > strong {
+  color: #33472e;
+  font-size: 0.78rem;
+}
+
+.plot-tile > small {
+  min-height: 1.9rem;
+  color: #66705d;
+  font-size: 0.65rem;
+}
+
+.plot-busy {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 5;
+  padding: 0.35rem 0.5rem;
+  border-radius: 99rem;
+  background: rgb(36 54 31 / 88%);
+  color: white;
+  font-size: 0.68rem;
+  transform: translate(-50%, -50%);
+}
+
+.plot-stage {
+  position: relative;
+  display: grid;
+  min-height: 8.5rem;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid #755331;
+  border-radius: 0.8rem;
+  background:
+    linear-gradient(45deg, rgb(255 255 255 / 8%) 25%, transparent 25%) 0 0 / 20px 20px,
+    #80ad62;
+}
+
+.plot-stage::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 24%;
+  background: #d7b56e;
+  content: "";
+  opacity: 0.35;
+}
+
+.plot-base {
+  width: min(78%, 8rem);
+  z-index: 1;
+}
+
+.plot-crop {
+  position: absolute;
+  z-index: 2;
+  width: min(36%, 4rem);
+  filter: drop-shadow(0 0.45rem 0 rgb(51 74 36 / 20%));
+}
+
+.plot-effect {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 3;
+  width: 1.8rem;
+  animation: effect-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes effect-pulse {
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+.plot-meta {
+  min-height: 2.7rem;
+  padding: 0.8rem 0.1rem 0;
+  color: #53604f;
+  font-size: 0.82rem;
+}
+
+.inventory-panel button {
+  min-height: 2.5rem;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.shop-item {
+  margin-top: 0.8rem;
+  padding: 0.75rem;
+  border-radius: 0.7rem;
+  background: #f0e7c7;
+}
+
+.shop-item > div {
+  display: grid;
+  flex: 1;
+  gap: 0.18rem;
+}
+
+.quantity-row {
+  display: grid;
+  grid-template-columns: 2.5rem 4rem 2.5rem minmax(7rem, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.quantity-row > button:not(.primary),
+.sell-buttons button {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.55rem;
+  font-weight: 800;
+}
+
+.quantity-row input {
+  min-height: 2.5rem;
+  padding: 0.4rem;
+  text-align: center;
+}
+
+.quantity-row > span {
+  color: #5d694f;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.sell-controls {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #c3b48e;
+}
+
+.sell-controls > span {
+  color: #46583f;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.sell-controls .quantity-row {
+  grid-template-columns: 2.5rem 4rem 2.5rem 1fr;
+  margin-top: 0;
+}
+
+.sell-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.shop-item small,
+.task-row small {
+  color: #6d755f;
+  font-size: 0.68rem;
+}
+
+.item-icon {
+  width: 3rem;
+  height: 3rem;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.inventory-slot {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid #c3b48e;
+  border-radius: 0.65rem;
+  background: #fffdf2;
+}
+
+.inventory-slot img {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+.inventory-slot span {
+  overflow: hidden;
+  color: #69705f;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-slot strong {
+  color: #31552d;
+  font-size: 0.82rem;
+}
+
+.chapter-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.task-list {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: 1.2rem 1fr;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid #c3b48e;
+  border-radius: 0.65rem;
+  background: #fffdf2;
+}
+
+.task-row img,
+.task-dot {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.task-dot {
+  border: 2px solid #aeb79e;
+  border-radius: 50%;
+}
+
+.task-row > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.task-row strong {
+  font-size: 0.7rem;
+}
+
+.task-row progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 0.4rem;
+  accent-color: #4e7c45;
+}
+
+.claim-button {
+  justify-self: start;
+}
+
+.chapter-placeholder {
+  margin: 0;
+  color: #67725f;
+  font-size: 0.82rem;
+}
+
+.action-notice {
+  margin: 0;
+}
+
+.success-banner {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #4e7c45;
+  border-radius: 0.35rem;
+  background: #f2f8df;
+  color: #36572e;
+  font-size: 0.85rem;
+}
+
+.tool-feedback {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #d28a35;
+  border-radius: 0.35rem;
+  background: #fff5d8;
+  color: #73501f;
+  font-size: 0.85rem;
 }
 
 .hero {
@@ -327,6 +814,23 @@ input:focus {
   .snapshot-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .farm-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbelt {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .plot-stage {
+    min-height: 8rem;
+  }
+
+  .task-list {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 440px) {
@@ -337,5 +841,40 @@ input:focus {
   .facts,
   .snapshot-grid {
     grid-template-columns: 1fr;
+  }
+
+  .farm-toolbar,
+  .panel-heading,
+  .shop-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .wallet {
+    width: 100%;
+  }
+
+  .tool-options,
+  .inventory-grid,
+  .task-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .plot-stage {
+    min-height: 7rem;
+  }
+
+  .quantity-row,
+  .sell-controls .quantity-row {
+    grid-template-columns: 2.5rem minmax(3.5rem, 1fr) 2.5rem;
+  }
+
+  .quantity-row > span,
+  .quantity-row > .primary {
+    grid-column: 1 / -1;
+  }
+
+  .quantity-row > .primary {
+    width: 100%;
   }
 }

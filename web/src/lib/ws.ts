@@ -152,6 +152,95 @@ export class FarmWebSocket {
     )
   }
 
+  async requestShop(playerId: bigint): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.GET_SHOP, {
+      case: 'getShopRequest',
+      value: {},
+    })
+  }
+
+  async buySeeds(
+    playerId: bigint,
+    shopEntryId: number,
+    quantity: number,
+    expectedPriceVersion: bigint,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.BUY_SEEDS, {
+      case: 'buySeedsRequest',
+      value: { shopEntryId, quantity, expectedPriceVersion },
+    })
+  }
+
+  async plant(playerId: bigint, plotId: number, seedItemId: number): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.PLANT, {
+      case: 'plantRequest',
+      value: { plotId, seedItemId },
+    })
+  }
+
+  async applyFertilizer(
+    playerId: bigint,
+    plotId: number,
+    fertilizerItemId: number,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.APPLY_FERTILIZER, {
+      case: 'applyFertilizerRequest',
+      value: { plotId, fertilizerItemId },
+    })
+  }
+
+  async harvest(playerId: bigint, plotId: number): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.HARVEST, {
+      case: 'harvestRequest',
+      value: { plotId },
+    })
+  }
+
+  async sellAll(
+    playerId: bigint,
+    cropItemId: number,
+    expectedPriceVersion: bigint,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.SELL_CROP, {
+      case: 'sellCropRequest',
+      value: {
+        cropItemId,
+        expectedPriceVersion,
+        amount: { case: 'sellAll', value: true },
+      },
+    })
+  }
+
+  async sellQuantity(
+    playerId: bigint,
+    cropItemId: number,
+    quantity: number,
+    expectedPriceVersion: bigint,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.SELL_CROP, {
+      case: 'sellCropRequest',
+      value: {
+        cropItemId,
+        expectedPriceVersion,
+        amount: { case: 'quantity', value: quantity },
+      },
+    })
+  }
+
+  async claimChapterReward(playerId: bigint, chapterId: number): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.CLAIM_CHAPTER_REWARD, {
+      case: 'claimChapterRewardRequest',
+      value: { chapterId },
+    })
+  }
+
+  async cleanPlot(playerId: bigint, plotId: number): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.CLEAN_PLOT, {
+      case: 'cleanPlotRequest',
+      value: { plotId },
+    })
+  }
+
   disconnect(): void {
     const socket = this.socket
     this.socket = undefined
@@ -163,6 +252,26 @@ export class FarmWebSocket {
     ) {
       socket.close(1000, 'client disconnect')
     }
+  }
+
+  private sendGameRequest(
+    playerId: bigint,
+    action: Action,
+    payload: WsEnvelope['payload'],
+  ): Promise<WsEnvelope> {
+    if (playerId === 0n) {
+      return Promise.reject(new Error('authenticated player_id 不能为 0'))
+    }
+    return this.sendRequest(
+      create(WsEnvelopeSchema, {
+        protocolVersion: PROTOCOL_VERSION,
+        messageKind: MessageKind.REQUEST,
+        action,
+        requestId: crypto.randomUUID(),
+        targetPlayerId: playerId,
+        payload,
+      }),
+    )
   }
 
   private sendRequest(envelope: WsEnvelope): Promise<WsEnvelope> {

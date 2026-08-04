@@ -26,11 +26,13 @@ all-or-nothing harvest into the Player Actor warehouse.
 - the live in-memory four-process flow reached natural maturity at
   `player_seq=4`, harvested three crop items, returned `NEED_CLEANUP` at
   `player_seq=5`, and replayed without applying twice.
+- the owner then ran the extended MySQL wrapper: the first stack completed the
+  same flow, all four services stopped, and a fresh stack recovered
+  `player_seq=5`, two seeds, three crops and the `NEED_CLEANUP` plot.
 
 Observed output is recorded in `../evidence/2026-07-31-harvest-e2e.md`.
 
 ## Remaining uncertainty
 
-The password-prompted MySQL restart wrapper now expects the harvested
-`player_seq=5` checkpoint, but this extension still needs an owner-run live
-result. Sell, reward claim and cleanup remain unimplemented.
+Restart while a fertilizer interval or maturity deadline is still in flight
+remains unverified. Sell, reward claim and cleanup remain unimplemented.

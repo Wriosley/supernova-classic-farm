@@ -18,6 +18,7 @@ import (
 
 	httpv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/http"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
+	chapterv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/chapter"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
 	reasonv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/reason"
 	"github.com/coder/websocket"
@@ -189,14 +190,20 @@ func TestAuthenticatedSnapshot(t *testing.T) {
 		shopEnvelope.GetTargetPlayerId() != playerID ||
 		shopEnvelope.GetError() != nil ||
 		shop.GetServerConfigVersion() != 1 ||
-		len(shop.GetEntries()) != 1 ||
+		len(shop.GetEntries()) != 2 ||
 		!shop.GetEntries()[0].GetEnabled() {
 		t.Fatalf("invalid GET_SHOP response: %+v", shopEnvelope)
 	}
 	seedQuote := shop.GetEntries()[0]
-	t.Logf("GET_SHOP request_id=%s config_version=%d shop_entry_id=%d item_id=%d unit_price=%d price_version=%d",
+	cropQuote := shop.GetEntries()[1]
+	if seedQuote.GetItemId() != 1001 || cropQuote.GetItemId() != 1002 ||
+		!cropQuote.GetEnabled() {
+		t.Fatalf("invalid development buy/sell quotes: %+v", shop.GetEntries())
+	}
+	t.Logf("GET_SHOP request_id=%s config_version=%d seed_entry_id=%d seed_price=%d seed_price_version=%d crop_entry_id=%d crop_price=%d crop_price_version=%d",
 		shopRequestID, shop.GetServerConfigVersion(), seedQuote.GetShopEntryId(),
-		seedQuote.GetItemId(), seedQuote.GetUnitPrice(), seedQuote.GetPriceVersion())
+		seedQuote.GetUnitPrice(), seedQuote.GetPriceVersion(), cropQuote.GetShopEntryId(),
+		cropQuote.GetUnitPrice(), cropQuote.GetPriceVersion())
 
 	snapshotRequestID := newUUID(t)
 	writeEnvelope(t, conn, &wsv1.WsEnvelope{
@@ -216,7 +223,10 @@ func TestAuthenticatedSnapshot(t *testing.T) {
 	expectedFertilizerQuantity := uint32(1)
 	expectedSeedQuantity := uint32(0)
 	expectedCropQuantity := uint32(0)
+	expectedNextSeedQuantity := uint32(0)
 	expectedPlotState := plotv1.PlotState_EMPTY
+	expectedChapterID := uint32(1)
+	expectedChapterStatus := chapterv1.ChapterStatus_IN_PROGRESS
 	if expectedPlayerSeq >= 1 {
 		expectedCoins = 4
 		expectedSeedQuantity = 3
@@ -235,6 +245,21 @@ func TestAuthenticatedSnapshot(t *testing.T) {
 		expectedCropQuantity = 3
 		expectedPlotState = plotv1.PlotState_NEED_CLEANUP
 	}
+	if expectedPlayerSeq >= 6 {
+		expectedCoins = 19
+		expectedCropQuantity = 0
+		expectedChapterStatus = chapterv1.ChapterStatus_CLAIMABLE
+	}
+	if expectedPlayerSeq >= 7 {
+		expectedCoins = 29
+		expectedFertilizerQuantity = 1
+		expectedNextSeedQuantity = 3
+		expectedChapterID = 2
+		expectedChapterStatus = chapterv1.ChapterStatus_IN_PROGRESS
+	}
+	if expectedPlayerSeq >= 8 {
+		expectedPlotState = plotv1.PlotState_EMPTY
+	}
 	if snapshotEnvelope.GetMessageKind() != wsv1.MessageKind_RESPONSE ||
 		snapshotEnvelope.GetAction() != wsv1.Action_GET_PLAYER_SNAPSHOT ||
 		snapshotEnvelope.GetRequestId() != snapshotRequestID ||
@@ -250,13 +275,27 @@ func TestAuthenticatedSnapshot(t *testing.T) {
 	}
 	if inventoryQuantity(snapshot, 1) != expectedFertilizerQuantity ||
 		inventoryQuantity(snapshot, 1001) != expectedSeedQuantity ||
-		inventoryQuantity(snapshot, 1002) != expectedCropQuantity {
+		inventoryQuantity(snapshot, 1002) != expectedCropQuantity ||
+		inventoryQuantity(snapshot, 1003) != expectedNextSeedQuantity {
 		t.Fatalf("inventory mismatch: %+v", snapshot.GetInventory())
 	}
-	if len(snapshot.GetPlots()) != 1 ||
+	if len(snapshot.GetPlots()) != 4 ||
 		snapshot.GetPlots()[0].GetPlotId() != 1 ||
 		snapshot.GetPlots()[0].GetPlotState() != expectedPlotState {
 		t.Fatalf("plot mismatch: %+v", snapshot.GetPlots())
+	}
+	for index, plot := range snapshot.GetPlots()[1:] {
+		if plot.GetPlotId() != uint32(index+2) ||
+			plot.GetPlotState() != plotv1.PlotState_EMPTY {
+			t.Fatalf("secondary plot mismatch: %+v", snapshot.GetPlots())
+		}
+	}
+	if snapshot.GetCurrentChapter().GetChapterId() != expectedChapterID ||
+		snapshot.GetCurrentChapter().GetStatus() != expectedChapterStatus {
+		t.Fatalf("chapter = %d/%s, want %d/%s",
+			snapshot.GetCurrentChapter().GetChapterId(),
+			snapshot.GetCurrentChapter().GetStatus(),
+			expectedChapterID, expectedChapterStatus)
 	}
 	if expectedPlotState == plotv1.PlotState_GROWING &&
 		(snapshot.GetPlots()[0].GetCropId() != 2001 ||
@@ -430,6 +469,116 @@ func TestAuthenticatedSnapshot(t *testing.T) {
 		}
 		t.Logf("HARVEST request_id=%s player_seq=%d crop_item_1002=3 plot_state=NEED_CLEANUP replayed=true",
 			harvestRequestID, harvestEnvelope.GetStateVersion().GetPlayerSeq())
+		wroteGameCommand = true
+	}
+	if os.Getenv("E2E_SELL_CROP") == "1" {
+		if os.Getenv("E2E_HARVEST") != "1" {
+			t.Fatal("E2E_SELL_CROP requires E2E_HARVEST")
+		}
+		sellRequestID := newUUID(t)
+		sellRequest := &wsv1.WsEnvelope{
+			ProtocolVersion: 1, MessageKind: wsv1.MessageKind_REQUEST,
+			Action: wsv1.Action_SELL_CROP, RequestId: sellRequestID, TargetPlayerId: playerID,
+			Payload: &wsv1.WsEnvelope_SellCropRequest{
+				SellCropRequest: &wsv1.SellCropRequest{
+					CropItemId: 1002, ExpectedPriceVersion: cropQuote.GetPriceVersion(),
+					Amount: &wsv1.SellCropRequest_SellAll{SellAll: true},
+				},
+			},
+		}
+		writeEnvelope(t, conn, sellRequest)
+		sellEnvelope := readEnvelope(t, conn)
+		sold := sellEnvelope.GetSellCropResponse()
+		if sellEnvelope.GetError() != nil || sellEnvelope.GetReplayed() ||
+			sellEnvelope.GetStateVersion().GetPlayerSeq() != expectedPlayerSeq+6 ||
+			sold.GetSoldQuantity() != 3 ||
+			sold.GetUnitPrice() != cropQuote.GetUnitPrice() ||
+			sold.GetTotalPrice() != cropQuote.GetUnitPrice()*3 ||
+			sold.GetPatch().GetCoinBalance() != 19 ||
+			len(sold.GetPatch().GetInventoryRemovedItemIds()) != 1 ||
+			sold.GetPatch().GetCurrentChapter().GetStatus() != chapterv1.ChapterStatus_CLAIMABLE {
+			t.Fatalf("invalid SELL_CROP response: %+v", sellEnvelope)
+		}
+		writeEnvelope(t, conn, sellRequest)
+		replayedSell := readEnvelope(t, conn)
+		if !replayedSell.GetReplayed() ||
+			replayedSell.GetStateVersion().GetPlayerSeq() != expectedPlayerSeq+6 ||
+			!proto.Equal(replayedSell.GetSellCropResponse(), sold) {
+			t.Fatalf("SELL_CROP replay mismatch: %+v", replayedSell)
+		}
+		t.Logf("SELL_CROP request_id=%s player_seq=%d sold_quantity=3 coins=19 chapter_status=CLAIMABLE replayed=true",
+			sellRequestID, sellEnvelope.GetStateVersion().GetPlayerSeq())
+		wroteGameCommand = true
+	}
+	if os.Getenv("E2E_CLAIM_CHAPTER_REWARD") == "1" {
+		if os.Getenv("E2E_SELL_CROP") != "1" {
+			t.Fatal("E2E_CLAIM_CHAPTER_REWARD requires E2E_SELL_CROP")
+		}
+		claimRequestID := newUUID(t)
+		claimRequest := &wsv1.WsEnvelope{
+			ProtocolVersion: 1, MessageKind: wsv1.MessageKind_REQUEST,
+			Action:    wsv1.Action_CLAIM_CHAPTER_REWARD,
+			RequestId: claimRequestID, TargetPlayerId: playerID,
+			Payload: &wsv1.WsEnvelope_ClaimChapterRewardRequest{
+				ClaimChapterRewardRequest: &wsv1.ClaimChapterRewardRequest{ChapterId: 1},
+			},
+		}
+		writeEnvelope(t, conn, claimRequest)
+		claimEnvelope := readEnvelope(t, conn)
+		claimed := claimEnvelope.GetClaimChapterRewardResponse()
+		if claimEnvelope.GetError() != nil || claimEnvelope.GetReplayed() ||
+			claimEnvelope.GetStateVersion().GetPlayerSeq() != expectedPlayerSeq+7 ||
+			claimed.GetChapterId() != 1 || claimed.GetCoinGranted() != 10 ||
+			len(claimed.GetItemsAddedToInventory()) != 2 ||
+			len(claimed.GetItemsPendingMail()) != 0 ||
+			claimed.GetPatch().GetCoinBalance() != 29 ||
+			claimed.GetPatch().GetCurrentChapter().GetChapterId() != 2 ||
+			claimed.GetPatch().GetCurrentChapter().GetStatus() != chapterv1.ChapterStatus_IN_PROGRESS {
+			t.Fatalf("invalid CLAIM_CHAPTER_REWARD response: %+v", claimEnvelope)
+		}
+		writeEnvelope(t, conn, claimRequest)
+		replayedClaim := readEnvelope(t, conn)
+		if !replayedClaim.GetReplayed() ||
+			replayedClaim.GetStateVersion().GetPlayerSeq() != expectedPlayerSeq+7 ||
+			!proto.Equal(replayedClaim.GetClaimChapterRewardResponse(), claimed) {
+			t.Fatalf("CLAIM_CHAPTER_REWARD replay mismatch: %+v", replayedClaim)
+		}
+		t.Logf("CLAIM_CHAPTER_REWARD request_id=%s player_seq=%d coins=29 fertilizer_item_1=1 next_seed_item_1003=3 chapter_id=2 replayed=true",
+			claimRequestID, claimEnvelope.GetStateVersion().GetPlayerSeq())
+		wroteGameCommand = true
+	}
+	if os.Getenv("E2E_CLEAN_PLOT") == "1" {
+		if os.Getenv("E2E_CLAIM_CHAPTER_REWARD") != "1" {
+			t.Fatal("E2E_CLEAN_PLOT requires E2E_CLAIM_CHAPTER_REWARD")
+		}
+		cleanRequestID := newUUID(t)
+		cleanRequest := &wsv1.WsEnvelope{
+			ProtocolVersion: 1, MessageKind: wsv1.MessageKind_REQUEST,
+			Action:    wsv1.Action_CLEAN_PLOT,
+			RequestId: cleanRequestID, TargetPlayerId: playerID,
+			Payload: &wsv1.WsEnvelope_CleanPlotRequest{
+				CleanPlotRequest: &wsv1.CleanPlotRequest{PlotId: 1},
+			},
+		}
+		writeEnvelope(t, conn, cleanRequest)
+		cleanEnvelope := readEnvelope(t, conn)
+		cleaned := cleanEnvelope.GetCleanPlotResponse()
+		if cleanEnvelope.GetError() != nil || cleanEnvelope.GetReplayed() ||
+			cleanEnvelope.GetStateVersion().GetPlayerSeq() != expectedPlayerSeq+8 ||
+			len(cleaned.GetPatch().GetPlotUpserts()) != 1 ||
+			cleaned.GetPatch().GetPlotUpserts()[0].GetPlotId() != 1 ||
+			cleaned.GetPatch().GetPlotUpserts()[0].GetPlotState() != plotv1.PlotState_EMPTY {
+			t.Fatalf("invalid CLEAN_PLOT response: %+v", cleanEnvelope)
+		}
+		writeEnvelope(t, conn, cleanRequest)
+		replayedClean := readEnvelope(t, conn)
+		if !replayedClean.GetReplayed() ||
+			replayedClean.GetStateVersion().GetPlayerSeq() != expectedPlayerSeq+8 ||
+			!proto.Equal(replayedClean.GetCleanPlotResponse(), cleaned) {
+			t.Fatalf("CLEAN_PLOT replay mismatch: %+v", replayedClean)
+		}
+		t.Logf("CLEAN_PLOT request_id=%s player_seq=%d plot_id=1 plot_state=EMPTY replayed=true",
+			cleanRequestID, cleanEnvelope.GetStateVersion().GetPlayerSeq())
 		wroteGameCommand = true
 	}
 	if wroteGameCommand {

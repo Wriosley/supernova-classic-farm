@@ -54,6 +54,10 @@ ratio. Those stages are display-only: they do not create server state,
 | `ui.mail` | MVP | 16x16 | 1 | center | reward mail pending | ready |
 | `ui.warning` | MVP | 16x16 | 1 | center | error/resync state | ready |
 | `ui.connection` | MVP | 16x16 | 1 | center | connecting/reconnecting | ready |
+| `tool.seed` | MVP | 16x16 | 1 | center | plant tool and desktop cursor | ready |
+| `tool.fertilizer` | MVP | 16x16 | 1 | center | fertilize tool and desktop cursor | ready |
+| `tool.shovel` | MVP | 16x16 | 1 | center | cleanup tool and desktop cursor | ready |
+| `tool.hand` | MVP | 16x16 | 1 | center | harvest tool and desktop cursor | ready |
 | `effect.fertilized` | MVP | 16x16 | 2 | center | active speed buff | ready |
 | purchase/plant/harvest/sell feedback | MVP | CSS + icons | n/a | n/a | successful commands | ready |
 | mature/reward/cleanup burst | optional | 16x16 | 2-6 | center | state transition feedback | gap |
@@ -73,6 +77,6 @@ errors, and state-resync copy are HTML/CSS.
 ## Required product decisions before final art
 
 1. First- and second-chapter crop IDs and colors.
-2. Number and screen arrangement of plots.
+2. Four initial plots in a responsive 2x2 farm grid are selected for the MVP.
 3. Portrait/landscape design viewport and safe-area policy.
-4. Vue renderer choice (DOM/CSS, Canvas, Phaser, Pixi, or another library).
+4. Vue DOM/CSS rendering is selected for the first interactive H5 slice.
