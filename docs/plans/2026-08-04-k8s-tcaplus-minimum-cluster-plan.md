@@ -187,13 +187,18 @@ Stop condition: do not start Kubernetes scaling if this baseline is not green.
 
 ### Phase 1: Storage boundary and Tcaplus POC
 
-1. Replace separate loader/writer injection with a `CheckpointStore` contract.
-2. Adapt the existing MySQL implementation to that contract without changing
-   Actor command semantics.
-3. Add a fake store and unit tests for all typed CAS outcomes.
+1. [x] Replace separate loader/writer injection with a `CheckpointStore`
+   contract.
+2. [x] Adapt the existing MySQL implementation to that contract without
+   changing Actor command semantics.
+3. [x] Add a fake store and unit tests for all typed CAS outcomes.
 4. Add a Tcaplus PB `PlayerCheckpoint` adapter and a standalone test program
    that performs create, Load, CAS success, stale CAS rejection and reload.
 5. Run restart recovery against the Tcaplus test environment.
+
+Items 1–3 completed on 2026-08-04. Full Go regression and the live Linux
+dual-Zone MySQL restart/migration/Fence E2E pass; Tcaplus SDK and table access
+are still required for items 4–5.
 
 Fallback: retain the MySQL Checkpoint implementation and publish only the
 Tcaplus single-record POC when owner-loop recovery fails.

@@ -190,14 +190,16 @@ func TestAuthenticatedSnapshot(t *testing.T) {
 		shopEnvelope.GetTargetPlayerId() != playerID ||
 		shopEnvelope.GetError() != nil ||
 		shop.GetServerConfigVersion() != 1 ||
-		len(shop.GetEntries()) != 2 ||
+		len(shop.GetEntries()) != 3 ||
 		!shop.GetEntries()[0].GetEnabled() {
 		t.Fatalf("invalid GET_SHOP response: %+v", shopEnvelope)
 	}
 	seedQuote := shop.GetEntries()[0]
 	cropQuote := shop.GetEntries()[1]
+	fertilizerQuote := shop.GetEntries()[2]
 	if seedQuote.GetItemId() != 1001 || cropQuote.GetItemId() != 1002 ||
-		!cropQuote.GetEnabled() {
+		fertilizerQuote.GetItemId() != 1 ||
+		!cropQuote.GetEnabled() || !fertilizerQuote.GetEnabled() {
 		t.Fatalf("invalid development buy/sell quotes: %+v", shop.GetEntries())
 	}
 	t.Logf("GET_SHOP request_id=%s config_version=%d seed_entry_id=%d seed_price=%d seed_price_version=%d crop_entry_id=%d crop_price=%d crop_price_version=%d",

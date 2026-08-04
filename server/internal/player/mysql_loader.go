@@ -10,20 +10,23 @@ import (
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
 )
 
-var (
-	ErrCheckpointNotFound = errors.New("player checkpoint not found")
-	ErrCheckpointConflict = errors.New("player checkpoint compare-and-set conflict")
-	ErrCheckpointFenced   = errors.New("player checkpoint owner epoch is fenced")
-)
-
-type MySQLCheckpointLoader struct {
+// MySQLCheckpointStore preserves the existing transactional Fence,
+// checkpoint CAS and Outbox behavior behind the storage-neutral contract.
+type MySQLCheckpointStore struct {
 	DB          *sql.DB
 	OwnerZoneID string
 }
 
-func (l *MySQLCheckpointLoader) Load(ctx context.Context, playerID uint64) (*State, error) {
+// MySQLCheckpointLoader remains as a source-compatible type name while callers
+// migrate to MySQLCheckpointStore.
+type MySQLCheckpointLoader = MySQLCheckpointStore
+
+func (l *MySQLCheckpointStore) Load(
+	ctx context.Context,
+	playerID uint64,
+) (LoadedCheckpoint, error) {
 	if l == nil || l.DB == nil {
-		return nil, errors.New("MySQL checkpoint loader is not configured")
+		return LoadedCheckpoint{}, errors.New("MySQL checkpoint store is not configured")
 	}
 	var envelope datav1.PlayerCheckpointV1
 	var blob []byte
@@ -41,14 +44,14 @@ func (l *MySQLCheckpointLoader) Load(ctx context.Context, playerID uint64) (*Sta
 		&envelope.LastAppliedConfigVersion, &envelope.CreatedAtMs, &envelope.UpdatedAtMs,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrCheckpointNotFound
+		return LoadedCheckpoint{}, ErrCheckpointNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("query player checkpoint: %w", err)
+		return LoadedCheckpoint{}, fmt.Errorf("query player checkpoint: %w", err)
 	}
 	checkpoint, err := UnmarshalCheckpoint(blob, digest)
 	if err != nil {
-		return nil, err
+		return LoadedCheckpoint{}, err
 	}
 	if checkpoint.PlayerId != playerID ||
 		checkpoint.LogicalShardId != envelope.LogicalShardId ||
@@ -59,12 +62,44 @@ func (l *MySQLCheckpointLoader) Load(ctx context.Context, playerID uint64) (*Sta
 		checkpoint.LastAppliedConfigVersion != envelope.LastAppliedConfigVersion ||
 		checkpoint.CreatedAtMs != envelope.CreatedAtMs ||
 		checkpoint.UpdatedAtMs != envelope.UpdatedAtMs {
-		return nil, errors.New("checkpoint envelope does not match blob")
+		return LoadedCheckpoint{}, errors.New("checkpoint envelope does not match blob")
 	}
-	return StateFromCheckpoint(checkpoint)
+	state, err := StateFromCheckpoint(checkpoint)
+	if err != nil {
+		return LoadedCheckpoint{}, err
+	}
+	return LoadedCheckpoint{
+		State:             state,
+		PersistedRevision: checkpoint.CheckpointRevision,
+	}, nil
 }
 
-func (l *MySQLCheckpointLoader) Save(ctx context.Context, checkpoint *datav1.PlayerCheckpointV1, expectedRevision uint64) error {
+func (l *MySQLCheckpointStore) SaveCAS(
+	ctx context.Context,
+	write CheckpointWrite,
+) (CheckpointWriteResult, error) {
+	err := l.Save(ctx, write.Checkpoint, write.ExpectedRevision)
+	switch {
+	case err == nil:
+		return CheckpointWriteResult{Status: CheckpointWriteApplied}, nil
+	case errors.Is(err, ErrCheckpointConflict):
+		return CheckpointWriteResult{Status: CheckpointWriteStaleCopy}, nil
+	case errors.Is(err, ErrCheckpointFenced):
+		return CheckpointWriteResult{Status: CheckpointWriteFenced}, nil
+	default:
+		return CheckpointWriteResult{
+			Status: CheckpointWriteRetryableFailure,
+		}, err
+	}
+}
+
+// Save is retained for focused MySQL adapter tests and migration diagnostics.
+// Runtime uses SaveCAS through CheckpointStore.
+func (l *MySQLCheckpointStore) Save(
+	ctx context.Context,
+	checkpoint *datav1.PlayerCheckpointV1,
+	expectedRevision uint64,
+) error {
 	if l == nil || l.DB == nil {
 		return errors.New("MySQL checkpoint writer is not configured")
 	}
@@ -135,7 +170,7 @@ func (l *MySQLCheckpointLoader) Save(ctx context.Context, checkpoint *datav1.Pla
 	return nil
 }
 
-func (l *MySQLCheckpointLoader) ownerZoneID() string {
+func (l *MySQLCheckpointStore) ownerZoneID() string {
 	if l.OwnerZoneID == "" {
 		return DefaultZoneID
 	}

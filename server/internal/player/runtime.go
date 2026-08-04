@@ -34,6 +34,7 @@ type runtimeActor struct {
 	mailbox           *actor.Mailbox
 	state             *State
 	persistedRevision uint64
+	persistedToken    StoreToken
 }
 
 type DrainedPlayer struct {
@@ -42,22 +43,13 @@ type DrainedPlayer struct {
 	CheckpointRevision uint64 `json:"checkpoint_revision"`
 }
 
-type CheckpointLoader interface {
-	Load(context.Context, uint64) (*State, error)
-}
-
-type CheckpointWriter interface {
-	Save(context.Context, *datav1.PlayerCheckpointV1, uint64) error
-}
-
-// Runtime lazily activates one in-memory Actor per player. Without a loader it
+// Runtime lazily activates one in-memory Actor per player. Without a store it
 // retains the explicit development-only default-state behavior.
 type Runtime struct {
 	mu            sync.Mutex
 	actors        map[uint64]*runtimeActor
 	dirtyRevision map[uint64]uint64
-	loader        CheckpointLoader
-	writer        CheckpointWriter
+	store         CheckpointStore
 	pushForwarder PushForwarder
 	config        atomic.Pointer[ConfigSnapshot]
 	now           func() time.Time
@@ -82,17 +74,14 @@ func NewRuntime() *Runtime {
 	return runtime
 }
 
-func NewRuntimeWithLoader(loader CheckpointLoader) (*Runtime, error) {
-	if loader == nil {
-		return nil, errors.New("checkpoint loader is required")
+func NewRuntimeWithStore(store CheckpointStore) (*Runtime, error) {
+	if store == nil {
+		return nil, errors.New("checkpoint store is required")
 	}
 	runtime := NewRuntime()
-	runtime.loader = loader
-	if writer, ok := loader.(CheckpointWriter); ok {
-		runtime.writer = writer
-		runtime.wg.Add(1)
-		go runtime.runDirtyFlusher(runtime.backgroundCtx)
-	}
+	runtime.store = store
+	runtime.wg.Add(1)
+	go runtime.runDirtyFlusher(runtime.backgroundCtx)
 	return runtime, nil
 }
 
@@ -173,7 +162,7 @@ func (r *Runtime) SetPushForwarder(forwarder PushForwarder) error {
 }
 
 func (r *Runtime) markDirty(playerID, checkpointRevision uint64) {
-	if r.writer == nil {
+	if r.store == nil {
 		return
 	}
 	r.mu.Lock()
@@ -229,6 +218,7 @@ func (r *Runtime) flushPlayerLocked(ctx context.Context, playerID uint64) error 
 	}
 	var checkpoint *datav1.PlayerCheckpointV1
 	var expectedRevision uint64
+	var expectedToken StoreToken
 	var checkpointErr error
 	if err := a.mailbox.Do(ctx, func() {
 		if a.state.CheckpointRevision < targetRevision {
@@ -236,6 +226,7 @@ func (r *Runtime) flushPlayerLocked(ctx context.Context, playerID uint64) error 
 		}
 		checkpoint, checkpointErr = a.state.Checkpoint()
 		expectedRevision = a.persistedRevision
+		expectedToken = cloneStoreToken(a.persistedToken)
 	}); err != nil {
 		return fmt.Errorf("snapshot dirty player %d: %w", playerID, err)
 	}
@@ -245,12 +236,19 @@ func (r *Runtime) flushPlayerLocked(ctx context.Context, playerID uint64) error 
 	if checkpoint == nil {
 		return fmt.Errorf("snapshot dirty player %d failed", playerID)
 	}
-	if err := r.writer.Save(ctx, checkpoint, expectedRevision); err != nil {
-		return fmt.Errorf("flush dirty player %d: %w", playerID, err)
+	result, err := r.store.SaveCAS(ctx, CheckpointWrite{
+		Checkpoint:       checkpoint,
+		ExpectedRevision: expectedRevision,
+		ExpectedToken:    expectedToken,
+	})
+	if writeErr := checkpointWriteError(result, err); writeErr != nil {
+		return fmt.Errorf("flush dirty player %d: %w", playerID, writeErr)
 	}
 	if err := a.mailbox.Do(ctx, func() {
-		if a.persistedRevision == expectedRevision {
+		if a.persistedRevision == expectedRevision &&
+			bytes.Equal(a.persistedToken, expectedToken) {
 			a.persistedRevision = checkpoint.CheckpointRevision
+			a.persistedToken = cloneStoreToken(result.NewToken)
 		}
 	}); err != nil {
 		return fmt.Errorf("acknowledge dirty player %d: %w", playerID, err)
@@ -279,14 +277,23 @@ func (r *Runtime) actorFor(
 	r.mu.Unlock()
 
 	state := NewDevelopmentState(playerID)
-	if r.loader != nil {
-		var err error
-		state, err = r.loader.Load(ctx, playerID)
+	persistedRevision := state.CheckpointRevision
+	var persistedToken StoreToken
+	if r.store != nil {
+		loaded, err := r.store.Load(ctx, playerID)
 		if err != nil {
 			return nil, fmt.Errorf("load player checkpoint: %w", err)
 		}
+		if loaded.State == nil {
+			return nil, errors.New("loaded player checkpoint has no state")
+		}
+		state = loaded.State
+		persistedRevision = loaded.PersistedRevision
+		persistedToken = cloneStoreToken(loaded.Token)
+		if persistedRevision != state.CheckpointRevision {
+			return nil, errors.New("loaded checkpoint revision does not match state")
+		}
 	}
-	persistedRevision := state.CheckpointRevision
 	if state.OwnerEpoch > ownerEpoch {
 		return nil, ErrNotOwner
 	}
@@ -306,6 +313,7 @@ func (r *Runtime) actorFor(
 		mailbox:           actor.NewMailbox(64),
 		state:             state,
 		persistedRevision: persistedRevision,
+		persistedToken:    persistedToken,
 	}
 	r.mu.Lock()
 	if existing := r.actors[playerID]; existing != nil {
@@ -519,7 +527,7 @@ func (r *Runtime) HasActiveActorsForShard(shardID uint32) bool {
 }
 
 func (r *Runtime) SupportsActiveMigration() bool {
-	return r.loader != nil && r.writer != nil
+	return r.store != nil
 }
 
 // DrainShardForMigration settles, durably flushes and evicts every active
@@ -545,8 +553,8 @@ func (r *Runtime) DrainShardForMigration(
 	}
 	r.mu.Unlock()
 	sort.Slice(playerIDs, func(i, j int) bool { return playerIDs[i] < playerIDs[j] })
-	if len(playerIDs) > 0 && r.writer == nil {
-		return nil, errors.New("active Actor migration requires a checkpoint writer")
+	if len(playerIDs) > 0 && r.store == nil {
+		return nil, errors.New("active Actor migration requires a checkpoint store")
 	}
 
 	actors := make([]*runtimeActor, 0, len(playerIDs))
@@ -560,6 +568,7 @@ func (r *Runtime) DrainShardForMigration(
 		}
 		var checkpoint *datav1.PlayerCheckpointV1
 		var expectedRevision uint64
+		var expectedToken StoreToken
 		var checkpointErr error
 		if err := a.mailbox.Do(ctx, func() {
 			if a.state.OwnerEpoch != ownerEpoch {
@@ -572,6 +581,7 @@ func (r *Runtime) DrainShardForMigration(
 			}
 			checkpoint, checkpointErr = a.state.Checkpoint()
 			expectedRevision = a.persistedRevision
+			expectedToken = cloneStoreToken(a.persistedToken)
 		}); err != nil {
 			return nil, fmt.Errorf("drain player %d mailbox: %w", playerID, err)
 		}
@@ -580,13 +590,21 @@ func (r *Runtime) DrainShardForMigration(
 		}
 		if checkpoint.CheckpointRevision > expectedRevision {
 			r.markDirty(playerID, checkpoint.CheckpointRevision)
-			if err := r.writer.Save(ctx, checkpoint, expectedRevision); err != nil {
-				if !r.checkpointWasCommitted(ctx, playerID, checkpoint) {
-					return nil, fmt.Errorf("final flush player %d: %w", playerID, err)
+			result, saveErr := r.store.SaveCAS(ctx, CheckpointWrite{
+				Checkpoint:       checkpoint,
+				ExpectedRevision: expectedRevision,
+				ExpectedToken:    expectedToken,
+			})
+			if writeErr := checkpointWriteError(result, saveErr); writeErr != nil {
+				loaded, committed := r.checkpointWasCommitted(ctx, playerID, checkpoint)
+				if !committed {
+					return nil, fmt.Errorf("final flush player %d: %w", playerID, writeErr)
 				}
+				result.NewToken = cloneStoreToken(loaded.Token)
 			}
 			if err := a.mailbox.Do(ctx, func() {
 				a.persistedRevision = checkpoint.CheckpointRevision
+				a.persistedToken = cloneStoreToken(result.NewToken)
 			}); err != nil {
 				return nil, fmt.Errorf("acknowledge final flush player %d: %w", playerID, err)
 			}
@@ -623,26 +641,26 @@ func (r *Runtime) checkpointWasCommitted(
 	_ context.Context,
 	playerID uint64,
 	expected *datav1.PlayerCheckpointV1,
-) bool {
-	if r.loader == nil || expected == nil {
-		return false
+) (LoadedCheckpoint, bool) {
+	if r.store == nil || expected == nil {
+		return LoadedCheckpoint{}, false
 	}
 	reconcileCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	state, err := r.loader.Load(reconcileCtx, playerID)
-	if err != nil {
-		return false
+	loaded, err := r.store.Load(reconcileCtx, playerID)
+	if err != nil || loaded.State == nil {
+		return LoadedCheckpoint{}, false
 	}
-	actual, err := state.Checkpoint()
+	actual, err := loaded.State.Checkpoint()
 	if err != nil {
-		return false
+		return LoadedCheckpoint{}, false
 	}
 	_, actualDigest, err := MarshalCheckpoint(actual)
 	if err != nil {
-		return false
+		return LoadedCheckpoint{}, false
 	}
 	_, expectedDigest, err := MarshalCheckpoint(expected)
-	return err == nil && bytes.Equal(actualDigest[:], expectedDigest[:])
+	return loaded, err == nil && bytes.Equal(actualDigest[:], expectedDigest[:])
 }
 
 // PrepareShardForMigration validates the old Owner's durable manifest and
@@ -655,7 +673,7 @@ func (r *Runtime) PrepareShardForMigration(
 	manifest []DrainedPlayer,
 ) error {
 	if shardID >= routing.ShardCount || ownerEpoch < 2 ||
-		r.loader == nil || r.writer == nil {
+		r.store == nil {
 		return errors.New("checkpoint-backed target preparation is required")
 	}
 	r.shardLocks[shardID].Lock()
@@ -673,10 +691,14 @@ func (r *Runtime) PrepareShardForMigration(
 			(index > 0 && players[index-1].PlayerID == item.PlayerID) {
 			return errors.New("drained player manifest is invalid")
 		}
-		state, err := r.loader.Load(ctx, item.PlayerID)
+		loaded, err := r.store.Load(ctx, item.PlayerID)
 		if err != nil {
 			return fmt.Errorf("load migrated player %d: %w", item.PlayerID, err)
 		}
+		if loaded.State == nil {
+			return fmt.Errorf("load migrated player %d: checkpoint has no state", item.PlayerID)
+		}
+		state := loaded.State
 		if state.OwnerEpoch == ownerEpoch &&
 			item.CheckpointRevision < math.MaxUint64 &&
 			state.CheckpointRevision == item.CheckpointRevision+1 {
@@ -695,8 +717,13 @@ func (r *Runtime) PrepareShardForMigration(
 		if err != nil {
 			return fmt.Errorf("build migrated player %d checkpoint: %w", item.PlayerID, err)
 		}
-		if err := r.writer.Save(ctx, checkpoint, expectedRevision); err != nil {
-			return fmt.Errorf("prepare migrated player %d: %w", item.PlayerID, err)
+		result, saveErr := r.store.SaveCAS(ctx, CheckpointWrite{
+			Checkpoint:       checkpoint,
+			ExpectedRevision: expectedRevision,
+			ExpectedToken:    cloneStoreToken(loaded.Token),
+		})
+		if writeErr := checkpointWriteError(result, saveErr); writeErr != nil {
+			return fmt.Errorf("prepare migrated player %d: %w", item.PlayerID, writeErr)
 		}
 	}
 	return nil
@@ -720,7 +747,7 @@ func (r *Runtime) forwardMaturityEvents(ctx context.Context, events []MaturityEv
 func (r *Runtime) Close() {
 	r.cancel()
 	r.wg.Wait()
-	if r.writer != nil {
+	if r.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = r.flushDirty(ctx)
 		cancel()

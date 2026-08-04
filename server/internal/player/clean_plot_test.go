@@ -53,8 +53,7 @@ func TestCleanPlotIsIdempotentAndPersistsEmptyPlot(t *testing.T) {
 	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
 	store := &recordingCheckpointStore{state: needCleanupState(playerID, now)}
 	runtime := NewRuntime()
-	runtime.loader = store
-	runtime.writer = store
+	runtime.store = store
 	runtime.now = func() time.Time { return now }
 	defer runtime.Close()
 
@@ -127,7 +126,7 @@ func TestCleanPlotRejectsMissingAndNonCleanupPlotsAtomically(t *testing.T) {
 			test.prepare(state)
 			store := &recordingCheckpointStore{state: state}
 			runtime := NewRuntime()
-			runtime.loader = store
+			runtime.store = store
 			runtime.now = func() time.Time { return now }
 			defer runtime.Close()
 

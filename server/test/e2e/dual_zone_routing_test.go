@@ -245,11 +245,12 @@ func TestDualZoneMySQLCoordinatorHydrateAfterMigration(t *testing.T) {
 
 func assertStaleZoneWriterFenced(t *testing.T, db *sql.DB, playerID uint64) {
 	t.Helper()
-	loader := &player.MySQLCheckpointLoader{DB: db, OwnerZoneID: "zone-a"}
-	state, err := loader.Load(context.Background(), playerID)
+	store := &player.MySQLCheckpointStore{DB: db, OwnerZoneID: "zone-a"}
+	loaded, err := store.Load(context.Background(), playerID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	state := loaded.State
 	expectedRevision := state.CheckpointRevision
 	state.OwnerEpoch = 1
 	state.CheckpointRevision++
@@ -258,7 +259,7 @@ func assertStaleZoneWriterFenced(t *testing.T, db *sql.DB, playerID uint64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := loader.Save(
+	if err := store.Save(
 		context.Background(), checkpoint, expectedRevision,
 	); !errors.Is(err, player.ErrCheckpointFenced) {
 		t.Fatalf("stale Zone-A writer error = %v, want ErrCheckpointFenced", err)
@@ -350,7 +351,7 @@ func registerDualPlayer(t *testing.T, snapshot routing.Snapshot) *dualPlayer {
 		t.Fatal(err)
 	}
 	client := &http.Client{Jar: jar, Timeout: 5 * time.Second}
-	loginURL := "http://127.0.0.1:8080"
+	loginURL := envOr("E2E_LOGIN_URL", "http://127.0.0.1:8080")
 	csrf := getCSRF(t, client, loginURL)
 	register := &httpv1.RegisterResponse{}
 	doProto(t, client, http.MethodPost, loginURL+"/v1/auth/register",

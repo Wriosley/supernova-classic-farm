@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-03
+updated: 2026-08-04
 ---
 
 # Current Handoff
@@ -88,6 +88,9 @@ Current supporting decisions referenced by V3:
 - ADR-0009: current chapter-task progress belongs to Player Actor.
 - ADR-0010: local prototype keeps unused WS tickets and CSRF nonce records
   process-local; Login restart drops them even when MySQL Sessions survive.
+- ADR-0011: Player Runtime depends on one `CheckpointStore` contract. Logical
+  checkpoint revision and opaque physical Store Token are kept separate so
+  MySQL and Tcaplus can expose the same Load/CAS semantics.
 
 Historical design evidence:
 
@@ -170,6 +173,23 @@ Current milestone status:
   Zone B on 8084 and Gate in dependency order. With `MYSQL_DSN`, Coordinator
   requires explicit bootstrap authorization and aligns all Fences before Login
   accepts registrations.
+- Linux now has executable `start-servers.sh`, `deploy/migrate.sh` and
+  `tests/e2e/run-mysql-restart-recovery.sh`. On TencentOS Server 4.4 with
+  Go 1.26.5 and Docker MySQL 8.4, the dual-Zone five-process stack completed
+  the full owner loop to `player_seq=8`, stopped normally, restarted and
+  recovered 29 coins, two old seeds and an `EMPTY` plot. A separate live
+  dual-Zone check routed players to both Owners, migrated one active Shard
+  from Zone A epoch one to Zone B epoch two, persisted the post-migration
+  write and rejected a delayed old-Zone writer. See
+  `../evidence/2026-08-04-linux-dual-zone-mysql-baseline.md`.
+- The first ADR-0011 implementation is complete. Runtime no longer injects
+  separate checkpoint Loader/Writer interfaces; it carries
+  `PersistedRevision` plus an opaque `StoreToken`, and consumes normalized CAS
+  outcomes. `MySQLCheckpointStore` preserves the existing Fence,
+  revision-CAS and Checkpoint/Outbox transaction. Full Go regression and the
+  live Linux five-process restart/active-migration/Fence E2E pass after the
+  refactor. The next storage task is the Tcaplus `PlayerCheckpoint` single-row
+  Load/Create/CAS POC, not account/session migration.
 - Assignment algorithm V1 uses deterministic SHA-256 Rendezvous scoring over
   `shard_id` and stable `zone_id`. Gate and Zone do not treat that calculation
   as authority; only the Coordinator's committed Route with Zone, endpoint,
@@ -345,13 +365,16 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 
 ## Next actions
 
-The full remaining-phase map and iteration table live in
-`../plans/2026-08-03-remaining-roadmap-and-iterations.md`. Immediate P0 order:
+The Linux dual-Zone MySQL baseline required before Tcaplus work is now green.
+The bounded next plan is
+`../plans/2026-08-04-k8s-tcaplus-minimum-cluster-plan.md`. Immediate order:
 
-1. Run one owner browser flow against MySQL to combine the H5 interaction proof
-   with durable restart recovery (roadmap R2).
-2. Measure Gate, Actor, Push and Dirty behavior (roadmap R3).
-3. Continue optional hardening and defense freeze work per the roadmap.
+1. Introduce a `CheckpointStore` boundary while preserving the passing MySQL
+   behavior and all Actor/Dirty semantics.
+2. Confirm a non-production Tcaplus PB App/Zone, SDK version, table permission
+   and single-record conditional-update capability.
+3. Implement only the Tcaplus `PlayerCheckpoint` Load/Create/CAS POC and stop
+   before control-plane replacement unless the full owner loop recovers.
 
 ## AI memory and handoff rule
 

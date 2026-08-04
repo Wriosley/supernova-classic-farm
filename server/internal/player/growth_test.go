@@ -107,8 +107,7 @@ func TestActorActivationMaterializesOfflineMaturityAndFlushesIt(t *testing.T) {
 	state.Plots[1] = growingPlotAt(plantedAt)
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
-	runtime.loader = store
-	runtime.writer = store
+	runtime.store = store
 	runtime.now = func() time.Time { return plantedAt.Add(101 * time.Second) }
 	defer runtime.Close()
 
@@ -144,7 +143,7 @@ func TestOnlineSchedulerMaterializesDuePlot(t *testing.T) {
 	state.PlayerSeq = 2
 	state.CheckpointRevision = 3
 	state.Plots[1] = growingPlotAt(plantedAt)
-	runtime, err := NewRuntimeWithLoader(checkpointLoaderFunc(func(context.Context, uint64) (*State, error) {
+	runtime, err := NewRuntimeWithStore(checkpointLoaderFunc(func(context.Context, uint64) (*State, error) {
 		return state, nil
 	}))
 	if err != nil {

@@ -36,12 +36,16 @@ func TestMySQLCheckpointLoaderVerifiesEnvelopeAndRestoresState(t *testing.T) {
 		WithArgs(uint64(42)).
 		WillReturnRows(rows)
 
-	state, err := (&MySQLCheckpointLoader{DB: db}).Load(context.Background(), 42)
+	loaded, err := (&MySQLCheckpointStore{DB: db}).Load(context.Background(), 42)
 	if err != nil {
 		t.Fatal(err)
 	}
+	state := loaded.State
 	if state.PlayerID != 42 || state.Coins != InitialCoinBalance || state.Inventory[BasicFertilizerID] != 1 {
 		t.Fatalf("unexpected restored state: %+v", state)
+	}
+	if loaded.PersistedRevision != checkpoint.CheckpointRevision {
+		t.Fatalf("persisted revision = %d, want %d", loaded.PersistedRevision, checkpoint.CheckpointRevision)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -72,7 +76,7 @@ func TestMySQLCheckpointLoaderRejectsEnvelopeBlobMismatch(t *testing.T) {
 		WithArgs(uint64(42)).
 		WillReturnRows(rows)
 
-	if _, err := (&MySQLCheckpointLoader{DB: db}).Load(context.Background(), 42); err == nil {
+	if _, err := (&MySQLCheckpointStore{DB: db}).Load(context.Background(), 42); err == nil {
 		t.Fatal("envelope/blob mismatch was accepted")
 	}
 }
@@ -104,7 +108,7 @@ func TestMySQLCheckpointWriterChecksFenceAndCheckpointCAS(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	if err := (&MySQLCheckpointLoader{
+	if err := (&MySQLCheckpointStore{
 		DB: db, OwnerZoneID: "zone-b",
 	}).Save(context.Background(), checkpoint, 1); err != nil {
 		t.Fatal(err)
@@ -136,7 +140,7 @@ func TestMySQLCheckpointWriterRejectsWrongZoneFence(t *testing.T) {
 		)
 	mock.ExpectRollback()
 
-	err = (&MySQLCheckpointLoader{
+	err = (&MySQLCheckpointStore{
 		DB: db, OwnerZoneID: "zone-b",
 	}).Save(context.Background(), checkpoint, 1)
 	if !errors.Is(err, ErrCheckpointFenced) {
@@ -203,7 +207,7 @@ func TestMySQLCheckpointWriterCommitsOutboxWithCheckpoint(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	if err := (&MySQLCheckpointLoader{DB: db}).Save(
+	if err := (&MySQLCheckpointStore{DB: db}).Save(
 		context.Background(), checkpoint, 1,
 	); err != nil {
 		t.Fatal(err)

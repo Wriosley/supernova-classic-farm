@@ -53,13 +53,13 @@ func main() {
 			log.Fatal(openErr)
 		}
 		defer db.Close()
-		runtime, err = player.NewRuntimeWithLoader(&player.MySQLCheckpointLoader{
+		runtime, err = player.NewRuntimeWithStore(&player.MySQLCheckpointStore{
 			DB: db, OwnerZoneID: ownerZoneID,
 		})
 		if err != nil {
 			log.Fatal(err)
 		}
-		logger.Info("using MySQL Player checkpoint activation")
+		logger.Info("using MySQL Player checkpoint store")
 	}
 	defer runtime.Close()
 

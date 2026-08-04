@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync/atomic"
@@ -16,49 +17,75 @@ import (
 
 type checkpointLoaderFunc func(context.Context, uint64) (*State, error)
 
-func (f checkpointLoaderFunc) Load(ctx context.Context, playerID uint64) (*State, error) {
-	return f(ctx, playerID)
+func (f checkpointLoaderFunc) Load(ctx context.Context, playerID uint64) (LoadedCheckpoint, error) {
+	state, err := f(ctx, playerID)
+	if err != nil {
+		return LoadedCheckpoint{}, err
+	}
+	return LoadedCheckpoint{
+		State: state, PersistedRevision: state.CheckpointRevision,
+	}, nil
+}
+
+func (f checkpointLoaderFunc) SaveCAS(context.Context, CheckpointWrite) (CheckpointWriteResult, error) {
+	return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+		errors.New("test checkpoint store is read-only")
 }
 
 type recordingCheckpointStore struct {
 	state            *State
 	saved            []*datav1.PlayerCheckpointV1
 	expectedRevision []uint64
+	token            StoreToken
+	expectedToken    []StoreToken
+	newToken         StoreToken
 }
 
 type ambiguousCheckpointStore struct {
 	state *State
 }
 
-func (s *ambiguousCheckpointStore) Load(context.Context, uint64) (*State, error) {
+func (s *ambiguousCheckpointStore) Load(context.Context, uint64) (LoadedCheckpoint, error) {
 	checkpoint, err := s.state.Checkpoint()
 	if err != nil {
-		return nil, err
+		return LoadedCheckpoint{}, err
 	}
-	return StateFromCheckpoint(checkpoint)
-}
-
-func (s *ambiguousCheckpointStore) Save(
-	_ context.Context,
-	checkpoint *datav1.PlayerCheckpointV1,
-	_ uint64,
-) error {
 	state, err := StateFromCheckpoint(checkpoint)
 	if err != nil {
-		return err
+		return LoadedCheckpoint{}, err
+	}
+	return LoadedCheckpoint{
+		State: state, PersistedRevision: state.CheckpointRevision,
+	}, nil
+}
+
+func (s *ambiguousCheckpointStore) SaveCAS(
+	_ context.Context,
+	write CheckpointWrite,
+) (CheckpointWriteResult, error) {
+	state, err := StateFromCheckpoint(write.Checkpoint)
+	if err != nil {
+		return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure}, err
 	}
 	s.state = state
-	return errors.New("connection lost after commit")
+	return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+		errors.New("connection lost after commit")
 }
 
-func (s *recordingCheckpointStore) Load(context.Context, uint64) (*State, error) {
-	return s.state, nil
+func (s *recordingCheckpointStore) Load(context.Context, uint64) (LoadedCheckpoint, error) {
+	return LoadedCheckpoint{
+		State: s.state, PersistedRevision: s.state.CheckpointRevision,
+		Token: cloneStoreToken(s.token),
+	}, nil
 }
 
-func (s *recordingCheckpointStore) Save(_ context.Context, checkpoint *datav1.PlayerCheckpointV1, expectedRevision uint64) error {
-	s.saved = append(s.saved, checkpoint)
-	s.expectedRevision = append(s.expectedRevision, expectedRevision)
-	return nil
+func (s *recordingCheckpointStore) SaveCAS(_ context.Context, write CheckpointWrite) (CheckpointWriteResult, error) {
+	s.saved = append(s.saved, write.Checkpoint)
+	s.expectedRevision = append(s.expectedRevision, write.ExpectedRevision)
+	s.expectedToken = append(s.expectedToken, cloneStoreToken(write.ExpectedToken))
+	return CheckpointWriteResult{
+		Status: CheckpointWriteApplied, NewToken: cloneStoreToken(s.newToken),
+	}, nil
 }
 
 func snapshotRequest(playerID uint64, requestID string) *wsv1.WsEnvelope {
@@ -240,7 +267,7 @@ func TestRuntimeDrainShardFlushesAndEvictsActiveActor(t *testing.T) {
 	const playerID = uint64(42)
 	state := NewDevelopmentState(playerID)
 	store := &recordingCheckpointStore{state: state}
-	runtime, err := NewRuntimeWithLoader(store)
+	runtime, err := NewRuntimeWithStore(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +302,7 @@ func TestRuntimeLazyEpochAdoptionAdvancesOnlyCheckpointRevision(t *testing.T) {
 	const playerID = uint64(42)
 	state := NewDevelopmentState(playerID)
 	store := &recordingCheckpointStore{state: state}
-	runtime, err := NewRuntimeWithLoader(store)
+	runtime, err := NewRuntimeWithStore(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +332,7 @@ func TestRuntimeLazyEpochAdoptionAdvancesOnlyCheckpointRevision(t *testing.T) {
 func TestRuntimeDrainReconcilesAmbiguousFinalFlushCommit(t *testing.T) {
 	const playerID = uint64(42)
 	store := &ambiguousCheckpointStore{state: NewDevelopmentState(playerID)}
-	runtime, err := NewRuntimeWithLoader(store)
+	runtime, err := NewRuntimeWithStore(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +358,7 @@ func TestRuntimeDrainReconcilesAmbiguousFinalFlushCommit(t *testing.T) {
 
 func TestRuntimeActivatesFromCheckpointLoaderOnce(t *testing.T) {
 	var calls atomic.Int32
-	runtime, err := NewRuntimeWithLoader(checkpointLoaderFunc(func(_ context.Context, playerID uint64) (*State, error) {
+	runtime, err := NewRuntimeWithStore(checkpointLoaderFunc(func(_ context.Context, playerID uint64) (*State, error) {
 		calls.Add(1)
 		state := NewDevelopmentState(playerID)
 		state.Coins = 77
@@ -360,8 +387,41 @@ func TestRuntimeActivatesFromCheckpointLoaderOnce(t *testing.T) {
 	}
 }
 
+func TestRuntimePreservesAndAdvancesOpaqueStoreToken(t *testing.T) {
+	const playerID = uint64(42)
+	store := &recordingCheckpointStore{
+		state:    NewDevelopmentState(playerID),
+		token:    StoreToken("mysql-or-tcaplus-v1"),
+		newToken: StoreToken("mysql-or-tcaplus-v2"),
+	}
+	runtime := NewRuntime()
+	runtime.store = store
+	defer runtime.Close()
+
+	response, err := runtime.Handle(
+		context.Background(), playerID, LocalOwnerEpoch,
+		buySeedsRequest(playerID, "00112233-4455-6677-8899-aabbccddee23", 1),
+	)
+	if err != nil || response.GetError() != nil {
+		t.Fatalf("buy before token flush failed: response=%+v error=%v", response, err)
+	}
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.expectedToken) != 1 ||
+		!bytes.Equal(store.expectedToken[0], store.token) {
+		t.Fatalf("SaveCAS expected token = %q, want %q", store.expectedToken, store.token)
+	}
+	if !bytes.Equal(runtime.actors[playerID].persistedToken, store.newToken) {
+		t.Fatalf(
+			"persisted token = %q, want %q",
+			runtime.actors[playerID].persistedToken, store.newToken,
+		)
+	}
+}
+
 func TestRuntimeDoesNotCreateDefaultStateWhenCheckpointLoadFails(t *testing.T) {
-	runtime, err := NewRuntimeWithLoader(checkpointLoaderFunc(func(context.Context, uint64) (*State, error) {
+	runtime, err := NewRuntimeWithStore(checkpointLoaderFunc(func(context.Context, uint64) (*State, error) {
 		return nil, ErrCheckpointNotFound
 	}))
 	if err != nil {
@@ -383,8 +443,7 @@ func TestBuySeedsIsIdempotentAndFlushesCheckpointCAS(t *testing.T) {
 	state.UpdatedAtMS = fixedNow.UnixMilli()
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
-	runtime.loader = store
-	runtime.writer = store
+	runtime.store = store
 	runtime.now = func() time.Time {
 		return fixedNow
 	}
@@ -536,8 +595,7 @@ func TestPlantIsIdempotentAndBatchesWithBuyInOneCheckpoint(t *testing.T) {
 	state.UpdatedAtMS = fixedNow.UnixMilli()
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
-	runtime.loader = store
-	runtime.writer = store
+	runtime.store = store
 	runtime.now = func() time.Time { return fixedNow }
 	defer runtime.Close()
 
@@ -598,8 +656,7 @@ func TestApplyFertilizerSettlesOldRateAndPersistsEffect(t *testing.T) {
 	state.UpdatedAtMS = fixedNow.UnixMilli()
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
-	runtime.loader = store
-	runtime.writer = store
+	runtime.store = store
 	runtime.now = func() time.Time { return fixedNow }
 	defer runtime.Close()
 
