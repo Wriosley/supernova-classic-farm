@@ -4,11 +4,28 @@
 
 ## 当前状态
 
-项目已完成第一阶段认证快照技术链路：H5 注册/登录、一次性 WS Ticket、Gate 路由、单节点 Coordinator-compatible ShardMap、Zone Player Actor 和关联快照响应。
+当前已完成可运行的单玩家农场闭环、固定双 Zone 路由和纯 Tcaplus
+持久化原型：
 
-默认启动仍使用开发内存适配器。MySQL 8.4.11 已验证从注册到 `CLEAN_PLOT` 的完整服务端单玩家链路和 `player_seq=8` 重启恢复：29 金币、2 个旧种子、1 个肥料、3 个下一章种子、`EMPTY` 地块和第二章 `IN_PROGRESS`。满仓奖励会原子记录待发送邮件 Outbox，当前没有 Relay、Mail Service 或邮件 UI。H5 已提供商店、地块、仓库和章节任务交互；浏览器实测完成购买到清理的整条内存链路，收到一次成熟 Push，最终到达 `player_seq=8`，320 像素宽度无横向溢出。生产级 Push 重试/跨 Gate 路由、旧 Owner Fence 拒绝和容量验证尚未完成。权威进度与限制见 `docs/context/CURRENT.md`。
+- H5 注册/登录、一次性 WS Ticket、Protobuf WebSocket 和完整单玩家农场
+  循环已通过浏览器与 E2E；
+- Coordinator 管理 4096 个逻辑 Shard，Gate 使用本地 RouteCache，
+  Zone 以 Player Actor 串行执行命令；
+- Login、Zone、Coordinator 的账号、Session、Checkpoint、Fence、
+  MigrationProgress 和 Outbox 均已接入 Tcaplus，不需要 MySQL 运行时；
+- 固定 `zone-a`/`zone-b` 支持非活跃和活跃 Shard 迁移、Fence 拒绝、
+  Checkpoint CAS 和完整进程重启恢复；
+- kind 集群已运行 Coordinator、Login、Gate、Zone A、Zone B 五个
+  Deployment，纯 Tcaplus 双 Zone E2E 通过。
 
-Zone 还实现了最小不可变版本化配置快照；`GET_SHOP` 返回当前启用的买入/卖出报价，`BUY_SEEDS` 和 `SELL_CROP` 使用同一固定快照推导权威价格。独立 ConfigSvr 和 H5 商店界面尚未实现。
+MySQL 实现仍保留为历史基线和回退适配器；不带存储参数的启动仍使用开发
+内存模式。当前 Kubernetes 原型不包含动态 Zone 发现、自动扩缩容、
+Ingress/TLS 或 Zone 级 preStop Drain。
+
+好友功能尚未编码。业务、gRPC、持久化、跨 Actor Saga、验收清单和
+8 阶段实施方案已完成评审，下一次开发从
+`docs/plans/friend_design_plan/06-分阶段实施方案.md` 的阶段 0 开始。
+权威进度与限制见 `docs/context/CURRENT.md`。
 
 ## 文档入口
 
@@ -22,8 +39,9 @@ Zone 还实现了最小不可变版本化配置快照；`GET_SHOP` 返回当前�
 - `docs/decisions/`：架构决策记录。
 - `docs/plans/`：开放问题看板和实施计划。
 - `docs/evidence/`：测试、压测和故障实验证据。
+- `docs/plans/friend_design_plan/`：下一阶段好友业务设计、验收与分阶段方案。
 
-## 计划中的目录
+## 项目目录
 
 - `server/`：Go 后端。
 - `web/`：Vue H5 客户端。
@@ -45,7 +63,20 @@ cp .env.example .env
 `LOGIN_PORT`、`GATE_PORT`、`ZONE_PORT`、`ZONE_B_PORT`、
 `COORDINATOR_PORT` 和 `MYSQL_PORT` 统一调整端口。
 
-启动 MySQL 并应用迁移：
+填写 Tcaplus 配置后，启动固定双 Zone 纯 Tcaplus 运行时：
+
+```bash
+./start-servers.sh --dual-zone --tcaplus
+```
+
+Kubernetes 最小集群的构建、Secret、部署和排错命令见：
+
+```text
+docs/study/tasks/18-Kubernetes固定双Zone部署入门/00-固定双Zone集群部署与查看.md
+```
+
+MySQL 仅作为保留的基线和回退路径。需要运行该基线时，启动 MySQL
+并应用迁移：
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d mysql

@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-07-30
+updated: 2026-08-05
 ---
 
 # Project Context
@@ -40,8 +40,11 @@ Independently build and demonstrate a classic farm H5 game with a Go backend, th
 The only current production-target architecture is the accepted stateful Player Actor Zone V3:
 
 - Player state is held in a Zone's Player Actor and same-player commands execute serially.
-- Successful ordinary game commands update Actor memory first, mark the Actor Dirty, and reply without waiting for MySQL.
-- A Zone flusher asynchronously batches versioned player checkpoints to MySQL.
+- Successful ordinary game commands update Actor memory first, mark the Actor
+  Dirty, and reply without waiting for the recovery store.
+- A Zone flusher asynchronously persists versioned player checkpoints through
+  `CheckpointStore`; Tcaplus is the current prototype target and MySQL remains
+  a rollback adapter.
 - An abnormal Zone exit may lose the latest unflushed ordinary game state; normal shutdown, Actor eviction, and controlled migration must flush Dirty state first.
 - A versioned 4096-logical-shard map, leases, `owner_epoch`, database fencing, and a majority-authorized production Coordinator preserve single-Owner semantics.
 - The production target uses a three-node majority Coordinator. The local prototype uses a compatible single-node implementation and does not claim control-plane high availability.
@@ -77,7 +80,11 @@ Before implementation, this milestone requires frozen minimum contracts for HTTP
 
 ## Prototype evidence boundary
 
-The local prototype should exercise the smallest V3 path: WebSocket routing, Actor serialization, in-Actor task progress, Dirty batching, MySQL checkpoint recovery, a single-node Coordinator-compatible control plane, leases, and epoch rejection.
+The local prototype should exercise the smallest V3 path: WebSocket routing,
+Actor serialization, in-Actor task progress, Dirty batching, Tcaplus checkpoint
+recovery, a single-node Coordinator-compatible control plane, leases, epoch
+rejection, fixed dual-Zone Kubernetes deployment and the reviewed friend
+interaction slice.
 
 The production target and local prototype are separate claims. The prototype validates mechanisms and measured single-instance baselines; it does not claim to run 30 million DAU locally.
 

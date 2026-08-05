@@ -22,31 +22,27 @@ This directory separates current project truth, design reasoning, executable con
 
 ## Current implementation boundary
 
-- The runnable slice includes LoginSvr, GateSvr, ZoneSvr, a single-node Coordinator-compatible process, shared Go/TypeScript Protobuf and a Vue 3 farm client.
-- An explicit dual-Zone mode uses versioned Rendezvous bootstrap placement, a
-  committed 4096-entry ShardMap, an immutable Gate RouteCache and Zone-side
-  ownership Snapshots. Its memory-only five-process E2E proves routing to both
-  Zones, wrong-Owner rejection and one inactive-Shard epoch-incrementing
-  handoff. Static epoch-one MySQL Fence alignment and one persisted write in
-  each Zone are verified. MySQL-backed active migration now final-flushes the
-  old Actors, advances the PREPARING Fence, prepares target checkpoints and
-  persists a post-migration write at epoch two. Coordinator restart rebuilds
-  routes from fences, overlays open PREPARING fail-closed, and exposes
-  inspect/continue/abandon controls backed by durable migration progress.
-- The H5 exposes the complete owner loop through a responsive shop, plot, inventory and chapter interface. A browser-driven in-memory run reached `player_seq=8`, consumed one maturity Push and completed without version-gap recovery; type-check, production build and a 320-pixel no-overflow check pass.
-- The default no-DSN run keeps accounts, Sessions, tickets, routes and Player Actors in process-local development memory.
-- An optional MySQL code path commits account, first Session and initial Player checkpoint in one transaction, loads it on Actor activation, and asynchronously flushes Actor mutations under checkpoint CAS and a database Fence. The single-Zone path has live fresh-process full-loop `player_seq=8` recovery; the static dual-Zone path has live Zone-A/Zone-B `player_seq=1` persistence evidence.
-- Zone has an immutable, atomically replaceable local configuration snapshot. `GET_SHOP`, `BUY_SEEDS` and `SELL_CROP` share its versioned buy/sell quotes; standalone ConfigSvr publication is not implemented.
-- Exact base/effect interval growth, activation-time maturity and the local online maturity scan have automated tests. A live four-process run delivered natural maturity from Zone through Gate as an unsolicited `PLAYER_STATE_CHANGED` Push; Gate snapshot buffering and newer-version filtering have unit coverage.
-- `HARVEST` enforces complete-yield warehouse capacity before mutation, advances the task and persists the `NEED_CLEANUP` plot. Unit/checkpoint tests plus in-memory and MySQL four-process flows through `player_seq=5` pass.
-- `SELL_CROP` supports quantity and sell-all semantics, checked integer pricing, retained idempotency and chapter transition to `CLAIMABLE`. Unit/checkpoint tests plus in-memory and MySQL four-process flows through fresh-process `player_seq=6` recovery pass.
-- `CLAIM_CHAPTER_REWARD` grants the accepted first-chapter reward, activates development chapter two and retains an idempotent receipt. Warehouse overflow creates one deterministic pending reward-mail Outbox record; checkpoint CAS and relational Outbox insertion share one MySQL transaction. Unit tests, mocked SQL and live in-memory/MySQL flows through fresh-process `player_seq=7` recovery pass.
-- `CLEAN_PLOT` requires `NEED_CLEANUP`, clears all frozen crop fields and returns the plot to `EMPTY` without resources or task progress. Unit/checkpoint tests and live in-memory/MySQL full owner loops through fresh-process `player_seq=8` recovery pass.
-- The Outbox relay, Mail Service, delivery reconciliation and mail UI are not implemented, so `items_pending_mail` means only that Actor state recorded a pending event.
-- The local Push transport is loopback and non-durable; cross-Gate delivery, retry and production backpressure are not implemented. Tickets and CSRF remain process-local in both modes. A combined MySQL-backed browser run, abnormal Dirty-window loss and capacity evidence remain future work.
-- Coordinator route and migration progress remain process-local. Restart after
-  a durable migrated Fence intentionally fails closed; persistent PREPARING
-  recovery is not yet implemented.
+- The runnable product includes Login, Gate, Coordinator, two static Zone
+  Owners, shared Go/TypeScript Protobuf and the Vue H5.
+- The complete single-player loop is implemented through `player_seq=8`:
+  buy, plant, fertilize, mature, harvest, sell, claim and clean.
+- The current persistence target is pure Tcaplus. It stores accounts, Sessions,
+  Player checkpoints, Shard fences, migration progress and Outbox records.
+  MySQL remains a tested historical baseline and rollback adapter.
+- Static dual-Zone routing uses a committed 4096-entry ShardMap, immutable Gate
+  RouteCache, Zone authorization snapshots and epoch fencing. Inactive and
+  active migration, stale-owner rejection and post-migration restart pass live
+  Tcaplus E2E.
+- A local kind cluster runs Coordinator, Login, Gate, `zone-a` and `zone-b` as
+  five Ready Deployments. It uses fixed membership and does not implement
+  dynamic discovery, HPA, PDB, Ingress/TLS or Zone-level preStop Drain.
+- Default startup without a storage option remains development-only in-memory
+  mode. Tickets and CSRF nonce records remain process-local by ADR-0010.
+- Outbox relay, Mail Service, production Push delivery, abnormal Dirty-window
+  guarantees and production capacity evidence remain outside the prototype.
+- Friend functionality is design-only. The reviewed source is
+  `plans/friend_design_plan/`; implementation resumes at phase 0 in
+  `plans/friend_design_plan/06-分阶段实施方案.md`.
 - Read `context/CURRENT.md` for the exact handoff and the dated files under `evidence/` for observed results and limitations.
 
 ## Directory roles

@@ -31,16 +31,30 @@ FriendSvr 是独立的 gRPC 服务，只管理社交关系：
 ## 3. 逻辑数据
 
 ```text
-FriendCode
-- code
+FriendCodeCurrent
 - owner_player_id
+- code
 - created_at
 - expires_at
 - status
 
+FriendCodeLookup
+- code
+- owner_player_id
+- expires_at
+- status
+
+FriendRelation
+- player_low_id
+- player_high_id
+- relation_id
+- status
+- created_at
+
 FriendList
 - player_id
-- entries: [{friend_player_id, account_name, created_at}]
+- entries: [{friend_player_id, account_name, relation_id, created_at}]
+- reservations: [{link_id, friend_player_id, expires_at}]
 - active_count
 - reserved_count
 
@@ -50,10 +64,22 @@ FriendLinkSaga
 - owner_player_id
 - redeemer_player_id
 - status
+- player_low_task_credit_status
+- player_high_task_credit_status
 - created_at / updated_at
 ```
 
-`FriendList` 每位玩家一条 Tcaplus 记录。`reserved_count` 用于并发兑换时预留好友名额，避免两次兑换同时超过 100 人上限。
+`FriendCodeCurrent` 以 `owner_player_id` 为主键，保证每名玩家只有一个当前
+有效代码；`FriendCodeLookup` 提供按代码兑换的查找入口。
+
+`FriendRelation` 以排序后的 `(player_low_id, player_high_id)` 为复合主键，
+是双向好友关系的唯一权威记录。`CheckMutualFriend` 直接读取它，不依赖
+两份列表是否已经投影完成。
+
+`FriendList` 每位玩家一条 Tcaplus 记录，是列表查询投影。
+`reservations` 必须按 `link_id` 持久化，`reserved_count` 是其汇总值，
+用于并发兑换时预留好友名额，避免超过 100 人上限。投影缺失可由
+`FriendRelation` 和 `FriendLinkSaga` 对账修复。
 
 ## 4. 建立好友 Saga
 
@@ -61,18 +87,24 @@ FriendLinkSaga
 flowchart LR
     Redeem["兑换好友代码"] --> Init["创建或读取 FriendLinkSaga"]
     Init --> Reserve["为双方 FriendList 预留名额"]
-    Reserve --> AEdge["写入 A -> B"]
-    AEdge --> BEdge["写入 B -> A"]
-    BEdge --> Done["标记 COMPLETED"]
+    Reserve --> Relation["创建 ACTIVE FriendRelation"]
+    Relation --> AEdge["投影 A -> B"]
+    AEdge --> BEdge["投影 B -> A"]
+    BEdge --> Task["幂等推进双方加好友任务"]
+    Task --> Done["标记 COMPLETED"]
 ```
 
 规则：
 
 1. `link_id` 由代码和兑换者确定，同一兑换可安全重试；
-2. 只有双方边都写入且 Saga 为 `COMPLETED`，才算双向好友；
-3. `CheckMutualFriend` 不认可半完成状态；
-4. 任一步 CAS 冲突或临时失败保留 Saga，稍后重试或对账；
-5. 已经是好友时不重复占用名额。
+2. 双方名额均预留成功后，才允许创建 `ACTIVE FriendRelation`；
+3. `CheckMutualFriend` 只认可 `ACTIVE FriendRelation`；
+4. 两份 `FriendList` 是可修复投影，不作为访问授权；
+5. 关系建立后，FriendSvr 按 `relation_id` 幂等调用双方 Player Owner，
+   为双方各推进一次第二章“加好友”任务；任务暂时失败不撤销好友关系，
+   由 Saga 对账继续；
+6. 任一步 CAS 冲突或临时失败保留 Saga，稍后重试或对账；
+7. 已经是好友时不重复占用名额，也不重复推进任务。
 
 ## 5. gRPC 方法
 

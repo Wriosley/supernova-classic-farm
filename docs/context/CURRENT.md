@@ -18,25 +18,41 @@ V3 is the only current production-target strategy. A new AI should read, in orde
 
 Do not resume V1 or V2 as the implementation target. Do not read every ADR as if all decisions were simultaneously active. The ADR directory preserves how the design evolved; current truth comes from this handoff, the current architecture, and the accepted ADRs that the current architecture explicitly references.
 
+## Snapshot at handoff
+
+- The single-player owner loop is complete through `player_seq=8`.
+- Pure Tcaplus is green for auth, checkpoint, Fence, migration, Outbox and
+  complete process restart.
+- The fixed dual-Zone kind cluster has five Ready Deployments and a passing
+  live owner-loop/migration E2E.
+- Dynamic Zone discovery and automatic scaling are outside the prototype.
+- Friend functionality is reviewed design only; no friend product code or
+  tables exist yet.
+- Tomorrow starts with friend plan phase 0, then pauses for owner schema review.
+
 ## Current accepted direction
 
 - The 30-million-DAU production target uses stateful Player Actors in Zone processes.
 - One logical shard has exactly one write-authorized Active Zone Owner at a time; one Zone owns many logical shards.
 - Player IDs map to 4096 versioned logical shards. Placement may use Rendezvous Hashing and load correction, but only the production Coordinator's majority-committed route grants ownership.
 - GateSvr routes from a local cache of committed `ACTIVE` routes; ordinary commands do not call the Coordinator.
-- The local prototype implements `static-dual-zone` with either in-memory
-  Players or a newly added MySQL epoch-one bootstrap path. Coordinator
-  materializes versioned Rendezvous candidates into 4096 committed routes for
-  `zone-a` and `zone-b`; Gate warms a complete immutable Snapshot and Zones
-  atomically refresh read-only authorization Snapshots.
-- The MySQL bootstrap implementation transactionally aligns only original
-  `zone-local/epoch=1/route_version=1` Fence rows to that committed assignment.
-  Full Go regression, vet and a live two-Owner MySQL persistence E2E pass.
-- The local prototype target is Coordinator-compatible route, lease, epoch, state-transition and fencing semantics with one Coordinator process. The runtime implements the in-memory route/lease/epoch/state-transition subset and exact assigned-Zone MySQL Fence checks on registration and Dirty checkpoint flush; stale-owner Fence rejection is not yet live-tested, and production consensus is not implemented.
+- The current prototype uses exactly two static Owners, `zone-a` and `zone-b`.
+  Coordinator materializes versioned Rendezvous candidates into 4096 committed
+  routes; Gate warms a complete immutable Snapshot and Zones atomically refresh
+  read-only authorization Snapshots.
+- Pure Tcaplus is the current persistence target. Account, Session,
+  PlayerCheckpoint, ShardFence, MigrationProgress and PlayerOutbox adapters
+  pass unit, live owner-loop, migration and restart checks without MySQL.
+  MySQL remains a tested rollback adapter.
+- The prototype implements Coordinator-compatible route, lease, epoch,
+  state-transition and fencing semantics with one Coordinator process.
+  Production consensus and dynamic Zone membership are not implemented.
 - Commands for one player enter one Actor mailbox and execute serially.
 - A successful ordinary write follows `validate -> apply Actor memory -> update task if matched -> player_seq++ -> save idempotency result/outbox -> checkpoint_revision++ -> mark Dirty -> reply`.
 - `checkpoint_revision` orders persistence CAS and is not client-visible. Saving a terminal business failure, pruning idempotency results, or reconciling Outbox increments it without incrementing `player_seq`.
-- A shared Zone flusher asynchronously batches Dirty checkpoints to MySQL. MySQL is the recovery checkpoint, not the online truth for an active Actor.
+- A shared Zone flusher asynchronously persists Dirty checkpoints through
+  `CheckpointStore`. Tcaplus is the current recovery store; active Actor memory
+  remains online truth.
 - V3 accepts that an abnormal Zone exit may roll back the latest unflushed ordinary game state. It does not use V2's Kafka Journal or MySQL `journal_events` path.
 - Normal shutdown, Actor eviction, and controlled migration must drain the mailbox and flush Dirty state before ownership changes.
 - WebSocket is established between Client and GateSvr and carries game commands, responses, snapshots, and pushes. The client does not connect directly to Zone.
@@ -62,7 +78,9 @@ Important rules already recorded in the business architecture:
 - Full warehouse makes an ordinary harvest fail atomically; task reward items that do not fit use a mail Outbox fallback.
 - Client-visible configuration is an immutable versioned Protobuf package delivered over HTTP and verified by SHA-256; it never becomes transaction authority.
 - A pending reward-mail Outbox is recorded atomically in Actor state but becomes database-durable only after the asynchronous checkpoint/Outbox transaction commits.
-- Friend interaction and cross-player inventory transfer remain later phases and must not block the single-player slice.
+- Friend functionality is the next planned phase. FriendSvr, farm visits,
+  public synchronization and cross-Actor interaction remain design-only and
+  must preserve the completed single-player slice.
 
 ## Current architecture and decision map
 
@@ -111,7 +129,7 @@ These remain planning assumptions, not measured claims:
 
 All values must be revised from reproducible prototype measurements before being presented as capability.
 
-## Immediate milestone: first stage by 2026-08-02
+## Completed historical milestone: first stage by 2026-08-02
 
 Goal:
 
@@ -192,8 +210,8 @@ Current milestone status:
 - The Tcaplus `PlayerCheckpoint` POC is complete against a real PB table using
   the official Go SDK module `v0.2.3` (API 3.55). It proves Create, Load,
   record-version plus logical-revision CAS, duplicate-commit reconciliation,
-  stale-write rejection and reload. Zone continues to use MySQL; full
-  owner-loop/restart evidence and Tcaplus control records remain pending. See
+  stale-write rejection and reload. This was the single-table checkpoint;
+  the pure-Tcaplus runtime described below supersedes its earlier limitation. See
   `../evidence/2026-08-04-tcaplus-player-checkpoint-poc.md`.
 - The owner selected immediate pure-Tcaplus runtime work on 2026-08-05.
   PlayerIdCounter, account provisioning Saga, durable Session generation,
@@ -214,6 +232,14 @@ Current milestone status:
   non-production Pod-network exception; local mode remains loopback-only.
   Zone-level Drain/preStop, HPA, PDB and replica scaling are not implemented.
   See `../evidence/2026-08-05-k8s-fixed-dual-zone.md`.
+- Friend functionality was reviewed on 2026-08-05 but has no product code yet.
+  The accepted design uses an authoritative `FriendRelation`, repairable
+  FriendList projections, Tcaplus Sagas, activation-scoped public-farm epochs,
+  full game-internal gRPC migration and HMAC-authenticated Metadata. Chapter
+  two will contain add-friend, steal-crop and apply-pest-to-friend tasks;
+  successful friendship advances both players. See
+  `../plans/friend_design_plan/01-FriendSvr详细设计.md` through
+  `../plans/friend_design_plan/06-分阶段实施方案.md`.
 - Assignment algorithm V1 uses deterministic SHA-256 Rendezvous scoring over
   `shard_id` and stable `zone_id`. Gate and Zone do not treat that calculation
   as authority; only the Coordinator's committed Route with Zone, endpoint,
@@ -284,7 +310,8 @@ Work order for this milestone:
 
 ## Actual prototype data ownership
 
-Without `MYSQL_DSN`, the runnable code deliberately uses development-only in-memory adapters:
+With neither `STORAGE_MODE=tcaplus` nor `MYSQL_DSN`, the runnable code
+deliberately uses development-only in-memory adapters:
 
 - LoginSvr stores accounts, Argon2id password hashes, Sessions, CSRF records and one-time tickets in process-local Go maps. Registration allocates a sequential `player_id`; restarting LoginSvr loses all of these records.
 - Registration does not yet create a durable Player checkpoint and does not call Zone.
@@ -296,9 +323,21 @@ Without `MYSQL_DSN`, the runnable code deliberately uses development-only in-mem
   by process memory alone or by assigned-Fence MySQL checkpoints.
 - Gate keeps authenticated player subscriptions in process memory. Online maturity travels from Zone to Gate over loopback HTTP and is forwarded as a Protobuf Push; reconnect or any detected version gap uses a fresh snapshot rather than replaying Push history.
 - `GET_SHOP` is routed to Zone and reads the pinned global configuration snapshot without activating a Player Actor.
-- Coordinator route state is also process-local. Without `MYSQL_DSN`, Dirty
+- Coordinator route state is also process-local. In this mode, Dirty
   writeback, database Fences and restart recovery are not implemented.
 - `deploy/migrations/000001_platform.up.sql` creates the migration ledger.
+
+With `STORAGE_MODE=tcaplus`:
+
+- Login uses durable PlayerIdCounter CAS, account provisioning Saga and
+  Session generation;
+- Zone loads and saves Player checkpoints with physical-version plus logical
+  revision CAS, exact ShardFence validation and PlayerOutbox reconciliation;
+- Coordinator persists ShardFence and MigrationProgress and hydrates advanced
+  routes after restart;
+- no `MYSQL_DSN` is accepted;
+- the live eight-table environment passes pure-Tcaplus five-process and kind
+  fixed-dual-Zone owner-loop/migration checks.
 
 With `MYSQL_DSN`, the new code path:
 
@@ -341,7 +380,8 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 
 ## Product code and evidence state
 
-- No backend or frontend product implementation has been accepted as complete.
+- The backend and H5 are complete for the bounded single-player/fixed-dual-Zone
+  prototype, but are not production-complete.
 - The architecture and first single-player business loop have initial accepted documents.
 - `frontend/src/assets/art/` now contains an engine-neutral 16x16 pixel-art
   workspace, a business-mapped inventory, source/license ledger, 30
@@ -386,20 +426,33 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 - A loopback-only local test platform exists under `tests/catalog.json` and
   `server/cmd/testrunner`. It wraps existing Go/PowerShell checks with tiered
   safety controls; platform history does not replace `docs/evidence/`.
+- `../evidence/2026-08-05-pure-tcaplus-runtime-gate.md` records the no-MySQL
+  account, checkpoint, migration and restart acceptance gate.
+- `../evidence/2026-08-05-k8s-fixed-dual-zone.md` records the five-Deployment
+  kind cluster and passing live dual-Zone owner-loop/migration E2E.
 
 ## Next actions
 
-The Linux dual-Zone MySQL baseline, CheckpointStore boundary and offline
-Tcaplus POC implementation are green. Live Tcaplus connection is deferred.
-The bounded next plan is
-`../plans/2026-08-04-k8s-tcaplus-minimum-cluster-plan.md`. Immediate order:
+The pure-Tcaplus runtime and fixed dual-Zone kind cluster are green. Dynamic
+Zone discovery and `2 -> 3` scaling were explicitly removed from the prototype
+scope.
 
-1. Define the minimum Zone registration, heartbeat, readiness and
-   deregistration contract.
-2. Replace fixed Zone A/B Coordinator membership with a dynamic Ready set
-   while preserving the current committed Route as authority.
-3. Add a bounded rebalance planner and prove controlled `2 -> 3` Zone
-   expansion before starting Kubernetes manifests.
+Development resumes tomorrow from
+`../plans/friend_design_plan/06-分阶段实施方案.md`:
+
+1. Phase 0: freeze friend/rpc/ws/data Protobuf and Tcaplus table schemas;
+2. stop for owner review of field numbers, primary keys and generated types;
+3. Phase 1: migrate game-internal Gate → Zone commands and Zone → Gate Push
+   to HMAC-authenticated gRPC while preserving all existing behavior;
+4. do not start FriendSvr until the existing Go, dual-Zone and Kubernetes
+   owner-loop gates remain green.
+
+Manual owner checkpoints:
+
+- approve phase-0 contracts;
+- create the friend PB tables in the Tcaplus console when requested;
+- authorize/update the Kubernetes HMAC Secret;
+- perform the final three-H5 interaction review.
 
 ## AI memory and handoff rule
 
