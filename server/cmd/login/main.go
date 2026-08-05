@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/auth"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
@@ -31,7 +31,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := requireLoopbackAddress(cfg.HTTPAddress); err != nil {
+	if err := internalnet.RequireListenAddress(cfg.HTTPAddress, "LoginSvr"); err != nil {
 		return err
 	}
 	logger, err := logging.New(cfg.ServiceName, cfg.Environment, cfg.LogLevel)
@@ -118,19 +118,6 @@ func run() error {
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
-}
-
-func requireLoopbackAddress(address string) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return err
-	}
-	host = strings.Trim(host, "[]")
-	ip := net.ParseIP(host)
-	if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-		return errors.New("development LoginSvr must bind an explicit loopback address")
-	}
-	return nil
 }
 
 func envOr(key, fallback string) string {

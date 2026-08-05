@@ -9,12 +9,12 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
 
@@ -272,13 +272,5 @@ func valueOr(value, fallback string) string {
 }
 
 func validateLoopbackHTTPURL(raw string) error {
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme != "http" || parsed.Hostname() == "" {
-		return errors.New("must be an HTTP URL")
-	}
-	host := parsed.Hostname()
-	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
-		return errors.New("must use a loopback host")
-	}
-	return nil
+	return internalnet.ValidateHTTPURL(raw)
 }

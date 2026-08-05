@@ -17,6 +17,7 @@ import (
 	"time"
 
 	httpv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/http"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -280,8 +281,7 @@ func (h *Handler) clientConfigPackage(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) consumeTicket(w http.ResponseWriter, r *http.Request) {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
+	if !internalnet.RemoteAllowed(r.RemoteAddr) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

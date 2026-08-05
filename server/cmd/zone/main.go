@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +10,7 @@ import (
 
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
@@ -35,7 +33,7 @@ func main() {
 		ownerZoneID = environmentOr("OWNER_ZONE_ID", "zone-a")
 	}
 	listenAddress := environmentOr("ZONE_HTTP_ADDRESS", defaultListenAddress)
-	if err := requireLoopbackListenAddress(listenAddress); err != nil {
+	if err := internalnet.RequireListenAddress(listenAddress, "ZoneSvr"); err != nil {
 		log.Fatal(err)
 	}
 	dsn := strings.TrimSpace(os.Getenv("MYSQL_DSN"))
@@ -245,21 +243,4 @@ func environmentOr(key, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func requireLoopbackListenAddress(address string) error {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("invalid Zone HTTP address %q: %w", address, err)
-	}
-	if port == "" {
-		return errors.New("Zone HTTP port is required")
-	}
-	host = strings.Trim(host, "[]")
-	ip := net.ParseIP(host)
-	if !strings.EqualFold(host, "localhost") &&
-		(ip == nil || !ip.IsLoopback()) {
-		return errors.New("development ZoneSvr must bind an explicit loopback address")
-	}
-	return nil
 }

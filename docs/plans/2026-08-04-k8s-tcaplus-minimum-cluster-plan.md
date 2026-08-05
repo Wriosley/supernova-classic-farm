@@ -233,21 +233,14 @@ processes from advanced Fence state without `MYSQL_DSN`. See
 
 ### Phase 3: Dynamic Zone membership
 
-This starts after the pure-Tcaplus live acceptance gate. Zone discovery,
-liveness and route planning remain independent of the CheckpointStore backend;
-Gate-to-Zone business request and response contracts remain unchanged.
-
-1. Replace fixed `ZONE_A_*`/`ZONE_B_*` configuration with Zone registration,
-   heartbeat, readiness and deregistration records.
-2. Coordinator calculates candidate placement from the Ready set but remains
-   the only route authority.
-3. Preserve immutable Gate RouteCache behavior.
-4. Add a bounded planner: only one migration at a time and a small, configured
-   shard-count limit per reconciliation interval.
+Skipped by owner decision on 2026-08-05. The minimum prototype keeps exactly
+two static identities, `zone-a` and `zone-b`, configured by
+`ZONE_A_*`/`ZONE_B_*`. It does not implement registration, discovery,
+heartbeat-driven membership or automatic rebalancing.
 
 ### Phase 4: Kubernetes deployment
 
-Create:
+Created on 2026-08-05:
 
 ```text
 deploy/k8s/namespace.yaml
@@ -258,31 +251,24 @@ deploy/k8s/gate.yaml
 deploy/k8s/coordinator.yaml
 deploy/k8s/zone.yaml
 deploy/k8s/services.yaml
-deploy/k8s/pdb.yaml
-deploy/k8s/hpa.yaml
+deploy/k8s/kustomization.yaml
 ```
 
 All Tcaplus values are `secretKeyRef` references only. The example Secret
 contains placeholder keys, never real values.
 
-Zone readiness requires process health, current Coordinator registration and
-an ownership snapshot. Its `preStop` calls Drain, waits for final Dirty flush,
-waits for Shard movement and deregisters only after no owned Shards remain.
-PDB prevents voluntary eviction of the only demonstration Zone. HPA is a
-bounded demonstration input, not evidence of safe autonomous scale-out.
+The fixed two-Zone prototype has no HPA, PDB or Zone-level preStop Drain.
+Those features require dynamic ownership evacuation and are explicitly outside
+the selected scope. Zone process shutdown remains bounded but operators must
+not voluntarily restart a Zone with active players.
 
-### Phase 5: Controlled scale tests
+### Phase 5: Fixed-cluster tests
 
-1. Start two registered Zones and run the owner loop.
-2. Add a third Zone and wait for a bounded set of migrations.
-3. Verify Gate serves ordinary commands from its committed cache.
-4. Scale down one Zone; verify preStop Drain, final flush, migrations and
-   deregistration complete before termination.
-5. Force one old-owner delayed flush attempt and verify it is rejected.
-
-Fallback: retain registration and manual Kubernetes replica changes; make
-migration an administrator-triggered action if automatic migration is
-unstable.
+1. [x] Start the five Deployments with exactly two static Zones.
+2. [x] Verify Gate serves ordinary commands from its committed cache.
+3. [x] Run inactive and active Shard migration through the Coordinator.
+4. Restart recovery and old-owner delayed-write rejection remain explicit
+   follow-up gates; replica scaling is not part of this prototype.
 
 ## File-level change inventory
 
@@ -344,6 +330,7 @@ Minimum final evidence:
 1. full owner loop and Tcaplus restart recovery;
 2. same `request_id` replay does not duplicate mutation/reward;
 3. Tcaplus CAS rejects stale revision and old Owner epoch;
-4. 2-to-3 Zone bounded migration;
-5. preStop Drain/final flush/move/deregister scale-down;
+4. fixed two-Zone Kubernetes owner loop and controlled migration;
+5. explicit statement that dynamic membership, autonomous scale and preStop
+   ownership evacuation are not implemented;
 6. explicit statement of all non-production limits.

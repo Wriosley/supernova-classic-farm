@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: classic-farm-runtime
+  namespace: classic-farm
+data:
+  APP_ENV: development
+  LOG_LEVEL: info
+  STORAGE_MODE: tcaplus
+  INTERNAL_NETWORK_MODE: kubernetes
+  ROUTING_MODE: static-dual-zone
+  COORDINATOR_URL: http://coordinator:8083
+  TCAPLUS_CHECKPOINT_TABLE: PlayerCheckpoint
+  TCAPLUS_PLAYER_ID_COUNTER_TABLE: PlayerIdCounter
+  TCAPLUS_ACCOUNT_BY_NAME_TABLE: AccountByName
+  TCAPLUS_ACCOUNT_BY_PLAYER_TABLE: AccountByPlayer
+  TCAPLUS_SESSION_TABLE: Session
+  TCAPLUS_FENCE_TABLE: ShardFence
+  TCAPLUS_MIGRATION_TABLE: MigrationProgress
+  TCAPLUS_OUTBOX_TABLE: PlayerOutbox

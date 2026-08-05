@@ -6,14 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	reasonv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/reason"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -61,14 +60,8 @@ type HTTPPushForwarder struct {
 }
 
 func NewHTTPPushForwarder(client *http.Client, endpoint string) (*HTTPPushForwarder, error) {
-	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Scheme != "http" || parsed.Hostname() == "" {
-		return nil, errors.New("push endpoint must be an HTTP URL")
-	}
-	host := parsed.Hostname()
-	ip := net.ParseIP(host)
-	if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-		return nil, errors.New("push endpoint must use a loopback host")
+	if err := internalnet.ValidateHTTPURL(endpoint); err != nil {
+		return nil, fmt.Errorf("invalid push endpoint: %w", err)
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 2 * time.Second}

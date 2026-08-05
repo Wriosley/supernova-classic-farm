@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coordinator
+  namespace: classic-farm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: coordinator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: coordinator
+        app.kubernetes.io/part-of: classic-farm
+    spec:
+      containers:
+        - name: coordinator
+          image: classic-farm/coordinator:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: classic-farm-runtime
+            - secretRef:
+                name: classic-farm-tcaplus
+          env:
+            - name: COORDINATOR_PORT
+              value: ""
+            - name: HTTP_ADDRESS
+              value: 0.0.0.0:8083
+            - name: ZONE_A_ID
+              value: zone-a
+            - name: ZONE_A_ENDPOINT
+              value: http://zone-a:8082
+            - name: ZONE_B_ID
+              value: zone-b
+            - name: ZONE_B_ENDPOINT
+              value: http://zone-b:8082
+          ports:
+            - name: http
+              containerPort: 8083
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            failureThreshold: 60
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

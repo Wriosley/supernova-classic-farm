@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"sort"
 	"sync"
 
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	reasonv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/reason"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -153,8 +153,8 @@ func stateVersionAfter(candidate, baseline *wsv1.StateVersion) bool {
 }
 
 func (h *PushHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !loopbackRemote(r.RemoteAddr) {
-		http.Error(w, "loopback only", http.StatusForbidden)
+	if !internalnet.RemoteAllowed(r.RemoteAddr) {
+		http.Error(w, "internal network only", http.StatusForbidden)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, MaxMessageBytes)
@@ -196,13 +196,4 @@ func validatePushEnvelope(envelope *wsv1.WsEnvelope) error {
 		return errors.New("invalid push payload")
 	}
 	return nil
-}
-
-func loopbackRemote(remoteAddr string) bool {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return false
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 )
@@ -33,7 +33,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := requireLoopbackAddress(cfg.HTTPAddress); err != nil {
+	if err := internalnet.RequireListenAddress(cfg.HTTPAddress, "GateSvr"); err != nil {
 		return err
 	}
 	logger, err := logging.New(cfg.ServiceName, cfg.Environment, cfg.LogLevel)
@@ -134,19 +134,6 @@ func configuredSHA(client *http.Client, clientConfigURL string) ([]byte, error) 
 	}
 	digest := sha256.Sum256(body)
 	return digest[:], nil
-}
-
-func requireLoopbackAddress(address string) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return err
-	}
-	host = strings.Trim(host, "[]")
-	ip := net.ParseIP(host)
-	if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-		return errors.New("development GateSvr must bind an explicit loopback address")
-	}
-	return nil
 }
 
 func envOr(key, fallback string) string {

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
@@ -365,21 +365,10 @@ func leaseDurationFromEnvironment() (time.Duration, error) {
 
 func loopbackAddress(address string) (string, error) {
 	if strings.HasPrefix(address, ":") {
-		return "127.0.0.1" + address, nil
+		address = "127.0.0.1" + address
 	}
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return "", fmt.Errorf("invalid Coordinator HTTP address %q: %w", address, err)
-	}
-	if port == "" {
-		return "", errors.New("Coordinator HTTP port is required")
-	}
-	if strings.EqualFold(host, "localhost") {
-		return address, nil
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return "", fmt.Errorf("Coordinator HTTP address must be loopback, got %q", address)
+	if err := internalnet.RequireListenAddress(address, "Coordinator"); err != nil {
+		return "", err
 	}
 	return address, nil
 }

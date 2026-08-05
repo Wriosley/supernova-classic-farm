@@ -206,6 +206,14 @@ Current milestone status:
   post-migration restart. Fence bootstrap uses one Traverse plus bounded
   parallel inserts and preserves advanced epochs for route hydration. See
   `../evidence/2026-08-05-pure-tcaplus-runtime-gate.md`.
+- The owner explicitly excluded dynamic Zone discovery and selected exactly
+  two static Kubernetes Zones. A kind cluster now runs Coordinator, Login,
+  Gate, `zone-a` and `zone-b` as five Deployments with pure Tcaplus storage.
+  All Pods reached Ready and the live dual-Zone owner loop plus inactive/active
+  migration E2E passed. `INTERNAL_NETWORK_MODE=kubernetes` is an explicit
+  non-production Pod-network exception; local mode remains loopback-only.
+  Zone-level Drain/preStop, HPA, PDB and replica scaling are not implemented.
+  See `../evidence/2026-08-05-k8s-fixed-dual-zone.md`.
 - Assignment algorithm V1 uses deterministic SHA-256 Rendezvous scoring over
   `shard_id` and stable `zone_id`. Gate and Zone do not treat that calculation
   as authority; only the Coordinator's committed Route with Zone, endpoint,

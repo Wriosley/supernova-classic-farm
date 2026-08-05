@@ -1,0 +1,5 @@
+**
+!server/
+!server/**
+server/**/*.test
+server/coverage.out

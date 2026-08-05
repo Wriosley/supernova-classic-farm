@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
 
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"google.golang.org/protobuf/proto"
@@ -176,12 +176,7 @@ func parseRequiredUintHeader(r *http.Request, name string) (uint64, error) {
 }
 
 func isLoopback(remoteAddr string) bool {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return false
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return internalnet.RemoteAllowed(remoteAddr)
 }
 
 func writeError(w http.ResponseWriter, status int, code string) {
