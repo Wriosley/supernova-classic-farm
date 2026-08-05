@@ -15,6 +15,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
@@ -44,7 +45,58 @@ func main() {
 	}
 
 	var runtime *player.Runtime
-	if dsn == "" {
+	storageMode := strings.TrimSpace(os.Getenv("STORAGE_MODE"))
+	if storageMode == "tcaplus" {
+		if dsn != "" {
+			log.Fatal("pure Tcaplus mode forbids MYSQL_DSN")
+		}
+		config, configErr := tcaplusdb.LoadConfigFromEnv()
+		if configErr != nil {
+			log.Fatal(configErr)
+		}
+		checkpointTable, configErr := tcaplusdb.TableName(
+			"TCAPLUS_CHECKPOINT_TABLE", "PlayerCheckpoint",
+		)
+		if configErr != nil {
+			log.Fatal(configErr)
+		}
+		fenceTable, configErr := tcaplusdb.TableName(
+			"TCAPLUS_FENCE_TABLE", "ShardFence",
+		)
+		if configErr != nil {
+			log.Fatal(configErr)
+		}
+		outboxTable, configErr := tcaplusdb.TableName(
+			"TCAPLUS_OUTBOX_TABLE", "PlayerOutbox",
+		)
+		if configErr != nil {
+			log.Fatal(configErr)
+		}
+		client, openErr := tcaplusdb.Open(
+			config, checkpointTable, fenceTable, outboxTable,
+		)
+		if openErr != nil {
+			log.Fatal(openErr)
+		}
+		defer client.Close()
+		checkpoints, storeErr := player.NewTcaplusCheckpointStoreWithClient(
+			client, config.ZoneID,
+		)
+		if storeErr != nil {
+			log.Fatal(storeErr)
+		}
+		durable, storeErr := player.NewTcaplusDurableCheckpointStore(
+			checkpoints, client, config.ZoneID, ownerZoneID,
+		)
+		if storeErr != nil {
+			log.Fatal(storeErr)
+		}
+		runtime, err = player.NewRuntimeWithStore(durable)
+		if err != nil {
+			log.Fatal(err)
+		}
+		logger.Info("using pure Tcaplus Player checkpoint store")
+	} else if dsn == "" {
 		runtime = player.NewRuntime()
 		logger.Warn("using development-only lazy in-memory player state")
 	} else {

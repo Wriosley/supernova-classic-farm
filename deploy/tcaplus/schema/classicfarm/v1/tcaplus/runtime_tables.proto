@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package classicfarm.tcaplus.v1;
+
+import "tcaplusservice.optionv1.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus;tcaplusv1";
+
+message PlayerIdCounter {
+  option (tcaplusservice.tcaplus_primary_key) = "counter_id";
+
+  uint32 counter_id = 1;
+  uint64 next_player_id = 2;
+  int64 updated_at_ms = 3;
+}
+
+message AccountByName {
+  option (tcaplusservice.tcaplus_primary_key) = "account_name";
+
+  string account_name = 1;
+  uint32 status = 2;
+  uint64 player_id = 3;
+  bytes provisioning_id = 4;
+  bytes password_salt = 5;
+  bytes password_digest = 6;
+  uint32 password_memory_kib = 7;
+  uint32 password_iterations = 8;
+  uint32 password_threads = 9;
+  uint32 password_version = 10;
+  uint64 session_generation = 11;
+  uint32 saga_step = 12;
+  int64 saga_started_at_ms = 13;
+  int64 created_at_ms = 14;
+  int64 updated_at_ms = 15;
+}
+
+message AccountByPlayer {
+  option (tcaplusservice.tcaplus_primary_key) = "player_id";
+
+  uint64 player_id = 1;
+  string account_name = 2;
+  uint32 status = 3;
+  uint64 session_generation = 4;
+  bytes provisioning_id = 5;
+  int64 created_at_ms = 6;
+  int64 updated_at_ms = 7;
+}
+
+message Session {
+  option (tcaplusservice.tcaplus_primary_key) = "session_digest";
+
+  bytes session_digest = 1;
+  uint64 player_id = 2;
+  uint64 generation = 3;
+  int64 created_at_ms = 4;
+  int64 idle_expires_at_ms = 5;
+  int64 absolute_expires_at_ms = 6;
+  bool revoked = 7;
+  int64 updated_at_ms = 8;
+}
+
+message ShardFence {
+  option (tcaplusservice.tcaplus_primary_key) = "logical_shard_id";
+
+  uint32 logical_shard_id = 1;
+  string owner_zone_id = 2;
+  uint64 owner_epoch = 3;
+  uint64 route_version = 4;
+  bytes transition_id = 5;
+  int64 fenced_at_ms = 6;
+}
+
+message MigrationProgress {
+  option (tcaplusservice.tcaplus_primary_key) = "logical_shard_id";
+
+  uint32 logical_shard_id = 1;
+  bytes transition_id = 2;
+  string status = 3;
+  string step = 4;
+  string source_zone_id = 5;
+  string source_endpoint = 6;
+  uint64 source_owner_epoch = 7;
+  uint64 source_route_version = 8;
+  bytes source_lease_id = 9;
+  string target_zone_id = 10;
+  string target_endpoint = 11;
+  uint64 prepared_owner_epoch = 12;
+  uint64 prepared_route_version = 13;
+  bytes prepared_lease_id = 14;
+  uint64 prepared_lease_term = 15;
+  bytes players_json = 16;
+  int64 updated_at_ms = 17;
+}
+
+message PlayerOutbox {
+  option (tcaplusservice.tcaplus_primary_key) = "event_id";
+
+  bytes event_id = 1;
+  uint32 db_shard_id = 2;
+  uint64 aggregate_player_id = 3;
+  uint32 logical_shard_id = 4;
+  uint32 event_type = 5;
+  uint32 event_contract_version = 6;
+  bytes caused_by_request_id = 7;
+  uint64 created_owner_epoch = 8;
+  uint64 created_player_seq = 9;
+  int64 created_at_ms = 10;
+  bytes payload = 11;
+  bytes payload_sha256 = 12;
+  uint32 relay_status = 13;
+  uint32 attempt_count = 14;
+  int64 next_attempt_at_ms = 15;
+  string claim_owner = 16;
+  int64 claim_until_ms = 17;
+  string last_error_code = 18;
+  int64 delivered_at_ms = 19;
+}

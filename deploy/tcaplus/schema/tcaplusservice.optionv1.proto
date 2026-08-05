@@ -1,0 +1,24 @@
+// TcaplusService option Ver.1, distributed by Tencent with the Go SDK.
+syntax = "proto2";
+
+package tcaplusservice;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/tcaplus/options;tcaplusoption";
+
+extend google.protobuf.MessageOptions {
+  optional string tcaplus_primary_key = 60000;
+  repeated string tcaplus_index = 60001;
+  optional string tcaplus_field_cipher_suite = 60002;
+  optional string tcaplus_record_cipher_suite = 60003;
+  optional string tcaplus_cipher_md5 = 60004;
+  optional string tcaplus_sharding_key = 60005;
+  optional string tcaplus_customattr = 60006;
+}
+
+extend google.protobuf.FieldOptions {
+  optional uint32 tcaplus_size = 60000;
+  optional string tcaplus_desc = 60001;
+  optional bool tcaplus_crypto = 60002;
+}

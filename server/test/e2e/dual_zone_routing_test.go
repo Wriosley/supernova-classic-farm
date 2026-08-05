@@ -109,10 +109,17 @@ func TestDualZoneRoutingAndCache(t *testing.T) {
 		t, migrationConn, migrationPlayer.id, "migrated-stale-cache", 2,
 	)
 	assertWrongZoneRejected(t, migrationPlayer)
-	moveShard(t, playerA.route.ShardID, "zone-b", http.StatusConflict)
+	activeMoved := moveShard(t, playerA.route.ShardID, "zone-b", http.StatusOK)
+	if activeMoved.OwnerZoneID != "zone-b" || activeMoved.OwnerEpoch != "2" ||
+		activeMoved.State != "ACTIVE" {
+		t.Fatalf("unexpected active-player migrated route: %+v", activeMoved)
+	}
+	assertSnapshotState(
+		t, connA, playerA.id, "active-player-migrated", 2, 1, 8,
+	)
 
 	after := routeLookupStats(t)
-	if after.Shard != before.Shard+1 {
+	if after.Shard < before.Shard+2 {
 		t.Fatalf("stale route refresh count mismatch: before=%+v after=%+v", before, after)
 	}
 	t.Logf("DUAL_ZONE zone_a_player=%d shard=%d zone_b_player=%d shard=%d migrated_player=%d migrated_shard=%d migrated_epoch=2 snapshot_lookups=%d shard_lookups=%d",

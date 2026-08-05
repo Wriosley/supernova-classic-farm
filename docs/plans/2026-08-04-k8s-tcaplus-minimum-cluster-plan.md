@@ -192,26 +192,50 @@ Stop condition: do not start Kubernetes scaling if this baseline is not green.
 2. [x] Adapt the existing MySQL implementation to that contract without
    changing Actor command semantics.
 3. [x] Add a fake store and unit tests for all typed CAS outcomes.
-4. Add a Tcaplus PB `PlayerCheckpoint` adapter and a standalone test program
-   that performs create, Load, CAS success, stale CAS rejection and reload.
-5. Run restart recovery against the Tcaplus test environment.
+4. [x] Add a Tcaplus PB `PlayerCheckpoint` adapter and a standalone test
+   program that performs create, Load, CAS success, stale CAS rejection and
+   reload.
+5. [x] Run restart recovery against the Tcaplus test environment.
 
 Items 1–3 completed on 2026-08-04. Full Go regression and the live Linux
 dual-Zone MySQL restart/migration/Fence E2E pass; Tcaplus SDK and table access
-are still required for items 4–5.
+were still required at that checkpoint.
+
+The Tcaplus POC implementation and live single-record verification completed
+on 2026-08-04 using the official Go module `v0.2.3` (internal API 3.55). The
+PB table schema, environment-only connection config, record-version plus
+logical-revision CAS adapter, typed result tests and `cmd/tcaplus-poc` prove
+Create, Load, CAS, duplicate retry, stale rejection and reload against a real
+table. Item 5 completed on 2026-08-05 through the pure-Tcaplus owner loop,
+active migration, complete process stop and post-migration restart.
 
 Fallback: retain the MySQL Checkpoint implementation and publish only the
 Tcaplus single-record POC when owner-loop recovery fails.
 
 ### Phase 2: Pure-Tcaplus control records
 
-1. Implement registration and Session provisioning Saga.
-2. Implement `ShardFence`, `MigrationProgress` and `PlayerOutbox` adapters.
-3. Add activation/outbox reconciliation.
-4. Prove request retry, Outbox immutable replay and old-epoch checkpoint
+The owner selected immediate pure-Tcaplus implementation on 2026-08-05.
+Existing MySQL adapters remain only as an explicit rollback path.
+
+1. [x] Implement registration and Session provisioning Saga.
+2. [x] Implement `ShardFence`, `MigrationProgress` and `PlayerOutbox` adapters.
+3. [x] Add activation/outbox reconciliation.
+4. [x] Prove request retry, Outbox immutable replay and old-epoch checkpoint
    rejection in tests.
+5. [x] Create the seven new PB tables in the Tcaplus control plane and run the
+   no-MySQL five-process restart/migration E2E.
+
+Phase 2 completed on 2026-08-05. The live gate initialized all 4096 fences,
+registered players through the Tcaplus Saga, routed players to both Zones,
+persisted gameplay, migrated inactive and active Shards, and restarted all five
+processes from advanced Fence state without `MYSQL_DSN`. See
+`../evidence/2026-08-05-pure-tcaplus-runtime-gate.md`.
 
 ### Phase 3: Dynamic Zone membership
+
+This starts after the pure-Tcaplus live acceptance gate. Zone discovery,
+liveness and route planning remain independent of the CheckpointStore backend;
+Gate-to-Zone business request and response contracts remain unchanged.
 
 1. Replace fixed `ZONE_A_*`/`ZONE_B_*` configuration with Zone registration,
    heartbeat, readiness and deregistration records.

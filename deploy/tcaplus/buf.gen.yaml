@@ -1,0 +1,7 @@
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: ../../server/gen
+    opt:
+      - paths=import
+      - module=github.com/Wriosley/supernova-classic-farm/server/gen

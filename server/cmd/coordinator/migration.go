@@ -26,6 +26,7 @@ type migrationHandler struct {
 	locks         [routing.ShardCount]sync.Mutex
 	advanceFence  func(context.Context, routing.RouteEntry) error
 	db            *sql.DB
+	tcaplus       *routing.TcaplusControlStore
 	progress      [routing.ShardCount]*migrationProgress
 }
 
@@ -69,10 +70,16 @@ func (h *migrationHandler) loadOpenProgress(
 	ctx context.Context,
 	now time.Time,
 ) (int, error) {
-	if h.db == nil {
+	if h.db == nil && h.tcaplus == nil {
 		return 0, nil
 	}
-	rows, err := routing.LoadOpenMigrationProgress(ctx, h.db)
+	var rows []routing.MigrationProgressRow
+	var err error
+	if h.tcaplus != nil {
+		rows, err = h.tcaplus.LoadOpenProgress(ctx)
+	} else {
+		rows, err = routing.LoadOpenMigrationProgress(ctx, h.db)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -153,10 +160,17 @@ func (h *migrationHandler) inspect(w http.ResponseWriter, r *http.Request) {
 		response.PreparedOwnerEpoch = strconv.FormatUint(
 			progress.Prepared.OwnerEpoch, 10,
 		)
-	} else if h.db != nil {
-		row, found, loadErr := routing.LoadMigrationProgress(
-			r.Context(), h.db, shardID,
-		)
+	} else if h.db != nil || h.tcaplus != nil {
+		var row routing.MigrationProgressRow
+		var found bool
+		var loadErr error
+		if h.tcaplus != nil {
+			row, found, loadErr = h.tcaplus.LoadProgress(r.Context(), shardID)
+		} else {
+			row, found, loadErr = routing.LoadMigrationProgress(
+				r.Context(), h.db, shardID,
+			)
+		}
 		if loadErr != nil {
 			writeMigrationError(w, http.StatusInternalServerError, "PROGRESS_LOAD_FAILED")
 			return
@@ -192,14 +206,14 @@ func (h *migrationHandler) listOpen(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		items = append(items, migrationInspectResponse{
-			ShardID:             uint32(shardID),
-			Status:              routing.MigrationStatusOpen,
-			Step:                progress.Step,
-			TransitionID:        progress.Prepared.TransitionID,
-			SourceZoneID:        progress.Source.OwnerZoneID,
-			TargetZoneID:        progress.Prepared.OwnerZoneID,
-			PreparedOwnerEpoch:  strconv.FormatUint(progress.Prepared.OwnerEpoch, 10),
-			Route:               routeJSON(entry),
+			ShardID:            uint32(shardID),
+			Status:             routing.MigrationStatusOpen,
+			Step:               progress.Step,
+			TransitionID:       progress.Prepared.TransitionID,
+			SourceZoneID:       progress.Source.OwnerZoneID,
+			TargetZoneID:       progress.Prepared.OwnerZoneID,
+			PreparedOwnerEpoch: strconv.FormatUint(progress.Prepared.OwnerEpoch, 10),
+			Route:              routeJSON(entry),
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -250,8 +264,8 @@ func (h *migrationHandler) abandonMigration(
 		writeMigrationError(w, http.StatusForbidden, "LOOPBACK_ONLY")
 		return
 	}
-	if h.advanceFence == nil || h.db == nil {
-		writeMigrationError(w, http.StatusConflict, "MYSQL_REQUIRED")
+	if h.advanceFence == nil || (h.db == nil && h.tcaplus == nil) {
+		writeMigrationError(w, http.StatusConflict, "DURABLE_STORE_REQUIRED")
 		return
 	}
 	shardValue, err := strconv.ParseUint(r.PathValue("shard_id"), 10, 32)
@@ -273,10 +287,18 @@ func (h *migrationHandler) abandonMigration(
 		return
 	}
 	now := h.now().UTC()
-	if err := routing.MarkMigrationAbandoned(
-		r.Context(), h.db, shardID, progress.Prepared.TransitionID, now,
-	); err != nil {
-		if errors.Is(err, routing.ErrFenceAlreadyAdvanced) {
+	var abandonErr error
+	if h.tcaplus != nil {
+		abandonErr = h.tcaplus.MarkAbandoned(
+			r.Context(), shardID, progress.Prepared.TransitionID, now,
+		)
+	} else {
+		abandonErr = routing.MarkMigrationAbandoned(
+			r.Context(), h.db, shardID, progress.Prepared.TransitionID, now,
+		)
+	}
+	if abandonErr != nil {
+		if errors.Is(abandonErr, routing.ErrFenceAlreadyAdvanced) {
 			writeMigrationError(w, http.StatusConflict, "FENCE_ALREADY_ADVANCED")
 			return
 		}
@@ -411,10 +433,20 @@ func (h *migrationHandler) moveMySQL(
 			writeMigrationError(w, http.StatusConflict, "DRAIN_REJECTED")
 			return
 		}
-		if h.db != nil {
-			if abandoned, found, loadErr := routing.LoadAbandonedPreparedEpoch(
-				r.Context(), h.db, shardID,
-			); loadErr == nil && found {
+		if h.db != nil || h.tcaplus != nil {
+			var abandoned uint64
+			var found bool
+			var loadErr error
+			if h.tcaplus != nil {
+				abandoned, found, loadErr = h.tcaplus.LoadAbandonedEpoch(
+					r.Context(), shardID,
+				)
+			} else {
+				abandoned, found, loadErr = routing.LoadAbandonedPreparedEpoch(
+					r.Context(), h.db, shardID,
+				)
+			}
+			if loadErr == nil && found {
 				h.routes.NoteConsumedEpoch(shardID, abandoned)
 			}
 		}
@@ -508,7 +540,7 @@ func (h *migrationHandler) persistProgress(
 	ctx context.Context,
 	progress *migrationProgress,
 ) error {
-	if h.db == nil || progress == nil {
+	if (h.db == nil && h.tcaplus == nil) || progress == nil {
 		return nil
 	}
 	players := make([]routing.MigrationPlayer, len(progress.Players))
@@ -519,7 +551,7 @@ func (h *migrationHandler) persistProgress(
 			CheckpointRevision: player.CheckpointRevision,
 		}
 	}
-	return routing.UpsertOpenMigrationProgress(ctx, h.db, routing.MigrationProgressRow{
+	row := routing.MigrationProgressRow{
 		ShardID:              progress.Prepared.ShardID,
 		TransitionID:         progress.Prepared.TransitionID,
 		Step:                 progress.Step,
@@ -536,15 +568,24 @@ func (h *migrationHandler) persistProgress(
 		PreparedLeaseTerm:    progress.Prepared.LeaseTerm,
 		Players:              players,
 		UpdatedAtMS:          h.now().UTC().UnixMilli(),
-	})
+	}
+	if h.tcaplus != nil {
+		return h.tcaplus.UpsertProgress(ctx, row)
+	}
+	return routing.UpsertOpenMigrationProgress(ctx, h.db, row)
 }
 
 func (h *migrationHandler) deleteProgress(
 	ctx context.Context,
 	progress *migrationProgress,
 ) error {
-	if h.db == nil || progress == nil {
+	if (h.db == nil && h.tcaplus == nil) || progress == nil {
 		return nil
+	}
+	if h.tcaplus != nil {
+		return h.tcaplus.DeleteOpenProgress(
+			ctx, progress.Prepared.ShardID, progress.Prepared.TransitionID,
+		)
 	}
 	return routing.DeleteOpenMigrationProgress(
 		ctx, h.db, progress.Prepared.ShardID, progress.Prepared.TransitionID,
@@ -768,14 +809,14 @@ func progressFromRow(row routing.MigrationProgressRow) *migrationProgress {
 }
 
 type migrationInspectResponse struct {
-	ShardID             uint32    `json:"shard_id"`
-	Status              string    `json:"status,omitempty"`
-	Step                string    `json:"step,omitempty"`
-	TransitionID        string    `json:"transition_id,omitempty"`
-	SourceZoneID        string    `json:"source_zone_id,omitempty"`
-	TargetZoneID        string    `json:"target_zone_id,omitempty"`
-	PreparedOwnerEpoch  string    `json:"prepared_owner_epoch,omitempty"`
-	Route               routeView `json:"route"`
+	ShardID            uint32    `json:"shard_id"`
+	Status             string    `json:"status,omitempty"`
+	Step               string    `json:"step,omitempty"`
+	TransitionID       string    `json:"transition_id,omitempty"`
+	SourceZoneID       string    `json:"source_zone_id,omitempty"`
+	TargetZoneID       string    `json:"target_zone_id,omitempty"`
+	PreparedOwnerEpoch string    `json:"prepared_owner_epoch,omitempty"`
+	Route              routeView `json:"route"`
 }
 
 type routeView struct {

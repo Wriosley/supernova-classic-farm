@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-04
+updated: 2026-08-05
 ---
 
 # Current Handoff
@@ -188,8 +188,24 @@ Current milestone status:
   outcomes. `MySQLCheckpointStore` preserves the existing Fence,
   revision-CAS and Checkpoint/Outbox transaction. Full Go regression and the
   live Linux five-process restart/active-migration/Fence E2E pass after the
-  refactor. The next storage task is the Tcaplus `PlayerCheckpoint` single-row
-  Load/Create/CAS POC, not account/session migration.
+  refactor.
+- The Tcaplus `PlayerCheckpoint` POC is complete against a real PB table using
+  the official Go SDK module `v0.2.3` (API 3.55). It proves Create, Load,
+  record-version plus logical-revision CAS, duplicate-commit reconciliation,
+  stale-write rejection and reload. Zone continues to use MySQL; full
+  owner-loop/restart evidence and Tcaplus control records remain pending. See
+  `../evidence/2026-08-04-tcaplus-player-checkpoint-poc.md`.
+- The owner selected immediate pure-Tcaplus runtime work on 2026-08-05.
+  PlayerIdCounter, account provisioning Saga, durable Session generation,
+  ShardFence, MigrationProgress, fenced Checkpoint CAS, PlayerOutbox and
+  activation reconciliation now have adapters and hermetic tests. Login, Zone,
+  Coordinator and `start-servers.sh --dual-zone --tcaplus` are wired to reject
+  `MYSQL_DSN`. The live table group now has all eight runtime tables. The
+  no-MySQL five-process gate registered players, routed both Owners, persisted
+  gameplay, migrated inactive and active Shards, and passed a complete
+  post-migration restart. Fence bootstrap uses one Traverse plus bounded
+  parallel inserts and preserves advanced epochs for route hydration. See
+  `../evidence/2026-08-05-pure-tcaplus-runtime-gate.md`.
 - Assignment algorithm V1 uses deterministic SHA-256 Rendezvous scoring over
   `shard_id` and stable `zone_id`. Gate and Zone do not treat that calculation
   as authority; only the Coordinator's committed Route with Zone, endpoint,
@@ -365,16 +381,17 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 
 ## Next actions
 
-The Linux dual-Zone MySQL baseline required before Tcaplus work is now green.
+The Linux dual-Zone MySQL baseline, CheckpointStore boundary and offline
+Tcaplus POC implementation are green. Live Tcaplus connection is deferred.
 The bounded next plan is
 `../plans/2026-08-04-k8s-tcaplus-minimum-cluster-plan.md`. Immediate order:
 
-1. Introduce a `CheckpointStore` boundary while preserving the passing MySQL
-   behavior and all Actor/Dirty semantics.
-2. Confirm a non-production Tcaplus PB App/Zone, SDK version, table permission
-   and single-record conditional-update capability.
-3. Implement only the Tcaplus `PlayerCheckpoint` Load/Create/CAS POC and stop
-   before control-plane replacement unless the full owner loop recovers.
+1. Define the minimum Zone registration, heartbeat, readiness and
+   deregistration contract.
+2. Replace fixed Zone A/B Coordinator membership with a dynamic Ready set
+   while preserving the current committed Route as authority.
+3. Add a bounded rebalance planner and prove controlled `2 -> 3` Zone
+   expansion before starting Kubernetes manifests.
 
 ## AI memory and handoff rule
 

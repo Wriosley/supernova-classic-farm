@@ -7,15 +7,18 @@ server_root="${repo_root}/server"
 env_file="${repo_root}/.env"
 dual_zone=false
 mysql_mode=false
+tcaplus_mode=false
 run_seconds=0
 
 usage() {
     cat <<'EOF'
-Usage: ./start-servers.sh [--dual-zone] [--mysql] [--run-seconds N]
+Usage: ./start-servers.sh [--dual-zone] [--mysql|--tcaplus] [--run-seconds N]
 
   --dual-zone      Start Zone A and Zone B.
   --mysql          Use MySQL persistence. MYSQL_DSN is preferred; otherwise
                    local MYSQL_* fields are used to construct it.
+  --tcaplus        Use Tcaplus for auth, checkpoints, fences, migration
+                   progress and Outbox. Requires --dual-zone and TCAPLUS_*.
   --run-seconds N  Stop automatically after N seconds. Zero waits for Ctrl+C.
 
 This script is for the Linux loopback baseline. It does not deploy Kubernetes.
@@ -30,6 +33,10 @@ while (( $# > 0 )); do
             ;;
         --mysql)
             mysql_mode=true
+            shift
+            ;;
+        --tcaplus)
+            tcaplus_mode=true
             shift
             ;;
         --run-seconds)
@@ -159,6 +166,15 @@ require_command go
 require_command curl
 load_dotenv
 
+if [[ "${mysql_mode}" == true && "${tcaplus_mode}" == true ]]; then
+    echo "--mysql and --tcaplus are mutually exclusive" >&2
+    exit 2
+fi
+if [[ "${tcaplus_mode}" == true && "${dual_zone}" != true ]]; then
+    echo "--tcaplus currently requires --dual-zone" >&2
+    exit 2
+fi
+
 login_port="${LOGIN_PORT:-8080}"
 gate_port="${GATE_PORT:-8081}"
 zone_port="${ZONE_PORT:-8082}"
@@ -199,6 +215,30 @@ if [[ "${mysql_mode}" == true ]]; then
         export MYSQL_DSN
     fi
 fi
+if [[ "${tcaplus_mode}" == true ]]; then
+    if [[ -n "${MYSQL_DSN:-}" ]]; then
+        echo "MYSQL_DSN must be unset in pure Tcaplus mode" >&2
+        exit 1
+    fi
+    required_tcaplus=(
+        TCAPLUS_APP_ID TCAPLUS_ZONE_ID TCAPLUS_DIR_URL TCAPLUS_SIGNATURE
+    )
+    for key in "${required_tcaplus[@]}"; do
+        if [[ -z "${!key:-}" ]]; then
+            echo "${key} is required for --tcaplus" >&2
+            exit 1
+        fi
+    done
+    export STORAGE_MODE=tcaplus
+    export TCAPLUS_CHECKPOINT_TABLE="${TCAPLUS_CHECKPOINT_TABLE:-PlayerCheckpoint}"
+    export TCAPLUS_PLAYER_ID_COUNTER_TABLE="${TCAPLUS_PLAYER_ID_COUNTER_TABLE:-PlayerIdCounter}"
+    export TCAPLUS_ACCOUNT_BY_NAME_TABLE="${TCAPLUS_ACCOUNT_BY_NAME_TABLE:-AccountByName}"
+    export TCAPLUS_ACCOUNT_BY_PLAYER_TABLE="${TCAPLUS_ACCOUNT_BY_PLAYER_TABLE:-AccountByPlayer}"
+    export TCAPLUS_SESSION_TABLE="${TCAPLUS_SESSION_TABLE:-Session}"
+    export TCAPLUS_FENCE_TABLE="${TCAPLUS_FENCE_TABLE:-ShardFence}"
+    export TCAPLUS_MIGRATION_TABLE="${TCAPLUS_MIGRATION_TABLE:-MigrationProgress}"
+    export TCAPLUS_OUTBOX_TABLE="${TCAPLUS_OUTBOX_TABLE:-PlayerOutbox}"
+fi
 
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/classic-farm-servers.XXXXXX")"
 trap stop_services INT TERM EXIT
@@ -231,7 +271,7 @@ if [[ "${dual_zone}" == true ]]; then
         "ZONE_B_ID=zone-b"
         "ZONE_B_ENDPOINT=http://127.0.0.1:${zone_b_port}"
     )
-    if [[ "${mysql_mode}" == true ]]; then
+    if [[ "${mysql_mode}" == true || "${tcaplus_mode}" == true ]]; then
         coordinator_env+=("DUAL_ZONE_FENCE_BOOTSTRAP=1")
     fi
 fi
@@ -276,6 +316,8 @@ echo "All backend services are running."
 echo "Runtime logs: ${run_root}"
 if [[ "${mysql_mode}" == true ]]; then
     echo "Data mode: MySQL checkpoint baseline."
+elif [[ "${tcaplus_mode}" == true ]]; then
+    echo "Data mode: pure TcaplusDB."
 else
     echo "Data mode: development-only in-memory."
 fi

@@ -26,11 +26,16 @@ func NewMySQLStore(db *sql.DB) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	store.mysql = &mysqlStore{db: db}
+	store.durable = &mysqlStore{db: db}
 	return store, nil
 }
 
-func (m *mysqlStore) register(name string, hash passwordHash, now time.Time) (string, *Session, error) {
+func (m *mysqlStore) register(
+	name string,
+	_ string,
+	hash passwordHash,
+	now time.Time,
+) (string, *Session, error) {
 	raw, err := randomToken()
 	if err != nil {
 		return "", nil, err

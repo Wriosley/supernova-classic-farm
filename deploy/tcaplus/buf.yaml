@@ -1,0 +1,10 @@
+version: v2
+modules:
+  - path: schema
+lint:
+  use:
+    - STANDARD
+  except:
+    - FILE_LOWER_SNAKE_CASE
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_VERSION_SUFFIX

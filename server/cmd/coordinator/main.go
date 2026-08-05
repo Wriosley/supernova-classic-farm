@@ -19,6 +19,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
 
@@ -70,7 +71,82 @@ func run() error {
 			routes, zones, &http.Client{Timeout: 5 * time.Second},
 			time.Now, leaseDuration,
 		)
-		if dsn := strings.TrimSpace(os.Getenv("MYSQL_DSN")); dsn != "" {
+		if strings.TrimSpace(os.Getenv("STORAGE_MODE")) == "tcaplus" {
+			if strings.TrimSpace(os.Getenv("MYSQL_DSN")) != "" {
+				return errors.New("pure Tcaplus mode forbids MYSQL_DSN")
+			}
+			tcaplusConfig, configErr := tcaplusdb.LoadConfigFromEnv()
+			if configErr != nil {
+				return configErr
+			}
+			fenceTable, configErr := tcaplusdb.TableName(
+				"TCAPLUS_FENCE_TABLE", "ShardFence",
+			)
+			if configErr != nil {
+				return configErr
+			}
+			migrationTable, configErr := tcaplusdb.TableName(
+				"TCAPLUS_MIGRATION_TABLE", "MigrationProgress",
+			)
+			if configErr != nil {
+				return configErr
+			}
+			client, openErr := tcaplusdb.Open(
+				tcaplusConfig, fenceTable, migrationTable,
+			)
+			if openErr != nil {
+				return openErr
+			}
+			defer client.Close()
+			control, controlErr := routing.NewTcaplusControlStore(
+				client, tcaplusConfig.ZoneID,
+			)
+			if controlErr != nil {
+				return controlErr
+			}
+			fenceCtx, fenceCancel := context.WithTimeout(
+				context.Background(), 60*time.Second,
+			)
+			updated, ensureErr := control.EnsureStaticFences(
+				fenceCtx, routes.Snapshot(), now,
+			)
+			if ensureErr != nil {
+				fenceCancel()
+				return ensureErr
+			}
+			fences, loadErr := control.LoadFences(fenceCtx)
+			if loadErr != nil {
+				fenceCancel()
+				return loadErr
+			}
+			if hydrateErr := routing.HydrateActiveRoutesFromFences(
+				routes, fences, zones, now, leaseDuration,
+			); hydrateErr != nil {
+				fenceCancel()
+				return hydrateErr
+			}
+			fenceCancel()
+			logger.Info(
+				"dual-Zone Tcaplus fences ready",
+				"initialized_or_aligned_shards", updated,
+			)
+			migrations.tcaplus = control
+			migrations.advanceFence = control.AdvanceFence
+			overlayCtx, overlayCancel := context.WithTimeout(
+				context.Background(), 10*time.Second,
+			)
+			openCount, overlayErr := migrations.loadOpenProgress(overlayCtx, now)
+			overlayCancel()
+			if overlayErr != nil {
+				return overlayErr
+			}
+			if openCount > 0 {
+				logger.Warn(
+					"loaded open PREPARING migrations; fail-closed until continue or abandon",
+					"open_migrations", openCount,
+				)
+			}
+		} else if dsn := strings.TrimSpace(os.Getenv("MYSQL_DSN")); dsn != "" {
 			if strings.TrimSpace(os.Getenv("DUAL_ZONE_FENCE_BOOTSTRAP")) != "1" {
 				return errors.New(
 					"dual-Zone MySQL requires DUAL_ZONE_FENCE_BOOTSTRAP=1",

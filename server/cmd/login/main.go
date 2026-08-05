@@ -15,6 +15,8 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 )
 
 func main() {
@@ -37,7 +39,49 @@ func run() error {
 		return err
 	}
 	var store *auth.Store
-	if cfg.MySQLDSN == "" {
+	if strings.TrimSpace(os.Getenv("STORAGE_MODE")) == "tcaplus" {
+		if cfg.MySQLDSN != "" {
+			return errors.New("pure Tcaplus mode forbids MYSQL_DSN")
+		}
+		tcaplusConfig, configErr := tcaplusdb.LoadConfigFromEnv()
+		if configErr != nil {
+			return configErr
+		}
+		tableSpecs := [][2]string{
+			{"TCAPLUS_PLAYER_ID_COUNTER_TABLE", "PlayerIdCounter"},
+			{"TCAPLUS_ACCOUNT_BY_NAME_TABLE", "AccountByName"},
+			{"TCAPLUS_ACCOUNT_BY_PLAYER_TABLE", "AccountByPlayer"},
+			{"TCAPLUS_SESSION_TABLE", "Session"},
+			{"TCAPLUS_CHECKPOINT_TABLE", "PlayerCheckpoint"},
+			{"TCAPLUS_FENCE_TABLE", "ShardFence"},
+		}
+		tables := make([]string, 0, len(tableSpecs))
+		for _, spec := range tableSpecs {
+			table, tableErr := tcaplusdb.TableName(spec[0], spec[1])
+			if tableErr != nil {
+				return tableErr
+			}
+			tables = append(tables, table)
+		}
+		client, openErr := tcaplusdb.Open(tcaplusConfig, tables...)
+		if openErr != nil {
+			return openErr
+		}
+		defer client.Close()
+		checkpoints, checkpointErr := player.NewTcaplusCheckpointStoreWithClient(
+			client, tcaplusConfig.ZoneID,
+		)
+		if checkpointErr != nil {
+			return checkpointErr
+		}
+		store, err = auth.NewTcaplusStore(
+			client, tcaplusConfig.ZoneID, checkpoints,
+		)
+		if err != nil {
+			return err
+		}
+		logger.Info("using pure Tcaplus auth and checkpoint provisioning")
+	} else if cfg.MySQLDSN == "" {
 		store, err = auth.NewStore()
 		if err != nil {
 			return err

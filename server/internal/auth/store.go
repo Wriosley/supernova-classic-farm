@@ -71,7 +71,7 @@ type ticketRecord struct {
 type Store struct {
 	mu         sync.Mutex
 	now        func() time.Time
-	mysql      *mysqlStore
+	durable    durableStore
 	accounts   map[string]*Account
 	sessions   map[[32]byte]*Session
 	csrf       map[string]csrfRecord
@@ -79,6 +79,14 @@ type Store struct {
 	issues     map[[32]byte]map[string]*ticketRecord
 	ticketKey  [32]byte
 	nextPlayer uint64
+}
+
+type durableStore interface {
+	register(string, string, passwordHash, time.Time) (string, *Session, error)
+	login(string, string, time.Time) (string, *Session, error)
+	session(string, time.Time) (*Session, error)
+	logout([32]byte, time.Time) error
+	sessionActive([32]byte, uint64, time.Time) (bool, error)
 }
 
 func NewStore() (*Store, error) {
@@ -162,8 +170,8 @@ func (s *Store) Register(name, password string) (string, *Session, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	if s.mysql != nil {
-		return s.mysql.register(name, hash, s.now())
+	if s.durable != nil {
+		return s.durable.register(name, password, hash, s.now())
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -181,8 +189,8 @@ func (s *Store) Register(name, password string) (string, *Session, error) {
 }
 
 func (s *Store) Login(name, password string) (string, *Session, error) {
-	if s.mysql != nil {
-		raw, session, err := s.mysql.login(name, password, s.now())
+	if s.durable != nil {
+		raw, session, err := s.durable.login(name, password, s.now())
 		if err == nil {
 			s.mu.Lock()
 			for _, ticket := range s.tickets {
@@ -248,8 +256,8 @@ func (s *Store) Session(raw string) (*Session, error) {
 	if raw == "" {
 		return nil, ErrUnauthenticated
 	}
-	if s.mysql != nil {
-		return s.mysql.session(raw, s.now())
+	if s.durable != nil {
+		return s.durable.session(raw, s.now())
 	}
 	digest := sha256.Sum256([]byte(raw))
 	s.mu.Lock()
@@ -277,8 +285,8 @@ func (s *Store) Logout(raw string) {
 		return
 	}
 	digest := sha256.Sum256([]byte(raw))
-	if s.mysql != nil {
-		_ = s.mysql.logout(digest, s.now())
+	if s.durable != nil {
+		_ = s.durable.logout(digest, s.now())
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -292,8 +300,8 @@ func (s *Store) IssueTicket(session *Session, issueID, gatewayID string) (string
 	if gatewayID != "local-gateway" {
 		return "", time.Time{}, ErrGatewayNotFound
 	}
-	if s.mysql != nil {
-		active, err := s.mysql.sessionActive(session.Digest, session.Generation, s.now())
+	if s.durable != nil {
+		active, err := s.durable.sessionActive(session.Digest, session.Generation, s.now())
 		if err != nil {
 			return "", time.Time{}, err
 		}
@@ -303,7 +311,7 @@ func (s *Store) IssueTicket(session *Session, issueID, gatewayID string) (string
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.mysql == nil {
+	if s.durable == nil {
 		live := s.sessions[session.Digest]
 		if !s.sessionActiveLocked(live) || live.Generation != session.Generation {
 			return "", time.Time{}, ErrUnauthenticated
@@ -352,8 +360,8 @@ func (s *Store) ConsumeTicket(raw, gatewayID string) (uint64, error) {
 	sessionDigest := ticket.SessionDigest
 	generation := ticket.Generation
 	s.mu.Unlock()
-	if s.mysql != nil {
-		active, err := s.mysql.sessionActive(sessionDigest, generation, s.now())
+	if s.durable != nil {
+		active, err := s.durable.sessionActive(sessionDigest, generation, s.now())
 		if err != nil {
 			return 0, err
 		}
@@ -368,7 +376,7 @@ func (s *Store) ConsumeTicket(raw, gatewayID string) (uint64, error) {
 		ticket.GatewayID != gatewayID {
 		return 0, ErrUnauthenticated
 	}
-	if s.mysql == nil {
+	if s.durable == nil {
 		session := s.sessions[ticket.SessionDigest]
 		if !s.sessionActiveLocked(session) || session.Generation != ticket.Generation {
 			return 0, ErrUnauthenticated
