@@ -54,7 +54,11 @@ kubectl -n classic-farm port-forward service/gate 8081:8081
 kubectl -n classic-farm port-forward service/coordinator 8083:8083
 ```
 
-Login 返回的 URL 使用本机 `localhost`，因此适用于该端口转发方式。
+Login 返回的 URL 使用本机 `localhost`，因此适用于该端口转发方式。Gate 用
+`CLIENT_CONFIG_URL`（集群内 `http://login:8080/...`）在启动时算配置摘要，
+但用 `CLIENT_CONFIG_PUBLIC_URL` 下发给客户端；后者必须和 Login 的
+`CLIENT_CONFIG_URL` 完全一致，否则 H5 会以为配置变更并去下载一个浏览器
+解析不了的集群内地址。
 
 Gate → Zone 游戏命令和 Zone → Gate Player Push 使用 Unary gRPC，并与
 现有 HTTP 健康检查、Coordinator 生命周期接口共享 8081/8082 端口。共享

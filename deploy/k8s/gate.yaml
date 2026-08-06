@@ -32,6 +32,9 @@ spec:
               value: http://login:8080/internal/v1/ws-tickets/consume
             - name: CLIENT_CONFIG_URL
               value: http://login:8080/v1/client-config/1
+            # Must match login.yaml CLIENT_CONFIG_URL: this one reaches the browser.
+            - name: CLIENT_CONFIG_PUBLIC_URL
+              value: http://localhost:8080/v1/client-config/1
           ports:
             - name: http
               containerPort: 8081

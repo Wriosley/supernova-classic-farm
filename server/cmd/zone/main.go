@@ -296,7 +296,7 @@ func main() {
 	rpcv1.RegisterGameCommandServiceServer(
 		grpcServer,
 		newGameCommandRPCServer(
-			runtime, authorization, gates, time.Now, gatewayID,
+			runtime, authorization, gates, time.Now, gatewayID, logger,
 		),
 	)
 	rpcv1.RegisterPlayerSocialServiceServer(

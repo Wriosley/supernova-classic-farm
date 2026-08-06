@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
@@ -21,6 +22,7 @@ type gameCommandRPCServer struct {
 	gates             *shardExecutionGates
 	now               func() time.Time
 	expectedGatewayID string
+	logger            *slog.Logger
 }
 
 func newGameCommandRPCServer(
@@ -29,13 +31,17 @@ func newGameCommandRPCServer(
 	gates *shardExecutionGates,
 	now func() time.Time,
 	expectedGatewayID string,
+	logger *slog.Logger,
 ) *gameCommandRPCServer {
 	if now == nil {
 		now = time.Now
 	}
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &gameCommandRPCServer{
 		runtime: runtime, authorization: authorization, gates: gates, now: now,
-		expectedGatewayID: expectedGatewayID,
+		expectedGatewayID: expectedGatewayID, logger: logger,
 	}
 }
 
@@ -80,6 +86,13 @@ func (s *gameCommandRPCServer) ExecutePlayerCommand(
 	case errors.Is(err, player.ErrForbiddenTarget):
 		return nil, status.Error(codes.PermissionDenied, "forbidden target")
 	case err != nil:
+		// The gRPC status stays generic so Gate never leaks internals to the
+		// client, which makes this the only place the real cause survives.
+		s.logger.Error("game command rejected",
+			"action", request.Envelope.Action.String(),
+			"player_id", request.CallerPlayerId,
+			"shard_id", route.LogicalShardId,
+			"error", err)
 		return nil, status.Error(codes.InvalidArgument, "invalid game command")
 	case response == nil:
 		return nil, status.Error(codes.Internal, "game command returned no response")

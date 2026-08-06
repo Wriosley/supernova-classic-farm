@@ -16,7 +16,7 @@ func TestGameCommandRPCServerReturnsSnapshot(t *testing.T) {
 	runtime := player.NewRuntime()
 	defer runtime.Close()
 	server := newGameCommandRPCServer(
-		runtime, localAuthorization{}, nil, nil, "local-gateway",
+		runtime, localAuthorization{}, nil, nil, "local-gateway", nil,
 	)
 	response, err := server.ExecutePlayerCommand(
 		context.Background(), rpcCommandRequest(42, 1, "local-gateway"),
@@ -36,7 +36,7 @@ func TestGameCommandRPCServerRejectsStaleOwner(t *testing.T) {
 	runtime := player.NewRuntime()
 	defer runtime.Close()
 	server := newGameCommandRPCServer(
-		runtime, localAuthorization{}, nil, nil, "local-gateway",
+		runtime, localAuthorization{}, nil, nil, "local-gateway", nil,
 	)
 	_, err := server.ExecutePlayerCommand(
 		context.Background(), rpcCommandRequest(42, 2, "local-gateway"),
@@ -50,7 +50,7 @@ func TestGameCommandRPCServerRejectsWrongGateway(t *testing.T) {
 	runtime := player.NewRuntime()
 	defer runtime.Close()
 	server := newGameCommandRPCServer(
-		runtime, localAuthorization{}, nil, nil, "local-gateway",
+		runtime, localAuthorization{}, nil, nil, "local-gateway", nil,
 	)
 	_, err := server.ExecutePlayerCommand(
 		context.Background(), rpcCommandRequest(42, 1, "forged-gateway"),

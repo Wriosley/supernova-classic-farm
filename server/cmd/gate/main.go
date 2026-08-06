@@ -71,6 +71,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// CLIENT_CONFIG_URL is resolved server-side and may point at an in-cluster
+	// address. Clients must be handed the same browser-reachable URL Login
+	// advertises, otherwise AuthResponse looks like a config change and the H5
+	// re-downloads the package from a host it cannot resolve.
+	publicConfigURL := envOr("CLIENT_CONFIG_PUBLIC_URL", clientConfigURL)
 	routeSource := &gateway.HTTPRouteResolver{
 		Client: client, BaseURL: envOr("COORDINATOR_URL", "http://127.0.0.1:8083"),
 	}
@@ -93,7 +98,7 @@ func run() error {
 		Zone:            zoneCommander,
 		Visitor:         visitorCommander,
 		Friends:         friendCommander,
-		ClientConfigURL: clientConfigURL,
+		ClientConfigURL: publicConfigURL,
 		ClientConfigSHA: configSHA,
 	})
 	if err != nil {
