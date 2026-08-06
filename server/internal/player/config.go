@@ -22,12 +22,18 @@ const (
 	developmentBaseYield                 uint32 = 3
 	developmentFertilizerModifierScaled6 int64  = 500_000
 	developmentFertilizerDurationMS      int64  = 60_000
+	developmentPestID                    uint32 = 1
+	developmentPestModifierScaled6       int64  = -300_000
+	developmentPestDurationMS            int64  = 120_000
 	developmentSellEntryID               uint32 = 5002
 	developmentCropSellUnitPrice         int64  = 5
 	developmentCropSellPriceVersion      uint64 = 9
 	developmentNextChapterID             uint32 = 2
 	developmentNextSeedItemID            uint32 = 1003
 	developmentChapterRewardCoins        int64  = 10
+	developmentStealQuantity             uint32 = 1
+	developmentMaxStealTimes             uint32 = 2
+	developmentProtectedOwnerYield       uint32 = 1
 )
 
 type ShopEntry struct {
@@ -47,10 +53,26 @@ type CropConfig struct {
 	BaseGrowthRateScaled6 int64
 	BaseYield             uint32
 	Enabled               bool
+
+	// Steal fields are frozen onto the Plot at plant time (see player.plant
+	// and docs/contracts/data-model.md §18). Zero (the struct default)
+	// means the crop is not stealable, matching pre-Phase-5 CropConfig
+	// callers that never set them.
+	StealQuantity       uint32
+	MaxStealTimes       uint32
+	ProtectedOwnerYield uint32
 }
 
 type FertilizerConfig struct {
 	ItemID          uint32
+	ConfigVersion   uint64
+	ModifierScaled6 int64
+	DurationMS      int64
+	Enabled         bool
+}
+
+type PestConfig struct {
+	PestID          uint32
 	ConfigVersion   uint64
 	ModifierScaled6 int64
 	DurationMS      int64
@@ -103,6 +125,7 @@ type ConfigSnapshot struct {
 	shopEntries map[uint32]ShopEntry
 	cropsBySeed map[uint32]CropConfig
 	fertilizers map[uint32]FertilizerConfig
+	pests       map[uint32]PestConfig
 	sellRules   map[uint32]SellRule
 	chapters    map[uint32]ChapterConfig
 }
@@ -148,6 +171,32 @@ func NewConfigSnapshotWithChapters(
 	sellRules []SellRule,
 	chapters []ChapterConfig,
 ) (*ConfigSnapshot, error) {
+	return newConfigSnapshot(version, entries, crops, fertilizers, nil, sellRules, chapters)
+}
+
+// NewConfigSnapshotWithPests exposes the complete immutable content needed by
+// friend pest interactions while preserving the older constructor signatures.
+func NewConfigSnapshotWithPests(
+	version uint64,
+	entries []ShopEntry,
+	crops []CropConfig,
+	fertilizers []FertilizerConfig,
+	pests []PestConfig,
+	sellRules []SellRule,
+	chapters []ChapterConfig,
+) (*ConfigSnapshot, error) {
+	return newConfigSnapshot(version, entries, crops, fertilizers, pests, sellRules, chapters)
+}
+
+func newConfigSnapshot(
+	version uint64,
+	entries []ShopEntry,
+	crops []CropConfig,
+	fertilizers []FertilizerConfig,
+	pests []PestConfig,
+	sellRules []SellRule,
+	chapters []ChapterConfig,
+) (*ConfigSnapshot, error) {
 	if version == 0 {
 		return nil, errors.New("config version is required")
 	}
@@ -156,6 +205,7 @@ func NewConfigSnapshotWithChapters(
 		shopEntries: make(map[uint32]ShopEntry, len(entries)),
 		cropsBySeed: make(map[uint32]CropConfig, len(crops)),
 		fertilizers: make(map[uint32]FertilizerConfig, len(fertilizers)),
+		pests:       make(map[uint32]PestConfig, len(pests)),
 		sellRules:   make(map[uint32]SellRule, len(sellRules)),
 		chapters:    make(map[uint32]ChapterConfig, len(chapters)),
 	}
@@ -191,6 +241,16 @@ func NewConfigSnapshotWithChapters(
 			return nil, errors.New("fertilizer item ID is duplicated")
 		}
 		snapshot.fertilizers[fertilizer.ItemID] = fertilizer
+	}
+	for _, pest := range pests {
+		if pest.PestID == 0 || pest.ConfigVersion == 0 ||
+			pest.ModifierScaled6 >= 0 || pest.DurationMS <= 0 {
+			return nil, errors.New("pest config is invalid")
+		}
+		if _, duplicate := snapshot.pests[pest.PestID]; duplicate {
+			return nil, errors.New("pest ID is duplicated")
+		}
+		snapshot.pests[pest.PestID] = pest
 	}
 	for _, rule := range sellRules {
 		if rule.ShopEntryID == 0 || rule.ItemID == 0 ||
@@ -255,7 +315,7 @@ func NewConfigSnapshotWithChapters(
 }
 
 func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
-	snapshot, err := NewConfigSnapshotWithChapters(ServerConfigVersion, []ShopEntry{
+	snapshot, err := NewConfigSnapshotWithPests(ServerConfigVersion, []ShopEntry{
 		{
 			ShopEntryID:  developmentShopEntryID,
 			ItemID:       developmentSeedItemID,
@@ -276,10 +336,16 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 		MaturityValueScaled9:  developmentMaturityScaled9,
 		BaseGrowthRateScaled6: developmentGrowthRateScaled6,
 		BaseYield:             developmentBaseYield, Enabled: true,
+		StealQuantity: developmentStealQuantity, MaxStealTimes: developmentMaxStealTimes,
+		ProtectedOwnerYield: developmentProtectedOwnerYield,
 	}}, []FertilizerConfig{{
 		ItemID: BasicFertilizerID, ConfigVersion: ServerConfigVersion,
 		ModifierScaled6: developmentFertilizerModifierScaled6,
 		DurationMS:      developmentFertilizerDurationMS, Enabled: true,
+	}}, []PestConfig{{
+		PestID: developmentPestID, ConfigVersion: ServerConfigVersion,
+		ModifierScaled6: developmentPestModifierScaled6,
+		DurationMS:      developmentPestDurationMS, Enabled: true,
 	}}, []SellRule{{
 		ShopEntryID: developmentSellEntryID, ItemID: developmentCropItemID,
 		UnitPrice:    developmentCropSellUnitPrice,
@@ -344,6 +410,14 @@ func (c *ConfigSnapshot) Fertilizer(itemID uint32) (FertilizerConfig, bool) {
 	return fertilizer, exists
 }
 
+func (c *ConfigSnapshot) Pest(pestID uint32) (PestConfig, bool) {
+	if c == nil {
+		return PestConfig{}, false
+	}
+	pest, exists := c.pests[pestID]
+	return pest, exists
+}
+
 func (c *ConfigSnapshot) SellRule(itemID uint32) (SellRule, bool) {
 	if c == nil {
 		return SellRule{}, false
@@ -363,6 +437,38 @@ func (c *ConfigSnapshot) Chapter(chapterID uint32) (ChapterConfig, bool) {
 	chapter.Tasks = append([]Task(nil), chapter.Tasks...)
 	chapter.RewardItems = append([]RewardItem(nil), chapter.RewardItems...)
 	return chapter, true
+}
+
+// SoleStealableCrop returns the (cropItemID, stealQuantity) of the single
+// stealable CropConfig in this snapshot (StealQuantity>0 and
+// MaxStealTimes>0), deterministically picking the lowest CropItemID if more
+// than one qualifies. This is a documented Phase 5 simplification: Zone's
+// ExecuteFriendAction handler needs to resolve an authoritative
+// crop_item_id/quantity for ReserveSteal before the owner's plot is known
+// (StealFriendCropRequest itself carries no crop hint), and
+// docs/plans/friend_design_plan/06-分阶段实施方案.md's development config
+// only ever defines one stealable crop. A future multi-crop config would
+// need Zone to resolve this from the owner's actual plot (e.g. via a
+// GetPublicFarmSnapshot read) instead of guessing from config alone.
+func (c *ConfigSnapshot) SoleStealableCrop() (cropItemID uint32, stealQuantity uint32, ok bool) {
+	if c == nil {
+		return 0, 0, false
+	}
+	seedItemIDs := make([]int, 0, len(c.cropsBySeed))
+	for seedItemID := range c.cropsBySeed {
+		seedItemIDs = append(seedItemIDs, int(seedItemID))
+	}
+	sort.Ints(seedItemIDs)
+	for _, seedItemID := range seedItemIDs {
+		crop := c.cropsBySeed[uint32(seedItemID)]
+		if crop.StealQuantity == 0 || crop.MaxStealTimes == 0 {
+			continue
+		}
+		if !ok || crop.CropItemID < cropItemID {
+			cropItemID, stealQuantity, ok = crop.CropItemID, crop.StealQuantity, true
+		}
+	}
+	return cropItemID, stealQuantity, ok
 }
 
 func (c *ConfigSnapshot) ActiveShopEntries() []*wsv1.ShopEntryView {

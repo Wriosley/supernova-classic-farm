@@ -42,6 +42,16 @@ type Plot struct {
 	EstimatedMatureAtMS       *int64
 	FertilizerEffect          *datav1.TimedEffectRecord
 	PestEffect                *datav1.TimedEffectRecord
+
+	// Steal fields are frozen at plant time alongside BaseYield (see
+	// player.plant and docs/contracts/data-model.md §18). A plot planted
+	// before Phase 5 (or under a CropConfig with no steal configuration)
+	// decodes StealQuantity/MaxStealTimes/ProtectedOwnerYield as zero,
+	// which CanSteal always treats as "not stealable".
+	StealCount          uint32
+	StealQuantity       uint32
+	MaxStealTimes       uint32
+	ProtectedOwnerYield uint32
 }
 
 type State struct {

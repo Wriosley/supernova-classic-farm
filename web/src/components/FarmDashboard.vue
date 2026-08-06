@@ -34,6 +34,7 @@ export type FarmAction =
   | 'sell'
   | 'claim'
   | 'clean'
+  | 'catch'
 
 export type FarmActionRequest = {
   action: FarmAction
@@ -42,7 +43,7 @@ export type FarmActionRequest = {
   sellAll?: boolean
 }
 
-type FarmTool = 'seed' | 'fertilizer' | 'shovel' | 'hand'
+type FarmTool = 'seed' | 'fertilizer' | 'catch' | 'shovel' | 'hand'
 
 const props = defineProps<{
   snapshot?: PlayerSnapshot
@@ -125,6 +126,7 @@ const toolOptions = computed<Array<{ id: FarmTool; label: string; icon: string; 
   () => [
     { id: 'seed', label: '种子', icon: seedTool, quantity: seedQuantity.value },
     { id: 'fertilizer', label: '肥料', icon: fertilizerTool, quantity: fertilizerQuantity.value },
+    { id: 'catch', label: '捉虫', icon: handTool },
     { id: 'shovel', label: '铲子', icon: shovelTool },
     { id: 'hand', label: '手', icon: handTool },
   ],
@@ -162,7 +164,11 @@ function clampSell(): void {
 function plotPresentation(plot: PlotView) {
   switch (plot.plotState) {
     case PlotState.GROWING:
-      return { label: '成长中', base: plotGrowing, crop: cropGrowing }
+      return {
+        label: plot.pestEffect ? '成长中 · 有虫' : '成长中',
+        base: plotGrowing,
+        crop: cropGrowing,
+      }
     case PlotState.MATURE:
       return { label: '可以收获', base: plotMature, crop: cropMature }
     case PlotState.NEED_CLEANUP:
@@ -181,8 +187,16 @@ function estimatedSeconds(plot: PlotView): number {
 
 function plotMeta(plot: PlotView): string {
   if (plot.plotState === PlotState.GROWING) {
+    const parts: string[] = []
+    if (plot.pestEffect) {
+      parts.push('有害虫')
+    }
     const seconds = estimatedSeconds(plot)
-    return seconds > 0 ? `${seconds} 秒后成熟` : '等待服务器确认成熟'
+    parts.push(seconds > 0 ? `${seconds} 秒后成熟` : '等待服务器确认成熟')
+    if (selectedTool.value === 'catch' && plot.pestEffect) {
+      parts.push('点击捉虫')
+    }
+    return parts.join(' · ')
   }
   if (plot.plotState === PlotState.MATURE) {
     return `可收获 ${plot.harvestableQuantity} 个作物`
@@ -216,6 +230,15 @@ function targetAction(plot: PlotView): FarmActionRequest | undefined {
             ? '该地块已有肥料效果。'
             : '仓库里没有肥料。'
       return undefined
+    case 'catch':
+      if (plot.plotState === PlotState.GROWING && plot.pestEffect) {
+        return { action: 'catch', plotId: plot.plotId }
+      }
+      localMessage.value =
+        plot.plotState !== PlotState.GROWING
+          ? '只能在成长中的作物上捉虫。'
+          : '这块地没有害虫。'
+      return undefined
     case 'hand':
       if (plot.plotState === PlotState.MATURE) {
         return { action: 'harvest', plotId: plot.plotId }
@@ -241,6 +264,8 @@ function isValidTarget(plot: PlotView): boolean {
         !plot.fertilizerEffect &&
         fertilizerQuantity.value > 0
       )
+    case 'catch':
+      return plot.plotState === PlotState.GROWING && Boolean(plot.pestEffect)
     case 'hand':
       return plot.plotState === PlotState.MATURE
     case 'shovel':
@@ -338,7 +363,10 @@ function run(request: FarmActionRequest): void {
             :aria-label="`地块 ${plot.plotId}，${plotPresentation(plot).label}`"
             @click="clickPlot(plot)"
           >
-            <span class="plot-number">PLOT {{ String(plot.plotId).padStart(2, '0') }}</span>
+            <span class="plot-number">
+              PLOT {{ String(plot.plotId).padStart(2, '0') }}
+              <em v-if="plot.pestEffect" class="pest-badge">有虫</em>
+            </span>
             <span class="plot-stage" :data-state="plot.plotState">
               <img class="plot-base pixel-art" :src="plotPresentation(plot).base" alt="" />
               <img

@@ -26,13 +26,37 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 - The fixed dual-Zone kind cluster has five Ready Deployments and a passing
   live owner-loop/migration E2E.
 - Dynamic Zone discovery and automatic scaling are outside the prototype.
-- Friend plan phases 0–2 are complete: contracts are frozen, existing
+- Friend plan phases 0–5 are complete: contracts are frozen, existing
   Gate→Zone commands plus Zone→Gate Push use HMAC-authenticated Unary gRPC,
-  and FriendSvr now owns share codes, `FriendRelation`, `FriendList`
+  FriendSvr now owns share codes, `FriendRelation`, `FriendList`
   reservations and idempotent `TASK_ADD_FRIEND` credit via Zone
-  `PlayerSocialService`. Real friend Tcaplus tables exist.
-- Gate WebSocket friend-code/list routing and farm visits are not wired yet.
-  Work continues at the phase-3 visit/public-snapshot boundary.
+  `PlayerSocialService`, and Gate WebSocket friend-code/list/visit actions
+  are wired to FriendSvr and to each Zone's new `VisitorZoneService`/
+  `OwnerFarmService`. Real friend Tcaplus tables exist.
+- Farm visits return a public snapshot on `ENTER_FRIEND_FARM` and now also
+  receive incremental `FarmViewPatch` pushes: public plot mutations (plant,
+  fertilize, harvest, clean, natural maturity) bump an Actor-local
+  `farm_view_seq` inside the same mailbox call, and `farmview.Broadcaster`
+  fans the resulting patch out through Gate to the owner plus every
+  currently registered visitor. H5 replaces the full snapshot on an epoch
+  change or a seq gap and merges in place on `seq == local + 1`.
+- The cross-Actor `FriendInteraction` Saga is live for `STEAL_FRIEND_CROP`
+  (pest/catch-pest/help-clean remain Phase 6, on the same infrastructure):
+  `PLANT` freezes `steal_quantity`/`max_steal_times`/`protected_owner_yield`
+  alongside `base_yield`; `player.CanSteal` gates the public `can_steal`
+  flag; `player.Runtime` exposes synchronous, mailbox-serialized
+  `ReserveSteal`/`ApplyStealOnOwner`/`CommitSteal`/`ReleaseSteal` steps that
+  flush immediately instead of joining the async Dirty batch; a new
+  `server/internal/interaction` package drives the
+  `INIT -> VISITOR_RESERVED -> OWNER_APPLIED -> VISITOR_COMMITTED ->
+  COMPLETED` (or `-> RELEASING -> ABORTED`) state machine against a Tcaplus
+  (or in-memory dev) `FriendInteraction` store with per-step CAS, and each
+  Zone runs a 5-second reconciler ticker that resumes any interaction whose
+  `retry_at_ms` is due, recovering all three crash windows. Gate and H5
+  route `STEAL_FRIEND_CROP` the same way as the other visit actions; H5
+  merges the returned `visitor_patch` optimistically (no `state_version` on
+  `FriendActionResponse` by frozen contract) and relies on the independent
+  `FarmViewPatch` push for the owner's plot update.
 
 ## Current accepted direction
 
@@ -82,10 +106,13 @@ Important rules already recorded in the business architecture:
 - Full warehouse makes an ordinary harvest fail atomically; task reward items that do not fit use a mail Outbox fallback.
 - Client-visible configuration is an immutable versioned Protobuf package delivered over HTTP and verified by SHA-256; it never becomes transaction authority.
 - A pending reward-mail Outbox is recorded atomically in Actor state but becomes database-durable only after the asynchronous checkpoint/Outbox transaction commits.
-- Friend phases 0–2 are accepted: contracts, internal gRPC/HMAC migration,
-  FriendSvr share-code/relation/list Saga and Zone `ApplyFriendTaskCredit`
-  are implemented. Farm visits, public synchronization and cross-Actor
-  interaction Sagas remain unimplemented.
+- Friend phases 0–5 are accepted: contracts, internal gRPC/HMAC migration,
+  FriendSvr share-code/relation/list Saga, Zone `ApplyFriendTaskCredit`,
+  farm-visit sessions (`ENTER`/`HEARTBEAT`/`EXIT_FRIEND_FARM` plus a
+  one-shot public snapshot), incremental public-Patch broadcast and the
+  cross-Actor `FriendInteraction` Saga for `STEAL_FRIEND_CROP` are
+  implemented. Pest/catch-pest/help-clean interactions remain unimplemented
+  (Phase 6).
 
 ## Current architecture and decision map
 
@@ -444,6 +471,21 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
   rejection tests plus passing local and kind gRPC dual-Zone E2Es.
 - `../evidence/2026-08-06-friend-phase-2-friendsvr.md` records FriendSvr,
   FriendLinkSaga, Zone task credit and friend-table deploy wiring.
+- `../evidence/2026-08-06-friend-phase-3-visit.md` records Zone/Gate visit-
+  session wiring, the new gRPC gateway adapters, `friend_rpc_test.go`
+  RPC-argument/authorization coverage, gateway routing tests and the
+  minimal H5 friends/visit panel.
+- `../evidence/2026-08-06-friend-phase-4-farmview.md` records the
+  `farmview.Broadcaster` fan-out, the Runtime `farm_view_seq` hook on public
+  plot mutations only, the Gate `PublishFarmViewPatch`/`push_hub.go`
+  validation and the H5 epoch/seq-gap recovery logic in `App.vue`.
+- `../evidence/2026-08-06-friend-phase-5-steal-saga.md` records the frozen
+  per-plot steal fields, `player.CanSteal`, the synchronous
+  Reserve/Apply/Commit/Release Actor steps, the new
+  `server/internal/interaction` Saga/Tcaplus-store/reconciler package (with
+  all three crash-window recovery tests), the Zone
+  `ExecuteFriendAction`/`ApplyVisitorAction` RPC wiring, Gate routing and
+  the minimal H5 steal button.
 
 ## Next actions
 
@@ -454,14 +496,17 @@ scope.
 Development follows
 `../plans/friend_design_plan/06-分阶段实施方案.md`:
 
-1. Phases 0–2 are complete and verified by
+1. Phases 0–5 are complete and verified by
    `../evidence/2026-08-06-friend-phase-0-contracts.md`,
-   `../evidence/2026-08-06-friend-phase-1-grpc.md` and
-   `../evidence/2026-08-06-friend-phase-2-friendsvr.md`;
-2. implement phase 3 visit sessions and public farm snapshots;
-3. keep the existing Go, dual-Zone and Kubernetes owner-loop gates green;
-4. optionally wire Gate WebSocket friend-code/list actions onto FriendSvr
-   before or during phase 3 UI work.
+   `../evidence/2026-08-06-friend-phase-1-grpc.md`,
+   `../evidence/2026-08-06-friend-phase-2-friendsvr.md`,
+   `../evidence/2026-08-06-friend-phase-3-visit.md`,
+   `../evidence/2026-08-06-friend-phase-4-farmview.md` and
+   `../evidence/2026-08-06-friend-phase-5-steal-saga.md`;
+2. implement phase 6 (apply-pest-to-friend, catch-pest-for-friend,
+   help-clean-friend-plot) on the same `server/internal/interaction` Saga
+   infrastructure phase 5 built;
+3. keep the existing Go, dual-Zone and Kubernetes owner-loop gates green.
 
 Manual owner checkpoints:
 

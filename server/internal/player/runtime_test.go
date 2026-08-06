@@ -648,6 +648,76 @@ func TestPlantIsIdempotentAndBatchesWithBuyInOneCheckpoint(t *testing.T) {
 	}
 }
 
+// TestPlantFreezesStealFieldsAndRoundTripsThroughCheckpoint verifies §1's
+// freeze-at-plant contract: PLANT copies the CropConfig's steal_quantity/
+// max_steal_times/protected_owner_yield onto the Plot exactly like
+// base_yield, and those frozen values (fields 16-19 in PlotStateRecord)
+// survive a checkpoint marshal/unmarshal round trip unchanged.
+func TestPlantFreezesStealFieldsAndRoundTripsThroughCheckpoint(t *testing.T) {
+	const playerID = uint64(42)
+	fixedNow := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	state := NewDevelopmentState(playerID)
+	state.CreatedAtMS = fixedNow.UnixMilli()
+	state.UpdatedAtMS = fixedNow.UnixMilli()
+	store := &recordingCheckpointStore{state: state}
+	runtime := NewRuntime()
+	runtime.store = store
+	runtime.now = func() time.Time { return fixedNow }
+	defer runtime.Close()
+
+	response, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
+		buySeedsRequest(playerID, "00112233-4455-6677-8899-aabbccddee20", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.GetError() != nil {
+		t.Fatalf("BUY_SEEDS: %+v", response)
+	}
+	response, err = runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
+		plantRequest(playerID, "00112233-4455-6677-8899-aabbccddee21", 1, 1001))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.GetError() != nil {
+		t.Fatalf("PLANT: %+v", response)
+	}
+
+	plot := response.GetPlantResponse().GetPatch().GetPlotUpserts()[0]
+	if plot.GetCropId() != developmentCropID {
+		t.Fatalf("PLANT response plot mismatch: %+v", plot)
+	}
+
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := store.saved[len(store.saved)-1]
+	record := checkpoint.Plots[0]
+	if record.StealQuantity != developmentStealQuantity ||
+		record.MaxStealTimes != developmentMaxStealTimes ||
+		record.ProtectedOwnerYield != developmentProtectedOwnerYield {
+		t.Fatalf("checkpoint did not persist frozen steal fields: %+v", record)
+	}
+
+	body, digest, err := MarshalCheckpoint(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := UnmarshalCheckpoint(body, digest[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := StateFromCheckpoint(decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoredPlot := restored.Plots[1]
+	if restoredPlot.StealQuantity != developmentStealQuantity ||
+		restoredPlot.MaxStealTimes != developmentMaxStealTimes ||
+		restoredPlot.ProtectedOwnerYield != developmentProtectedOwnerYield {
+		t.Fatalf("restored plot lost frozen steal fields: %+v", restoredPlot)
+	}
+}
+
 func TestApplyFertilizerSettlesOldRateAndPersistsEffect(t *testing.T) {
 	const playerID = uint64(42)
 	fixedNow := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)

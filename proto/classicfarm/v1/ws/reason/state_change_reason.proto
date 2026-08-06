@@ -15,4 +15,5 @@ enum StateChangeReason {
   SELL_CROP = 7;
   CLAIM_CHAPTER_REWARD = 8;
   BUY_FERTILIZER = 9;
+  CATCH_PEST = 10;
 }

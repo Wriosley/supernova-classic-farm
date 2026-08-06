@@ -148,7 +148,7 @@ New-Item -ItemType Directory -Path $runRoot | Out-Null
 $environmentKeys = @(
     "APP_ENV", "H5_ORIGIN", "GATEWAY_ID", "GATEWAY_URL",
     "CLIENT_CONFIG_URL", "LOGIN_TICKET_CONSUME_URL", "COORDINATOR_URL",
-    "GATE_RPC_URL", "INTERNAL_GRPC_HMAC_KEY", "MYSQL_DSN", "ROUTING_MODE",
+    "GATE_RPC_URL", "FRIEND_RPC_URL", "INTERNAL_GRPC_HMAC_KEY", "MYSQL_DSN", "ROUTING_MODE",
     "STORAGE_MODE",
     "TCAPLUS_CHECKPOINT_TABLE", "TCAPLUS_PLAYER_ID_COUNTER_TABLE",
     "TCAPLUS_ACCOUNT_BY_NAME_TABLE", "TCAPLUS_ACCOUNT_BY_PLAYER_TABLE",
@@ -200,6 +200,7 @@ try {
     $env:ROUTING_MODE = if ($DualZone) { "static-dual-zone" } else { "local" }
     if ($Tcaplus) {
         $env:STORAGE_MODE = "tcaplus"
+        $env:FRIEND_RPC_URL = "http://127.0.0.1:8085"
         $env:TCAPLUS_CHECKPOINT_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_CHECKPOINT_TABLE)) { "PlayerCheckpoint" } else { $env:TCAPLUS_CHECKPOINT_TABLE }
         $env:TCAPLUS_PLAYER_ID_COUNTER_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_PLAYER_ID_COUNTER_TABLE)) { "PlayerIdCounter" } else { $env:TCAPLUS_PLAYER_ID_COUNTER_TABLE }
         $env:TCAPLUS_ACCOUNT_BY_NAME_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_ACCOUNT_BY_NAME_TABLE)) { "AccountByName" } else { $env:TCAPLUS_ACCOUNT_BY_NAME_TABLE }

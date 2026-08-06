@@ -24,10 +24,16 @@ MySQL 实现仍保留为历史基线和回退适配器；不带存储参数的�
 内存模式。当前 Kubernetes 原型不包含动态 Zone 发现、自动扩缩容、
 Ingress/TLS 或 Zone 级 preStop Drain。
 
-好友功能阶段 0、1、2 已完成：协议/表结构已经冻结，现有内部游戏传输
-已经完成 gRPC/HMAC 改造，FriendSvr 与权威好友关系/列表/加好友任务推进
-已落地。真实好友 Tcaplus 表已在控制台创建。下一阶段是访问会话与公开
-快照。权威进度与限制见 `docs/context/CURRENT.md`。
+好友功能阶段 0-5 已完成：协议/表结构已经冻结，现有内部游戏传输已经
+完成 gRPC/HMAC 改造，FriendSvr 与权威好友关系/列表/加好友任务推进已
+落地，好友农场访问会话（`ENTER`/`HEARTBEAT`/`EXIT`）、公开快照和
+增量 `FarmViewPatch` 广播（独立 `farm_view_seq`、Gate 按农场主+在线
+访客扇出、H5 epoch/seq 缺口自动重新 `ENTER`）均已接入 Gate/Zone 与
+最小 H5；跨 Actor 的 `FriendInteraction` Saga 与偷菜闭环（`STEAL_FRIEND_CROP`
+的预留/应用/提交/释放四步、崩溃恢复、Actor 激活/Zone 定时对账）已落地
+并接入 Gate/Zone/H5。真实好友 Tcaplus 表已在控制台创建。下一阶段是投虫、
+捉虫和好友地块清理（复用同一套 Saga 基础设施）。权威进度与限制见
+`docs/context/CURRENT.md`。
 
 ## 文档入口
 

@@ -9,7 +9,7 @@ import { enumDesc, fileDesc } from "@bufbuild/protobuf/codegenv2";
  * Describes the file classicfarm/v1/ws/reason/state_change_reason.proto.
  */
 export const file_classicfarm_v1_ws_reason_state_change_reason: GenFile = /*@__PURE__*/
-  fileDesc("CjJjbGFzc2ljZmFybS92MS93cy9yZWFzb24vc3RhdGVfY2hhbmdlX3JlYXNvbi5wcm90bxIYY2xhc3NpY2Zhcm0ud3MudjEucmVhc29uKs8BChFTdGF0ZUNoYW5nZVJlYXNvbhIjCh9TVEFURV9DSEFOR0VfUkVBU09OX1VOU1BFQ0lGSUVEEAASDQoJQlVZX1NFRURTEAESCQoFUExBTlQQAhIUChBBUFBMWV9GRVJUSUxJWkVSEAMSCwoHTUFUVVJFRBAEEgsKB0hBUlZFU1QQBRIOCgpDTEVBTl9QTE9UEAYSDQoJU0VMTF9DUk9QEAcSGAoUQ0xBSU1fQ0hBUFRFUl9SRVdBUkQQCBISCg5CVVlfRkVSVElMSVpFUhAJQllaV2dpdGh1Yi5jb20vV3Jpb3NsZXkvc3VwZXJub3ZhLWNsYXNzaWMtZmFybS9zZXJ2ZXIvZ2VuL2NsYXNzaWNmYXJtL3YxL3dzL3JlYXNvbjtyZWFzb252MWIGcHJvdG8z");
+  fileDesc("CjJjbGFzc2ljZmFybS92MS93cy9yZWFzb24vc3RhdGVfY2hhbmdlX3JlYXNvbi5wcm90bxIYY2xhc3NpY2Zhcm0ud3MudjEucmVhc29uKt8BChFTdGF0ZUNoYW5nZVJlYXNvbhIjCh9TVEFURV9DSEFOR0VfUkVBU09OX1VOU1BFQ0lGSUVEEAASDQoJQlVZX1NFRURTEAESCQoFUExBTlQQAhIUChBBUFBMWV9GRVJUSUxJWkVSEAMSCwoHTUFUVVJFRBAEEgsKB0hBUlZFU1QQBRIOCgpDTEVBTl9QTE9UEAYSDQoJU0VMTF9DUk9QEAcSGAoUQ0xBSU1fQ0hBUFRFUl9SRVdBUkQQCBISCg5CVVlfRkVSVElMSVpFUhAJEg4KCkNBVENIX1BFU1QQCkJZWldnaXRodWIuY29tL1dyaW9zbGV5L3N1cGVybm92YS1jbGFzc2ljLWZhcm0vc2VydmVyL2dlbi9jbGFzc2ljZmFybS92MS93cy9yZWFzb247cmVhc29udjFiBnByb3RvMw");
 
 /**
  * @generated from enum classicfarm.ws.v1.reason.StateChangeReason
@@ -64,6 +64,11 @@ export enum StateChangeReason {
    * @generated from enum value: BUY_FERTILIZER = 9;
    */
   BUY_FERTILIZER = 9,
+
+  /**
+   * @generated from enum value: CATCH_PEST = 10;
+   */
+  CATCH_PEST = 10,
 }
 
 /**

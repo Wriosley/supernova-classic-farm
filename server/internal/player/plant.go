@@ -88,6 +88,8 @@ func (r *Runtime) plant(
 		BaseGrowthRateScaled6: crop.BaseGrowthRateScaled6,
 		BaseYield:             crop.BaseYield, SettledGrowthValueScaled9: 0,
 		LastSettledAtMS: now.UnixMilli(), EstimatedMatureAtMS: &estimatedMatureAtMS,
+		StealQuantity: crop.StealQuantity, MaxStealTimes: crop.MaxStealTimes,
+		ProtectedOwnerYield: crop.ProtectedOwnerYield,
 	}
 	for index := range a.state.Tasks {
 		if a.state.Tasks[index].ID == 2 && a.state.Tasks[index].Current < a.state.Tasks[index].Target {

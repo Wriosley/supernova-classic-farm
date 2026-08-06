@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/farmview"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/interaction"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
@@ -19,8 +22,12 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
+
+const interactionReconcileInterval = 5 * time.Second
 
 const (
 	defaultListenAddress = "127.0.0.1:8082"
@@ -52,6 +59,20 @@ func main() {
 	gatewayID := environmentOr("GATEWAY_ID", "local-gateway")
 
 	var runtime *player.Runtime
+	// interactionStore backs the Phase 5 friend-interaction Saga
+	// (STEAL_FRIEND_CROP): a durable Tcaplus-backed store when this Zone
+	// already opened Tcaplus for its own checkpoint storage, or an
+	// in-memory store for development/MySQL modes so the Zone still starts
+	// without requiring Tcaplus solely for friend interactions.
+	var interactionStore interaction.Store
+	// interactionScanner is interactionStore's underlying concrete type,
+	// kept separately because Traverse is not part of the interaction.Store
+	// interface: both *interaction.TcaplusStore's client and
+	// *interaction.MemoryStore support it, letting the Reconciler's ticker
+	// run in every storage mode.
+	var interactionScanner interface {
+		Traverse(proto.Message) ([]proto.Message, error)
+	}
 	storageMode := strings.TrimSpace(os.Getenv("STORAGE_MODE"))
 	if storageMode == "tcaplus" {
 		if dsn != "" {
@@ -79,8 +100,14 @@ func main() {
 		if configErr != nil {
 			log.Fatal(configErr)
 		}
+		friendInteractionTable, configErr := tcaplusdb.TableName(
+			"TCAPLUS_FRIEND_INTERACTION_TABLE", "FriendInteraction",
+		)
+		if configErr != nil {
+			log.Fatal(configErr)
+		}
 		client, openErr := tcaplusdb.Open(
-			config, checkpointTable, fenceTable, outboxTable,
+			config, checkpointTable, fenceTable, outboxTable, friendInteractionTable,
 		)
 		if openErr != nil {
 			log.Fatal(openErr)
@@ -102,9 +129,16 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		interactionStore, err = interaction.NewTcaplusStore(client, config.ZoneID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		interactionScanner = client
 		logger.Info("using pure Tcaplus Player checkpoint store")
 	} else if dsn == "" {
 		runtime = player.NewRuntime()
+		memoryInteractions := interaction.NewMemoryStore()
+		interactionStore, interactionScanner = memoryInteractions, memoryInteractions
 		logger.Warn("using development-only lazy in-memory player state")
 	} else {
 		db, openErr := database.OpenMySQL(context.Background(), dsn)
@@ -118,6 +152,8 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		memoryInteractions := interaction.NewMemoryStore()
+		interactionStore, interactionScanner = memoryInteractions, memoryInteractions
 		logger.Info("using MySQL Player checkpoint store")
 	}
 	var pushForwarder *player.GRPCPushForwarder
@@ -133,12 +169,12 @@ func main() {
 	gates := &shardExecutionGates{}
 	var authorization ownerAuthorization = localAuthorization{}
 	var lifecycle *lifecycleHandler
+	coordinatorURL := environmentOr("COORDINATOR_URL", "http://127.0.0.1:8083")
 	if routingMode == dualRoutingMode {
 		table, tableErr := routing.NewAuthorizationTable(ownerZoneID)
 		if tableErr != nil {
 			log.Fatal(tableErr)
 		}
-		coordinatorURL := environmentOr("COORDINATOR_URL", "http://127.0.0.1:8083")
 		client := &http.Client{Timeout: 5 * time.Second}
 		if err := refreshAuthorization(ctx, table, client, coordinatorURL); err != nil {
 			log.Fatalf("load initial ownership snapshot: %v", err)
@@ -169,6 +205,58 @@ func main() {
 		log.Fatal(err)
 	}
 
+	friendURL := environmentOr("FRIEND_RPC_URL", "http://127.0.0.1:8085")
+	friendClient, err := visit.NewFriendRPCClient(rpcKey, ownerZoneID, friendURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ownerFarmClient, err := visit.NewZoneOwnerFarmClient(rpcKey, ownerZoneID, coordinatorURL, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		_ = friendClient.Close()
+		_ = ownerFarmClient.Close()
+	}()
+	visitorService, err := visit.NewService(friendClient, ownerFarmClient, time.Now)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ownerFarmService, err := visit.NewOwnerService(runtime, pushForwarder, time.Now)
+	if err != nil {
+		log.Fatal(err)
+	}
+	go ownerFarmService.RunEvictionLoop(ctx)
+
+	farmViewBroadcaster, err := farmview.NewBroadcaster(pushForwarder, ownerFarmService, gatewayID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := runtime.SetFarmViewBroadcaster(farmViewBroadcaster); err != nil {
+		log.Fatal(err)
+	}
+
+	// Phase 5: the STEAL_FRIEND_CROP interaction Saga. ownerFarmClient
+	// already implements interaction.OwnerFarmClient (its
+	// ApplyVisitorAction resolves the owner's route itself), and *Runtime
+	// already implements interaction.VisitorSteps, so both wire in
+	// directly with no adapter.
+	stealSaga, err := interaction.NewStealSaga(interactionStore, runtime, ownerFarmClient)
+	if err != nil {
+		log.Fatal(err)
+	}
+	actionSaga, err := interaction.NewActionSaga(interactionStore, runtime, ownerFarmClient)
+	if err != nil {
+		log.Fatal(err)
+	}
+	stealResolver := newZoneStealResolver(runtime, authorization)
+	interactionReconciler, err := interaction.NewReconciler(interactionStore, stealSaga, stealResolver, interactionScanner)
+	if err != nil {
+		log.Fatal(err)
+	}
+	interactionReconciler.WithActionSaga(actionSaga)
+	go runInteractionReconcileLoop(ctx, interactionReconciler, logger)
+
 	mux := http.NewServeMux()
 	if lifecycle != nil {
 		mux.HandleFunc("POST /internal/v1/shards/{shard_id}/drain", lifecycle.drain)
@@ -185,6 +273,15 @@ func main() {
 		AllowedCallers: map[string][]string{
 			rpcv1.GameCommandService_ExecutePlayerCommand_FullMethodName:   {"gate"},
 			rpcv1.PlayerSocialService_ApplyFriendTaskCredit_FullMethodName: {"friend"},
+			rpcv1.VisitorZoneService_EnterFriendFarm_FullMethodName:        {"gate"},
+			rpcv1.VisitorZoneService_HeartbeatFriendFarm_FullMethodName:    {"gate"},
+			rpcv1.VisitorZoneService_ExitFriendFarm_FullMethodName:         {"gate"},
+			rpcv1.OwnerFarmService_EnterVisitor_FullMethodName:             {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_RefreshVisitorHeartbeat_FullMethodName:  {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_ExitVisitor_FullMethodName:              {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_GetPublicFarmSnapshot_FullMethodName:    {"zone-local", "zone-a", "zone-b"},
+			rpcv1.VisitorZoneService_ExecuteFriendAction_FullMethodName:    {"gate"},
+			rpcv1.OwnerFarmService_ApplyVisitorAction_FullMethodName:       {"zone-local", "zone-a", "zone-b"},
 		},
 	})
 	if err != nil {
@@ -206,6 +303,13 @@ func main() {
 		grpcServer,
 		newPlayerSocialRPCServer(runtime, authorization, gates, time.Now),
 	)
+	visitorZoneServer := newVisitorZoneRPCServer(visitorService, authorization, ownerZoneID)
+	visitorZoneServer.withFriendSagas(runtime, stealSaga, actionSaga)
+	rpcv1.RegisterVisitorZoneServiceServer(grpcServer, visitorZoneServer)
+	ownerFarmServer := newOwnerFarmRPCServer(ownerFarmService, authorization, gates, time.Now)
+	ownerFarmServer.withRuntime(runtime)
+	ownerFarmServer.enableFriendActions()
+	rpcv1.RegisterOwnerFarmServiceServer(grpcServer, ownerFarmServer)
 
 	server := &http.Server{
 		Addr:              listenAddress,
@@ -272,6 +376,24 @@ func refreshAuthorizationLoop(
 				continue
 			}
 			logger.Debug("ownership snapshot refreshed")
+		}
+	}
+}
+
+// runInteractionReconcileLoop drives the Phase 5 friend-interaction
+// Reconciler every interactionReconcileInterval, exactly like
+// cmd/friend's runReconcileLoop drives the friend-link Saga's Reconciler.
+func runInteractionReconcileLoop(ctx context.Context, reconciler *interaction.Reconciler, logger *slog.Logger) {
+	ticker := time.NewTicker(interactionReconcileInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := reconciler.ReconcileDue(ctx, time.Now()); err != nil {
+				logger.Error("friend interaction Saga reconcile failed", "error", err)
+			}
 		}
 	}
 }

@@ -27,6 +27,9 @@ const friendActionInitialChances uint32 = 100
 // resulting checkpoint synchronously rather than waiting for the periodic
 // dirty flusher: FriendSvr's Saga only marks its own step APPLIED after this
 // call returns, so a durable write here is required before that happens.
+// A retry whose credit receipt is still only in Actor memory (an earlier
+// attempt's SaveCAS failed) re-attempts that write and keeps failing until it
+// commits, so newlyApplied=false never stands in for an unpersisted credit.
 func (r *Runtime) ApplyFriendTaskCredit(
 	ctx context.Context,
 	playerID uint64,
@@ -48,23 +51,22 @@ func (r *Runtime) ApplyFriendTaskCredit(
 		return false, 0, err
 	}
 	now := r.now().UTC()
-	var beforeRevision uint64
+	stepKey := syncStepKey(syncStepFriendTaskCredit, relationID)
 	var mailboxErr error
 	if err := a.mailbox.Do(ctx, func() {
-		beforeRevision = a.state.CheckpointRevision
+		beforeRevision := a.state.CheckpointRevision
 		newlyApplied, mailboxErr = applyFriendTaskCredit(a.state, relationID, now)
 		playerSeq = a.state.PlayerSeq
+		if mailboxErr == nil && a.state.CheckpointRevision != beforeRevision {
+			a.markSyncPending(stepKey, pendingSyncStep{revision: a.state.CheckpointRevision})
+		}
 	}); err != nil {
 		return false, 0, fmt.Errorf("execute friend task credit mailbox: %w", err)
 	}
 	if mailboxErr != nil {
 		return false, 0, mailboxErr
 	}
-	if a.state.CheckpointRevision == beforeRevision {
-		return newlyApplied, playerSeq, nil
-	}
-	r.markDirty(playerID, a.state.CheckpointRevision)
-	if err := r.flushPlayerLocked(ctx, playerID); err != nil {
+	if _, err := r.settleSyncStepLocked(ctx, playerID, a, stepKey); err != nil {
 		return false, 0, fmt.Errorf("flush friend task credit: %w", err)
 	}
 	return newlyApplied, playerSeq, nil

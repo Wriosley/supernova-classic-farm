@@ -248,11 +248,25 @@ button:disabled {
   cursor: url("../../frontend/src/assets/art/runtime/tools/hand.png") 8 8, pointer;
 }
 
+.plots-grid[data-tool="catch"] .plot-tile {
+  cursor: url("../../frontend/src/assets/art/runtime/tools/hand.png") 8 8, pointer;
+}
+
 .plot-number {
   color: #6b7c54;
   font-size: 0.62rem;
   font-weight: 900;
   letter-spacing: 0.1em;
+}
+
+.pest-badge {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 99rem;
+  background: #8a5a2b;
+  color: #f7f3e2;
+  font-style: normal;
+  font-size: 0.6rem;
 }
 
 .plot-tile > strong {
@@ -789,6 +803,75 @@ input:focus {
   border-radius: 0.7rem;
   color: #6d7768;
   text-align: center;
+}
+
+.friends-grid {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.2fr);
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.friends-code-panel,
+.friends-list-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+}
+
+.friends-code-panel h3,
+.friends-list-panel h3,
+.visit-panel h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.generated-code {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.65rem;
+  background: #f1f2e8;
+  color: #273824;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+}
+
+.redeem-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.friends-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.friends-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #c3b48e;
+  border-radius: 0.65rem;
+  background: #fffdf2;
+}
+
+.visit-panel {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #c3b48e;
+}
+
+@media (max-width: 720px) {
+  .friends-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {

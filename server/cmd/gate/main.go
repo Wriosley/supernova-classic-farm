@@ -54,6 +54,17 @@ func run() error {
 		return err
 	}
 	defer zoneCommander.Close()
+	visitorCommander, err := gateway.NewGRPCVisitorZoneCommander(rpcKey, gatewayID)
+	if err != nil {
+		return err
+	}
+	defer visitorCommander.Close()
+	friendURL := envOr("FRIEND_RPC_URL", "http://127.0.0.1:8085")
+	friendCommander, err := gateway.NewGRPCFriendCommander(rpcKey, friendURL)
+	if err != nil {
+		return err
+	}
+	defer friendCommander.Close()
 	client := newInternalHTTPClient()
 	clientConfigURL := envOr("CLIENT_CONFIG_URL", gateway.DefaultConfigURL)
 	configSHA, err := configuredSHA(client, clientConfigURL)
@@ -80,6 +91,8 @@ func run() error {
 		},
 		Routes:          routeCache,
 		Zone:            zoneCommander,
+		Visitor:         visitorCommander,
+		Friends:         friendCommander,
 		ClientConfigURL: clientConfigURL,
 		ClientConfigSHA: configSHA,
 	})
@@ -101,6 +114,12 @@ func run() error {
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
 			rpcv1.GatePushService_PublishPlayerStateChanged_FullMethodName: {
+				"zone-local", "zone-a", "zone-b",
+			},
+			rpcv1.GatePushService_PublishFarmPresence_FullMethodName: {
+				"zone-local", "zone-a", "zone-b",
+			},
+			rpcv1.GatePushService_PublishFarmViewPatch_FullMethodName: {
 				"zone-local", "zone-a", "zone-b",
 			},
 		},

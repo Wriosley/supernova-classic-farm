@@ -10,6 +10,7 @@ data:
   INTERNAL_NETWORK_MODE: kubernetes
   ROUTING_MODE: static-dual-zone
   COORDINATOR_URL: http://coordinator:8083
+  FRIEND_RPC_URL: http://friend:8085
   TCAPLUS_CHECKPOINT_TABLE: PlayerCheckpoint
   TCAPLUS_PLAYER_ID_COUNTER_TABLE: PlayerIdCounter
   TCAPLUS_ACCOUNT_BY_NAME_TABLE: AccountByName

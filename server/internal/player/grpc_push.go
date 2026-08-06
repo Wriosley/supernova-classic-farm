@@ -84,6 +84,66 @@ func (f *GRPCPushForwarder) Forward(
 	return nil
 }
 
+// PublishFarmPresence implements visit.PresencePublisher, letting the Owner
+// Zone's visit.OwnerService reuse the same static single-gate forwarder that
+// carries PLAYER_STATE_CHANGED pushes.
+func (f *GRPCPushForwarder) PublishFarmPresence(
+	ctx context.Context,
+	ownerPlayerID uint64,
+	presence *wsv1.FarmPresencePush,
+) error {
+	if f == nil || f.client == nil || presence == nil {
+		return errors.New("gRPC push forwarder is not configured")
+	}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+	}
+	_, err := f.client.PublishFarmPresence(
+		ctx,
+		&rpcv1.PublishFarmPresenceRequest{
+			GateId: f.gatewayID, RecipientPlayerId: ownerPlayerID,
+			Presence: presence,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("publish farm presence: %w", err)
+	}
+	return nil
+}
+
+// PublishFarmViewPatch implements farmview.PatchPublisher, letting the Owner
+// Zone's farmview.Broadcaster reuse the same static single-gate forwarder
+// that carries PLAYER_STATE_CHANGED and FARM_PRESENCE_CHANGED pushes. Unlike
+// those two, one call fans out to every recipient_player_id on gateID in a
+// single RPC.
+func (f *GRPCPushForwarder) PublishFarmViewPatch(
+	ctx context.Context,
+	gateID string,
+	recipientPlayerIDs []uint64,
+	patch *wsv1.FarmViewPatch,
+) error {
+	if f == nil || f.client == nil || patch == nil || len(recipientPlayerIDs) == 0 {
+		return errors.New("gRPC push forwarder is not configured")
+	}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+	}
+	_, err := f.client.PublishFarmViewPatch(
+		ctx,
+		&rpcv1.PublishFarmViewPatchRequest{
+			GateId: gateID, RecipientPlayerIds: recipientPlayerIDs, Patch: patch,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("publish farm view patch: %w", err)
+	}
+	return nil
+}
+
 func (f *GRPCPushForwarder) Close() error {
 	if f == nil || f.conn == nil {
 		return nil

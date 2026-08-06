@@ -40,11 +40,22 @@ This directory separates current project truth, design reasoning, executable con
   mode. Tickets and CSRF nonce records remain process-local by ADR-0010.
 - Outbox relay, Mail Service, production Push delivery, abnormal Dirty-window
   guarantees and production capacity evidence remain outside the prototype.
-- Friend phases 0–2 are complete: contracts are frozen, existing
-  Gate→Zone/Zone→Gate game traffic uses HMAC-authenticated gRPC, and
-  FriendSvr plus authoritative friend relations/lists/task credit are live
-  against real friend Tcaplus tables. Phase 3 (visit session + public
-  snapshot) is the next boundary.
+- Friend phases 0–5 are complete: contracts are frozen, existing
+  Gate→Zone/Zone→Gate game traffic uses HMAC-authenticated gRPC, FriendSvr
+  plus authoritative friend relations/lists/task credit are live against
+  real friend Tcaplus tables, and Gate/Zone route `ENTER`/`HEARTBEAT`/
+  `EXIT_FRIEND_FARM` to a public farm snapshot with a minimal H5 friends
+  panel. Public plot mutations (plant, fertilize, harvest, clean, natural
+  maturity) now bump an independent `farm_view_seq` and broadcast an
+  incremental `FarmViewPatch` to the owner and every online visitor through
+  Gate; H5 replaces the full snapshot on an epoch change or seq gap. The
+  cross-Actor `FriendInteraction` Saga is live for `STEAL_FRIEND_CROP`:
+  frozen per-plot steal fields at plant, synchronous visitor
+  reserve/owner-apply/visitor-commit/release steps, a Tcaplus (or in-memory
+  dev) `FriendInteraction` store with CAS, and a 5-second reconciler ticker
+  that recovers all three crash windows; ordinary single-player commands
+  remain unaffected asynchronous Dirty writes. Phase 6 (pest/catch/help
+  interactions, reusing the same Saga infrastructure) is the next boundary.
 - Read `context/CURRENT.md` for the exact handoff and the dated files under `evidence/` for observed results and limitations.
 
 ## Directory roles

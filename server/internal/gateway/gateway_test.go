@@ -37,6 +37,66 @@ func (f zoneFunc) Command(ctx context.Context, route Route, caller uint64, body 
 	return f(ctx, route, caller, body)
 }
 
+type fakeVisitorClient struct {
+	enter, heartbeat, exit, steal, applyPest, catchPest, helpClean func(context.Context, Route, uint64, *wsv1.WsEnvelope) ([]byte, error)
+}
+
+func (f *fakeVisitorClient) Enter(ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	return f.enter(ctx, route, caller, request)
+}
+
+func (f *fakeVisitorClient) Heartbeat(ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	return f.heartbeat(ctx, route, caller, request)
+}
+
+func (f *fakeVisitorClient) Exit(ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	return f.exit(ctx, route, caller, request)
+}
+
+func (f *fakeVisitorClient) Steal(ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	if f.steal == nil {
+		return nil, errors.New("fakeVisitorClient.steal not configured")
+	}
+	return f.steal(ctx, route, caller, request)
+}
+
+func (f *fakeVisitorClient) ApplyPest(ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	if f.applyPest == nil {
+		return nil, errors.New("fakeVisitorClient.applyPest not configured")
+	}
+	return f.applyPest(ctx, route, caller, request)
+}
+
+func (f *fakeVisitorClient) CatchPest(ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	if f.catchPest == nil {
+		return nil, errors.New("fakeVisitorClient.catchPest not configured")
+	}
+	return f.catchPest(ctx, route, caller, request)
+}
+
+func (f *fakeVisitorClient) HelpClean(ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	if f.helpClean == nil {
+		return nil, errors.New("fakeVisitorClient.helpClean not configured")
+	}
+	return f.helpClean(ctx, route, caller, request)
+}
+
+type fakeFriendClient struct {
+	createCode, redeemCode, list func(context.Context, uint64, *wsv1.WsEnvelope) ([]byte, error)
+}
+
+func (f *fakeFriendClient) CreateCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	return f.createCode(ctx, caller, request)
+}
+
+func (f *fakeFriendClient) RedeemCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	return f.redeemCode(ctx, caller, request)
+}
+
+func (f *fakeFriendClient) List(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	return f.list(ctx, caller, request)
+}
+
 func TestHTTPTicketConsumerSingleUseAndGatewayIdentity(t *testing.T) {
 	var consumed atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -316,20 +376,31 @@ func authenticatedConnectionWithHandler(
 	routes RouteResolver,
 ) (*websocket.Conn, *Handler, func()) {
 	t.Helper()
-	if routes == nil {
-		routes = routeFunc(func(_ context.Context, shard uint32) (Route, error) {
+	return authenticatedConnectionWithConfig(t, Config{Zone: zone, Routes: routes})
+}
+
+func authenticatedConnectionWithConfig(
+	t *testing.T,
+	cfg Config,
+) (*websocket.Conn, *Handler, func()) {
+	t.Helper()
+	if cfg.Routes == nil {
+		cfg.Routes = routeFunc(func(_ context.Context, shard uint32) (Route, error) {
 			return Route{ShardID: shard, OwnerEpoch: 1, OwnerEndpoint: "http://127.0.0.1:8082"}, nil
 		})
 	}
-	handler, err := NewHandler(Config{
-		Tickets: ticketFunc(func(_ context.Context, ticket string) (uint64, error) {
-			if ticket != "valid-ticket" {
-				return 0, errors.New("invalid ticket")
-			}
-			return 42, nil
-		}),
-		Routes: routes, Zone: zone,
+	if cfg.Zone == nil {
+		cfg.Zone = zoneFunc(func(context.Context, Route, uint64, []byte) ([]byte, error) {
+			return nil, errors.New("unused")
+		})
+	}
+	cfg.Tickets = ticketFunc(func(_ context.Context, ticket string) (uint64, error) {
+		if ticket != "valid-ticket" {
+			return 0, errors.New("invalid ticket")
+		}
+		return 42, nil
 	})
+	handler, err := NewHandler(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,6 +475,56 @@ func maturedPush(playerID, playerSeq uint64) *wsv1.WsEnvelope {
 	}
 }
 
+func stealFriendCropRequest(requestID string, playerID, ownerID uint64, visitID []byte, plotID uint32) *wsv1.WsEnvelope {
+	return &wsv1.WsEnvelope{
+		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,
+		Action: wsv1.Action_STEAL_FRIEND_CROP, RequestId: requestID,
+		TargetPlayerId: playerID,
+		Payload: &wsv1.WsEnvelope_StealFriendCropRequest{
+			StealFriendCropRequest: &wsv1.StealFriendCropRequest{
+				OwnerPlayerId: ownerID, VisitId: visitID, PlotId: plotID,
+			},
+		},
+	}
+}
+
+func createFriendCodeRequest(requestID string, playerID uint64) *wsv1.WsEnvelope {
+	return &wsv1.WsEnvelope{
+		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,
+		Action: wsv1.Action_CREATE_FRIEND_CODE, RequestId: requestID,
+		TargetPlayerId: playerID,
+		Payload: &wsv1.WsEnvelope_CreateFriendCodeRequest{
+			CreateFriendCodeRequest: &wsv1.CreateFriendCodeRequest{},
+		},
+	}
+}
+
+func enterFriendFarmRequest(requestID string, playerID, ownerID uint64) *wsv1.WsEnvelope {
+	return &wsv1.WsEnvelope{
+		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,
+		Action: wsv1.Action_ENTER_FRIEND_FARM, RequestId: requestID,
+		TargetPlayerId: playerID,
+		Payload: &wsv1.WsEnvelope_EnterFriendFarmRequest{
+			EnterFriendFarmRequest: &wsv1.EnterFriendFarmRequest{OwnerPlayerId: ownerID},
+		},
+	}
+}
+
+// genericDomainResponse builds a minimal, correlated RESPONSE envelope for
+// friend/visit actions. validateZoneResponse only checks protocol version,
+// message kind, Action, and RequestId, not the payload oneof's shape, so a
+// single payload type is enough to exercise every action under test.
+func genericDomainResponse(request *wsv1.WsEnvelope) *wsv1.WsEnvelope {
+	return &wsv1.WsEnvelope{
+		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
+		Action: request.Action, RequestId: request.RequestId,
+		TargetPlayerId: request.TargetPlayerId, ServerTimeMs: time.Now().UnixMilli(),
+		Payload: &wsv1.WsEnvelope_ListFriendsResponse{
+			ListFriendsResponse: &wsv1.ListFriendsResponse{},
+		},
+	}
+}
+
 func pingRequest(requestID string, pingID uint64) *wsv1.WsEnvelope {
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,
@@ -448,4 +569,168 @@ func decodeEnvelope(t *testing.T, body []byte) *wsv1.WsEnvelope {
 		t.Fatalf("decode envelope: %v", err)
 	}
 	return message
+}
+
+func TestValidateRequestTupleAcceptsFriendAndVisitActions(t *testing.T) {
+	tests := []struct {
+		name    string
+		request *wsv1.WsEnvelope
+	}{
+		{"create friend code", createFriendCodeRequest("req-1", 42)},
+		{"redeem friend code", &wsv1.WsEnvelope{
+			MessageKind: wsv1.MessageKind_REQUEST,
+			Action:      wsv1.Action_REDEEM_FRIEND_CODE, RequestId: "req-1", TargetPlayerId: 42,
+			Payload: &wsv1.WsEnvelope_RedeemFriendCodeRequest{RedeemFriendCodeRequest: &wsv1.RedeemFriendCodeRequest{Code: "abc"}},
+		}},
+		{"list friends", &wsv1.WsEnvelope{
+			MessageKind: wsv1.MessageKind_REQUEST,
+			Action:      wsv1.Action_LIST_FRIENDS, RequestId: "req-1", TargetPlayerId: 42,
+			Payload: &wsv1.WsEnvelope_ListFriendsRequest{ListFriendsRequest: &wsv1.ListFriendsRequest{}},
+		}},
+		{"enter friend farm", enterFriendFarmRequest("req-1", 42, 7)},
+		{"farm heartbeat", &wsv1.WsEnvelope{
+			MessageKind: wsv1.MessageKind_REQUEST,
+			Action:      wsv1.Action_FARM_HEARTBEAT, RequestId: "req-1", TargetPlayerId: 42,
+			Payload: &wsv1.WsEnvelope_FarmHeartbeatRequest{FarmHeartbeatRequest: &wsv1.FarmHeartbeatRequest{OwnerPlayerId: 7, VisitId: make([]byte, 16)}},
+		}},
+		{"exit friend farm", &wsv1.WsEnvelope{
+			MessageKind: wsv1.MessageKind_REQUEST,
+			Action:      wsv1.Action_EXIT_FRIEND_FARM, RequestId: "req-1", TargetPlayerId: 42,
+			Payload: &wsv1.WsEnvelope_ExitFriendFarmRequest{ExitFriendFarmRequest: &wsv1.ExitFriendFarmRequest{OwnerPlayerId: 7, VisitId: make([]byte, 16)}},
+		}},
+		{"steal friend crop", stealFriendCropRequest("req-1", 42, 7, make([]byte, 16), 3)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validateRequestTuple(test.request); err != nil {
+				t.Fatalf("validateRequestTuple(%s) = %v, want nil", test.name, err)
+			}
+			missingTarget := proto.Clone(test.request).(*wsv1.WsEnvelope)
+			missingTarget.TargetPlayerId = 0
+			if err := validateRequestTuple(missingTarget); err == nil {
+				t.Fatalf("validateRequestTuple(%s without target_player_id) = nil, want error", test.name)
+			}
+			missingPayload := proto.Clone(test.request).(*wsv1.WsEnvelope)
+			missingPayload.Payload = nil
+			if err := validateRequestTuple(missingPayload); err == nil {
+				t.Fatalf("validateRequestTuple(%s without payload) = nil, want error", test.name)
+			}
+		})
+	}
+}
+
+func TestValidateRequestTupleRejectsInvalidStealFriendCrop(t *testing.T) {
+	base := stealFriendCropRequest("req-1", 42, 7, make([]byte, 16), 3)
+	tests := []struct {
+		name   string
+		mutate func(*wsv1.WsEnvelope)
+	}{
+		{"zero owner_player_id", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().OwnerPlayerId = 0 }},
+		{"short visit_id", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().VisitId = []byte{1, 2, 3} }},
+		{"nil visit_id", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().VisitId = nil }},
+		{"zero plot_id", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().PlotId = 0 }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := proto.Clone(base).(*wsv1.WsEnvelope)
+			test.mutate(request)
+			if err := validateRequestTuple(request); err == nil {
+				t.Fatalf("validateRequestTuple(%s) = nil, want error", test.name)
+			}
+		})
+	}
+}
+
+func TestFriendAndVisitActionsRejectedWhenClientsUnconfigured(t *testing.T) {
+	conn, _, closeServer := authenticatedConnectionWithConfig(t, Config{})
+	defer closeServer()
+	defer conn.CloseNow()
+
+	writeEnvelope(t, conn, createFriendCodeRequest("friend-unconfigured", 42))
+	if response := readEnvelope(t, conn); response.GetError().GetCode() != wsv1.ErrorCode_SERVICE_UNAVAILABLE {
+		t.Fatalf("CREATE_FRIEND_CODE without Friends client response = %+v", response)
+	}
+
+	writeEnvelope(t, conn, enterFriendFarmRequest("visit-unconfigured", 42, 7))
+	if response := readEnvelope(t, conn); response.GetError().GetCode() != wsv1.ErrorCode_SERVICE_UNAVAILABLE {
+		t.Fatalf("ENTER_FRIEND_FARM without Visitor client response = %+v", response)
+	}
+}
+
+func TestHandleGameRoutesFriendActionToFriendsClient(t *testing.T) {
+	var gotCaller uint64
+	friends := &fakeFriendClient{
+		createCode: func(_ context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+			gotCaller = caller
+			return proto.Marshal(genericDomainResponse(request))
+		},
+	}
+	conn, _, closeServer := authenticatedConnectionWithConfig(t, Config{Friends: friends})
+	defer closeServer()
+	defer conn.CloseNow()
+
+	writeEnvelope(t, conn, createFriendCodeRequest("create-code-1", 42))
+	response := readEnvelope(t, conn)
+	if response.Action != wsv1.Action_CREATE_FRIEND_CODE || response.RequestId != "create-code-1" {
+		t.Fatalf("CREATE_FRIEND_CODE response = %+v", response)
+	}
+	if gotCaller != 42 {
+		t.Fatalf("caller passed to Friends.CreateCode = %d, want 42", gotCaller)
+	}
+}
+
+func TestHandleGameRoutesVisitActionToVisitorClientWithNotOwnerRetry(t *testing.T) {
+	var routeCalls atomic.Int32
+	routes := routeFunc(func(_ context.Context, shard uint32) (Route, error) {
+		call := routeCalls.Add(1)
+		return Route{ShardID: shard, OwnerEpoch: uint64(call), OwnerEndpoint: "http://127.0.0.1:8082"}, nil
+	})
+	var enterCalls atomic.Int32
+	visitor := &fakeVisitorClient{
+		enter: func(_ context.Context, _ Route, _ uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+			if enterCalls.Add(1) == 1 {
+				return nil, ErrNotOwner
+			}
+			return proto.Marshal(genericDomainResponse(request))
+		},
+	}
+	conn, _, closeServer := authenticatedConnectionWithConfig(t, Config{Visitor: visitor, Routes: routes})
+	defer closeServer()
+	defer conn.CloseNow()
+
+	writeEnvelope(t, conn, enterFriendFarmRequest("enter-1", 42, 7))
+	response := readEnvelope(t, conn)
+	if response.Action != wsv1.Action_ENTER_FRIEND_FARM || response.RequestId != "enter-1" || response.Error != nil {
+		t.Fatalf("ENTER_FRIEND_FARM response = %+v", response)
+	}
+	if routeCalls.Load() != 2 || enterCalls.Load() != 2 {
+		t.Fatalf("route/visitor calls = %d/%d, want 2/2", routeCalls.Load(), enterCalls.Load())
+	}
+}
+
+func TestHandleGameRoutesStealFriendCropToVisitorClient(t *testing.T) {
+	routes := routeFunc(func(_ context.Context, shard uint32) (Route, error) {
+		return Route{ShardID: shard, OwnerEpoch: 1, OwnerEndpoint: "http://127.0.0.1:8082"}, nil
+	})
+	var gotCaller uint64
+	var stealCalls atomic.Int32
+	visitor := &fakeVisitorClient{
+		steal: func(_ context.Context, _ Route, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+			stealCalls.Add(1)
+			gotCaller = caller
+			return proto.Marshal(genericDomainResponse(request))
+		},
+	}
+	conn, _, closeServer := authenticatedConnectionWithConfig(t, Config{Visitor: visitor, Routes: routes})
+	defer closeServer()
+	defer conn.CloseNow()
+
+	writeEnvelope(t, conn, stealFriendCropRequest("steal-1", 42, 7, make([]byte, 16), 3))
+	response := readEnvelope(t, conn)
+	if response.Action != wsv1.Action_STEAL_FRIEND_CROP || response.RequestId != "steal-1" || response.Error != nil {
+		t.Fatalf("STEAL_FRIEND_CROP response = %+v", response)
+	}
+	if stealCalls.Load() != 1 || gotCaller != 42 {
+		t.Fatalf("visitor.Steal calls=%d caller=%d, want 1/42", stealCalls.Load(), gotCaller)
+	}
 }

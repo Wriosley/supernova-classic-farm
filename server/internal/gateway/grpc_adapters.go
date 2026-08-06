@@ -84,7 +84,7 @@ func (z *GRPCZoneCommander) Command(
 			err:  errors.New("invalid Zone command protobuf"),
 		}
 	}
-	client, err := z.client(route.OwnerEndpoint)
+	client, err := z.client(route.OwnerEndpoint) // ← 拿到 gRPC 客户端（内部可能触发上面的 dial）
 	if err != nil {
 		return nil, &zoneCommandError{kind: "target", err: err}
 	}
@@ -147,16 +147,16 @@ func (z *GRPCZoneCommander) Close() error {
 func (z *GRPCZoneCommander) client(
 	endpoint string,
 ) (rpcv1.GameCommandServiceClient, error) {
-	target, err := rpcnet.TargetFromHTTPURL(endpoint)
+	target, err := rpcnet.TargetFromHTTPURL(endpoint) // 把路由表里的 endpoint 转成 gRPC 目标地址
 	if err != nil {
 		return nil, fmt.Errorf("invalid Zone gRPC endpoint: %w", err)
 	}
 	z.mu.Lock()
 	defer z.mu.Unlock()
 	if client := z.clients[target]; client != nil {
-		return client, nil
+		return client, nil // 已经连过，直接复用
 	}
-	conn, err := grpc.NewClient(target, z.dialOpts...)
+	conn, err := grpc.NewClient(target, z.dialOpts...) // ← 真正"拨号"建立 gRPC 连接
 	if err != nil {
 		return nil, fmt.Errorf("create Zone gRPC client: %w", err)
 	}

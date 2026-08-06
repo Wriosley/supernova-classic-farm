@@ -22,6 +22,12 @@ const (
 	MaxMessageBytes         = 64 << 10
 	DefaultGatewayID        = "local-gateway"
 	DefaultConfigURL        = "http://127.0.0.1:8080/v1/client-config/1"
+	// visitCommandTimeout and friendCommandTimeout follow the internal-gRPC
+	// contract deadlines documented on VisitorZoneService/OwnerFarmService
+	// and FriendService respectively, rather than the longer general
+	// CommandTimeout used for GameCommandService.
+	visitCommandTimeout  = 3 * time.Second
+	friendCommandTimeout = 2 * time.Second
 )
 
 var (
@@ -56,6 +62,8 @@ type Config struct {
 	Tickets           TicketConsumer
 	Routes            RouteResolver
 	Zone              ZoneCommander
+	Visitor           VisitorZoneClient
+	Friends           FriendClient
 	AuthTimeout       time.Duration
 	CommandTimeout    time.Duration
 	HeartbeatInterval time.Duration
@@ -68,6 +76,8 @@ type Handler struct {
 	tickets           TicketConsumer
 	routes            RouteResolver
 	zone              ZoneCommander
+	visitor           VisitorZoneClient
+	friends           FriendClient
 	authTimeout       time.Duration
 	commandTimeout    time.Duration
 	heartbeatInterval time.Duration
@@ -114,6 +124,7 @@ func NewHandler(cfg Config) (*Handler, error) {
 	}
 	return &Handler{
 		tickets: cfg.Tickets, routes: cfg.Routes, zone: cfg.Zone,
+		visitor: cfg.Visitor, friends: cfg.Friends,
 		authTimeout: cfg.AuthTimeout, commandTimeout: cfg.CommandTimeout,
 		heartbeatInterval: cfg.HeartbeatInterval,
 		clientConfigURL:   cfg.ClientConfigURL,
@@ -324,6 +335,10 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 		if request.TargetPlayerId == 0 || request.GetCleanPlotRequest() == nil {
 			return errors.New("invalid clean request")
 		}
+	case wsv1.Action_CATCH_PEST:
+		if request.TargetPlayerId == 0 || request.GetCatchPestRequest() == nil {
+			return errors.New("invalid catch pest request")
+		}
 	case wsv1.Action_SELL_CROP:
 		if request.TargetPlayerId == 0 || request.GetSellCropRequest() == nil {
 			return errors.New("invalid sell request")
@@ -331,6 +346,54 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 	case wsv1.Action_CLAIM_CHAPTER_REWARD:
 		if request.TargetPlayerId == 0 || request.GetClaimChapterRewardRequest() == nil {
 			return errors.New("invalid claim request")
+		}
+	case wsv1.Action_CREATE_FRIEND_CODE:
+		if request.TargetPlayerId == 0 || request.GetCreateFriendCodeRequest() == nil {
+			return errors.New("invalid create friend code request")
+		}
+	case wsv1.Action_REDEEM_FRIEND_CODE:
+		if request.TargetPlayerId == 0 || request.GetRedeemFriendCodeRequest() == nil {
+			return errors.New("invalid redeem friend code request")
+		}
+	case wsv1.Action_LIST_FRIENDS:
+		if request.TargetPlayerId == 0 || request.GetListFriendsRequest() == nil {
+			return errors.New("invalid list friends request")
+		}
+	case wsv1.Action_ENTER_FRIEND_FARM:
+		if request.TargetPlayerId == 0 || request.GetEnterFriendFarmRequest() == nil {
+			return errors.New("invalid enter friend farm request")
+		}
+	case wsv1.Action_FARM_HEARTBEAT:
+		if request.TargetPlayerId == 0 || request.GetFarmHeartbeatRequest() == nil {
+			return errors.New("invalid farm heartbeat request")
+		}
+	case wsv1.Action_EXIT_FRIEND_FARM:
+		if request.TargetPlayerId == 0 || request.GetExitFriendFarmRequest() == nil {
+			return errors.New("invalid exit friend farm request")
+		}
+	case wsv1.Action_STEAL_FRIEND_CROP:
+		steal := request.GetStealFriendCropRequest()
+		if request.TargetPlayerId == 0 || steal == nil || steal.OwnerPlayerId == 0 ||
+			len(steal.VisitId) != 16 || steal.PlotId == 0 {
+			return errors.New("invalid steal friend crop request")
+		}
+	case wsv1.Action_APPLY_PEST_TO_FRIEND:
+		apply := request.GetApplyPestToFriendRequest()
+		if request.TargetPlayerId == 0 || apply == nil || apply.OwnerPlayerId == 0 ||
+			len(apply.VisitId) != 16 || apply.PlotId == 0 || apply.PestId == 0 {
+			return errors.New("invalid apply pest to friend request")
+		}
+	case wsv1.Action_CATCH_PEST_FOR_FRIEND:
+		catch := request.GetCatchPestForFriendRequest()
+		if request.TargetPlayerId == 0 || catch == nil || catch.OwnerPlayerId == 0 ||
+			len(catch.VisitId) != 16 || catch.PlotId == 0 {
+			return errors.New("invalid catch pest for friend request")
+		}
+	case wsv1.Action_HELP_CLEAN_FRIEND_PLOT:
+		help := request.GetHelpCleanFriendPlotRequest()
+		if request.TargetPlayerId == 0 || help == nil || help.OwnerPlayerId == 0 ||
+			len(help.VisitId) != 16 || help.PlotId == 0 {
+			return errors.New("invalid help clean friend plot request")
 		}
 	default:
 		return errUnknownAction
@@ -377,6 +440,17 @@ func (h *Handler) handleGame(
 		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_FORBIDDEN, false, h.now)))
 		return
 	}
+	switch request.Action {
+	case wsv1.Action_CREATE_FRIEND_CODE, wsv1.Action_REDEEM_FRIEND_CODE, wsv1.Action_LIST_FRIENDS:
+		h.handleFriendAction(parent, writer, caller, request)
+		return
+	case wsv1.Action_ENTER_FRIEND_FARM, wsv1.Action_FARM_HEARTBEAT, wsv1.Action_EXIT_FRIEND_FARM,
+		wsv1.Action_STEAL_FRIEND_CROP, wsv1.Action_APPLY_PEST_TO_FRIEND,
+		wsv1.Action_CATCH_PEST_FOR_FRIEND, wsv1.Action_HELP_CLEAN_FRIEND_PLOT:
+		h.handleVisitAction(parent, writer, caller, request)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(parent, h.commandTimeout)
 	defer cancel()
 	isSnapshot := request.Action == wsv1.Action_GET_PLAYER_SNAPSHOT
@@ -425,17 +499,138 @@ func (h *Handler) handleGame(
 			}
 		}
 	}
+	h.recordFailure(failureSource, err)
+	_ = writer.write(parent, marshalResponse(errorResponse(request, failureErrorCode(err), true, h.now)))
+}
+
+// handleFriendAction routes CREATE_FRIEND_CODE, REDEEM_FRIEND_CODE and
+// LIST_FRIENDS straight to FriendSvr: unlike Zone actions there is no Shard
+// route to resolve and no NOT_OWNER retry, since FriendSvr is not Sharded.
+func (h *Handler) handleFriendAction(
+	parent context.Context, writer *serializedWriter, caller uint64, request *wsv1.WsEnvelope,
+) {
+	if h.friends == nil {
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_SERVICE_UNAVAILABLE, true, h.now)))
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, friendCommandTimeout)
+	defer cancel()
+	failureSource := "friend_command"
+	var response []byte
+	var err error
+	switch request.Action {
+	case wsv1.Action_CREATE_FRIEND_CODE:
+		response, err = h.friends.CreateCode(ctx, caller, request)
+	case wsv1.Action_REDEEM_FRIEND_CODE:
+		response, err = h.friends.RedeemCode(ctx, caller, request)
+	case wsv1.Action_LIST_FRIENDS:
+		response, err = h.friends.List(ctx, caller, request)
+	}
+	var zoneFailure *zoneCommandError
+	if errors.As(err, &zoneFailure) {
+		failureSource = "friend_command_" + zoneFailure.kind
+	}
+	h.writeDomainResult(parent, writer, request, failureSource, response, err)
+}
+
+// handleVisitAction routes ENTER_FRIEND_FARM, FARM_HEARTBEAT,
+// EXIT_FRIEND_FARM and STEAL_FRIEND_CROP to whichever Zone owns the
+// caller's own Shard (that Zone runs VisitorZoneService), retrying once
+// after NOT_OWNER exactly like an ordinary game command.
+func (h *Handler) handleVisitAction(
+	parent context.Context, writer *serializedWriter, caller uint64, request *wsv1.WsEnvelope,
+) {
+	if h.visitor == nil {
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_SERVICE_UNAVAILABLE, true, h.now)))
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, visitCommandTimeout)
+	defer cancel()
+	failureSource := "route_resolve"
+	shardID := routing.ShardForPlayer(request.TargetPlayerId)
+	route, err := h.routes.Resolve(ctx, shardID)
+	var response []byte
+	if err == nil {
+		failureSource = "visitor_command"
+		response, err = h.callVisitor(ctx, route, caller, request)
+		var zoneFailure *zoneCommandError
+		if errors.As(err, &zoneFailure) {
+			failureSource = "visitor_command_" + zoneFailure.kind
+		}
+		if errors.Is(err, ErrNotOwner) {
+			if invalidator, ok := h.routes.(RouteInvalidator); ok {
+				invalidator.InvalidateIfVersion(shardID, route.RouteVersion)
+			}
+			route, err = h.routes.Resolve(ctx, shardID)
+			if err == nil {
+				response, err = h.callVisitor(ctx, route, caller, request)
+			}
+		}
+	}
+	h.writeDomainResult(parent, writer, request, failureSource, response, err)
+}
+
+func (h *Handler) callVisitor(
+	ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope,
+) ([]byte, error) {
+	switch request.Action {
+	case wsv1.Action_ENTER_FRIEND_FARM:
+		return h.visitor.Enter(ctx, route, caller, request)
+	case wsv1.Action_FARM_HEARTBEAT:
+		return h.visitor.Heartbeat(ctx, route, caller, request)
+	case wsv1.Action_EXIT_FRIEND_FARM:
+		return h.visitor.Exit(ctx, route, caller, request)
+	case wsv1.Action_STEAL_FRIEND_CROP:
+		return h.visitor.Steal(ctx, route, caller, request)
+	case wsv1.Action_APPLY_PEST_TO_FRIEND:
+		return h.visitor.ApplyPest(ctx, route, caller, request)
+	case wsv1.Action_CATCH_PEST_FOR_FRIEND:
+		return h.visitor.CatchPest(ctx, route, caller, request)
+	case wsv1.Action_HELP_CLEAN_FRIEND_PLOT:
+		return h.visitor.HelpClean(ctx, route, caller, request)
+	default:
+		return nil, errors.New("unsupported visit action")
+	}
+}
+
+// writeDomainResult shares the response-validation and failure-accounting
+// tail of handleFriendAction/handleVisitAction with handleGame's Zone
+// command path: a well-formed, correlated response is written as-is,
+// otherwise the failure is recorded and a generic retryable error replies.
+func (h *Handler) writeDomainResult(
+	parent context.Context,
+	writer *serializedWriter,
+	request *wsv1.WsEnvelope,
+	failureSource string,
+	response []byte,
+	err error,
+) {
+	if err == nil {
+		if validateErr := validateZoneResponse(response, request); validateErr == nil {
+			_ = writer.write(parent, response)
+			return
+		} else {
+			failureSource, err = "domain_response_validation", validateErr
+		}
+	}
+	h.recordFailure(failureSource, err)
+	_ = writer.write(parent, marshalResponse(errorResponse(request, failureErrorCode(err), true, h.now)))
+}
+
+func (h *Handler) recordFailure(source string, err error) {
 	h.failureStats.mu.Lock()
-	h.failureStats.counts[failureSource]++
+	h.failureStats.counts[source]++
 	if err != nil {
-		h.failureStats.lastErrors[failureSource] = err.Error()
+		h.failureStats.lastErrors[source] = err.Error()
 	}
 	h.failureStats.mu.Unlock()
-	code := wsv1.ErrorCode_SERVICE_UNAVAILABLE
+}
+
+func failureErrorCode(err error) wsv1.ErrorCode {
 	if errors.Is(err, context.DeadlineExceeded) {
-		code = wsv1.ErrorCode_REQUEST_OUTCOME_UNKNOWN
+		return wsv1.ErrorCode_REQUEST_OUTCOME_UNKNOWN
 	}
-	_ = writer.write(parent, marshalResponse(errorResponse(request, code, true, h.now)))
+	return wsv1.ErrorCode_SERVICE_UNAVAILABLE
 }
 
 func validateZoneResponse(body []byte, request *wsv1.WsEnvelope) error {

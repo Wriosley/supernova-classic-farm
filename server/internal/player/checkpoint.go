@@ -245,7 +245,9 @@ func validatePlotRecord(plot *datav1.PlotStateRecord) error {
 			plot.BaseGrowthRate != nil || plot.BaseYield != 0 ||
 			plot.StolenQuantity != 0 || plot.SettledGrowthValue != nil ||
 			plot.LastSettledAtMs != 0 || plot.EstimatedMatureAtMs != nil ||
-			plot.FertilizerEffect != nil || plot.PestEffect != nil {
+			plot.FertilizerEffect != nil || plot.PestEffect != nil ||
+			plot.StealCount != 0 || plot.StealQuantity != 0 ||
+			plot.MaxStealTimes != 0 || plot.ProtectedOwnerYield != 0 {
 			return errors.New("EMPTY plot contains crop fields")
 		}
 	case datav1.PlotRecordState_GROWING:
@@ -265,6 +267,9 @@ func validatePlotRecord(plot *datav1.PlotStateRecord) error {
 		if err := validateTimedEffect(plot.PestEffect, datav1.EffectKind_PEST, plot.PlantedAtMs); err != nil {
 			return err
 		}
+		if plot.StealCount > plot.MaxStealTimes {
+			return errors.New("GROWING plot steal_count exceeds max_steal_times")
+		}
 	case datav1.PlotRecordState_MATURE:
 		if !validCropIdentity(plot) ||
 			plot.MaturityValue == nil || plot.MaturityValue.ScaledValue <= 0 ||
@@ -276,6 +281,9 @@ func validatePlotRecord(plot *datav1.PlotStateRecord) error {
 			plot.FertilizerEffect != nil || plot.PestEffect != nil {
 			return errors.New("MATURE plot fields are invalid")
 		}
+		if plot.StealCount > plot.MaxStealTimes {
+			return errors.New("MATURE plot steal_count exceeds max_steal_times")
+		}
 	case datav1.PlotRecordState_NEED_CLEANUP:
 		if !validCropIdentity(plot) ||
 			plot.MaturityValue != nil || plot.BaseGrowthRate != nil ||
@@ -283,6 +291,9 @@ func validatePlotRecord(plot *datav1.PlotStateRecord) error {
 			plot.EstimatedMatureAtMs != nil ||
 			plot.FertilizerEffect != nil || plot.PestEffect != nil {
 			return errors.New("NEED_CLEANUP plot fields are invalid")
+		}
+		if plot.StealCount > plot.MaxStealTimes {
+			return errors.New("NEED_CLEANUP plot steal_count exceeds max_steal_times")
 		}
 	default:
 		return errors.New("checkpoint plot state is invalid")
@@ -482,18 +493,37 @@ func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
 			proto.Clone(reservation).(*datav1.FriendResourceReservation),
 		)
 	}
+	sort.Slice(checkpoint.FriendReservations, func(i, j int) bool {
+		return bytes.Compare(
+			checkpoint.FriendReservations[i].InteractionId,
+			checkpoint.FriendReservations[j].InteractionId,
+		) < 0
+	})
 	for _, receipt := range s.FriendReceipts {
 		checkpoint.FriendReceipts = append(
 			checkpoint.FriendReceipts,
 			proto.Clone(receipt).(*datav1.FriendInteractionReceipt),
 		)
 	}
+	sort.Slice(checkpoint.FriendReceipts, func(i, j int) bool {
+		left, right := checkpoint.FriendReceipts[i], checkpoint.FriendReceipts[j]
+		if cmp := bytes.Compare(left.InteractionId, right.InteractionId); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Role < right.Role
+	})
 	for _, receipt := range s.FriendTaskCreditReceipts {
 		checkpoint.FriendTaskCreditReceipts = append(
 			checkpoint.FriendTaskCreditReceipts,
 			proto.Clone(receipt).(*datav1.FriendTaskCreditReceipt),
 		)
 	}
+	sort.Slice(checkpoint.FriendTaskCreditReceipts, func(i, j int) bool {
+		return bytes.Compare(
+			checkpoint.FriendTaskCreditReceipts[i].RelationId,
+			checkpoint.FriendTaskCreditReceipts[j].RelationId,
+		) < 0
+	})
 	if err := ValidateCheckpoint(checkpoint); err != nil {
 		return nil, err
 	}
@@ -507,6 +537,8 @@ func plotFromRecord(record *datav1.PlotStateRecord) *Plot {
 		CropConfigVersion: record.CropConfigVersion, PlantedAtMS: record.PlantedAtMs,
 		BaseYield: record.BaseYield, StolenQuantity: record.StolenQuantity,
 		LastSettledAtMS: record.LastSettledAtMs,
+		StealCount:      record.StealCount, StealQuantity: record.StealQuantity,
+		MaxStealTimes: record.MaxStealTimes, ProtectedOwnerYield: record.ProtectedOwnerYield,
 	}
 	if record.MaturityValue != nil {
 		plot.MaturityValueScaled9 = record.MaturityValue.ScaledValue
@@ -540,6 +572,8 @@ func (p *Plot) Record() (*datav1.PlotStateRecord, error) {
 		CropConfigVersion: p.CropConfigVersion, PlantedAtMs: p.PlantedAtMS,
 		BaseYield: p.BaseYield, StolenQuantity: p.StolenQuantity,
 		LastSettledAtMs: p.LastSettledAtMS,
+		StealCount:      p.StealCount, StealQuantity: p.StealQuantity,
+		MaxStealTimes: p.MaxStealTimes, ProtectedOwnerYield: p.ProtectedOwnerYield,
 	}
 	if p.State == plotv1.PlotState_GROWING || p.State == plotv1.PlotState_MATURE {
 		record.MaturityValue = &datav1.GrowthDecimal9{ScaledValue: p.MaturityValueScaled9}

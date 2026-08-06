@@ -117,15 +117,22 @@ func (s *connectionSubscription) finishSnapshot(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sort.SliceStable(s.buffer, func(i, j int) bool {
-		left, right := s.buffer[i].envelope.StateVersion, s.buffer[j].envelope.StateVersion
-		if left.OwnerEpoch != right.OwnerEpoch {
-			return left.OwnerEpoch < right.OwnerEpoch
+		// FARM_PRESENCE_CHANGED pushes are unversioned (nil StateVersion) and
+		// are filtered out below regardless of order, so the getters' nil
+		// receiver handling (returning 0) just needs to avoid a panic here.
+		left, right := s.buffer[i].envelope.GetStateVersion(), s.buffer[j].envelope.GetStateVersion()
+		if left.GetOwnerEpoch() != right.GetOwnerEpoch() {
+			return left.GetOwnerEpoch() < right.GetOwnerEpoch()
 		}
-		return left.PlayerSeq < right.PlayerSeq
+		return left.GetPlayerSeq() < right.GetPlayerSeq()
 	})
 	bodies := [][]byte{responseBody}
 	for _, push := range s.buffer {
-		if !stateVersionAfter(push.envelope.StateVersion, snapshotVersion) {
+		// Unversioned pushes (e.g. FARM_PRESENCE_CHANGED) do not participate
+		// in snapshot catch-up ordering, so they are always delivered once
+		// buffered; only versioned pushes are deduplicated against the
+		// just-delivered snapshot's StateVersion.
+		if push.envelope.StateVersion != nil && !stateVersionAfter(push.envelope.StateVersion, snapshotVersion) {
 			continue
 		}
 		bodies = append(bodies, push.body)
@@ -153,20 +160,50 @@ func validatePushEnvelope(envelope *wsv1.WsEnvelope) error {
 	if envelope == nil ||
 		envelope.ProtocolVersion != ProtocolVersion ||
 		envelope.MessageKind != wsv1.MessageKind_PUSH ||
-		envelope.Action != wsv1.Action_PLAYER_STATE_CHANGED ||
 		envelope.RequestId != "" ||
 		envelope.TargetPlayerId == 0 ||
-		envelope.StateVersion == nil ||
-		envelope.StateVersion.OwnerEpoch == 0 ||
 		envelope.ServerTimeMs <= 0 ||
 		envelope.Error != nil ||
 		envelope.Replayed {
 		return errors.New("invalid push envelope")
 	}
-	push := envelope.GetPlayerStateChangedPush()
-	if push == nil || push.Reason == reasonv1.StateChangeReason_STATE_CHANGE_REASON_UNSPECIFIED ||
-		push.Patch == nil {
-		return errors.New("invalid push payload")
+	switch envelope.Action {
+	case wsv1.Action_PLAYER_STATE_CHANGED:
+		if envelope.StateVersion == nil || envelope.StateVersion.OwnerEpoch == 0 {
+			return errors.New("invalid push envelope")
+		}
+		push := envelope.GetPlayerStateChangedPush()
+		if push == nil || push.Reason == reasonv1.StateChangeReason_STATE_CHANGE_REASON_UNSPECIFIED ||
+			push.Patch == nil {
+			return errors.New("invalid push payload")
+		}
+	case wsv1.Action_FARM_PRESENCE_CHANGED:
+		// Presence is unversioned: it never carries a StateVersion and never
+		// participates in GET_PLAYER_SNAPSHOT catch-up ordering.
+		if envelope.StateVersion != nil {
+			return errors.New("invalid push envelope")
+		}
+		push := envelope.GetFarmPresenceChangedPush()
+		if push == nil || push.OwnerPlayerId != envelope.TargetPlayerId ||
+			push.Kind == wsv1.FarmPresenceKind_FARM_PRESENCE_KIND_UNSPECIFIED {
+			return errors.New("invalid push payload")
+		}
+	case wsv1.Action_FARM_VIEW_CHANGED:
+		// The public farm view has its own independent (epoch, seq) carried
+		// inside the patch itself; it never carries the player's own
+		// StateVersion and never participates in GET_PLAYER_SNAPSHOT catch-up
+		// ordering (recipients may not even be the owner).
+		if envelope.StateVersion != nil {
+			return errors.New("invalid push envelope")
+		}
+		push := envelope.GetFarmViewChangedPush()
+		if push == nil || push.OwnerPlayerId == 0 ||
+			len(push.GetVersion().GetFarmViewEpoch()) == 0 ||
+			push.GetVersion().GetFarmViewSeq() == 0 {
+			return errors.New("invalid push payload")
+		}
+	default:
+		return errors.New("invalid push envelope")
 	}
 	return nil
 }

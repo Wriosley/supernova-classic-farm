@@ -89,6 +89,7 @@ All display text comes from the versioned client configuration package. IDs and 
 | 205 | `SELL_CROP` |
 | 206 | `CLAIM_CHAPTER_REWARD` |
 | 207 | `BUY_FERTILIZER` |
+| 208 | `CATCH_PEST` |
 | 300 | `CREATE_FRIEND_CODE` |
 | 301 | `REDEEM_FRIEND_CODE` |
 | 302 | `LIST_FRIENDS` |
@@ -371,6 +372,16 @@ V1 self-cleaning consumes no item, grants no reward and advances no task. A
 `NEED_CLEANUP` plot may be cleaned before its chapter reward is claimed.
 
 `CleanPlotResponse` contains a patch with the EMPTY plot.
+
+### 10.6a CATCH_PEST
+
+`CatchPestRequest` contains `plot_id`.
+
+Owner self-catch is free: it clears an active `pest_effect` on a `GROWING`
+plot, recomputes the remaining maturity estimate, and does not spend friend
+action chances. Visitors continue to use `CATCH_PEST_FOR_FRIEND`.
+
+`CatchPestResponse` contains a patch with the updated plot (pest cleared).
 
 ### 10.7 SELL_CROP
 

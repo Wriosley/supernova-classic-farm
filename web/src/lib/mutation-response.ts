@@ -15,6 +15,7 @@ export function mutationResponsePatch(
     case 'sellCropResponse':
     case 'claimChapterRewardResponse':
     case 'cleanPlotResponse':
+    case 'catchPestResponse':
       return response.payload.value.patch
     default:
       return undefined

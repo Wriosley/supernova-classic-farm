@@ -30,11 +30,30 @@ var (
 	ErrUnsupportedAction = errors.New("unsupported action")
 )
 
+// FarmViewBroadcaster abstracts farmview.Broadcaster so Runtime never
+// imports package farmview (which itself imports player for *Plot). The one
+// production implementation is *farmview.Broadcaster, wired by cmd/zone.
+type FarmViewBroadcaster interface {
+	Broadcast(ctx context.Context, ownerPlayerID uint64, patch *wsv1.FarmViewPatch) error
+}
+
 type runtimeActor struct {
 	mailbox           *actor.Mailbox
 	state             *State
 	persistedRevision uint64
 	persistedToken    StoreToken
+
+	// syncPending holds one pendingSyncStep per synchronous Saga step whose
+	// mutation is in this Actor's memory but not yet proven durable (see
+	// sync_persist.go). It is mailbox-owned, ephemeral and never persisted.
+	syncPending map[string]pendingSyncStep
+
+	// farmViewEpoch/farmViewSeq are ephemeral, in-memory only (see
+	// BuildPublicFarmSnapshot): they identify this Actor incarnation to
+	// friend-farm visitors and are never persisted or restored from a
+	// checkpoint.
+	farmViewEpoch []byte
+	farmViewSeq   uint64
 }
 
 type DrainedPlayer struct {
@@ -51,6 +70,7 @@ type Runtime struct {
 	dirtyRevision map[uint64]uint64
 	store         CheckpointStore
 	pushForwarder PushForwarder
+	farmView      FarmViewBroadcaster
 	config        atomic.Pointer[ConfigSnapshot]
 	now           func() time.Time
 	backgroundCtx context.Context
@@ -137,6 +157,7 @@ func (r *Runtime) materializeOnlineMaturities(ctx context.Context) error {
 				r.shardLocks[shardID].RUnlock()
 				return err
 			}
+			r.notifyPublicPlots(ctx, a, playerID, maturedPlotIDs(events))
 		}
 		r.shardLocks[shardID].RUnlock()
 	}
@@ -151,12 +172,34 @@ func (r *Runtime) ReplaceConfig(snapshot *ConfigSnapshot) error {
 	return nil
 }
 
+// CurrentConfig exposes the live ConfigSnapshot read-only, for callers
+// outside package player that need to resolve config-driven facts (e.g.
+// cmd/zone resolving ConfigSnapshot.SoleStealableCrop before starting a
+// steal interaction) without duplicating Runtime's config storage.
+func (r *Runtime) CurrentConfig() *ConfigSnapshot {
+	return r.config.Load()
+}
+
 func (r *Runtime) SetPushForwarder(forwarder PushForwarder) error {
 	if forwarder == nil {
 		return errors.New("push forwarder is required")
 	}
 	r.mu.Lock()
 	r.pushForwarder = forwarder
+	r.mu.Unlock()
+	return nil
+}
+
+// SetFarmViewBroadcaster wires the Phase 4 public FarmViewPatch fan-out.
+// Runtime works without one (development/tests): notifyPublicPlots still
+// bumps farm_view_seq so ENTER/HEARTBEAT snapshots stay correct, it simply
+// has nothing to push out over Gate.
+func (r *Runtime) SetFarmViewBroadcaster(broadcaster FarmViewBroadcaster) error {
+	if broadcaster == nil {
+		return errors.New("farm view broadcaster is required")
+	}
+	r.mu.Lock()
+	r.farmView = broadcaster
 	r.mu.Unlock()
 	return nil
 }
@@ -309,11 +352,16 @@ func (r *Runtime) actorFor(
 	if err != nil {
 		return nil, fmt.Errorf("activate player maturity: %w", err)
 	}
+	farmViewEpoch, err := newFarmViewEpoch()
+	if err != nil {
+		return nil, fmt.Errorf("mint farm view epoch: %w", err)
+	}
 	created := &runtimeActor{
 		mailbox:           actor.NewMailbox(64),
 		state:             state,
 		persistedRevision: persistedRevision,
 		persistedToken:    persistedToken,
+		farmViewEpoch:     farmViewEpoch,
 	}
 	r.mu.Lock()
 	if existing := r.actors[playerID]; existing != nil {
@@ -371,12 +419,14 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		request.GetHarvestRequest() != nil
 	isCleanPlot := request.Action == wsv1.Action_CLEAN_PLOT &&
 		request.GetCleanPlotRequest() != nil
+	isCatchPest := request.Action == wsv1.Action_CATCH_PEST &&
+		request.GetCatchPestRequest() != nil
 	isSellCrop := request.Action == wsv1.Action_SELL_CROP &&
 		request.GetSellCropRequest() != nil
 	isClaimReward := request.Action == wsv1.Action_CLAIM_CHAPTER_REWARD &&
 		request.GetClaimChapterRewardRequest() != nil
 	if !isSnapshot && !isGetShop && !isBuySeeds && !isBuyFertilizer && !isPlant &&
-		!isApplyFertilizer && !isHarvest && !isCleanPlot &&
+		!isApplyFertilizer && !isHarvest && !isCleanPlot && !isCatchPest &&
 		!isSellCrop && !isClaimReward {
 		return nil, ErrUnsupportedAction
 	}
@@ -461,6 +511,15 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 			dirtyRevision = a.state.CheckpointRevision
 			return
 		}
+		if isCatchPest {
+			var commandDirty bool
+			response, commandDirty = r.catchPest(
+				a, callerPlayerID, request, config, serverNow,
+			)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
 		if isSellCrop {
 			var commandDirty bool
 			response, commandDirty = r.sellCrop(a, callerPlayerID, request, config, serverNow)
@@ -509,7 +568,99 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	if !isSnapshot && len(maturityEvents) > 0 {
 		_ = r.forwardMaturityEvents(ctx, maturityEvents)
 	}
+	r.notifyPublicPlots(ctx, a, callerPlayerID, publicPlotIDsChanged(maturityEvents, request, response))
 	return response, nil
+}
+
+// publicPlotIDsChanged collects the plot IDs a Handle call just changed in a
+// way visitors can see: every plot a background/foreground maturity
+// materialized to MATURE (regardless of which action triggered it), plus the
+// single plot touched by a successful, non-replayed PLANT/APPLY_FERTILIZER/
+// HARVEST/CLEAN_PLOT/CATCH_PEST. BUY_SEEDS, BUY_FERTILIZER, SELL_CROP and
+// CLAIM_CHAPTER_REWARD never mutate public plot state, so they contribute
+// nothing here.
+func publicPlotIDsChanged(
+	maturityEvents []MaturityEvent, request, response *wsv1.WsEnvelope,
+) []uint32 {
+	ids := make([]uint32, 0, len(maturityEvents)+1)
+	for _, event := range maturityEvents {
+		if plotID := event.Plot.GetPlotId(); plotID != 0 {
+			ids = append(ids, plotID)
+		}
+	}
+	if response == nil || response.Error != nil || response.Replayed {
+		return ids
+	}
+	switch request.GetAction() {
+	case wsv1.Action_PLANT:
+		if plant := request.GetPlantRequest(); plant != nil {
+			ids = append(ids, plant.PlotId)
+		}
+	case wsv1.Action_APPLY_FERTILIZER:
+		if apply := request.GetApplyFertilizerRequest(); apply != nil {
+			ids = append(ids, apply.PlotId)
+		}
+	case wsv1.Action_HARVEST:
+		if harvest := request.GetHarvestRequest(); harvest != nil {
+			ids = append(ids, harvest.PlotId)
+		}
+	case wsv1.Action_CLEAN_PLOT:
+		if clean := request.GetCleanPlotRequest(); clean != nil {
+			ids = append(ids, clean.PlotId)
+		}
+	case wsv1.Action_CATCH_PEST:
+		if catch := request.GetCatchPestRequest(); catch != nil {
+			ids = append(ids, catch.PlotId)
+		}
+	}
+	return ids
+}
+
+func maturedPlotIDs(events []MaturityEvent) []uint32 {
+	ids := make([]uint32, 0, len(events))
+	for _, event := range events {
+		if plotID := event.Plot.GetPlotId(); plotID != 0 {
+			ids = append(ids, plotID)
+		}
+	}
+	return ids
+}
+
+// notifyPublicPlots bumps a's farm_view_seq and builds a FarmViewPatch from
+// plotIDs' current state synchronously inside the mailbox (so any snapshot
+// or re-ENTER built right after this call already observes the new seq),
+// then hands the patch to the configured FarmViewBroadcaster on a detached
+// goroutine: a slow or failing Gate fan-out must never delay or fail the
+// game command that triggered it. It returns the built patch (nil if
+// nothing was built) so synchronous Saga steps such as
+// Runtime.ApplyStealOnOwner can also return it directly to their own
+// caller.
+func (r *Runtime) notifyPublicPlots(
+	ctx context.Context, a *runtimeActor, ownerPlayerID uint64, plotIDs []uint32,
+) *wsv1.FarmViewPatch {
+	if a == nil || len(plotIDs) == 0 {
+		return nil
+	}
+	var patch *wsv1.FarmViewPatch
+	err := a.mailbox.Do(ctx, func() {
+		a.farmViewSeq++
+		patch = buildFarmViewPatch(ownerPlayerID, a.farmViewEpoch, a.farmViewSeq, plotIDs, a.state.Plots)
+	})
+	if err != nil || patch == nil {
+		return nil
+	}
+	r.mu.Lock()
+	broadcaster := r.farmView
+	r.mu.Unlock()
+	if broadcaster == nil {
+		return patch
+	}
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = broadcaster.Broadcast(bgCtx, ownerPlayerID, patch)
+	}()
+	return patch
 }
 
 // HasActiveActorsForShard reports whether this process has materialized any

@@ -31,7 +31,8 @@ enum Action {
   SELL_CROP = 205;
   CLAIM_CHAPTER_REWARD = 206;
   BUY_FERTILIZER = 207;
-  reserved 208 to 299;
+  CATCH_PEST = 208;
+  reserved 209 to 299;
   CREATE_FRIEND_CODE = 300;
   REDEEM_FRIEND_CODE = 301;
   LIST_FRIENDS = 302;
@@ -156,8 +157,10 @@ message WsEnvelope {
     FriendActionResponse steal_friend_crop_response = 54;
     FarmViewPatch farm_view_changed_push = 55;
     FarmPresencePush farm_presence_changed_push = 56;
+    CatchPestRequest catch_pest_request = 57;
+    CatchPestResponse catch_pest_response = 58;
   }
-  reserved 57 to 99;
+  reserved 59 to 99;
 }
 
 message StateVersion {
@@ -347,6 +350,14 @@ message CleanPlotRequest {
 }
 
 message CleanPlotResponse {
+  PlayerStatePatch patch = 1;
+}
+
+message CatchPestRequest {
+  uint32 plot_id = 1;
+}
+
+message CatchPestResponse {
   PlayerStatePatch patch = 1;
 }
 

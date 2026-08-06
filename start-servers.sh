@@ -275,6 +275,9 @@ export CLIENT_CONFIG_URL="${CLIENT_CONFIG_URL:-http://127.0.0.1:${login_port}/v1
 export LOGIN_TICKET_CONSUME_URL="${LOGIN_TICKET_CONSUME_URL:-http://127.0.0.1:${login_port}/internal/v1/ws-tickets/consume}"
 export COORDINATOR_URL="${COORDINATOR_URL:-http://127.0.0.1:${coordinator_port}}"
 export GATE_RPC_URL="${GATE_RPC_URL:-http://127.0.0.1:${gate_port}}"
+if [[ "${tcaplus_mode}" == true ]]; then
+    export FRIEND_RPC_URL="${FRIEND_RPC_URL:-http://127.0.0.1:${friend_port}}"
+fi
 export INTERNAL_GRPC_HMAC_KEY="${INTERNAL_GRPC_HMAC_KEY:-classic-farm-local-development-hmac-key-2026}"
 export ROUTING_MODE="$([[ "${dual_zone}" == true ]] && echo static-dual-zone || echo local)"
 

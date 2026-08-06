@@ -130,6 +130,63 @@ func TestGRPCPushServerValidatesRecipientAndPublishes(t *testing.T) {
 	}
 }
 
+func TestGRPCPushServerFansFarmViewPatchOutToEveryRecipient(t *testing.T) {
+	hub := newPushHub()
+	pushServer, err := NewGRPCPushServer(&Handler{pushHub: hub}, DefaultGatewayID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patch := &wsv1.FarmViewPatch{
+		OwnerPlayerId: 7,
+		Version: &wsv1.FarmViewVersion{
+			FarmViewEpoch: []byte("0123456789abcdef"), FarmViewSeq: 1,
+		},
+		PlotUpserts: []*wsv1.PublicPlotView{{PlotId: 1, PlotState: 1}},
+	}
+	_, err = pushServer.PublishFarmViewPatch(
+		context.Background(),
+		&rpcv1.PublishFarmViewPatchRequest{
+			GateId: DefaultGatewayID, RecipientPlayerIds: []uint64{7, 101}, Patch: patch,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGRPCPushServerRejectsInvalidFarmViewPatchPushes(t *testing.T) {
+	pushServer, err := NewGRPCPushServer(&Handler{pushHub: newPushHub()}, DefaultGatewayID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validPatch := &wsv1.FarmViewPatch{
+		OwnerPlayerId: 7,
+		Version: &wsv1.FarmViewVersion{
+			FarmViewEpoch: []byte("0123456789abcdef"), FarmViewSeq: 1,
+		},
+	}
+	cases := []*rpcv1.PublishFarmViewPatchRequest{
+		{GateId: "wrong-gate", RecipientPlayerIds: []uint64{7}, Patch: validPatch},
+		{GateId: DefaultGatewayID, RecipientPlayerIds: nil, Patch: validPatch},
+		{GateId: DefaultGatewayID, RecipientPlayerIds: []uint64{0}, Patch: validPatch},
+		{GateId: DefaultGatewayID, RecipientPlayerIds: []uint64{7}, Patch: nil},
+		{GateId: DefaultGatewayID, RecipientPlayerIds: []uint64{7}, Patch: &wsv1.FarmViewPatch{
+			Version: validPatch.Version,
+		}},
+		{GateId: DefaultGatewayID, RecipientPlayerIds: []uint64{7}, Patch: &wsv1.FarmViewPatch{
+			OwnerPlayerId: 7,
+		}},
+		{GateId: DefaultGatewayID, RecipientPlayerIds: []uint64{7}, Patch: &wsv1.FarmViewPatch{
+			OwnerPlayerId: 7, Version: &wsv1.FarmViewVersion{FarmViewEpoch: []byte("0123456789abcdef")},
+		}},
+	}
+	for index, request := range cases {
+		if _, err := pushServer.PublishFarmViewPatch(context.Background(), request); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("case %d: status = %v, want InvalidArgument", index, status.Code(err))
+		}
+	}
+}
+
 func newTestGRPCZoneCommander(
 	t *testing.T,
 	service *testGameCommandServer,
