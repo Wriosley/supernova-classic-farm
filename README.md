@@ -16,16 +16,18 @@
 - 固定 `zone-a`/`zone-b` 支持非活跃和活跃 Shard 迁移、Fence 拒绝、
   Checkpoint CAS 和完整进程重启恢复；
 - kind 集群已运行 Coordinator、Login、Gate、Zone A、Zone B 五个
-  Deployment，纯 Tcaplus 双 Zone E2E 通过。
+  Deployment，纯 Tcaplus 双 Zone E2E 通过；
+- Gate→Zone 游戏命令和 Zone→Gate Player Push 已迁移到带 HMAC
+  Metadata 的 Unary gRPC，本机和 kind 双 Zone 路由/迁移 E2E 均通过。
 
 MySQL 实现仍保留为历史基线和回退适配器；不带存储参数的启动仍使用开发
 内存模式。当前 Kubernetes 原型不包含动态 Zone 发现、自动扩缩容、
 Ingress/TLS 或 Zone 级 preStop Drain。
 
-好友功能尚未编码。业务、gRPC、持久化、跨 Actor Saga、验收清单和
-8 阶段实施方案已完成评审，下一次开发从
-`docs/plans/friend_design_plan/06-分阶段实施方案.md` 的阶段 0 开始。
-权威进度与限制见 `docs/context/CURRENT.md`。
+好友功能阶段 0、1、2 已完成：协议/表结构已经冻结，现有内部游戏传输
+已经完成 gRPC/HMAC 改造，FriendSvr 与权威好友关系/列表/加好友任务推进
+已落地。真实好友 Tcaplus 表已在控制台创建。下一阶段是访问会话与公开
+快照。权威进度与限制见 `docs/context/CURRENT.md`。
 
 ## 文档入口
 

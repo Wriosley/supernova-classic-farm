@@ -35,6 +35,21 @@ MigrationProgress
 PlayerOutbox
 ```
 
+好友功能从阶段 2 起还需使用 `friend_tables.proto` 创建以下 PB Generic
+表：
+
+```text
+FriendCodeCurrent
+FriendCodeLookup
+FriendRelation
+FriendList
+FriendLinkSaga
+FriendInteraction
+```
+
+控制台的表描述文件校验拒绝 proto3 的显式 `optional` 字段。需要表达
+“缺省”时使用零值约定，并在 schema 注释中写明该零值的含义。
+
 不要把访问密码写入本目录、`.env.example`、日志或命令历史。
 
 ## 生成 Go 类型

@@ -96,7 +96,8 @@ $failure = $null
 $environmentKeys = @(
     "APP_ENV", "H5_ORIGIN", "GATEWAY_ID", "GATEWAY_URL",
     "CLIENT_CONFIG_URL", "LOGIN_TICKET_CONSUME_URL", "COORDINATOR_URL",
-    "ROUTING_MODE", "E2E_RUN", "E2E_DUAL_ZONE", "E2E_SUITE"
+    "GATE_RPC_URL", "INTERNAL_GRPC_HMAC_KEY", "ROUTING_MODE",
+    "E2E_RUN", "E2E_DUAL_ZONE", "E2E_SUITE"
 )
 $previousEnvironment = @{}
 foreach ($key in $environmentKeys) {
@@ -127,6 +128,8 @@ try {
     $env:CLIENT_CONFIG_URL = "http://127.0.0.1:8080/v1/client-config/1"
     $env:LOGIN_TICKET_CONSUME_URL = "http://127.0.0.1:8080/internal/v1/ws-tickets/consume"
     $env:COORDINATOR_URL = "http://127.0.0.1:8083"
+    $env:GATE_RPC_URL = "http://127.0.0.1:8081"
+    $env:INTERNAL_GRPC_HMAC_KEY = "classic-farm-local-development-hmac-key-2026"
     $env:ROUTING_MODE = "static-dual-zone"
     $env:E2E_RUN = "1"
     $env:E2E_DUAL_ZONE = "1"

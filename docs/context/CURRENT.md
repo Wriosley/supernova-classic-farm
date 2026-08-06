@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # Current Handoff
@@ -13,7 +13,7 @@ V3 is the only current production-target strategy. A new AI should read, in orde
 2. `PROJECT.md` and this file;
 3. `../architecture/stateful-zone-v3-architecture.md`;
 4. `../architecture/single-player-vertical-loop-business-architecture.md`;
-5. the five accepted first-stage contracts under `../contracts/`;
+5. the accepted contracts under `../contracts/`;
 6. only the additional requirement, ADR, plan, or evidence files needed for the task.
 
 Do not resume V1 or V2 as the implementation target. Do not read every ADR as if all decisions were simultaneously active. The ADR directory preserves how the design evolved; current truth comes from this handoff, the current architecture, and the accepted ADRs that the current architecture explicitly references.
@@ -26,9 +26,13 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 - The fixed dual-Zone kind cluster has five Ready Deployments and a passing
   live owner-loop/migration E2E.
 - Dynamic Zone discovery and automatic scaling are outside the prototype.
-- Friend functionality is reviewed design only; no friend product code or
-  tables exist yet.
-- Tomorrow starts with friend plan phase 0, then pauses for owner schema review.
+- Friend plan phases 0–2 are complete: contracts are frozen, existing
+  Gate→Zone commands plus Zone→Gate Push use HMAC-authenticated Unary gRPC,
+  and FriendSvr now owns share codes, `FriendRelation`, `FriendList`
+  reservations and idempotent `TASK_ADD_FRIEND` credit via Zone
+  `PlayerSocialService`. Real friend Tcaplus tables exist.
+- Gate WebSocket friend-code/list routing and farm visits are not wired yet.
+  Work continues at the phase-3 visit/public-snapshot boundary.
 
 ## Current accepted direction
 
@@ -78,9 +82,10 @@ Important rules already recorded in the business architecture:
 - Full warehouse makes an ordinary harvest fail atomically; task reward items that do not fit use a mail Outbox fallback.
 - Client-visible configuration is an immutable versioned Protobuf package delivered over HTTP and verified by SHA-256; it never becomes transaction authority.
 - A pending reward-mail Outbox is recorded atomically in Actor state but becomes database-durable only after the asynchronous checkpoint/Outbox transaction commits.
-- Friend functionality is the next planned phase. FriendSvr, farm visits,
-  public synchronization and cross-Actor interaction remain design-only and
-  must preserve the completed single-player slice.
+- Friend phases 0–2 are accepted: contracts, internal gRPC/HMAC migration,
+  FriendSvr share-code/relation/list Saga and Zone `ApplyFriendTaskCredit`
+  are implemented. Farm visits, public synchronization and cross-Actor
+  interaction Sagas remain unimplemented.
 
 ## Current architecture and decision map
 
@@ -96,6 +101,8 @@ Accepted first-stage contracts:
 - `../contracts/idempotency-and-errors.md`: request identity, retained results, retry and error behavior.
 - `../contracts/data-model.md`: Player checkpoint, `checkpoint_revision`, ShardMap, fences, Dirty batches and Outbox storage.
 - `../contracts/event-contracts.md`: reward-mail event, relay and consumer deduplication.
+- `../contracts/internal-grpc.md`: internal unary services, HMAC identity,
+  deadlines, errors and retry boundaries.
 - Complete Chinese reading mirrors use the `.zh-CN.md` suffix.
 
 Current supporting decisions referenced by V3:
@@ -321,7 +328,10 @@ deliberately uses development-only in-memory adapters:
   snapshot from current Actor memory. The default mode still uses one local
   Zone; `static-dual-zone` uses two independent Actor runtimes, backed either
   by process memory alone or by assigned-Fence MySQL checkpoints.
-- Gate keeps authenticated player subscriptions in process memory. Online maturity travels from Zone to Gate over loopback HTTP and is forwarded as a Protobuf Push; reconnect or any detected version gap uses a fresh snapshot rather than replaying Push history.
+- Gate keeps authenticated player subscriptions in process memory. Online
+  maturity travels from Zone to Gate through HMAC-authenticated Unary gRPC and
+  is forwarded as a Protobuf Push; reconnect or any detected version gap uses a
+  fresh snapshot rather than replaying Push history.
 - `GET_SHOP` is routed to Zone and reads the pinned global configuration snapshot without activating a Player Actor.
 - Coordinator route state is also process-local. In this mode, Dirty
   writeback, database Fences and restart recovery are not implemented.
@@ -430,6 +440,10 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
   account, checkpoint, migration and restart acceptance gate.
 - `../evidence/2026-08-05-k8s-fixed-dual-zone.md` records the five-Deployment
   kind cluster and passing live dual-Zone owner-loop/migration E2E.
+- `../evidence/2026-08-06-friend-phase-1-grpc.md` records HMAC interceptor
+  rejection tests plus passing local and kind gRPC dual-Zone E2Es.
+- `../evidence/2026-08-06-friend-phase-2-friendsvr.md` records FriendSvr,
+  FriendLinkSaga, Zone task credit and friend-table deploy wiring.
 
 ## Next actions
 
@@ -437,22 +451,22 @@ The pure-Tcaplus runtime and fixed dual-Zone kind cluster are green. Dynamic
 Zone discovery and `2 -> 3` scaling were explicitly removed from the prototype
 scope.
 
-Development resumes tomorrow from
+Development follows
 `../plans/friend_design_plan/06-分阶段实施方案.md`:
 
-1. Phase 0: freeze friend/rpc/ws/data Protobuf and Tcaplus table schemas;
-2. stop for owner review of field numbers, primary keys and generated types;
-3. Phase 1: migrate game-internal Gate → Zone commands and Zone → Gate Push
-   to HMAC-authenticated gRPC while preserving all existing behavior;
-4. do not start FriendSvr until the existing Go, dual-Zone and Kubernetes
-   owner-loop gates remain green.
+1. Phases 0–2 are complete and verified by
+   `../evidence/2026-08-06-friend-phase-0-contracts.md`,
+   `../evidence/2026-08-06-friend-phase-1-grpc.md` and
+   `../evidence/2026-08-06-friend-phase-2-friendsvr.md`;
+2. implement phase 3 visit sessions and public farm snapshots;
+3. keep the existing Go, dual-Zone and Kubernetes owner-loop gates green;
+4. optionally wire Gate WebSocket friend-code/list actions onto FriendSvr
+   before or during phase 3 UI work.
 
 Manual owner checkpoints:
 
-- approve phase-0 contracts;
-- create the friend PB tables in the Tcaplus console when requested;
-- authorize/update the Kubernetes HMAC Secret;
-- perform the final three-H5 interaction review.
+- rebuild/redeploy the FriendSvr image into kind when exercising phase 2+;
+- perform the final three-H5 interaction review after phase 7.
 
 ## AI memory and handoff rule
 

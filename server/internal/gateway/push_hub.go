@@ -3,14 +3,11 @@ package gateway
 import (
 	"context"
 	"errors"
-	"io"
-	"net/http"
 	"sort"
 	"sync"
 
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	reasonv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/reason"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -150,30 +147,6 @@ func stateVersionAfter(candidate, baseline *wsv1.StateVersion) bool {
 		return candidate.OwnerEpoch > baseline.OwnerEpoch
 	}
 	return candidate.PlayerSeq > baseline.PlayerSeq
-}
-
-func (h *PushHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !internalnet.RemoteAllowed(r.RemoteAddr) {
-		http.Error(w, "internal network only", http.StatusForbidden)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, MaxMessageBytes)
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "push too large", http.StatusRequestEntityTooLarge)
-		return
-	}
-	envelope := &wsv1.WsEnvelope{}
-	if len(body) == 0 || proto.Unmarshal(body, envelope) != nil ||
-		validatePushEnvelope(envelope) != nil {
-		http.Error(w, "invalid push", http.StatusBadRequest)
-		return
-	}
-	if err := h.Publish(envelope); err != nil {
-		http.Error(w, "push rejected", http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func validatePushEnvelope(envelope *wsv1.WsEnvelope) error {

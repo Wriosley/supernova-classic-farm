@@ -62,6 +62,15 @@ type State struct {
 	UpdatedAtMS          int64
 	RecentResults        []*datav1.IdempotencyResultRecord
 	PendingOutbox        []*datav1.PendingOutboxRecord
+
+	// Friend fields are nil/empty until the first friend-related event (see
+	// migrateFriendSchema); their presence bumps the checkpoint schema to
+	// CheckpointSchemaVersion. FriendReservations/FriendReceipts are farm
+	// visit state, out of scope for Phase 2, and are only round-tripped.
+	FriendActions            *datav1.FriendActionState
+	FriendReservations       []*datav1.FriendResourceReservation
+	FriendReceipts           []*datav1.FriendInteractionReceipt
+	FriendTaskCreditReceipts []*datav1.FriendTaskCreditReceipt
 }
 
 // NewDevelopmentState is a lazy, in-memory development adapter. It is not

@@ -7,7 +7,7 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 
 COPY server/ ./
-RUN case "${SERVICE}" in login|gate|coordinator|zone) ;; *) exit 2 ;; esac \
+RUN case "${SERVICE}" in login|gate|coordinator|zone|friend) ;; *) exit 2 ;; esac \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
         -o /out/service "./cmd/${SERVICE}"
 

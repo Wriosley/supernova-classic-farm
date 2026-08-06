@@ -32,6 +32,36 @@ enum TaskMetric {
   TASK_APPLY_FERTILIZER = 3;
   TASK_HARVEST = 4;
   TASK_SELL_CROP = 5;
+  TASK_ADD_FRIEND = 6;
+  TASK_STEAL_CROP = 7;
+  TASK_APPLY_PEST_TO_FRIEND = 8;
+}
+
+enum FriendInteractionAction {
+  FRIEND_INTERACTION_ACTION_UNSPECIFIED = 0;
+  APPLY_PEST_TO_FRIEND = 1;
+  CATCH_PEST_FOR_FRIEND = 2;
+  HELP_CLEAN_FRIEND_PLOT = 3;
+  STEAL_FRIEND_CROP = 4;
+}
+
+enum FriendReservationStatus {
+  FRIEND_RESERVATION_STATUS_UNSPECIFIED = 0;
+  FRIEND_RESERVATION_RESERVED = 1;
+  FRIEND_RESERVATION_CONSUMED = 2;
+  FRIEND_RESERVATION_RELEASED = 3;
+}
+
+enum FriendReceiptRole {
+  FRIEND_RECEIPT_ROLE_UNSPECIFIED = 0;
+  FRIEND_RECEIPT_VISITOR = 1;
+  FRIEND_RECEIPT_OWNER = 2;
+}
+
+enum FriendReceiptStatus {
+  FRIEND_RECEIPT_STATUS_UNSPECIFIED = 0;
+  FRIEND_RECEIPT_APPLIED = 1;
+  FRIEND_RECEIPT_COMMITTED = 2;
 }
 
 enum OutboxEventType {
@@ -80,6 +110,10 @@ message PlayerCheckpointV1 {
   uint64 last_applied_config_version = 13;
   int64 created_at_ms = 14;
   int64 updated_at_ms = 15;
+  FriendActionState friend_actions = 16;
+  repeated FriendResourceReservation friend_reservations = 17;
+  repeated FriendInteractionReceipt friend_receipts = 18;
+  repeated FriendTaskCreditReceipt friend_task_credit_receipts = 19;
 }
 
 message InventoryStack {
@@ -103,6 +137,10 @@ message PlotStateRecord {
   optional int64 estimated_mature_at_ms = 13;
   optional TimedEffectRecord fertilizer_effect = 14;
   optional TimedEffectRecord pest_effect = 15;
+  uint32 steal_count = 16;
+  uint32 steal_quantity = 17;
+  uint32 max_steal_times = 18;
+  uint32 protected_owner_yield = 19;
 }
 
 message TimedEffectRecord {
@@ -133,6 +171,38 @@ message TaskStateRecord {
   uint32 current_value = 4;
   uint32 target_value = 5;
   bool completed = 6;
+}
+
+message FriendActionState {
+  uint32 apply_pest_chances = 1;
+  uint32 catch_pest_chances = 2;
+  uint32 help_clean_chances = 3;
+}
+
+message FriendResourceReservation {
+  bytes interaction_id = 1;
+  FriendInteractionAction action = 2;
+  FriendReservationStatus status = 3;
+  uint32 reserved_action_chances = 4;
+  optional uint32 reserved_inventory_item_id = 5;
+  optional uint32 reserved_inventory_quantity = 6;
+  int64 created_at_ms = 7;
+  int64 updated_at_ms = 8;
+}
+
+message FriendInteractionReceipt {
+  bytes interaction_id = 1;
+  FriendReceiptRole role = 2;
+  FriendInteractionAction action = 3;
+  FriendReceiptStatus status = 4;
+  bytes result_digest_sha256 = 5;
+  bytes result_payload = 6;
+  int64 committed_at_ms = 7;
+}
+
+message FriendTaskCreditReceipt {
+  bytes relation_id = 1;
+  int64 applied_at_ms = 2;
 }
 
 message IdempotencyResultRecord {

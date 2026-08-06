@@ -1,7 +1,7 @@
 ---
 status: accepted
-version: 1
-date: 2026-07-30
+version: 2
+date: 2026-08-06
 owners:
   - project-owner
 related:
@@ -111,6 +111,28 @@ When safe, `PLOT_STATE_CONFLICT` includes the current `PlotView`, allowing H5 to
 
 A retry of the original successful claim request returns the original successful result, not `CHAPTER_REWARD_ALREADY_CLAIMED`.
 
+### 3.7 Friends, visits and interactions
+
+| Value | Code | Meaning |
+|---:|---|---|
+| 700 | `FRIEND_CODE_NOT_FOUND` | No lookup record exists for the supplied code |
+| 701 | `FRIEND_CODE_EXPIRED` | The code is no longer redeemable |
+| 702 | `CANNOT_FRIEND_SELF` | Code owner and redeemer are the same player |
+| 703 | `FRIEND_LIMIT_REACHED` | Either player's active plus reserved slots reached 100 |
+| 704 | `NOT_MUTUAL_FRIEND` | No active authoritative relation exists |
+| 705 | `VISIT_NOT_FOUND` | The visit ID is unknown or belongs to different identities |
+| 706 | `VISIT_EXPIRED` | The visit lease has expired |
+| 720 | `PLOT_NOT_ELIGIBLE` | Plot state cannot accept the requested friend action |
+| 721 | `PEST_ALREADY_PRESENT` | A growing plot already has an active pest |
+| 722 | `PEST_SOURCE_FORBIDDEN` | A player attempted to catch their own pest |
+| 723 | `STEAL_NOT_AVAILABLE` | Frozen count or protected-yield rule rejects stealing |
+| 724 | `INSUFFICIENT_ACTION_CHANCE` | Visitor has no chance for the requested action |
+| 725 | `INVENTORY_CAPACITY_EXCEEDED` | Visitor cannot reserve the steal reward |
+| 726 | `INTERACTION_OUTCOME_UNKNOWN` | Saga outcome must be recovered with the same request ID |
+
+Codes 700–706 and 720–725 are terminal for the current intent. Code 726 is
+retryable only with the same ID and semantic payload.
+
 ## 4. Which failures close the connection
 
 Close after:
@@ -162,6 +184,15 @@ shop_entry_id, quantity, expected_price_version
 
 SELL_CROP:
 crop_item_id, expected_price_version, amount branch, quantity when present
+
+REDEEM_FRIEND_CODE:
+normalized code
+
+ENTER/HEARTBEAT/EXIT_FRIEND_FARM:
+owner_player_id, visit_id when present
+
+FRIEND PLOT ACTION:
+owner_player_id, visit_id, plot_id, pest_id when present
 ```
 
 The fingerprint is not based on client-supplied hash text. Unknown compatible Protobuf fields do not change V1 semantics and are excluded by the V1 fingerprint schema.
@@ -298,6 +329,24 @@ V3 does not claim durable exactly-once execution across an unflushed abnormal fa
 - atomic recovery of player state, retained result and pending Outbox;
 - an explicit bounded-loss window accepted by ADR-0006.
 
+Cross-player friend interactions are the exception to asynchronous Dirty
+acknowledgement. The visitor reservation is synchronously checkpointed before
+the owner mutation; the owner receipt is synchronously checkpointed with that
+mutation; and the visitor completion receipt is synchronously checkpointed
+with resource consumption, reward and task credit. `FriendInteraction` records
+orchestrate these checkpoints but never replace them as resource authority.
+
+The WebSocket request UUID, raw-byte `interaction_id`, Tcaplus Saga key and both
+Player receipts identify one intent. A same-ID/different-fingerprint request is
+`REQUEST_ID_CONFLICT`. A timeout after any durable step is
+`INTERACTION_OUTCOME_UNKNOWN`; the client must keep the ID until reconciliation
+returns the stored terminal result.
+
+`FriendInteraction` persists every input needed to resume execution, including
+`action`, `plot_id` and `pest_id` when present; the request digest detects any
+changed retry. Owner-enter calls also forward the original request ID so a
+timeout cannot create duplicate visit leases or presence notifications.
+
 ## 12. Required tests
 
 1. same ID and payload executes each write once;
@@ -309,4 +358,7 @@ V3 does not claim durable exactly-once execution across an unflushed abnormal fa
 7. price refresh requires a new ID after player confirmation;
 8. claim reward replay creates no duplicate inventory or mail Outbox;
 9. retention enforces both 100-result and 24-hour bounds;
-10. epoch recovery restores player state, idempotency records and Outbox from one checkpoint.
+10. epoch recovery restores player state, idempotency records and Outbox from one checkpoint;
+11. a same-ID friend action cannot consume two chances or mutate the owner twice;
+12. recovery from every interaction Saga boundary converges to one committed result or a released reservation;
+13. `INTERACTION_OUTCOME_UNKNOWN` retries preserve ID and reject changed payloads.

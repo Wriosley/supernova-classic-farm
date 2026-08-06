@@ -1,7 +1,7 @@
 ---
 status: accepted
-version: 1
-date: 2026-07-30
+version: 2
+date: 2026-08-06
 owners:
   - project-owner
 related:
@@ -89,9 +89,22 @@ All display text comes from the versioned client configuration package. IDs and 
 | 205 | `SELL_CROP` |
 | 206 | `CLAIM_CHAPTER_REWARD` |
 | 207 | `BUY_FERTILIZER` |
+| 300 | `CREATE_FRIEND_CODE` |
+| 301 | `REDEEM_FRIEND_CODE` |
+| 302 | `LIST_FRIENDS` |
+| 310 | `ENTER_FRIEND_FARM` |
+| 311 | `FARM_HEARTBEAT` |
+| 312 | `EXIT_FRIEND_FARM` |
+| 320 | `APPLY_PEST_TO_FRIEND` |
+| 321 | `CATCH_PEST_FOR_FRIEND` |
+| 322 | `HELP_CLEAN_FRIEND_PLOT` |
+| 323 | `STEAL_FRIEND_CROP` |
 | 1000 | `PLAYER_STATE_CHANGED` |
+| 1100 | `FARM_VIEW_CHANGED` |
+| 1101 | `FARM_PRESENCE_CHANGED` |
 
-Numbers 3–99, 102–199, 208–999 and 1001–1999 are reserved for compatible expansion. Removed values remain reserved.
+Unassigned numbers in the published ranges remain reserved for compatible
+expansion. Removed values remain reserved.
 
 ## 5. Common envelope
 
@@ -461,7 +474,42 @@ There is no V1 persistent delta replay endpoint.
 
 Normal business errors such as insufficient coins, full inventory, immature crop, active fertilizer or changed price return a failed RESPONSE and keep the connection open.
 
-## 15. Validation checklist
+## 15. Friend and public-farm extension
+
+Friend-code and list requests are authenticated-player operations. Their
+envelope `target_player_id` is the authenticated player. Friend-code creation
+returns the one current code and its ten-minute expiry; redeem is idempotent for
+an already active relation. A player cannot redeem their own code, and each
+list is limited to 100 active friends.
+
+Visit and interaction requests are routed through the authenticated visitor's
+Player Owner. The farm owner is carried only as `owner_player_id` in the typed
+payload; clients cannot supply a Zone, Gate, owner epoch or internal route.
+`ENTER_FRIEND_FARM` returns a 16-byte `visit_id`, expiry and
+`FarmVisitSnapshot`. Heartbeat and exit must preserve that owner and visit ID.
+
+The public farm version is `(farm_view_epoch, farm_view_seq)`.
+`farm_view_epoch` is a non-zero 16-byte UUID regenerated when the owner Actor
+activates or migrates; `farm_view_seq` increments for every public mutation.
+Clients replace the complete public farm on epoch change, apply a patch only at
+`local_seq + 1`, ignore older duplicates and re-enter on a gap.
+
+Public plot projections contain only plot ID/state, crop ID, estimated maturity,
+harvestable quantity, pest presence and `can_steal`. They MUST NOT expose
+owner coin, inventory, task state, frozen internal arithmetic, pest source,
+Saga state, action chances or another visitor's identity.
+
+The four interaction requests contain owner, visit and plot; apply-pest also
+contains `pest_id`. Their response carries `interaction_id`, the visitor
+`PlayerStatePatch` and owner `FarmViewPatch`. The envelope state version orders
+the visitor patch; the independent farm-view version orders the owner patch.
+`interaction_id` is the request UUID encoded as 16 raw bytes.
+
+`FARM_VIEW_CHANGED` is sent only to Gates with active visits for that owner.
+`FARM_PRESENCE_CHANGED` is sent to the owner and carries ENTERED/LEFT; visitor
+account name is optional according to owner privacy configuration.
+
+## 16. Validation checklist
 
 Implementation tests MUST prove:
 
@@ -474,4 +522,7 @@ Implementation tests MUST prove:
 7. snapshot subscription buffering has no snapshot-to-Push race;
 8. 64 KiB enforcement occurs before unbounded allocation;
 9. PING remains at GateSvr and never activates an Actor;
-10. every business failure preserves connection and returns the documented error behavior.
+10. every business failure preserves connection and returns the documented error behavior;
+11. friend payloads cannot inject internal routing or caller identity;
+12. public-farm gap/duplicate/epoch handling is independent from player state;
+13. public snapshots and patches leak none of the prohibited private fields.

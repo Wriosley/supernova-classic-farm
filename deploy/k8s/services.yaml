@@ -40,6 +40,19 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: friend
+  namespace: classic-farm
+spec:
+  selector:
+    app.kubernetes.io/name: friend
+  ports:
+    - name: http
+      port: 8085
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: zone-a
   namespace: classic-farm
 spec:

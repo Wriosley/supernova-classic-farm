@@ -13,12 +13,16 @@ import (
 	"strings"
 	"time"
 
+	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -40,6 +44,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	rpcKey, err := rpcauth.LoadKeyFromEnv()
+	if err != nil {
+		return err
+	}
+	gatewayID := envOr("GATEWAY_ID", gateway.DefaultGatewayID)
+	zoneCommander, err := gateway.NewGRPCZoneCommander(rpcKey, gatewayID)
+	if err != nil {
+		return err
+	}
+	defer zoneCommander.Close()
 	client := newInternalHTTPClient()
 	clientConfigURL := envOr("CLIENT_CONFIG_URL", gateway.DefaultConfigURL)
 	configSHA, err := configuredSHA(client, clientConfigURL)
@@ -62,10 +76,10 @@ func run() error {
 	wsHandler, err := gateway.NewHandler(gateway.Config{
 		Tickets: &gateway.HTTPTicketConsumer{
 			Client: client, Endpoint: envOr("LOGIN_TICKET_CONSUME_URL", "http://127.0.0.1:8080/internal/v1/ws-tickets/consume"),
-			GatewayID: gateway.DefaultGatewayID,
+			GatewayID: gatewayID,
 		},
 		Routes:          routeCache,
-		Zone:            &gateway.HTTPZoneCommander{Client: client},
+		Zone:            zoneCommander,
 		ClientConfigURL: clientConfigURL,
 		ClientConfigSHA: configSHA,
 	})
@@ -75,19 +89,40 @@ func run() error {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /ws", wsHandler)
-	mux.Handle("POST /internal/v1/player-state-changes", wsHandler.PushHandler())
 	mux.Handle("GET /internal/v1/debug/command-failures", wsHandler.DebugCommandFailuresHandler())
 	healthHandler := health.NewHandler()
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
+	pushServer, err := gateway.NewGRPCPushServer(wsHandler, gatewayID)
+	if err != nil {
+		return err
+	}
+	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
+		Key: rpcKey,
+		AllowedCallers: map[string][]string{
+			rpcv1.GatePushService_PublishPlayerStateChanged_FullMethodName: {
+				"zone-local", "zone-a", "zone-b",
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(rpcInterceptor),
+		grpc.MaxRecvMsgSize(128<<10),
+		grpc.MaxSendMsgSize(128<<10),
+	)
+	defer grpcServer.Stop()
+	rpcv1.RegisterGatePushServiceServer(grpcServer, pushServer)
 	server := &http.Server{
-		Addr: cfg.HTTPAddress, Handler: mux,
+		Addr: cfg.HTTPAddress, Handler: rpcnet.H2CHandler(grpcServer, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 	logger.Info("gate listening",
 		"address", cfg.HTTPAddress,
-		"gateway_id", gateway.DefaultGatewayID,
+		"gateway_id", gatewayID,
 		"max_message_bytes", gateway.MaxMessageBytes,
 		"production_backpressure", false,
 		"distributed_connection_revocation", false,

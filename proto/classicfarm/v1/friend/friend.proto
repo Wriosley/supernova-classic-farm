@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package classicfarm.friend.v1;
+
+import "classicfarm/v1/ws/ws.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/friend;friendv1";
+
+// All calls are unary, require the internal HMAC metadata contract, and use a
+// two-second client deadline.
+service FriendService {
+  rpc CreateShareCode(CreateShareCodeRequest) returns (CreateShareCodeResponse);
+  rpc RedeemShareCode(RedeemShareCodeRequest) returns (RedeemShareCodeResponse);
+  rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
+  rpc CheckMutualFriend(CheckMutualFriendRequest) returns (CheckMutualFriendResponse);
+}
+
+message CreateShareCodeRequest {
+  uint64 caller_player_id = 1;
+}
+
+message CreateShareCodeResponse {
+  string code = 1;
+  int64 created_at_ms = 2;
+  int64 expires_at_ms = 3;
+  classicfarm.ws.v1.Error error = 4;
+}
+
+message RedeemShareCodeRequest {
+  uint64 caller_player_id = 1;
+  string code = 2;
+}
+
+message RedeemShareCodeResponse {
+  FriendView friend = 1;
+  bytes relation_id = 2;
+  bool newly_created = 3;
+  classicfarm.ws.v1.Error error = 4;
+}
+
+message ListFriendsRequest {
+  uint64 caller_player_id = 1;
+}
+
+message ListFriendsResponse {
+  repeated FriendView friends = 1;
+  classicfarm.ws.v1.Error error = 2;
+}
+
+message CheckMutualFriendRequest {
+  uint64 player_a_id = 1;
+  uint64 player_b_id = 2;
+}
+
+message CheckMutualFriendResponse {
+  bool mutual_friend = 1;
+  optional bytes relation_id = 2;
+  classicfarm.ws.v1.Error error = 3;
+}
+
+message FriendView {
+  uint64 player_id = 1;
+  string account_name = 2;
+  int64 created_at_ms = 3;
+}

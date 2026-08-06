@@ -5,7 +5,12 @@ param(
 
     [string]$MySQLDSN = $env:MYSQL_DSN,
 
-    [switch]$DualZone
+    [switch]$DualZone,
+
+    # Use Tcaplus for auth, checkpoints, fences, migration progress, Outbox
+    # and friend tables. Also starts FriendSvr (FriendSvr has no in-memory
+    # mode). Requires -DualZone and the TCAPLUS_* environment variables.
+    [switch]$Tcaplus
 )
 
 $ErrorActionPreference = "Stop"
@@ -109,9 +114,26 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     throw "Go was not found on PATH"
 }
 
+if ($Tcaplus -and -not [string]::IsNullOrWhiteSpace($MySQLDSN)) {
+    throw "-Tcaplus and -MySQLDSN are mutually exclusive"
+}
+if ($Tcaplus -and -not $DualZone) {
+    throw "-Tcaplus currently requires -DualZone"
+}
+if ($Tcaplus) {
+    foreach ($key in @("TCAPLUS_APP_ID", "TCAPLUS_ZONE_ID", "TCAPLUS_DIR_URL", "TCAPLUS_SIGNATURE")) {
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($key))) {
+            throw "$key is required for -Tcaplus"
+        }
+    }
+}
+
 $ports = @(8080, 8081, 8082, 8083)
 if ($DualZone) {
     $ports += 8084
+}
+if ($Tcaplus) {
+    $ports += 8085
 }
 foreach ($port in $ports) {
     if (Test-PortOpen -Port $port) {
@@ -126,7 +148,15 @@ New-Item -ItemType Directory -Path $runRoot | Out-Null
 $environmentKeys = @(
     "APP_ENV", "H5_ORIGIN", "GATEWAY_ID", "GATEWAY_URL",
     "CLIENT_CONFIG_URL", "LOGIN_TICKET_CONSUME_URL", "COORDINATOR_URL",
-    "MYSQL_DSN", "ROUTING_MODE"
+    "GATE_RPC_URL", "INTERNAL_GRPC_HMAC_KEY", "MYSQL_DSN", "ROUTING_MODE",
+    "STORAGE_MODE",
+    "TCAPLUS_CHECKPOINT_TABLE", "TCAPLUS_PLAYER_ID_COUNTER_TABLE",
+    "TCAPLUS_ACCOUNT_BY_NAME_TABLE", "TCAPLUS_ACCOUNT_BY_PLAYER_TABLE",
+    "TCAPLUS_SESSION_TABLE", "TCAPLUS_FENCE_TABLE", "TCAPLUS_MIGRATION_TABLE",
+    "TCAPLUS_OUTBOX_TABLE", "TCAPLUS_FRIEND_CODE_CURRENT_TABLE",
+    "TCAPLUS_FRIEND_CODE_LOOKUP_TABLE", "TCAPLUS_FRIEND_RELATION_TABLE",
+    "TCAPLUS_FRIEND_LIST_TABLE", "TCAPLUS_FRIEND_LINK_SAGA_TABLE",
+    "TCAPLUS_FRIEND_INTERACTION_TABLE"
 )
 $previousEnvironment = @{}
 foreach ($key in $environmentKeys) {
@@ -135,7 +165,11 @@ foreach ($key in $environmentKeys) {
 
 try {
     $binaries = @{}
-    foreach ($name in @("login", "zone", "coordinator", "gate")) {
+    $buildTargets = @("login", "zone", "coordinator", "gate")
+    if ($Tcaplus) {
+        $buildTargets += "friend"
+    }
+    foreach ($name in $buildTargets) {
         $binary = Join-Path $runRoot "$name.exe"
         Write-Host "[build] $name"
         Push-Location $serverRoot
@@ -158,8 +192,29 @@ try {
     $env:CLIENT_CONFIG_URL = "http://127.0.0.1:8080/v1/client-config/1"
     $env:LOGIN_TICKET_CONSUME_URL = "http://127.0.0.1:8080/internal/v1/ws-tickets/consume"
     $env:COORDINATOR_URL = "http://127.0.0.1:8083"
+    $env:GATE_RPC_URL = "http://127.0.0.1:8081"
+    if ([string]::IsNullOrWhiteSpace($env:INTERNAL_GRPC_HMAC_KEY)) {
+        $env:INTERNAL_GRPC_HMAC_KEY = "classic-farm-local-development-hmac-key-2026"
+    }
     $env:MYSQL_DSN = $MySQLDSN
     $env:ROUTING_MODE = if ($DualZone) { "static-dual-zone" } else { "local" }
+    if ($Tcaplus) {
+        $env:STORAGE_MODE = "tcaplus"
+        $env:TCAPLUS_CHECKPOINT_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_CHECKPOINT_TABLE)) { "PlayerCheckpoint" } else { $env:TCAPLUS_CHECKPOINT_TABLE }
+        $env:TCAPLUS_PLAYER_ID_COUNTER_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_PLAYER_ID_COUNTER_TABLE)) { "PlayerIdCounter" } else { $env:TCAPLUS_PLAYER_ID_COUNTER_TABLE }
+        $env:TCAPLUS_ACCOUNT_BY_NAME_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_ACCOUNT_BY_NAME_TABLE)) { "AccountByName" } else { $env:TCAPLUS_ACCOUNT_BY_NAME_TABLE }
+        $env:TCAPLUS_ACCOUNT_BY_PLAYER_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_ACCOUNT_BY_PLAYER_TABLE)) { "AccountByPlayer" } else { $env:TCAPLUS_ACCOUNT_BY_PLAYER_TABLE }
+        $env:TCAPLUS_SESSION_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_SESSION_TABLE)) { "Session" } else { $env:TCAPLUS_SESSION_TABLE }
+        $env:TCAPLUS_FENCE_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_FENCE_TABLE)) { "ShardFence" } else { $env:TCAPLUS_FENCE_TABLE }
+        $env:TCAPLUS_MIGRATION_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_MIGRATION_TABLE)) { "MigrationProgress" } else { $env:TCAPLUS_MIGRATION_TABLE }
+        $env:TCAPLUS_OUTBOX_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_OUTBOX_TABLE)) { "PlayerOutbox" } else { $env:TCAPLUS_OUTBOX_TABLE }
+        $env:TCAPLUS_FRIEND_CODE_CURRENT_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_FRIEND_CODE_CURRENT_TABLE)) { "FriendCodeCurrent" } else { $env:TCAPLUS_FRIEND_CODE_CURRENT_TABLE }
+        $env:TCAPLUS_FRIEND_CODE_LOOKUP_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_FRIEND_CODE_LOOKUP_TABLE)) { "FriendCodeLookup" } else { $env:TCAPLUS_FRIEND_CODE_LOOKUP_TABLE }
+        $env:TCAPLUS_FRIEND_RELATION_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_FRIEND_RELATION_TABLE)) { "FriendRelation" } else { $env:TCAPLUS_FRIEND_RELATION_TABLE }
+        $env:TCAPLUS_FRIEND_LIST_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_FRIEND_LIST_TABLE)) { "FriendList" } else { $env:TCAPLUS_FRIEND_LIST_TABLE }
+        $env:TCAPLUS_FRIEND_LINK_SAGA_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_FRIEND_LINK_SAGA_TABLE)) { "FriendLinkSaga" } else { $env:TCAPLUS_FRIEND_LINK_SAGA_TABLE }
+        $env:TCAPLUS_FRIEND_INTERACTION_TABLE = if ([string]::IsNullOrWhiteSpace($env:TCAPLUS_FRIEND_INTERACTION_TABLE)) { "FriendInteraction" } else { $env:TCAPLUS_FRIEND_INTERACTION_TABLE }
+    }
 
     $coordinatorEnvironment = @{}
     if ($DualZone) {
@@ -198,6 +253,14 @@ try {
         Wait-Ready -Name "ZoneSvr" -Url "http://127.0.0.1:8082/readyz" -Process $zone
     }
 
+    if ($Tcaplus) {
+        $friend = Start-FarmService -Name "friend" -Binary $binaries["friend"] -Environment @{
+            FRIEND_PORT = ""
+            HTTP_ADDRESS = "127.0.0.1:8085"
+        }
+        Wait-Ready -Name "FriendSvr" -Url "http://127.0.0.1:8085/readyz" -Process $friend
+    }
+
     $gate = Start-FarmService -Name "gate" -Binary $binaries["gate"]
     Wait-Ready -Name "GateSvr" -Url "http://127.0.0.1:8081/readyz" -Process $gate
 
@@ -213,8 +276,14 @@ try {
         Write-Host "ZoneSvr:    http://127.0.0.1:8082"
     }
     Write-Host "Coordinator:http://127.0.0.1:8083"
+    if ($Tcaplus) {
+        Write-Host "FriendSvr:  http://127.0.0.1:8085"
+    }
     Write-Host ""
-    if ([string]::IsNullOrWhiteSpace($MySQLDSN)) {
+    if ($Tcaplus) {
+        Write-Host "Data mode: pure TcaplusDB. Press Ctrl+C to stop all services."
+    }
+    elseif ([string]::IsNullOrWhiteSpace($MySQLDSN)) {
         Write-Host "Data mode: development-only in-memory. Press Ctrl+C to stop all services."
     }
     else {

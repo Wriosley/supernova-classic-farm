@@ -21,6 +21,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: classic-farm-runtime
+            - secretRef:
+                name: classic-farm-internal-rpc
           env:
             - name: GATE_PORT
               value: ""

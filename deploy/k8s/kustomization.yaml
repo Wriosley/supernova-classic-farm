@@ -8,3 +8,4 @@ resources:
   - login.yaml
   - gate.yaml
   - zone.yaml
+  - friend.yaml

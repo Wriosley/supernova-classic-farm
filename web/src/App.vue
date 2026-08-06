@@ -23,6 +23,7 @@ import {
   selectGateway,
 } from './lib/http'
 import { bytesEqual } from './lib/hash'
+import { mutationResponsePatch } from './lib/mutation-response'
 import { FarmWebSocket } from './lib/ws'
 import FarmDashboard, {
   type FarmAction,
@@ -204,21 +205,6 @@ function describeWsError(error: WsError): string {
   return labels[error.code] ?? `WebSocket 错误 ${error.code}`
 }
 
-function responsePatch(response: WsEnvelope): PlayerStatePatch | undefined {
-  switch (response.payload.case) {
-    case 'buySeedsResponse':
-    case 'plantResponse':
-    case 'applyFertilizerResponse':
-    case 'harvestResponse':
-    case 'sellCropResponse':
-    case 'claimChapterRewardResponse':
-    case 'cleanPlotResponse':
-      return response.payload.value.patch
-    default:
-      return undefined
-  }
-}
-
 async function acceptMutationResponse(response: WsEnvelope): Promise<void> {
   setServerClock(response.serverTimeMs)
   lastActionRequestId.value = response.requestId
@@ -229,7 +215,7 @@ async function acceptMutationResponse(response: WsEnvelope): Promise<void> {
     }
     throw new Error(describeWsError(response.error))
   }
-  const patch = responsePatch(response)
+  const patch = mutationResponsePatch(response)
   const nextVersion = response.stateVersion
   const currentVersion = stateVersion.value
   const currentSnapshot = snapshot.value

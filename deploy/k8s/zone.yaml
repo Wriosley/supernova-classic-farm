@@ -26,13 +26,15 @@ spec:
                 name: classic-farm-runtime
             - secretRef:
                 name: classic-farm-tcaplus
+            - secretRef:
+                name: classic-farm-internal-rpc
           env:
             - name: OWNER_ZONE_ID
               value: zone-a
             - name: ZONE_HTTP_ADDRESS
               value: 0.0.0.0:8082
-            - name: GATE_PUSH_URL
-              value: http://gate:8081/internal/v1/player-state-changes
+            - name: GATE_RPC_URL
+              value: http://gate:8081
           ports:
             - name: http
               containerPort: 8082
@@ -88,13 +90,15 @@ spec:
                 name: classic-farm-runtime
             - secretRef:
                 name: classic-farm-tcaplus
+            - secretRef:
+                name: classic-farm-internal-rpc
           env:
             - name: OWNER_ZONE_ID
               value: zone-b
             - name: ZONE_HTTP_ADDRESS
               value: 0.0.0.0:8082
-            - name: GATE_PUSH_URL
-              value: http://gate:8081/internal/v1/player-state-changes
+            - name: GATE_RPC_URL
+              value: http://gate:8081
           ports:
             - name: http
               containerPort: 8082

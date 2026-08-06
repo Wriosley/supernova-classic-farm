@@ -1,6 +1,10 @@
 package player
 
-import "testing"
+import (
+	"testing"
+
+	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
+)
 
 func TestConfigSnapshotRejectsInvalidAndDuplicateShopEntries(t *testing.T) {
 	tests := []struct {
@@ -85,6 +89,23 @@ func TestDevelopmentShopIncludesSeedCropAndFertilizerQuotesInStableOrder(t *test
 		entries[2].GetUnitPrice() != developmentFertilizerUnitPrice ||
 		entries[2].GetPriceVersion() != developmentFertilizerPriceVersion {
 		t.Fatalf("development shop entries = %+v", entries)
+	}
+}
+
+func TestDevelopmentChapterTwoDefinesFriendTasks(t *testing.T) {
+	chapter, exists := NewDevelopmentConfigSnapshot().Chapter(developmentNextChapterID)
+	if !exists || len(chapter.Tasks) != 3 {
+		t.Fatalf("chapter two tasks = %+v", chapter.Tasks)
+	}
+	want := []datav1.TaskMetric{
+		datav1.TaskMetric_TASK_ADD_FRIEND,
+		datav1.TaskMetric_TASK_STEAL_CROP,
+		datav1.TaskMetric_TASK_APPLY_PEST_TO_FRIEND,
+	}
+	for index, task := range chapter.Tasks {
+		if task.Target != 1 || taskMetric(task.ID) != want[index] {
+			t.Fatalf("chapter two task %d = %+v", index, task)
+		}
 	}
 }
 

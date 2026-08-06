@@ -16,14 +16,23 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const CheckpointSchemaVersion uint32 = 1
+const (
+	// CheckpointSchemaVersionV1 has no friend fields populated.
+	CheckpointSchemaVersionV1 uint32 = 1
+	// CheckpointSchemaVersion is the latest schema: friend_actions and
+	// friend_task_credit_receipts are populated once a player's first
+	// friend-related event lazily migrates them (see migrateFriendSchema).
+	// State.Checkpoint emits V1 until that migration happens so players who
+	// never touch the friend feature keep the smaller, unmigrated encoding.
+	CheckpointSchemaVersion uint32 = 2
+)
 
 // NewInitialCheckpoint creates the durable aggregate committed atomically with
 // a new account and Session by the local MySQL registration path.
 func NewInitialCheckpoint(playerID uint64, now time.Time) *datav1.PlayerCheckpointV1 {
 	nowMS := now.UnixMilli()
 	return &datav1.PlayerCheckpointV1{
-		SchemaVersion:            CheckpointSchemaVersion,
+		SchemaVersion:            CheckpointSchemaVersionV1,
 		PlayerId:                 playerID,
 		LogicalShardId:           routing.ShardForPlayer(playerID),
 		OwnerEpoch:               LocalOwnerEpoch,
@@ -104,7 +113,7 @@ func ValidateCheckpoint(checkpoint *datav1.PlayerCheckpointV1) error {
 	switch {
 	case checkpoint == nil:
 		return errors.New("checkpoint is required")
-	case checkpoint.SchemaVersion != CheckpointSchemaVersion:
+	case checkpoint.SchemaVersion != CheckpointSchemaVersionV1 && checkpoint.SchemaVersion != CheckpointSchemaVersion:
 		return fmt.Errorf("unsupported checkpoint schema %d", checkpoint.SchemaVersion)
 	case checkpoint.PlayerId == 0:
 		return errors.New("checkpoint player_id is required")
@@ -364,6 +373,27 @@ func StateFromCheckpoint(checkpoint *datav1.PlayerCheckpointV1) (*State, error) 
 			proto.Clone(pending).(*datav1.PendingOutboxRecord),
 		)
 	}
+	if checkpoint.FriendActions != nil {
+		state.FriendActions = proto.Clone(checkpoint.FriendActions).(*datav1.FriendActionState)
+	}
+	for _, reservation := range checkpoint.FriendReservations {
+		state.FriendReservations = append(
+			state.FriendReservations,
+			proto.Clone(reservation).(*datav1.FriendResourceReservation),
+		)
+	}
+	for _, receipt := range checkpoint.FriendReceipts {
+		state.FriendReceipts = append(
+			state.FriendReceipts,
+			proto.Clone(receipt).(*datav1.FriendInteractionReceipt),
+		)
+	}
+	for _, receipt := range checkpoint.FriendTaskCreditReceipts {
+		state.FriendTaskCreditReceipts = append(
+			state.FriendTaskCreditReceipts,
+			proto.Clone(receipt).(*datav1.FriendTaskCreditReceipt),
+		)
+	}
 	return state, nil
 }
 
@@ -425,8 +455,12 @@ func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
 		}
 		return bytes.Compare(pendingOutbox[i].EventId, pendingOutbox[j].EventId) < 0
 	})
+	schemaVersion := CheckpointSchemaVersionV1
+	if s.FriendActions != nil {
+		schemaVersion = CheckpointSchemaVersion
+	}
 	checkpoint := &datav1.PlayerCheckpointV1{
-		SchemaVersion: CheckpointSchemaVersion, PlayerId: s.PlayerID,
+		SchemaVersion: schemaVersion, PlayerId: s.PlayerID,
 		LogicalShardId: routing.ShardForPlayer(s.PlayerID), OwnerEpoch: s.OwnerEpoch,
 		PlayerSeq: s.PlayerSeq, CheckpointRevision: s.CheckpointRevision,
 		CoinBalance: s.Coins, Inventory: inventory, Plots: plots,
@@ -438,6 +472,27 @@ func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
 		RecentResults: recent, PendingOutbox: pendingOutbox,
 		LastAppliedConfigVersion: s.ConfigVersion,
 		CreatedAtMs:              s.CreatedAtMS, UpdatedAtMs: s.UpdatedAtMS,
+	}
+	if s.FriendActions != nil {
+		checkpoint.FriendActions = proto.Clone(s.FriendActions).(*datav1.FriendActionState)
+	}
+	for _, reservation := range s.FriendReservations {
+		checkpoint.FriendReservations = append(
+			checkpoint.FriendReservations,
+			proto.Clone(reservation).(*datav1.FriendResourceReservation),
+		)
+	}
+	for _, receipt := range s.FriendReceipts {
+		checkpoint.FriendReceipts = append(
+			checkpoint.FriendReceipts,
+			proto.Clone(receipt).(*datav1.FriendInteractionReceipt),
+		)
+	}
+	for _, receipt := range s.FriendTaskCreditReceipts {
+		checkpoint.FriendTaskCreditReceipts = append(
+			checkpoint.FriendTaskCreditReceipts,
+			proto.Clone(receipt).(*datav1.FriendTaskCreditReceipt),
+		)
 	}
 	if err := ValidateCheckpoint(checkpoint); err != nil {
 		return nil, err
@@ -546,6 +601,12 @@ func taskMetric(taskID uint32) datav1.TaskMetric {
 		return datav1.TaskMetric_TASK_HARVEST
 	case 5:
 		return datav1.TaskMetric_TASK_SELL_CROP
+	case 6:
+		return datav1.TaskMetric_TASK_ADD_FRIEND
+	case 7:
+		return datav1.TaskMetric_TASK_STEAL_CROP
+	case 8:
+		return datav1.TaskMetric_TASK_APPLY_PEST_TO_FRIEND
 	default:
 		return datav1.TaskMetric_TASK_METRIC_UNSPECIFIED
 	}

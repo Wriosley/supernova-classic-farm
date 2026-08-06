@@ -2,11 +2,11 @@ syntax = "proto3";
 
 package classicfarm.ws.v1;
 
-option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws;wsv1";
-
 import "classicfarm/v1/ws/chapter/chapter_status.proto";
 import "classicfarm/v1/ws/plot/plot_state.proto";
 import "classicfarm/v1/ws/reason/state_change_reason.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws;wsv1";
 
 enum MessageKind {
   MESSAGE_KIND_UNSPECIFIED = 0;
@@ -31,9 +31,25 @@ enum Action {
   SELL_CROP = 205;
   CLAIM_CHAPTER_REWARD = 206;
   BUY_FERTILIZER = 207;
-  reserved 208 to 999;
+  reserved 208 to 299;
+  CREATE_FRIEND_CODE = 300;
+  REDEEM_FRIEND_CODE = 301;
+  LIST_FRIENDS = 302;
+  reserved 303 to 309;
+  ENTER_FRIEND_FARM = 310;
+  FARM_HEARTBEAT = 311;
+  EXIT_FRIEND_FARM = 312;
+  reserved 313 to 319;
+  APPLY_PEST_TO_FRIEND = 320;
+  CATCH_PEST_FOR_FRIEND = 321;
+  HELP_CLEAN_FRIEND_PLOT = 322;
+  STEAL_FRIEND_CROP = 323;
+  reserved 324 to 999;
   PLAYER_STATE_CHANGED = 1000;
-  reserved 1001 to 1999;
+  reserved 1001 to 1099;
+  FARM_VIEW_CHANGED = 1100;
+  FARM_PRESENCE_CHANGED = 1101;
+  reserved 1102 to 1999;
 }
 
 enum ErrorCode {
@@ -66,6 +82,20 @@ enum ErrorCode {
   CHAPTER_NOT_FOUND = 600;
   CHAPTER_NOT_CLAIMABLE = 601;
   CHAPTER_REWARD_ALREADY_CLAIMED = 602;
+  FRIEND_CODE_NOT_FOUND = 700;
+  FRIEND_CODE_EXPIRED = 701;
+  CANNOT_FRIEND_SELF = 702;
+  FRIEND_LIMIT_REACHED = 703;
+  NOT_MUTUAL_FRIEND = 704;
+  VISIT_NOT_FOUND = 705;
+  VISIT_EXPIRED = 706;
+  PLOT_NOT_ELIGIBLE = 720;
+  PEST_ALREADY_PRESENT = 721;
+  PEST_SOURCE_FORBIDDEN = 722;
+  STEAL_NOT_AVAILABLE = 723;
+  INSUFFICIENT_ACTION_CHANCE = 724;
+  INVENTORY_CAPACITY_EXCEEDED = 725;
+  INTERACTION_OUTCOME_UNKNOWN = 726;
 }
 
 message WsEnvelope {
@@ -104,8 +134,30 @@ message WsEnvelope {
     PlayerStateChangedPush player_state_changed_push = 32;
     BuyFertilizerRequest buy_fertilizer_request = 33;
     BuyFertilizerResponse buy_fertilizer_response = 34;
+    CreateFriendCodeRequest create_friend_code_request = 35;
+    CreateFriendCodeResponse create_friend_code_response = 36;
+    RedeemFriendCodeRequest redeem_friend_code_request = 37;
+    RedeemFriendCodeResponse redeem_friend_code_response = 38;
+    ListFriendsRequest list_friends_request = 39;
+    ListFriendsResponse list_friends_response = 40;
+    EnterFriendFarmRequest enter_friend_farm_request = 41;
+    EnterFriendFarmResponse enter_friend_farm_response = 42;
+    FarmHeartbeatRequest farm_heartbeat_request = 43;
+    FarmHeartbeatResponse farm_heartbeat_response = 44;
+    ExitFriendFarmRequest exit_friend_farm_request = 45;
+    ExitFriendFarmResponse exit_friend_farm_response = 46;
+    ApplyPestToFriendRequest apply_pest_to_friend_request = 47;
+    FriendActionResponse apply_pest_to_friend_response = 48;
+    CatchPestForFriendRequest catch_pest_for_friend_request = 49;
+    FriendActionResponse catch_pest_for_friend_response = 50;
+    HelpCleanFriendPlotRequest help_clean_friend_plot_request = 51;
+    FriendActionResponse help_clean_friend_plot_response = 52;
+    StealFriendCropRequest steal_friend_crop_request = 53;
+    FriendActionResponse steal_friend_crop_response = 54;
+    FarmViewPatch farm_view_changed_push = 55;
+    FarmPresencePush farm_presence_changed_push = 56;
   }
-  reserved 35 to 99;
+  reserved 57 to 99;
 }
 
 message StateVersion {
@@ -331,4 +383,129 @@ message PlayerStateChangedPush {
   .classicfarm.ws.v1.reason.StateChangeReason reason = 1;
   optional string caused_by_request_id = 2;
   PlayerStatePatch patch = 3;
+}
+
+message CreateFriendCodeRequest {}
+
+message CreateFriendCodeResponse {
+  string code = 1;
+  int64 created_at_ms = 2;
+  int64 expires_at_ms = 3;
+}
+
+message RedeemFriendCodeRequest {
+  string code = 1;
+}
+
+message RedeemFriendCodeResponse {
+  FriendView friend = 1;
+  bool newly_created = 2;
+}
+
+message ListFriendsRequest {}
+
+message ListFriendsResponse {
+  repeated FriendView friends = 1;
+}
+
+message FriendView {
+  uint64 player_id = 1;
+  string account_name = 2;
+  int64 created_at_ms = 3;
+}
+
+message FarmViewVersion {
+  bytes farm_view_epoch = 1;
+  uint64 farm_view_seq = 2;
+}
+
+message PublicPlotView {
+  uint32 plot_id = 1;
+  .classicfarm.ws.v1.plot.PlotState plot_state = 2;
+  uint32 crop_id = 3;
+  int64 estimated_mature_at_ms = 4;
+  uint32 harvestable_quantity = 5;
+  bool pest_active = 6;
+  bool can_steal = 7;
+}
+
+message FarmVisitSnapshot {
+  uint64 owner_player_id = 1;
+  FarmViewVersion version = 2;
+  repeated PublicPlotView plots = 3;
+}
+
+message FarmViewPatch {
+  uint64 owner_player_id = 1;
+  FarmViewVersion version = 2;
+  repeated PublicPlotView plot_upserts = 3;
+}
+
+enum FarmPresenceKind {
+  FARM_PRESENCE_KIND_UNSPECIFIED = 0;
+  FARM_VISITOR_ENTERED = 1;
+  FARM_VISITOR_LEFT = 2;
+}
+
+message FarmPresencePush {
+  uint64 owner_player_id = 1;
+  FarmPresenceKind kind = 2;
+  optional string visitor_account_name = 3;
+}
+
+message EnterFriendFarmRequest {
+  uint64 owner_player_id = 1;
+}
+
+message EnterFriendFarmResponse {
+  bytes visit_id = 1;
+  int64 expires_at_ms = 2;
+  FarmVisitSnapshot snapshot = 3;
+}
+
+message FarmHeartbeatRequest {
+  uint64 owner_player_id = 1;
+  bytes visit_id = 2;
+}
+
+message FarmHeartbeatResponse {
+  int64 expires_at_ms = 1;
+}
+
+message ExitFriendFarmRequest {
+  uint64 owner_player_id = 1;
+  bytes visit_id = 2;
+}
+
+message ExitFriendFarmResponse {}
+
+message ApplyPestToFriendRequest {
+  uint64 owner_player_id = 1;
+  bytes visit_id = 2;
+  uint32 plot_id = 3;
+  uint32 pest_id = 4;
+}
+
+message CatchPestForFriendRequest {
+  uint64 owner_player_id = 1;
+  bytes visit_id = 2;
+  uint32 plot_id = 3;
+}
+
+message HelpCleanFriendPlotRequest {
+  uint64 owner_player_id = 1;
+  bytes visit_id = 2;
+  uint32 plot_id = 3;
+}
+
+message StealFriendCropRequest {
+  uint64 owner_player_id = 1;
+  bytes visit_id = 2;
+  uint32 plot_id = 3;
+}
+
+message FriendActionResponse {
+  bytes interaction_id = 1;
+  PlayerStatePatch visitor_patch = 2;
+  FarmViewPatch farm_patch = 3;
 }

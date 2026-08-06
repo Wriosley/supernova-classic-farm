@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,12 +16,17 @@ import (
 	"time"
 
 	httpv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/http"
+	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/coder/websocket"
 	_ "github.com/go-sql-driver/mysql"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type dualPlayer struct {
@@ -573,30 +577,43 @@ func assertDirectZoneRejected(
 			GetPlayerSnapshotRequest: &wsv1.GetPlayerSnapshotRequest{},
 		},
 	}
-	body, err := proto.Marshal(envelope)
+	key, err := rpcauth.LoadKeyFromEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := http.NewRequest(http.MethodPost,
-		endpoint+"/internal/v1/command", bytes.NewReader(body))
+	interceptor, err := rpcauth.NewClientUnaryInterceptor(rpcauth.ClientConfig{
+		Service: "gate", Key: key,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Content-Type", protobufMediaType)
-	request.Header.Set("X-Caller-Player-ID", fmt.Sprint(player.id))
-	request.Header.Set("X-Shard-ID", fmt.Sprint(player.route.ShardID))
-	request.Header.Set("X-Owner-Zone-ID", player.route.OwnerZoneID)
-	request.Header.Set("X-Owner-Epoch", fmt.Sprint(player.route.OwnerEpoch))
-	request.Header.Set("X-Route-Version", fmt.Sprint(player.route.RouteVersion))
-	response, err := http.DefaultClient.Do(request)
+	conn, err := grpc.NewClient(
+		strings.TrimPrefix(endpoint, "http://"),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(interceptor),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
-	responseBody, _ := io.ReadAll(response.Body)
-	if response.StatusCode != http.StatusConflict ||
-		!bytes.Contains(responseBody, []byte(`"code":"NOT_OWNER"`)) {
-		t.Fatalf("wrong Zone status=%d body=%s", response.StatusCode, responseBody)
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = rpcv1.NewGameCommandServiceClient(conn).ExecutePlayerCommand(
+		ctx,
+		&rpcv1.ExecutePlayerCommandRequest{
+			CallerPlayerId: player.id,
+			GateId:         "local-gateway",
+			Route: &rpcv1.CommittedRoute{
+				LogicalShardId: player.route.ShardID,
+				OwnerZoneId:    player.route.OwnerZoneID,
+				OwnerEpoch:     player.route.OwnerEpoch,
+				RouteVersion:   player.route.RouteVersion,
+			},
+			Envelope: envelope,
+		},
+	)
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("wrong Zone gRPC status=%v error=%v", status.Code(err), err)
 	}
 }
 

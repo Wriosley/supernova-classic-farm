@@ -1,0 +1,224 @@
+syntax = "proto3";
+
+package classicfarm.rpc.v1;
+
+import "classicfarm/v1/data/data_model.proto";
+import "classicfarm/v1/ws/ws.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc;rpcv1";
+
+// Runtime calls are unary and require x-cf-caller-service, x-cf-timestamp,
+// x-cf-nonce, x-cf-body-sha256 and x-cf-signature metadata. Game commands use
+// a five-second client deadline.
+service GameCommandService {
+  rpc ExecutePlayerCommand(ExecutePlayerCommandRequest) returns (ExecutePlayerCommandResponse);
+}
+
+// Enter, heartbeat and exit use a three-second client deadline. Friend actions
+// use a five-second client deadline.
+service VisitorZoneService {
+  rpc EnterFriendFarm(EnterFriendFarmRequest) returns (EnterFriendFarmResponse);
+  rpc HeartbeatFriendFarm(HeartbeatFriendFarmRequest) returns (HeartbeatFriendFarmResponse);
+  rpc ExitFriendFarm(ExitFriendFarmRequest) returns (ExitFriendFarmResponse);
+  rpc ExecuteFriendAction(ExecuteFriendActionRequest) returns (ExecuteFriendActionResponse);
+}
+
+// Owner-farm reads and visit lease calls use a three-second client deadline.
+// ApplyVisitorAction uses a five-second client deadline.
+service OwnerFarmService {
+  rpc EnterVisitor(EnterVisitorRequest) returns (EnterVisitorResponse);
+  rpc RefreshVisitorHeartbeat(RefreshVisitorHeartbeatRequest) returns (RefreshVisitorHeartbeatResponse);
+  rpc ExitVisitor(ExitVisitorRequest) returns (ExitVisitorResponse);
+  rpc GetPublicFarmSnapshot(GetPublicFarmSnapshotRequest) returns (GetPublicFarmSnapshotResponse);
+  rpc ApplyVisitorAction(ApplyVisitorActionRequest) returns (ApplyVisitorActionResponse);
+}
+
+// Push calls use a two-second client deadline.
+service GatePushService {
+  rpc PublishPlayerStateChanged(PublishPlayerStateChangedRequest) returns (PublishPlayerStateChangedResponse);
+  rpc PublishFarmViewPatch(PublishFarmViewPatchRequest) returns (PublishFarmViewPatchResponse);
+  rpc PublishFarmPresence(PublishFarmPresenceRequest) returns (PublishFarmPresenceResponse);
+}
+
+// Task-credit calls use a five-second client deadline.
+service PlayerSocialService {
+  rpc ApplyFriendTaskCredit(ApplyFriendTaskCreditRequest) returns (ApplyFriendTaskCreditResponse);
+}
+
+message CommittedRoute {
+  uint32 logical_shard_id = 1;
+  string owner_zone_id = 2;
+  uint64 owner_epoch = 3;
+  uint64 route_version = 4;
+}
+
+message ExecutePlayerCommandRequest {
+  uint64 caller_player_id = 1;
+  string gate_id = 2;
+  CommittedRoute route = 3;
+  classicfarm.ws.v1.WsEnvelope envelope = 4;
+}
+
+message ExecutePlayerCommandResponse {
+  classicfarm.ws.v1.WsEnvelope envelope = 1;
+}
+
+message EnterFriendFarmRequest {
+  uint64 caller_player_id = 1;
+  uint64 owner_player_id = 2;
+  string gate_id = 3;
+  string request_id = 4;
+}
+
+message EnterFriendFarmResponse {
+  classicfarm.ws.v1.EnterFriendFarmResponse result = 1;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message HeartbeatFriendFarmRequest {
+  uint64 caller_player_id = 1;
+  uint64 owner_player_id = 2;
+  bytes visit_id = 3;
+  string gate_id = 4;
+  string request_id = 5;
+}
+
+message HeartbeatFriendFarmResponse {
+  classicfarm.ws.v1.FarmHeartbeatResponse result = 1;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message ExitFriendFarmRequest {
+  uint64 caller_player_id = 1;
+  uint64 owner_player_id = 2;
+  bytes visit_id = 3;
+  string gate_id = 4;
+  string request_id = 5;
+}
+
+message ExitFriendFarmResponse {
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message ExecuteFriendActionRequest {
+  uint64 caller_player_id = 1;
+  uint64 owner_player_id = 2;
+  bytes visit_id = 3;
+  string gate_id = 4;
+  string request_id = 5;
+  classicfarm.data.v1.FriendInteractionAction action = 6;
+  uint32 plot_id = 7;
+  optional uint32 pest_id = 8;
+}
+
+message ExecuteFriendActionResponse {
+  classicfarm.ws.v1.FriendActionResponse result = 1;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message EnterVisitorRequest {
+  CommittedRoute owner_route = 1;
+  uint64 owner_player_id = 2;
+  uint64 visitor_player_id = 3;
+  string gate_id = 4;
+  bytes relation_id = 5;
+  string request_id = 6;
+}
+
+message EnterVisitorResponse {
+  bytes visit_id = 1;
+  int64 expires_at_ms = 2;
+  classicfarm.ws.v1.FarmVisitSnapshot snapshot = 3;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message RefreshVisitorHeartbeatRequest {
+  CommittedRoute owner_route = 1;
+  uint64 owner_player_id = 2;
+  uint64 visitor_player_id = 3;
+  bytes visit_id = 4;
+  string gate_id = 5;
+}
+
+message RefreshVisitorHeartbeatResponse {
+  int64 expires_at_ms = 1;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message ExitVisitorRequest {
+  CommittedRoute owner_route = 1;
+  uint64 owner_player_id = 2;
+  uint64 visitor_player_id = 3;
+  bytes visit_id = 4;
+}
+
+message ExitVisitorResponse {
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message GetPublicFarmSnapshotRequest {
+  CommittedRoute owner_route = 1;
+  uint64 owner_player_id = 2;
+  uint64 visitor_player_id = 3;
+  bytes visit_id = 4;
+}
+
+message GetPublicFarmSnapshotResponse {
+  classicfarm.ws.v1.FarmVisitSnapshot snapshot = 1;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message ApplyVisitorActionRequest {
+  CommittedRoute owner_route = 1;
+  uint64 owner_player_id = 2;
+  uint64 visitor_player_id = 3;
+  bytes visit_id = 4;
+  bytes interaction_id = 5;
+  classicfarm.data.v1.FriendInteractionAction action = 6;
+  uint32 plot_id = 7;
+  optional uint32 pest_id = 8;
+  bytes request_digest_sha256 = 9;
+}
+
+message ApplyVisitorActionResponse {
+  bytes result_digest_sha256 = 1;
+  bytes result_payload = 2;
+  classicfarm.ws.v1.FarmViewPatch farm_patch = 3;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message PublishPlayerStateChangedRequest {
+  string gate_id = 1;
+  uint64 recipient_player_id = 2;
+  classicfarm.ws.v1.WsEnvelope envelope = 3;
+}
+
+message PublishFarmViewPatchRequest {
+  string gate_id = 1;
+  repeated uint64 recipient_player_ids = 2;
+  classicfarm.ws.v1.FarmViewPatch patch = 3;
+}
+
+message PublishFarmPresenceRequest {
+  string gate_id = 1;
+  uint64 recipient_player_id = 2;
+  classicfarm.ws.v1.FarmPresencePush presence = 3;
+}
+
+message PublishPlayerStateChangedResponse {}
+
+message PublishFarmViewPatchResponse {}
+
+message PublishFarmPresenceResponse {}
+
+message ApplyFriendTaskCreditRequest {
+  CommittedRoute player_route = 1;
+  uint64 player_id = 2;
+  bytes relation_id = 3;
+}
+
+message ApplyFriendTaskCreditResponse {
+  bool newly_applied = 1;
+  uint64 player_seq = 2;
+  classicfarm.ws.v1.Error error = 15;
+}

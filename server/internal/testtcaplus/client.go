@@ -142,6 +142,19 @@ func recordKey(message proto.Message) string {
 		key = strconv.FormatUint(uint64(record.LogicalShardId), 10)
 	case *tcaplusv1.PlayerOutbox:
 		key = fmt.Sprintf("%x", record.EventId)
+	case *tcaplusv1.FriendCodeCurrent:
+		key = strconv.FormatUint(record.OwnerPlayerId, 10)
+	case *tcaplusv1.FriendCodeLookup:
+		key = record.Code
+	case *tcaplusv1.FriendRelation:
+		key = strconv.FormatUint(record.PlayerLowId, 10) + ":" +
+			strconv.FormatUint(record.PlayerHighId, 10)
+	case *tcaplusv1.FriendList:
+		key = strconv.FormatUint(record.PlayerId, 10)
+	case *tcaplusv1.FriendLinkSaga:
+		key = fmt.Sprintf("%x", record.LinkId)
+	case *tcaplusv1.FriendInteraction:
+		key = fmt.Sprintf("%x", record.InteractionId)
 	default:
 		panic(fmt.Sprintf("unsupported fake Tcaplus message %T", message))
 	}

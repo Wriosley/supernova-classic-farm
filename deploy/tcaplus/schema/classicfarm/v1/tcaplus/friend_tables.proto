@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package classicfarm.tcaplus.v1;
+
+import "tcaplusservice.optionv1.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus;tcaplusv1";
+
+enum FriendCodeStatus {
+  FRIEND_CODE_STATUS_UNSPECIFIED = 0;
+  FRIEND_CODE_STATUS_ACTIVE = 1;
+  FRIEND_CODE_STATUS_EXPIRED = 2;
+  FRIEND_CODE_STATUS_REPLACED = 3;
+}
+
+enum FriendRelationStatus {
+  FRIEND_RELATION_STATUS_UNSPECIFIED = 0;
+  FRIEND_RELATION_STATUS_ACTIVE = 1;
+}
+
+enum FriendReservationStatus {
+  FRIEND_RESERVATION_STATUS_UNSPECIFIED = 0;
+  FRIEND_RESERVATION_STATUS_ACTIVE = 1;
+  FRIEND_RESERVATION_STATUS_CONSUMED = 2;
+  FRIEND_RESERVATION_STATUS_RELEASED = 3;
+}
+
+enum FriendLinkSagaStatus {
+  FRIEND_LINK_SAGA_STATUS_UNSPECIFIED = 0;
+  FRIEND_LINK_SAGA_STATUS_INIT = 1;
+  FRIEND_LINK_SAGA_STATUS_LOW_RESERVED = 2;
+  FRIEND_LINK_SAGA_STATUS_BOTH_RESERVED = 3;
+  FRIEND_LINK_SAGA_STATUS_RELATION_ACTIVE = 4;
+  FRIEND_LINK_SAGA_STATUS_PROJECTIONS_APPLIED = 5;
+  FRIEND_LINK_SAGA_STATUS_TASK_CREDITING = 6;
+  FRIEND_LINK_SAGA_STATUS_COMPLETED = 7;
+  FRIEND_LINK_SAGA_STATUS_RELEASING = 8;
+  FRIEND_LINK_SAGA_STATUS_ABORTED = 9;
+}
+
+enum FriendTaskCreditStatus {
+  FRIEND_TASK_CREDIT_STATUS_UNSPECIFIED = 0;
+  FRIEND_TASK_CREDIT_STATUS_PENDING = 1;
+  FRIEND_TASK_CREDIT_STATUS_APPLIED = 2;
+}
+
+enum FriendInteractionStatus {
+  FRIEND_INTERACTION_STATUS_UNSPECIFIED = 0;
+  FRIEND_INTERACTION_STATUS_INIT = 1;
+  FRIEND_INTERACTION_STATUS_VISITOR_RESERVED = 2;
+  FRIEND_INTERACTION_STATUS_OWNER_APPLIED = 3;
+  FRIEND_INTERACTION_STATUS_VISITOR_COMMITTED = 4;
+  FRIEND_INTERACTION_STATUS_COMPLETED = 5;
+  FRIEND_INTERACTION_STATUS_RELEASING = 6;
+  FRIEND_INTERACTION_STATUS_ABORTED = 7;
+}
+
+message FriendCodeCurrent {
+  option (tcaplusservice.tcaplus_primary_key) = "owner_player_id";
+
+  uint64 owner_player_id = 1;
+  string code = 2;
+  FriendCodeStatus status = 3;
+  int64 created_at_ms = 4;
+  int64 expires_at_ms = 5;
+  int64 updated_at_ms = 6;
+}
+
+message FriendCodeLookup {
+  option (tcaplusservice.tcaplus_primary_key) = "code";
+
+  string code = 1;
+  uint64 owner_player_id = 2;
+  FriendCodeStatus status = 3;
+  int64 expires_at_ms = 4;
+  int64 updated_at_ms = 5;
+}
+
+message FriendRelation {
+  option (tcaplusservice.tcaplus_primary_key) = "player_low_id,player_high_id";
+
+  uint64 player_low_id = 1;
+  uint64 player_high_id = 2;
+  bytes relation_id = 3;
+  FriendRelationStatus status = 4;
+  int64 created_at_ms = 5;
+  int64 updated_at_ms = 6;
+}
+
+message FriendListEntry {
+  uint64 friend_player_id = 1;
+  string account_name = 2;
+  bytes relation_id = 3;
+  int64 created_at_ms = 4;
+}
+
+message FriendSlotReservation {
+  bytes link_id = 1;
+  uint64 friend_player_id = 2;
+  FriendReservationStatus status = 3;
+  int64 created_at_ms = 4;
+  int64 expires_at_ms = 5;
+}
+
+message FriendList {
+  option (tcaplusservice.tcaplus_primary_key) = "player_id";
+
+  uint64 player_id = 1;
+  repeated FriendListEntry entries = 2;
+  repeated FriendSlotReservation reservations = 3;
+  uint32 active_count = 4;
+  uint32 reserved_count = 5;
+  int64 updated_at_ms = 6;
+}
+
+message FriendLinkSaga {
+  option (tcaplusservice.tcaplus_primary_key) = "link_id";
+
+  bytes link_id = 1;
+  string code = 2;
+  uint64 code_owner_player_id = 3;
+  uint64 redeemer_player_id = 4;
+  uint64 player_low_id = 5;
+  uint64 player_high_id = 6;
+  bytes relation_id = 7;
+  FriendLinkSagaStatus status = 8;
+  FriendTaskCreditStatus low_task_credit_status = 9;
+  FriendTaskCreditStatus high_task_credit_status = 10;
+  string last_error_code = 11;
+  int64 retry_at_ms = 12;
+  int64 created_at_ms = 13;
+  int64 updated_at_ms = 14;
+}
+
+message FriendInteraction {
+  option (tcaplusservice.tcaplus_primary_key) = "interaction_id";
+
+  bytes interaction_id = 1;
+  uint64 visitor_player_id = 2;
+  uint64 owner_player_id = 3;
+  bytes visit_id = 4;
+  uint32 action = 5;
+  uint32 plot_id = 6;
+  bytes request_digest_sha256 = 7;
+  FriendInteractionStatus status = 8;
+  bytes result_payload = 9;
+  bytes result_digest_sha256 = 10;
+  string error_code = 11;
+  int64 retry_at_ms = 12;
+  int64 created_at_ms = 13;
+  int64 updated_at_ms = 14;
+  // Zero means the action carries no pest; only APPLY_PEST_TO_FRIEND sets it.
+  uint32 pest_id = 15;
+}

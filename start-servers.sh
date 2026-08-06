@@ -18,7 +18,9 @@ Usage: ./start-servers.sh [--dual-zone] [--mysql|--tcaplus] [--run-seconds N]
   --mysql          Use MySQL persistence. MYSQL_DSN is preferred; otherwise
                    local MYSQL_* fields are used to construct it.
   --tcaplus        Use Tcaplus for auth, checkpoints, fences, migration
-                   progress and Outbox. Requires --dual-zone and TCAPLUS_*.
+                   progress, Outbox and friend tables. Also starts FriendSvr
+                   (FriendSvr has no in-memory mode). Requires --dual-zone
+                   and TCAPLUS_*.
   --run-seconds N  Stop automatically after N seconds. Zero waits for Ctrl+C.
 
 This script is for the Linux loopback baseline. It does not deploy Kubernetes.
@@ -180,9 +182,10 @@ gate_port="${GATE_PORT:-8081}"
 zone_port="${ZONE_PORT:-8082}"
 coordinator_port="${COORDINATOR_PORT:-8083}"
 zone_b_port="${ZONE_B_PORT:-8084}"
+friend_port="${FRIEND_PORT:-8085}"
 
 for port in "${login_port}" "${gate_port}" "${zone_port}" \
-    "${coordinator_port}" "${zone_b_port}"; do
+    "${coordinator_port}" "${zone_b_port}" "${friend_port}"; do
     if [[ ! "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
         echo "Invalid backend port: ${port}" >&2
         exit 1
@@ -192,6 +195,9 @@ done
 ports=("${login_port}" "${gate_port}" "${zone_port}" "${coordinator_port}")
 if [[ "${dual_zone}" == true ]]; then
     ports+=("${zone_b_port}")
+fi
+if [[ "${tcaplus_mode}" == true ]]; then
+    ports+=("${friend_port}")
 fi
 for port in "${ports[@]}"; do
     if port_is_open "${port}"; then
@@ -238,12 +244,22 @@ if [[ "${tcaplus_mode}" == true ]]; then
     export TCAPLUS_FENCE_TABLE="${TCAPLUS_FENCE_TABLE:-ShardFence}"
     export TCAPLUS_MIGRATION_TABLE="${TCAPLUS_MIGRATION_TABLE:-MigrationProgress}"
     export TCAPLUS_OUTBOX_TABLE="${TCAPLUS_OUTBOX_TABLE:-PlayerOutbox}"
+    export TCAPLUS_FRIEND_CODE_CURRENT_TABLE="${TCAPLUS_FRIEND_CODE_CURRENT_TABLE:-FriendCodeCurrent}"
+    export TCAPLUS_FRIEND_CODE_LOOKUP_TABLE="${TCAPLUS_FRIEND_CODE_LOOKUP_TABLE:-FriendCodeLookup}"
+    export TCAPLUS_FRIEND_RELATION_TABLE="${TCAPLUS_FRIEND_RELATION_TABLE:-FriendRelation}"
+    export TCAPLUS_FRIEND_LIST_TABLE="${TCAPLUS_FRIEND_LIST_TABLE:-FriendList}"
+    export TCAPLUS_FRIEND_LINK_SAGA_TABLE="${TCAPLUS_FRIEND_LINK_SAGA_TABLE:-FriendLinkSaga}"
+    export TCAPLUS_FRIEND_INTERACTION_TABLE="${TCAPLUS_FRIEND_INTERACTION_TABLE:-FriendInteraction}"
 fi
 
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/classic-farm-servers.XXXXXX")"
 trap stop_services INT TERM EXIT
 
-for name in login zone coordinator gate; do
+build_targets=(login zone coordinator gate)
+if [[ "${tcaplus_mode}" == true ]]; then
+    build_targets+=(friend)
+fi
+for name in "${build_targets[@]}"; do
     echo "[build] ${name}"
     (
         cd "${server_root}"
@@ -258,6 +274,8 @@ export GATEWAY_URL="${GATEWAY_URL:-ws://127.0.0.1:${gate_port}/ws}"
 export CLIENT_CONFIG_URL="${CLIENT_CONFIG_URL:-http://127.0.0.1:${login_port}/v1/client-config/1}"
 export LOGIN_TICKET_CONSUME_URL="${LOGIN_TICKET_CONSUME_URL:-http://127.0.0.1:${login_port}/internal/v1/ws-tickets/consume}"
 export COORDINATOR_URL="${COORDINATOR_URL:-http://127.0.0.1:${coordinator_port}}"
+export GATE_RPC_URL="${GATE_RPC_URL:-http://127.0.0.1:${gate_port}}"
+export INTERNAL_GRPC_HMAC_KEY="${INTERNAL_GRPC_HMAC_KEY:-classic-farm-local-development-hmac-key-2026}"
 export ROUTING_MODE="$([[ "${dual_zone}" == true ]] && echo static-dual-zone || echo local)"
 
 coordinator_env=(
@@ -306,6 +324,14 @@ else
     wait_ready zone "http://127.0.0.1:${zone_port}/readyz" "${zone_pid}"
 fi
 
+if [[ "${tcaplus_mode}" == true ]]; then
+    start_service friend "${run_root}/friend" \
+        "FRIEND_PORT=" \
+        "HTTP_ADDRESS=127.0.0.1:${friend_port}"
+    friend_pid="${service_pid}"
+    wait_ready friend "http://127.0.0.1:${friend_port}/readyz" "${friend_pid}"
+fi
+
 start_service gate "${run_root}/gate" \
     "GATE_PORT=" \
     "HTTP_ADDRESS=127.0.0.1:${gate_port}"
@@ -318,6 +344,7 @@ if [[ "${mysql_mode}" == true ]]; then
     echo "Data mode: MySQL checkpoint baseline."
 elif [[ "${tcaplus_mode}" == true ]]; then
     echo "Data mode: pure TcaplusDB."
+    echo "FriendSvr: http://127.0.0.1:${friend_port}"
 else
     echo "Data mode: development-only in-memory."
 fi

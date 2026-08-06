@@ -300,6 +300,11 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 		},
 		{
 			ChapterID: developmentNextChapterID, ConfigVersion: ServerConfigVersion,
+			Tasks: []Task{
+				{ID: 6, Target: 1},
+				{ID: 7, Target: 1},
+				{ID: 8, Target: 1},
+			},
 		},
 	})
 	if err != nil {

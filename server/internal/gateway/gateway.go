@@ -126,10 +126,6 @@ func NewHandler(cfg Config) (*Handler, error) {
 	}, nil
 }
 
-func (h *Handler) PushHandler() http.Handler {
-	return h.pushHub
-}
-
 // DebugCommandFailuresHandler exposes aggregate local diagnostic counters.
 func (h *Handler) DebugCommandFailuresHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -16,7 +16,7 @@ This directory separates current project truth, design reasoning, executable con
 - Current production target: stateful Player Actor Zone V3 with asynchronous Dirty writeback.
 - Accepted active decisions: ADR-0003 for Player Actors, ADR-0006 for Dirty persistence, ADR-0008 for majority-authorized Shard ownership, and ADR-0009 for current-chapter task ownership.
 - Accepted first-slice business architecture: `architecture/single-player-vertical-loop-business-architecture.md`.
-- Accepted first-stage contracts: `contracts/http-api.md`, `contracts/websocket-protocol.md`, `contracts/idempotency-and-errors.md`, `contracts/data-model.md`, and `contracts/event-contracts.md`.
+- Accepted contracts: `contracts/http-api.md`, `contracts/websocket-protocol.md`, `contracts/idempotency-and-errors.md`, `contracts/data-model.md`, `contracts/event-contracts.md`, and `contracts/internal-grpc.md`.
 - Historical comparison only: synchronous-Journal V2, stateless V1, ADR-0004, ADR-0005, and their old plans.
 - Target numbers and component choices remain planning assumptions until supported by evidence.
 
@@ -40,9 +40,11 @@ This directory separates current project truth, design reasoning, executable con
   mode. Tickets and CSRF nonce records remain process-local by ADR-0010.
 - Outbox relay, Mail Service, production Push delivery, abnormal Dirty-window
   guarantees and production capacity evidence remain outside the prototype.
-- Friend functionality is design-only. The reviewed source is
-  `plans/friend_design_plan/`; implementation resumes at phase 0 in
-  `plans/friend_design_plan/06-分阶段实施方案.md`.
+- Friend phases 0–2 are complete: contracts are frozen, existing
+  Gate→Zone/Zone→Gate game traffic uses HMAC-authenticated gRPC, and
+  FriendSvr plus authoritative friend relations/lists/task credit are live
+  against real friend Tcaplus tables. Phase 3 (visit session + public
+  snapshot) is the next boundary.
 - Read `context/CURRENT.md` for the exact handoff and the dated files under `evidence/` for observed results and limitations.
 
 ## Directory roles

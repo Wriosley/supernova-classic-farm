@@ -1,7 +1,7 @@
 ---
 status: accepted
-version: 1
-date: 2026-07-30
+version: 2
+date: 2026-08-06
 owners:
   - project-owner
 related:
@@ -554,3 +554,63 @@ Implementation evidence MUST prove:
 ## 17. Cross-contract consistency
 
 Design reconciliation found that persisting terminal failures without incrementing `player_seq` requires a separate persistence CAS version. The V3 architecture and idempotency contract now use `checkpoint_revision` for that purpose and keep `(owner_epoch, player_seq)` unchanged as the client state version.
+
+## 18. Friend extension and checkpoint schema V2
+
+Friend gameplay extends the Player aggregate; it does not create a second mutable
+authority for player resources. A checkpoint that contains the extension writes
+`schema_version = 2`. During activation, a V1 checkpoint is deterministically
+migrated by creating `FriendActionState` with 100 apply-pest, 100 catch-pest and
+100 help-clean chances, empty reservations and empty receipts. The migration
+increments `checkpoint_revision` but not `player_seq`.
+
+`PlayerCheckpointV1` appends:
+
+- `friend_actions`: the three non-negative remaining action-chance counters;
+- `friend_reservations`: at most one live record per `interaction_id`;
+- `friend_receipts`: at most one record per `(interaction_id, role)`;
+- `friend_task_credit_receipts`: at most one record per `relation_id`.
+
+Reservations freeze the action chance or inventory capacity before the remote
+owner mutation. A reservation is consumed or released exactly once. Receipts
+contain the deterministic result bytes and SHA-256 digest used to answer a
+same-ID retry. Interaction collections are serialized by raw `interaction_id`,
+then role; task-credit receipts are serialized by raw `relation_id`. Terminal
+interaction receipts are retained for at least the 24-hour interaction
+retention window.
+
+`FriendTaskCreditReceipt` is part of the credited player's checkpoint and makes
+`ApplyFriendTaskCredit(relation_id)` durable across retries and Actor restarts.
+It is written atomically with the `TASK_ADD_FRIEND` increment and retained while
+the relation exists.
+
+Each planted plot freezes `steal_quantity`, `max_steal_times` and
+`protected_owner_yield` together with `base_yield`. `steal_count` and
+`stolen_quantity` start at zero. A steal is allowed only when:
+
+```text
+steal_count < max_steal_times
+base_yield - stolen_quantity - steal_quantity >= protected_owner_yield
+```
+
+The frozen values are never recomputed from newer configuration. A successful
+steal atomically increments `steal_count` and `stolen_quantity` in the owner
+checkpoint.
+
+Task metrics 6, 7 and 8 are respectively `TASK_ADD_FRIEND`,
+`TASK_STEAL_CROP` and `TASK_APPLY_PEST_TO_FRIEND`. Friend-link task credit is
+deduplicated by `relation_id`; interaction task credit is part of the visitor's
+committed receipt.
+
+The Tcaplus social records use these authoritative keys:
+
+- `FriendCodeCurrent(owner_player_id)` and `FriendCodeLookup(code)`;
+- `FriendRelation(player_low_id, player_high_id)`, where IDs are sorted;
+- `FriendList(player_id)`, which is a repairable projection with persisted slot
+  reservations and a hard `active_count + reserved_count <= 100` invariant;
+- `FriendLinkSaga(link_id)` and `FriendInteraction(interaction_id)`.
+
+Only an `ACTIVE FriendRelation` authorizes a visit. `FriendList` disagreement
+never grants access. All state-machine advances and count changes use Tcaplus
+single-record CAS; cross-record completion is recovered by the persisted Saga
+and Player checkpoint receipts.

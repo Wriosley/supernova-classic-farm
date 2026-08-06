@@ -48,8 +48,9 @@ Zone 镜像只有一个，但用不同的 `OWNER_ZONE_ID` 启动两次，成为
 ```text
 客户端 -> Login 获取 Session/Ticket
 客户端 -> Gate WebSocket
-Gate -> Coordinator 路由缓存
-Gate -> zone-a 或 zone-b
+Gate -> Coordinator 路由缓存（HTTP）
+Gate -> zone-a 或 zone-b（HMAC gRPC）
+Zone -> Gate Player Push（HMAC gRPC）
 Login / Zone / Coordinator -> TcaplusDB
 ```
 
@@ -68,7 +69,7 @@ Login / Zone / Coordinator -> TcaplusDB
 
 - `deploy/k8s/namespace.yaml`：创建 `classic-farm` Namespace；
 - `deploy/k8s/configmap.yaml`：公共非敏感配置；
-- `deploy/k8s/secret.example.yaml`：Tcaplus Secret 示例，不能填写真实值后提交；
+- `deploy/k8s/secret.example.yaml`：Tcaplus 和内部 gRPC Secret 示例，不能填写真实值后提交；
 - `deploy/k8s/coordinator.yaml`：Coordinator Deployment；
 - `deploy/k8s/login.yaml`：Login Deployment；
 - `deploy/k8s/gate.yaml`：Gate Deployment；
@@ -97,21 +98,25 @@ ZONE_B_ID=zone-b
 ZONE_B_ENDPOINT=http://zone-b:8082
 ```
 
-Secret 中包含：
+两个 Secret 分别包含：
 
 ```text
 TCAPLUS_APP_ID
 TCAPLUS_ZONE_ID
 TCAPLUS_DIR_URL
 TCAPLUS_SIGNATURE
+INTERNAL_GRPC_HMAC_KEY
 ```
 
 `server/internal/platform/internalnet/policy.go` 控制网络策略：
 
 - 本地模式只允许 loopback；
-- 只有显式设置 `INTERNAL_NETWORK_MODE=kubernetes` 时，才允许 Pod 间通信。
+- 只有显式设置 `INTERNAL_NETWORK_MODE=kubernetes` 时，才允许 Pod 间通信；
+- Gate→Zone 命令和 Zone→Gate Push 使用共享 Secret 注入的 HMAC key，
+  校验 caller、method、30 秒时间窗、nonce、请求体 SHA-256 和签名；
+- gRPC 与健康检查/生命周期 HTTP 通过 h2c 共享 Service 端口。
 
-这是最小原型策略，不是生产级服务认证。
+HMAC 是最小原型身份认证；生产环境仍应替换为 mTLS/workload identity。
 
 ## 4. 从零部署
 
@@ -143,7 +148,7 @@ for service in login gate coordinator zone; do
 done
 ```
 
-### 4.3 创建 Tcaplus Secret
+### 4.3 创建 Tcaplus 和内部 gRPC Secret
 
 先创建 Namespace：
 
@@ -159,9 +164,12 @@ kubectl -n classic-farm create secret generic classic-farm-tcaplus \
   --from-literal=TCAPLUS_ZONE_ID='...' \
   --from-literal=TCAPLUS_DIR_URL='...' \
   --from-literal=TCAPLUS_SIGNATURE='...'
+
+kubectl -n classic-farm create secret generic classic-farm-internal-rpc \
+  --from-literal=INTERNAL_GRPC_HMAC_KEY="$(openssl rand -hex 32)"
 ```
 
-不要把真实凭据写入 Git。
+不要把真实凭据或 HMAC key 写入 Git。
 
 ### 4.4 应用清单
 

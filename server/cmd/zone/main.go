@@ -8,14 +8,18 @@ import (
 	"strings"
 	"time"
 
+	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -41,6 +45,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	rpcKey, err := rpcauth.LoadKeyFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	gatewayID := environmentOr("GATEWAY_ID", "local-gateway")
 
 	var runtime *player.Runtime
 	storageMode := strings.TrimSpace(os.Getenv("STORAGE_MODE"))
@@ -111,7 +120,13 @@ func main() {
 		}
 		logger.Info("using MySQL Player checkpoint store")
 	}
-	defer runtime.Close()
+	var pushForwarder *player.GRPCPushForwarder
+	defer func() {
+		runtime.Close()
+		if pushForwarder != nil {
+			_ = pushForwarder.Close()
+		}
+	}()
 
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
@@ -140,13 +155,12 @@ func main() {
 		go refreshAuthorizationLoop(ctx, table, client, coordinatorURL, logger)
 	}
 
-	pushEndpoint := os.Getenv("GATE_PUSH_URL")
+	pushEndpoint := os.Getenv("GATE_RPC_URL")
 	if pushEndpoint == "" {
-		pushEndpoint = "http://127.0.0.1:8081/internal/v1/player-state-changes"
+		pushEndpoint = "http://127.0.0.1:8081"
 	}
-	pushForwarder, err := player.NewHTTPPushForwarder(
-		&http.Client{Timeout: 2 * time.Second},
-		pushEndpoint,
+	pushForwarder, err = player.NewGRPCPushForwarder(
+		rpcKey, ownerZoneID, pushEndpoint, gatewayID,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -156,8 +170,6 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("POST /internal/v1/command",
-		newOwnedCommandHandlerWithGates(runtime, authorization, gates, time.Now))
 	if lifecycle != nil {
 		mux.HandleFunc("POST /internal/v1/shards/{shard_id}/drain", lifecycle.drain)
 		mux.HandleFunc("POST /internal/v1/shards/{shard_id}/drain-complete", lifecycle.completeDrain)
@@ -168,10 +180,36 @@ func main() {
 	healthHandler := health.NewHandler()
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
+	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
+		Key: rpcKey,
+		AllowedCallers: map[string][]string{
+			rpcv1.GameCommandService_ExecutePlayerCommand_FullMethodName:   {"gate"},
+			rpcv1.PlayerSocialService_ApplyFriendTaskCredit_FullMethodName: {"friend"},
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(rpcInterceptor),
+		grpc.MaxRecvMsgSize(128<<10),
+		grpc.MaxSendMsgSize(128<<10),
+	)
+	defer grpcServer.Stop()
+	rpcv1.RegisterGameCommandServiceServer(
+		grpcServer,
+		newGameCommandRPCServer(
+			runtime, authorization, gates, time.Now, gatewayID,
+		),
+	)
+	rpcv1.RegisterPlayerSocialServiceServer(
+		grpcServer,
+		newPlayerSocialRPCServer(runtime, authorization, gates, time.Now),
+	)
 
 	server := &http.Server{
 		Addr:              listenAddress,
-		Handler:           mux,
+		Handler:           rpcnet.H2CHandler(grpcServer, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -183,7 +221,7 @@ func main() {
 		"owner_zone_id", ownerZoneID,
 		"owner_epoch", player.LocalOwnerEpoch,
 		"routing_mode", routingMode,
-		"gate_push_url", pushEndpoint,
+		"gate_rpc_url", pushEndpoint,
 		"state_adapter", func() string {
 			if os.Getenv("MYSQL_DSN") == "" {
 				return "lazy-in-memory-development-only"
