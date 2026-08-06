@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file classicfarm/v1/data/data_model.proto.
  */
 export const file_classicfarm_v1_data_data_model: GenFile = /*@__PURE__*/
-  fileDesc("CiRjbGFzc2ljZmFybS92MS9kYXRhL2RhdGFfbW9kZWwucHJvdG8SE2NsYXNzaWNmYXJtLmRhdGEudjEiJAoMUmF0ZURlY2ltYWw2EhQKDHNjYWxlZF92YWx1ZRgBIAEoAyImCg5Hcm93dGhEZWNpbWFsORIUCgxzY2FsZWRfdmFsdWUYASABKAMivwQKElBsYXllckNoZWNrcG9pbnRWMRIWCg5zY2hlbWFfdmVyc2lvbhgBIAEoDRIRCglwbGF5ZXJfaWQYAiABKAQSGAoQbG9naWNhbF9zaGFyZF9pZBgDIAEoDRITCgtvd25lcl9lcG9jaBgEIAEoBBISCgpwbGF5ZXJfc2VxGAUgASgEEhsKE2NoZWNrcG9pbnRfcmV2aXNpb24YBiABKAQSFAoMY29pbl9iYWxhbmNlGAcgASgDEjYKCWludmVudG9yeRgIIAMoCzIjLmNsYXNzaWNmYXJtLmRhdGEudjEuSW52ZW50b3J5U3RhY2sSMwoFcGxvdHMYCSADKAsyJC5jbGFzc2ljZmFybS5kYXRhLnYxLlBsb3RTdGF0ZVJlY29yZBJACg9jdXJyZW50X2NoYXB0ZXIYCiABKAsyJy5jbGFzc2ljZmFybS5kYXRhLnYxLkNoYXB0ZXJTdGF0ZVJlY29yZBJECg5yZWNlbnRfcmVzdWx0cxgLIAMoCzIsLmNsYXNzaWNmYXJtLmRhdGEudjEuSWRlbXBvdGVuY3lSZXN1bHRSZWNvcmQSQAoOcGVuZGluZ19vdXRib3gYDCADKAsyKC5jbGFzc2ljZmFybS5kYXRhLnYxLlBlbmRpbmdPdXRib3hSZWNvcmQSIwobbGFzdF9hcHBsaWVkX2NvbmZpZ192ZXJzaW9uGA0gASgEEhUKDWNyZWF0ZWRfYXRfbXMYDiABKAMSFQoNdXBkYXRlZF9hdF9tcxgPIAEoAyIzCg5JbnZlbnRvcnlTdGFjaxIPCgdpdGVtX2lkGAEgASgNEhAKCHF1YW50aXR5GAIgASgNIqgFCg9QbG90U3RhdGVSZWNvcmQSDwoHcGxvdF9pZBgBIAEoDRIzCgVzdGF0ZRgCIAEoDjIkLmNsYXNzaWNmYXJtLmRhdGEudjEuUGxvdFJlY29yZFN0YXRlEg8KB2Nyb3BfaWQYAyABKA0SFAoMY3JvcF9pdGVtX2lkGAQgASgNEhsKE2Nyb3BfY29uZmlnX3ZlcnNpb24YBSABKAQSFQoNcGxhbnRlZF9hdF9tcxgGIAEoAxI7Cg5tYXR1cml0eV92YWx1ZRgHIAEoCzIjLmNsYXNzaWNmYXJtLmRhdGEudjEuR3Jvd3RoRGVjaW1hbDkSOwoQYmFzZV9ncm93dGhfcmF0ZRgIIAEoCzIhLmNsYXNzaWNmYXJtLmRhdGEudjEuUmF0ZURlY2ltYWw2EhIKCmJhc2VfeWllbGQYCSABKA0SFwoPc3RvbGVuX3F1YW50aXR5GAogASgNEkEKFHNldHRsZWRfZ3Jvd3RoX3ZhbHVlGAsgASgLMiMuY2xhc3NpY2Zhcm0uZGF0YS52MS5Hcm93dGhEZWNpbWFsORIaChJsYXN0X3NldHRsZWRfYXRfbXMYDCABKAMSIwoWZXN0aW1hdGVkX21hdHVyZV9hdF9tcxgNIAEoA0gAiAEBEkYKEWZlcnRpbGl6ZXJfZWZmZWN0GA4gASgLMiYuY2xhc3NpY2Zhcm0uZGF0YS52MS5UaW1lZEVmZmVjdFJlY29yZEgBiAEBEkAKC3Blc3RfZWZmZWN0GA8gASgLMiYuY2xhc3NpY2Zhcm0uZGF0YS52MS5UaW1lZEVmZmVjdFJlY29yZEgCiAEBQhkKF19lc3RpbWF0ZWRfbWF0dXJlX2F0X21zQhQKEl9mZXJ0aWxpemVyX2VmZmVjdEIOCgxfcGVzdF9lZmZlY3QirgIKEVRpbWVkRWZmZWN0UmVjb3JkEhoKEmVmZmVjdF9pbnN0YW5jZV9pZBgBIAEoDBI0CgtlZmZlY3Rfa2luZBgCIAEoDjIfLmNsYXNzaWNmYXJtLmRhdGEudjEuRWZmZWN0S2luZBIeChZlZmZlY3RfaXRlbV9vcl9wZXN0X2lkGAMgASgNEh0KEHNvdXJjZV9wbGF5ZXJfaWQYBCABKARIAIgBARIWCg5jb25maWdfdmVyc2lvbhgFIAEoBBIzCghtb2RpZmllchgGIAEoCzIhLmNsYXNzaWNmYXJtLmRhdGEudjEuUmF0ZURlY2ltYWw2EhMKC3N0YXJ0X2F0X21zGAcgASgDEhEKCWVuZF9hdF9tcxgIIAEoA0ITChFfc291cmNlX3BsYXllcl9pZCKwAgoSQ2hhcHRlclN0YXRlUmVjb3JkEhIKCmNoYXB0ZXJfaWQYASABKA0SHgoWY2hhcHRlcl9jb25maWdfdmVyc2lvbhgCIAEoBBI4CgZzdGF0dXMYAyABKA4yKC5jbGFzc2ljZmFybS5kYXRhLnYxLkNoYXB0ZXJSZWNvcmRTdGF0dXMSFwoPYWN0aXZhdGVkX2F0X21zGAQgASgDEhoKDWNsYWltZWRfYXRfbXMYBSABKANIAIgBARIzCgV0YXNrcxgGIAMoCzIkLmNsYXNzaWNmYXJtLmRhdGEudjEuVGFza1N0YXRlUmVjb3JkEhwKD25leHRfY2hhcHRlcl9pZBgHIAEoDUgBiAEBQhAKDl9jbGFpbWVkX2F0X21zQhIKEF9uZXh0X2NoYXB0ZXJfaWQisAEKD1Rhc2tTdGF0ZVJlY29yZBIPCgd0YXNrX2lkGAEgASgNEhsKE3Rhc2tfY29uZmlnX3ZlcnNpb24YAiABKAQSLwoGbWV0cmljGAMgASgOMh8uY2xhc3NpY2Zhcm0uZGF0YS52MS5UYXNrTWV0cmljEhUKDWN1cnJlbnRfdmFsdWUYBCABKA0SFAoMdGFyZ2V0X3ZhbHVlGAUgASgNEhEKCWNvbXBsZXRlZBgGIAEoCCKvAwoXSWRlbXBvdGVuY3lSZXN1bHRSZWNvcmQSGAoQY2FsbGVyX3BsYXllcl9pZBgBIAEoBBISCgpyZXF1ZXN0X2lkGAIgASgMEiIKGmZpbmdlcnByaW50X3NjaGVtYV92ZXJzaW9uGAMgASgNEhgKEHByb3RvY29sX3ZlcnNpb24YBCABKA0SDgoGYWN0aW9uGAUgASgNEhgKEHRhcmdldF9wbGF5ZXJfaWQYBiABKAQSIgoacGF5bG9hZF9maW5nZXJwcmludF9zaGEyNTYYByABKAwSFwoPY29tcGxldGVkX2F0X21zGAggASgDEg8KB3N1Y2Nlc3MYCSABKAgSGgoScmVzdWx0X293bmVyX2Vwb2NoGAogASgEEhkKEXJlc3VsdF9wbGF5ZXJfc2VxGAsgASgEEh0KFXJlc3BvbnNlX3BheWxvYWRfdHlwZRgMIAEoDRIYChByZXNwb25zZV9wYXlsb2FkGA0gASgMEhoKDWVycm9yX3BheWxvYWQYDiABKAxIAIgBARISCgpvdXRib3hfaWRzGA8gAygMQhAKDl9lcnJvcl9wYXlsb2FkIrUCChNQZW5kaW5nT3V0Ym94UmVjb3JkEhAKCGV2ZW50X2lkGAEgASgMEjgKCmV2ZW50X3R5cGUYAiABKA4yJC5jbGFzc2ljZmFybS5kYXRhLnYxLk91dGJveEV2ZW50VHlwZRIeChZldmVudF9jb250cmFjdF92ZXJzaW9uGAMgASgNEhsKE2FnZ3JlZ2F0ZV9wbGF5ZXJfaWQYBCABKAQSHAoUY2F1c2VkX2J5X3JlcXVlc3RfaWQYBSABKAwSGwoTY3JlYXRlZF9vd25lcl9lcG9jaBgGIAEoBBIaChJjcmVhdGVkX3BsYXllcl9zZXEYByABKAQSFQoNY3JlYXRlZF9hdF9tcxgIIAEoAxIPCgdwYXlsb2FkGAkgASgMEhYKDnBheWxvYWRfc2hhMjU2GAogASgMItoCCglPdXRib3hSb3cSEAoIZXZlbnRfaWQYASABKAwSEwoLZGJfc2hhcmRfaWQYAiABKA0SGwoTYWdncmVnYXRlX3BsYXllcl9pZBgDIAEoBBIYChBsb2dpY2FsX3NoYXJkX2lkGAQgASgNEjgKCmV2ZW50X3R5cGUYBSABKA4yJC5jbGFzc2ljZmFybS5kYXRhLnYxLk91dGJveEV2ZW50VHlwZRIeChZldmVudF9jb250cmFjdF92ZXJzaW9uGAYgASgNEhwKFGNhdXNlZF9ieV9yZXF1ZXN0X2lkGAcgASgMEhsKE2NyZWF0ZWRfb3duZXJfZXBvY2gYCCABKAQSGgoSY3JlYXRlZF9wbGF5ZXJfc2VxGAkgASgEEhUKDWNyZWF0ZWRfYXRfbXMYCiABKAMSDwoHcGF5bG9hZBgLIAEoDBIWCg5wYXlsb2FkX3NoYTI1NhgMIAEoDCLEAQoQU2hhcmRNYXBTbmFwc2hvdBITCgtzaGFyZF9jb3VudBgBIAEoDRIeChZoYXNoX2FsZ29yaXRobV92ZXJzaW9uGAIgASgNEhMKC21hcF92ZXJzaW9uGAMgASgEEhYKDmNvbW1pdHRlZF90ZXJtGAQgASgEEhcKD2NvbW1pdHRlZF9pbmRleBgFIAEoBBI1CgdlbnRyaWVzGAYgAygLMiQuY2xhc3NpY2Zhcm0uZGF0YS52MS5TaGFyZFJvdXRlRW50cnki+gIKD1NoYXJkUm91dGVFbnRyeRIQCghzaGFyZF9pZBgBIAEoDRIaCg1vd25lcl96b25lX2lkGAIgASgJSACIAQESEwoLb3duZXJfZXBvY2gYAyABKAQSFQoNcm91dGVfdmVyc2lvbhgEIAEoBBIzCgVzdGF0ZRgFIAEoDjIkLmNsYXNzaWNmYXJtLmRhdGEudjEuU2hhcmRSb3V0ZVN0YXRlEhIKCmxlYXNlX3Rlcm0YBiABKAQSEAoIbGVhc2VfaWQYByABKAwSGwoTbGVhc2VfZXhwaXJlc19hdF9tcxgIIAEoAxIjChZwcmV2aW91c19vd25lcl96b25lX2lkGAkgASgJSAGIAQESGgoNdHJhbnNpdGlvbl9pZBgKIAEoDEgCiAEBEhUKDXVwZGF0ZWRfYXRfbXMYCyABKANCEAoOX293bmVyX3pvbmVfaWRCGQoXX3ByZXZpb3VzX293bmVyX3pvbmVfaWRCEAoOX3RyYW5zaXRpb25faWQilgEKClNoYXJkRmVuY2USGAoQbG9naWNhbF9zaGFyZF9pZBgBIAEoDRIVCg1vd25lcl96b25lX2lkGAIgASgJEhMKC293bmVyX2Vwb2NoGAMgASgEEhUKDXJvdXRlX3ZlcnNpb24YBCABKAQSFQoNdHJhbnNpdGlvbl9pZBgFIAEoDBIUCgxmZW5jZWRfYXRfbXMYBiABKAMiwwIKD0RpcnR5UXVldWVFbnRyeRIRCglwbGF5ZXJfaWQYASABKAQSEwoLZGJfc2hhcmRfaWQYAiABKA0SGAoQbG9naWNhbF9zaGFyZF9pZBgDIAEoDRIVCg1vd25lcl96b25lX2lkGAQgASgJEhMKC293bmVyX2Vwb2NoGAUgASgEEiIKGmxhdGVzdF9jaGVja3BvaW50X3JldmlzaW9uGAYgASgEEhkKEWZpcnN0X2RpcnR5X2F0X21zGAcgASgDEhgKEGxhc3RfZGlydHlfYXRfbXMYCCABKAMSGgoSbmV4dF9hdHRlbXB0X2F0X21zGAkgASgDEhUKDWF0dGVtcHRfY291bnQYCiABKA0SHwoSaW5fZmxpZ2h0X3JldmlzaW9uGAsgASgESACIAQFCFQoTX2luX2ZsaWdodF9yZXZpc2lvbiKqAQoWRGlydHlCYXRjaFdyaXRlUmVxdWVzdBIQCghiYXRjaF9pZBgBIAEoDBITCgtkYl9zaGFyZF9pZBgCIAEoDRIVCg1vd25lcl96b25lX2lkGAMgASgJEhUKDWNyZWF0ZWRfYXRfbXMYBCABKAMSOwoHZW50cmllcxgFIAMoCzIqLmNsYXNzaWNmYXJtLmRhdGEudjEuUGxheWVyQ2hlY2twb2ludFdyaXRlIpUDChVQbGF5ZXJDaGVja3BvaW50V3JpdGUSEQoJcGxheWVyX2lkGAEgASgEEhMKC2RiX3NoYXJkX2lkGAIgASgNEhgKEGxvZ2ljYWxfc2hhcmRfaWQYAyABKA0SFQoNb3duZXJfem9uZV9pZBgEIAEoCRITCgtvd25lcl9lcG9jaBgFIAEoBBISCgpwbGF5ZXJfc2VxGAYgASgEEhsKE2NoZWNrcG9pbnRfcmV2aXNpb24YByABKAQSIQoZY2hlY2twb2ludF9zY2hlbWFfdmVyc2lvbhgIIAEoDRIXCg9jaGVja3BvaW50X2Jsb2IYCSABKAwSGQoRY2hlY2twb2ludF9zaGEyNTYYCiABKAwSIwobbGFzdF9hcHBsaWVkX2NvbmZpZ192ZXJzaW9uGAsgASgEEhUKDWNyZWF0ZWRfYXRfbXMYDCABKAMSFQoNdXBkYXRlZF9hdF9tcxgNIAEoAxIzCgtvdXRib3hfcm93cxgOIAMoCzIeLmNsYXNzaWNmYXJtLmRhdGEudjEuT3V0Ym94Um93IpABChtQbGF5ZXJDaGVja3BvaW50V3JpdGVSZXN1bHQSEQoJcGxheWVyX2lkGAEgASgEEiIKGmNvcGllZF9jaGVja3BvaW50X3JldmlzaW9uGAIgASgEEjoKBnN0YXR1cxgDIAEoDjIqLmNsYXNzaWNmYXJtLmRhdGEudjEuQ2hlY2twb2ludFdyaXRlU3RhdHVzKmoKD1Bsb3RSZWNvcmRTdGF0ZRIhCh1QTE9UX1JFQ09SRF9TVEFURV9VTlNQRUNJRklFRBAAEgkKBUVNUFRZEAESCwoHR1JPV0lORxACEgoKBk1BVFVSRRADEhAKDE5FRURfQ0xFQU5VUBAEKkMKCkVmZmVjdEtpbmQSGwoXRUZGRUNUX0tJTkRfVU5TUEVDSUZJRUQQABIOCgpGRVJUSUxJWkVSEAESCAoEUEVTVBACKmkKE0NoYXB0ZXJSZWNvcmRTdGF0dXMSJQohQ0hBUFRFUl9SRUNPUkRfU1RBVFVTX1VOU1BFQ0lGSUVEEAASDwoLSU5fUFJPR1JFU1MQARINCglDTEFJTUFCTEUQAhILCgdDTEFJTUVEEAMqjgEKClRhc2tNZXRyaWMSGwoXVEFTS19NRVRSSUNfVU5TUEVDSUZJRUQQABISCg5UQVNLX0JVWV9TRUVEUxABEg4KClRBU0tfUExBTlQQAhIZChVUQVNLX0FQUExZX0ZFUlRJTElaRVIQAxIQCgxUQVNLX0hBUlZFU1QQBBISCg5UQVNLX1NFTExfQ1JPUBAFKkwKD091dGJveEV2ZW50VHlwZRIhCh1PVVRCT1hfRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEhYKEkNSRUFURV9SRVdBUkRfTUFJTBABKl8KD1NoYXJkUm91dGVTdGF0ZRIhCh1TSEFSRF9ST1VURV9TVEFURV9VTlNQRUNJRklFRBAAEg4KClVOQVNTSUdORUQQARINCglQUkVQQVJJTkcQAhIKCgZBQ1RJVkUQAyqrAQoVQ2hlY2twb2ludFdyaXRlU3RhdHVzEicKI0NIRUNLUE9JTlRfV1JJVEVfU1RBVFVTX1VOU1BFQ0lGSUVEEAASCwoHQVBQTElFRBABEhMKD0FMUkVBRFlfQVBQTElFRBACEg4KClNUQUxFX0NPUFkQAxIKCgZGRU5DRUQQBBIVChFSRVRSWUFCTEVfRkFJTFVSRRAFEhQKEENPUlJVUFRfQ09ORkxJQ1QQBkJSWlBnaXRodWIuY29tL1dyaW9zbGV5L3N1cGVybm92YS1jbGFzc2ljLWZhcm0vc2VydmVyL2dlbi9jbGFzc2ljZmFybS92MS9kYXRhO2RhdGF2MWIGcHJvdG8z");
+  fileDesc("CiRjbGFzc2ljZmFybS92MS9kYXRhL2RhdGFfbW9kZWwucHJvdG8SE2NsYXNzaWNmYXJtLmRhdGEudjEiJAoMUmF0ZURlY2ltYWw2EhQKDHNjYWxlZF92YWx1ZRgBIAEoAyImCg5Hcm93dGhEZWNpbWFsORIUCgxzY2FsZWRfdmFsdWUYASABKAMi5wYKElBsYXllckNoZWNrcG9pbnRWMRIWCg5zY2hlbWFfdmVyc2lvbhgBIAEoDRIRCglwbGF5ZXJfaWQYAiABKAQSGAoQbG9naWNhbF9zaGFyZF9pZBgDIAEoDRITCgtvd25lcl9lcG9jaBgEIAEoBBISCgpwbGF5ZXJfc2VxGAUgASgEEhsKE2NoZWNrcG9pbnRfcmV2aXNpb24YBiABKAQSFAoMY29pbl9iYWxhbmNlGAcgASgDEjYKCWludmVudG9yeRgIIAMoCzIjLmNsYXNzaWNmYXJtLmRhdGEudjEuSW52ZW50b3J5U3RhY2sSMwoFcGxvdHMYCSADKAsyJC5jbGFzc2ljZmFybS5kYXRhLnYxLlBsb3RTdGF0ZVJlY29yZBJACg9jdXJyZW50X2NoYXB0ZXIYCiABKAsyJy5jbGFzc2ljZmFybS5kYXRhLnYxLkNoYXB0ZXJTdGF0ZVJlY29yZBJECg5yZWNlbnRfcmVzdWx0cxgLIAMoCzIsLmNsYXNzaWNmYXJtLmRhdGEudjEuSWRlbXBvdGVuY3lSZXN1bHRSZWNvcmQSQAoOcGVuZGluZ19vdXRib3gYDCADKAsyKC5jbGFzc2ljZmFybS5kYXRhLnYxLlBlbmRpbmdPdXRib3hSZWNvcmQSIwobbGFzdF9hcHBsaWVkX2NvbmZpZ192ZXJzaW9uGA0gASgEEhUKDWNyZWF0ZWRfYXRfbXMYDiABKAMSFQoNdXBkYXRlZF9hdF9tcxgPIAEoAxI+Cg5mcmllbmRfYWN0aW9ucxgQIAEoCzImLmNsYXNzaWNmYXJtLmRhdGEudjEuRnJpZW5kQWN0aW9uU3RhdGUSSwoTZnJpZW5kX3Jlc2VydmF0aW9ucxgRIAMoCzIuLmNsYXNzaWNmYXJtLmRhdGEudjEuRnJpZW5kUmVzb3VyY2VSZXNlcnZhdGlvbhJGCg9mcmllbmRfcmVjZWlwdHMYEiADKAsyLS5jbGFzc2ljZmFybS5kYXRhLnYxLkZyaWVuZEludGVyYWN0aW9uUmVjZWlwdBJRChtmcmllbmRfdGFza19jcmVkaXRfcmVjZWlwdHMYEyADKAsyLC5jbGFzc2ljZmFybS5kYXRhLnYxLkZyaWVuZFRhc2tDcmVkaXRSZWNlaXB0IjMKDkludmVudG9yeVN0YWNrEg8KB2l0ZW1faWQYASABKA0SEAoIcXVhbnRpdHkYAiABKA0ijQYKD1Bsb3RTdGF0ZVJlY29yZBIPCgdwbG90X2lkGAEgASgNEjMKBXN0YXRlGAIgASgOMiQuY2xhc3NpY2Zhcm0uZGF0YS52MS5QbG90UmVjb3JkU3RhdGUSDwoHY3JvcF9pZBgDIAEoDRIUCgxjcm9wX2l0ZW1faWQYBCABKA0SGwoTY3JvcF9jb25maWdfdmVyc2lvbhgFIAEoBBIVCg1wbGFudGVkX2F0X21zGAYgASgDEjsKDm1hdHVyaXR5X3ZhbHVlGAcgASgLMiMuY2xhc3NpY2Zhcm0uZGF0YS52MS5Hcm93dGhEZWNpbWFsORI7ChBiYXNlX2dyb3d0aF9yYXRlGAggASgLMiEuY2xhc3NpY2Zhcm0uZGF0YS52MS5SYXRlRGVjaW1hbDYSEgoKYmFzZV95aWVsZBgJIAEoDRIXCg9zdG9sZW5fcXVhbnRpdHkYCiABKA0SQQoUc2V0dGxlZF9ncm93dGhfdmFsdWUYCyABKAsyIy5jbGFzc2ljZmFybS5kYXRhLnYxLkdyb3d0aERlY2ltYWw5EhoKEmxhc3Rfc2V0dGxlZF9hdF9tcxgMIAEoAxIjChZlc3RpbWF0ZWRfbWF0dXJlX2F0X21zGA0gASgDSACIAQESRgoRZmVydGlsaXplcl9lZmZlY3QYDiABKAsyJi5jbGFzc2ljZmFybS5kYXRhLnYxLlRpbWVkRWZmZWN0UmVjb3JkSAGIAQESQAoLcGVzdF9lZmZlY3QYDyABKAsyJi5jbGFzc2ljZmFybS5kYXRhLnYxLlRpbWVkRWZmZWN0UmVjb3JkSAKIAQESEwoLc3RlYWxfY291bnQYECABKA0SFgoOc3RlYWxfcXVhbnRpdHkYESABKA0SFwoPbWF4X3N0ZWFsX3RpbWVzGBIgASgNEh0KFXByb3RlY3RlZF9vd25lcl95aWVsZBgTIAEoDUIZChdfZXN0aW1hdGVkX21hdHVyZV9hdF9tc0IUChJfZmVydGlsaXplcl9lZmZlY3RCDgoMX3Blc3RfZWZmZWN0Iq4CChFUaW1lZEVmZmVjdFJlY29yZBIaChJlZmZlY3RfaW5zdGFuY2VfaWQYASABKAwSNAoLZWZmZWN0X2tpbmQYAiABKA4yHy5jbGFzc2ljZmFybS5kYXRhLnYxLkVmZmVjdEtpbmQSHgoWZWZmZWN0X2l0ZW1fb3JfcGVzdF9pZBgDIAEoDRIdChBzb3VyY2VfcGxheWVyX2lkGAQgASgESACIAQESFgoOY29uZmlnX3ZlcnNpb24YBSABKAQSMwoIbW9kaWZpZXIYBiABKAsyIS5jbGFzc2ljZmFybS5kYXRhLnYxLlJhdGVEZWNpbWFsNhITCgtzdGFydF9hdF9tcxgHIAEoAxIRCgllbmRfYXRfbXMYCCABKANCEwoRX3NvdXJjZV9wbGF5ZXJfaWQisAIKEkNoYXB0ZXJTdGF0ZVJlY29yZBISCgpjaGFwdGVyX2lkGAEgASgNEh4KFmNoYXB0ZXJfY29uZmlnX3ZlcnNpb24YAiABKAQSOAoGc3RhdHVzGAMgASgOMiguY2xhc3NpY2Zhcm0uZGF0YS52MS5DaGFwdGVyUmVjb3JkU3RhdHVzEhcKD2FjdGl2YXRlZF9hdF9tcxgEIAEoAxIaCg1jbGFpbWVkX2F0X21zGAUgASgDSACIAQESMwoFdGFza3MYBiADKAsyJC5jbGFzc2ljZmFybS5kYXRhLnYxLlRhc2tTdGF0ZVJlY29yZBIcCg9uZXh0X2NoYXB0ZXJfaWQYByABKA1IAYgBAUIQCg5fY2xhaW1lZF9hdF9tc0ISChBfbmV4dF9jaGFwdGVyX2lkIrABCg9UYXNrU3RhdGVSZWNvcmQSDwoHdGFza19pZBgBIAEoDRIbChN0YXNrX2NvbmZpZ192ZXJzaW9uGAIgASgEEi8KBm1ldHJpYxgDIAEoDjIfLmNsYXNzaWNmYXJtLmRhdGEudjEuVGFza01ldHJpYxIVCg1jdXJyZW50X3ZhbHVlGAQgASgNEhQKDHRhcmdldF92YWx1ZRgFIAEoDRIRCgljb21wbGV0ZWQYBiABKAgiZwoRRnJpZW5kQWN0aW9uU3RhdGUSGgoSYXBwbHlfcGVzdF9jaGFuY2VzGAEgASgNEhoKEmNhdGNoX3Blc3RfY2hhbmNlcxgCIAEoDRIaChJoZWxwX2NsZWFuX2NoYW5jZXMYAyABKA0ikAMKGUZyaWVuZFJlc291cmNlUmVzZXJ2YXRpb24SFgoOaW50ZXJhY3Rpb25faWQYASABKAwSPAoGYWN0aW9uGAIgASgOMiwuY2xhc3NpY2Zhcm0uZGF0YS52MS5GcmllbmRJbnRlcmFjdGlvbkFjdGlvbhI8CgZzdGF0dXMYAyABKA4yLC5jbGFzc2ljZmFybS5kYXRhLnYxLkZyaWVuZFJlc2VydmF0aW9uU3RhdHVzEh8KF3Jlc2VydmVkX2FjdGlvbl9jaGFuY2VzGAQgASgNEicKGnJlc2VydmVkX2ludmVudG9yeV9pdGVtX2lkGAUgASgNSACIAQESKAobcmVzZXJ2ZWRfaW52ZW50b3J5X3F1YW50aXR5GAYgASgNSAGIAQESFQoNY3JlYXRlZF9hdF9tcxgHIAEoAxIVCg11cGRhdGVkX2F0X21zGAggASgDQh0KG19yZXNlcnZlZF9pbnZlbnRvcnlfaXRlbV9pZEIeChxfcmVzZXJ2ZWRfaW52ZW50b3J5X3F1YW50aXR5Iq8CChhGcmllbmRJbnRlcmFjdGlvblJlY2VpcHQSFgoOaW50ZXJhY3Rpb25faWQYASABKAwSNAoEcm9sZRgCIAEoDjImLmNsYXNzaWNmYXJtLmRhdGEudjEuRnJpZW5kUmVjZWlwdFJvbGUSPAoGYWN0aW9uGAMgASgOMiwuY2xhc3NpY2Zhcm0uZGF0YS52MS5GcmllbmRJbnRlcmFjdGlvbkFjdGlvbhI4CgZzdGF0dXMYBCABKA4yKC5jbGFzc2ljZmFybS5kYXRhLnYxLkZyaWVuZFJlY2VpcHRTdGF0dXMSHAoUcmVzdWx0X2RpZ2VzdF9zaGEyNTYYBSABKAwSFgoOcmVzdWx0X3BheWxvYWQYBiABKAwSFwoPY29tbWl0dGVkX2F0X21zGAcgASgDIkUKF0ZyaWVuZFRhc2tDcmVkaXRSZWNlaXB0EhMKC3JlbGF0aW9uX2lkGAEgASgMEhUKDWFwcGxpZWRfYXRfbXMYAiABKAMirwMKF0lkZW1wb3RlbmN5UmVzdWx0UmVjb3JkEhgKEGNhbGxlcl9wbGF5ZXJfaWQYASABKAQSEgoKcmVxdWVzdF9pZBgCIAEoDBIiChpmaW5nZXJwcmludF9zY2hlbWFfdmVyc2lvbhgDIAEoDRIYChBwcm90b2NvbF92ZXJzaW9uGAQgASgNEg4KBmFjdGlvbhgFIAEoDRIYChB0YXJnZXRfcGxheWVyX2lkGAYgASgEEiIKGnBheWxvYWRfZmluZ2VycHJpbnRfc2hhMjU2GAcgASgMEhcKD2NvbXBsZXRlZF9hdF9tcxgIIAEoAxIPCgdzdWNjZXNzGAkgASgIEhoKEnJlc3VsdF9vd25lcl9lcG9jaBgKIAEoBBIZChFyZXN1bHRfcGxheWVyX3NlcRgLIAEoBBIdChVyZXNwb25zZV9wYXlsb2FkX3R5cGUYDCABKA0SGAoQcmVzcG9uc2VfcGF5bG9hZBgNIAEoDBIaCg1lcnJvcl9wYXlsb2FkGA4gASgMSACIAQESEgoKb3V0Ym94X2lkcxgPIAMoDEIQCg5fZXJyb3JfcGF5bG9hZCK1AgoTUGVuZGluZ091dGJveFJlY29yZBIQCghldmVudF9pZBgBIAEoDBI4CgpldmVudF90eXBlGAIgASgOMiQuY2xhc3NpY2Zhcm0uZGF0YS52MS5PdXRib3hFdmVudFR5cGUSHgoWZXZlbnRfY29udHJhY3RfdmVyc2lvbhgDIAEoDRIbChNhZ2dyZWdhdGVfcGxheWVyX2lkGAQgASgEEhwKFGNhdXNlZF9ieV9yZXF1ZXN0X2lkGAUgASgMEhsKE2NyZWF0ZWRfb3duZXJfZXBvY2gYBiABKAQSGgoSY3JlYXRlZF9wbGF5ZXJfc2VxGAcgASgEEhUKDWNyZWF0ZWRfYXRfbXMYCCABKAMSDwoHcGF5bG9hZBgJIAEoDBIWCg5wYXlsb2FkX3NoYTI1NhgKIAEoDCLaAgoJT3V0Ym94Um93EhAKCGV2ZW50X2lkGAEgASgMEhMKC2RiX3NoYXJkX2lkGAIgASgNEhsKE2FnZ3JlZ2F0ZV9wbGF5ZXJfaWQYAyABKAQSGAoQbG9naWNhbF9zaGFyZF9pZBgEIAEoDRI4CgpldmVudF90eXBlGAUgASgOMiQuY2xhc3NpY2Zhcm0uZGF0YS52MS5PdXRib3hFdmVudFR5cGUSHgoWZXZlbnRfY29udHJhY3RfdmVyc2lvbhgGIAEoDRIcChRjYXVzZWRfYnlfcmVxdWVzdF9pZBgHIAEoDBIbChNjcmVhdGVkX293bmVyX2Vwb2NoGAggASgEEhoKEmNyZWF0ZWRfcGxheWVyX3NlcRgJIAEoBBIVCg1jcmVhdGVkX2F0X21zGAogASgDEg8KB3BheWxvYWQYCyABKAwSFgoOcGF5bG9hZF9zaGEyNTYYDCABKAwixAEKEFNoYXJkTWFwU25hcHNob3QSEwoLc2hhcmRfY291bnQYASABKA0SHgoWaGFzaF9hbGdvcml0aG1fdmVyc2lvbhgCIAEoDRITCgttYXBfdmVyc2lvbhgDIAEoBBIWCg5jb21taXR0ZWRfdGVybRgEIAEoBBIXCg9jb21taXR0ZWRfaW5kZXgYBSABKAQSNQoHZW50cmllcxgGIAMoCzIkLmNsYXNzaWNmYXJtLmRhdGEudjEuU2hhcmRSb3V0ZUVudHJ5IvoCCg9TaGFyZFJvdXRlRW50cnkSEAoIc2hhcmRfaWQYASABKA0SGgoNb3duZXJfem9uZV9pZBgCIAEoCUgAiAEBEhMKC293bmVyX2Vwb2NoGAMgASgEEhUKDXJvdXRlX3ZlcnNpb24YBCABKAQSMwoFc3RhdGUYBSABKA4yJC5jbGFzc2ljZmFybS5kYXRhLnYxLlNoYXJkUm91dGVTdGF0ZRISCgpsZWFzZV90ZXJtGAYgASgEEhAKCGxlYXNlX2lkGAcgASgMEhsKE2xlYXNlX2V4cGlyZXNfYXRfbXMYCCABKAMSIwoWcHJldmlvdXNfb3duZXJfem9uZV9pZBgJIAEoCUgBiAEBEhoKDXRyYW5zaXRpb25faWQYCiABKAxIAogBARIVCg11cGRhdGVkX2F0X21zGAsgASgDQhAKDl9vd25lcl96b25lX2lkQhkKF19wcmV2aW91c19vd25lcl96b25lX2lkQhAKDl90cmFuc2l0aW9uX2lkIpYBCgpTaGFyZEZlbmNlEhgKEGxvZ2ljYWxfc2hhcmRfaWQYASABKA0SFQoNb3duZXJfem9uZV9pZBgCIAEoCRITCgtvd25lcl9lcG9jaBgDIAEoBBIVCg1yb3V0ZV92ZXJzaW9uGAQgASgEEhUKDXRyYW5zaXRpb25faWQYBSABKAwSFAoMZmVuY2VkX2F0X21zGAYgASgDIsMCCg9EaXJ0eVF1ZXVlRW50cnkSEQoJcGxheWVyX2lkGAEgASgEEhMKC2RiX3NoYXJkX2lkGAIgASgNEhgKEGxvZ2ljYWxfc2hhcmRfaWQYAyABKA0SFQoNb3duZXJfem9uZV9pZBgEIAEoCRITCgtvd25lcl9lcG9jaBgFIAEoBBIiChpsYXRlc3RfY2hlY2twb2ludF9yZXZpc2lvbhgGIAEoBBIZChFmaXJzdF9kaXJ0eV9hdF9tcxgHIAEoAxIYChBsYXN0X2RpcnR5X2F0X21zGAggASgDEhoKEm5leHRfYXR0ZW1wdF9hdF9tcxgJIAEoAxIVCg1hdHRlbXB0X2NvdW50GAogASgNEh8KEmluX2ZsaWdodF9yZXZpc2lvbhgLIAEoBEgAiAEBQhUKE19pbl9mbGlnaHRfcmV2aXNpb24iqgEKFkRpcnR5QmF0Y2hXcml0ZVJlcXVlc3QSEAoIYmF0Y2hfaWQYASABKAwSEwoLZGJfc2hhcmRfaWQYAiABKA0SFQoNb3duZXJfem9uZV9pZBgDIAEoCRIVCg1jcmVhdGVkX2F0X21zGAQgASgDEjsKB2VudHJpZXMYBSADKAsyKi5jbGFzc2ljZmFybS5kYXRhLnYxLlBsYXllckNoZWNrcG9pbnRXcml0ZSKVAwoVUGxheWVyQ2hlY2twb2ludFdyaXRlEhEKCXBsYXllcl9pZBgBIAEoBBITCgtkYl9zaGFyZF9pZBgCIAEoDRIYChBsb2dpY2FsX3NoYXJkX2lkGAMgASgNEhUKDW93bmVyX3pvbmVfaWQYBCABKAkSEwoLb3duZXJfZXBvY2gYBSABKAQSEgoKcGxheWVyX3NlcRgGIAEoBBIbChNjaGVja3BvaW50X3JldmlzaW9uGAcgASgEEiEKGWNoZWNrcG9pbnRfc2NoZW1hX3ZlcnNpb24YCCABKA0SFwoPY2hlY2twb2ludF9ibG9iGAkgASgMEhkKEWNoZWNrcG9pbnRfc2hhMjU2GAogASgMEiMKG2xhc3RfYXBwbGllZF9jb25maWdfdmVyc2lvbhgLIAEoBBIVCg1jcmVhdGVkX2F0X21zGAwgASgDEhUKDXVwZGF0ZWRfYXRfbXMYDSABKAMSMwoLb3V0Ym94X3Jvd3MYDiADKAsyHi5jbGFzc2ljZmFybS5kYXRhLnYxLk91dGJveFJvdyKQAQobUGxheWVyQ2hlY2twb2ludFdyaXRlUmVzdWx0EhEKCXBsYXllcl9pZBgBIAEoBBIiChpjb3BpZWRfY2hlY2twb2ludF9yZXZpc2lvbhgCIAEoBBI6CgZzdGF0dXMYAyABKA4yKi5jbGFzc2ljZmFybS5kYXRhLnYxLkNoZWNrcG9pbnRXcml0ZVN0YXR1cypqCg9QbG90UmVjb3JkU3RhdGUSIQodUExPVF9SRUNPUkRfU1RBVEVfVU5TUEVDSUZJRUQQABIJCgVFTVBUWRABEgsKB0dST1dJTkcQAhIKCgZNQVRVUkUQAxIQCgxORUVEX0NMRUFOVVAQBCpDCgpFZmZlY3RLaW5kEhsKF0VGRkVDVF9LSU5EX1VOU1BFQ0lGSUVEEAASDgoKRkVSVElMSVpFUhABEggKBFBFU1QQAippChNDaGFwdGVyUmVjb3JkU3RhdHVzEiUKIUNIQVBURVJfUkVDT1JEX1NUQVRVU19VTlNQRUNJRklFRBAAEg8KC0lOX1BST0dSRVNTEAESDQoJQ0xBSU1BQkxFEAISCwoHQ0xBSU1FRBADKtcBCgpUYXNrTWV0cmljEhsKF1RBU0tfTUVUUklDX1VOU1BFQ0lGSUVEEAASEgoOVEFTS19CVVlfU0VFRFMQARIOCgpUQVNLX1BMQU5UEAISGQoVVEFTS19BUFBMWV9GRVJUSUxJWkVSEAMSEAoMVEFTS19IQVJWRVNUEAQSEgoOVEFTS19TRUxMX0NST1AQBRITCg9UQVNLX0FERF9GUklFTkQQBhITCg9UQVNLX1NURUFMX0NST1AQBxIdChlUQVNLX0FQUExZX1BFU1RfVE9fRlJJRU5EEAgqrAEKF0ZyaWVuZEludGVyYWN0aW9uQWN0aW9uEikKJUZSSUVORF9JTlRFUkFDVElPTl9BQ1RJT05fVU5TUEVDSUZJRUQQABIYChRBUFBMWV9QRVNUX1RPX0ZSSUVORBABEhkKFUNBVENIX1BFU1RfRk9SX0ZSSUVORBACEhoKFkhFTFBfQ0xFQU5fRlJJRU5EX1BMT1QQAxIVChFTVEVBTF9GUklFTkRfQ1JPUBAEKqcBChdGcmllbmRSZXNlcnZhdGlvblN0YXR1cxIpCiVGUklFTkRfUkVTRVJWQVRJT05fU1RBVFVTX1VOU1BFQ0lGSUVEEAASHwobRlJJRU5EX1JFU0VSVkFUSU9OX1JFU0VSVkVEEAESHwobRlJJRU5EX1JFU0VSVkFUSU9OX0NPTlNVTUVEEAISHwobRlJJRU5EX1JFU0VSVkFUSU9OX1JFTEVBU0VEEAMqbgoRRnJpZW5kUmVjZWlwdFJvbGUSIwofRlJJRU5EX1JFQ0VJUFRfUk9MRV9VTlNQRUNJRklFRBAAEhoKFkZSSUVORF9SRUNFSVBUX1ZJU0lUT1IQARIYChRGUklFTkRfUkVDRUlQVF9PV05FUhACKnYKE0ZyaWVuZFJlY2VpcHRTdGF0dXMSJQohRlJJRU5EX1JFQ0VJUFRfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGgoWRlJJRU5EX1JFQ0VJUFRfQVBQTElFRBABEhwKGEZSSUVORF9SRUNFSVBUX0NPTU1JVFRFRBACKkwKD091dGJveEV2ZW50VHlwZRIhCh1PVVRCT1hfRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEhYKEkNSRUFURV9SRVdBUkRfTUFJTBABKl8KD1NoYXJkUm91dGVTdGF0ZRIhCh1TSEFSRF9ST1VURV9TVEFURV9VTlNQRUNJRklFRBAAEg4KClVOQVNTSUdORUQQARINCglQUkVQQVJJTkcQAhIKCgZBQ1RJVkUQAyqrAQoVQ2hlY2twb2ludFdyaXRlU3RhdHVzEicKI0NIRUNLUE9JTlRfV1JJVEVfU1RBVFVTX1VOU1BFQ0lGSUVEEAASCwoHQVBQTElFRBABEhMKD0FMUkVBRFlfQVBQTElFRBACEg4KClNUQUxFX0NPUFkQAxIKCgZGRU5DRUQQBBIVChFSRVRSWUFCTEVfRkFJTFVSRRAFEhQKEENPUlJVUFRfQ09ORkxJQ1QQBkJSWlBnaXRodWIuY29tL1dyaW9zbGV5L3N1cGVybm92YS1jbGFzc2ljLWZhcm0vc2VydmVyL2dlbi9jbGFzc2ljZmFybS92MS9kYXRhO2RhdGF2MWIGcHJvdG8z");
 
 /**
  * @generated from message classicfarm.data.v1.RateDecimal6
@@ -124,6 +124,26 @@ export type PlayerCheckpointV1 = Message<"classicfarm.data.v1.PlayerCheckpointV1
    * @generated from field: int64 updated_at_ms = 15;
    */
   updatedAtMs: bigint;
+
+  /**
+   * @generated from field: classicfarm.data.v1.FriendActionState friend_actions = 16;
+   */
+  friendActions?: FriendActionState | undefined;
+
+  /**
+   * @generated from field: repeated classicfarm.data.v1.FriendResourceReservation friend_reservations = 17;
+   */
+  friendReservations: FriendResourceReservation[];
+
+  /**
+   * @generated from field: repeated classicfarm.data.v1.FriendInteractionReceipt friend_receipts = 18;
+   */
+  friendReceipts: FriendInteractionReceipt[];
+
+  /**
+   * @generated from field: repeated classicfarm.data.v1.FriendTaskCreditReceipt friend_task_credit_receipts = 19;
+   */
+  friendTaskCreditReceipts: FriendTaskCreditReceipt[];
 };
 
 /**
@@ -233,6 +253,26 @@ export type PlotStateRecord = Message<"classicfarm.data.v1.PlotStateRecord"> & {
    * @generated from field: optional classicfarm.data.v1.TimedEffectRecord pest_effect = 15;
    */
   pestEffect?: TimedEffectRecord | undefined;
+
+  /**
+   * @generated from field: uint32 steal_count = 16;
+   */
+  stealCount: number;
+
+  /**
+   * @generated from field: uint32 steal_quantity = 17;
+   */
+  stealQuantity: number;
+
+  /**
+   * @generated from field: uint32 max_steal_times = 18;
+   */
+  maxStealTimes: number;
+
+  /**
+   * @generated from field: uint32 protected_owner_yield = 19;
+   */
+  protectedOwnerYield: number;
 };
 
 /**
@@ -384,6 +424,154 @@ export const TaskStateRecordSchema: GenMessage<TaskStateRecord> = /*@__PURE__*/
   messageDesc(file_classicfarm_v1_data_data_model, 7);
 
 /**
+ * @generated from message classicfarm.data.v1.FriendActionState
+ */
+export type FriendActionState = Message<"classicfarm.data.v1.FriendActionState"> & {
+  /**
+   * @generated from field: uint32 apply_pest_chances = 1;
+   */
+  applyPestChances: number;
+
+  /**
+   * @generated from field: uint32 catch_pest_chances = 2;
+   */
+  catchPestChances: number;
+
+  /**
+   * @generated from field: uint32 help_clean_chances = 3;
+   */
+  helpCleanChances: number;
+};
+
+/**
+ * Describes the message classicfarm.data.v1.FriendActionState.
+ * Use `create(FriendActionStateSchema)` to create a new message.
+ */
+export const FriendActionStateSchema: GenMessage<FriendActionState> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_data_data_model, 8);
+
+/**
+ * @generated from message classicfarm.data.v1.FriendResourceReservation
+ */
+export type FriendResourceReservation = Message<"classicfarm.data.v1.FriendResourceReservation"> & {
+  /**
+   * @generated from field: bytes interaction_id = 1;
+   */
+  interactionId: Uint8Array;
+
+  /**
+   * @generated from field: classicfarm.data.v1.FriendInteractionAction action = 2;
+   */
+  action: FriendInteractionAction;
+
+  /**
+   * @generated from field: classicfarm.data.v1.FriendReservationStatus status = 3;
+   */
+  status: FriendReservationStatus;
+
+  /**
+   * @generated from field: uint32 reserved_action_chances = 4;
+   */
+  reservedActionChances: number;
+
+  /**
+   * @generated from field: optional uint32 reserved_inventory_item_id = 5;
+   */
+  reservedInventoryItemId?: number | undefined;
+
+  /**
+   * @generated from field: optional uint32 reserved_inventory_quantity = 6;
+   */
+  reservedInventoryQuantity?: number | undefined;
+
+  /**
+   * @generated from field: int64 created_at_ms = 7;
+   */
+  createdAtMs: bigint;
+
+  /**
+   * @generated from field: int64 updated_at_ms = 8;
+   */
+  updatedAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.data.v1.FriendResourceReservation.
+ * Use `create(FriendResourceReservationSchema)` to create a new message.
+ */
+export const FriendResourceReservationSchema: GenMessage<FriendResourceReservation> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_data_data_model, 9);
+
+/**
+ * @generated from message classicfarm.data.v1.FriendInteractionReceipt
+ */
+export type FriendInteractionReceipt = Message<"classicfarm.data.v1.FriendInteractionReceipt"> & {
+  /**
+   * @generated from field: bytes interaction_id = 1;
+   */
+  interactionId: Uint8Array;
+
+  /**
+   * @generated from field: classicfarm.data.v1.FriendReceiptRole role = 2;
+   */
+  role: FriendReceiptRole;
+
+  /**
+   * @generated from field: classicfarm.data.v1.FriendInteractionAction action = 3;
+   */
+  action: FriendInteractionAction;
+
+  /**
+   * @generated from field: classicfarm.data.v1.FriendReceiptStatus status = 4;
+   */
+  status: FriendReceiptStatus;
+
+  /**
+   * @generated from field: bytes result_digest_sha256 = 5;
+   */
+  resultDigestSha256: Uint8Array;
+
+  /**
+   * @generated from field: bytes result_payload = 6;
+   */
+  resultPayload: Uint8Array;
+
+  /**
+   * @generated from field: int64 committed_at_ms = 7;
+   */
+  committedAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.data.v1.FriendInteractionReceipt.
+ * Use `create(FriendInteractionReceiptSchema)` to create a new message.
+ */
+export const FriendInteractionReceiptSchema: GenMessage<FriendInteractionReceipt> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_data_data_model, 10);
+
+/**
+ * @generated from message classicfarm.data.v1.FriendTaskCreditReceipt
+ */
+export type FriendTaskCreditReceipt = Message<"classicfarm.data.v1.FriendTaskCreditReceipt"> & {
+  /**
+   * @generated from field: bytes relation_id = 1;
+   */
+  relationId: Uint8Array;
+
+  /**
+   * @generated from field: int64 applied_at_ms = 2;
+   */
+  appliedAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.data.v1.FriendTaskCreditReceipt.
+ * Use `create(FriendTaskCreditReceiptSchema)` to create a new message.
+ */
+export const FriendTaskCreditReceiptSchema: GenMessage<FriendTaskCreditReceipt> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_data_data_model, 11);
+
+/**
  * @generated from message classicfarm.data.v1.IdempotencyResultRecord
  */
 export type IdempotencyResultRecord = Message<"classicfarm.data.v1.IdempotencyResultRecord"> & {
@@ -468,7 +656,7 @@ export type IdempotencyResultRecord = Message<"classicfarm.data.v1.IdempotencyRe
  * Use `create(IdempotencyResultRecordSchema)` to create a new message.
  */
 export const IdempotencyResultRecordSchema: GenMessage<IdempotencyResultRecord> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 8);
+  messageDesc(file_classicfarm_v1_data_data_model, 12);
 
 /**
  * @generated from message classicfarm.data.v1.PendingOutboxRecord
@@ -530,7 +718,7 @@ export type PendingOutboxRecord = Message<"classicfarm.data.v1.PendingOutboxReco
  * Use `create(PendingOutboxRecordSchema)` to create a new message.
  */
 export const PendingOutboxRecordSchema: GenMessage<PendingOutboxRecord> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 9);
+  messageDesc(file_classicfarm_v1_data_data_model, 13);
 
 /**
  * @generated from message classicfarm.data.v1.OutboxRow
@@ -602,7 +790,7 @@ export type OutboxRow = Message<"classicfarm.data.v1.OutboxRow"> & {
  * Use `create(OutboxRowSchema)` to create a new message.
  */
 export const OutboxRowSchema: GenMessage<OutboxRow> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 10);
+  messageDesc(file_classicfarm_v1_data_data_model, 14);
 
 /**
  * @generated from message classicfarm.data.v1.ShardMapSnapshot
@@ -644,7 +832,7 @@ export type ShardMapSnapshot = Message<"classicfarm.data.v1.ShardMapSnapshot"> &
  * Use `create(ShardMapSnapshotSchema)` to create a new message.
  */
 export const ShardMapSnapshotSchema: GenMessage<ShardMapSnapshot> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 11);
+  messageDesc(file_classicfarm_v1_data_data_model, 15);
 
 /**
  * @generated from message classicfarm.data.v1.ShardRouteEntry
@@ -711,7 +899,7 @@ export type ShardRouteEntry = Message<"classicfarm.data.v1.ShardRouteEntry"> & {
  * Use `create(ShardRouteEntrySchema)` to create a new message.
  */
 export const ShardRouteEntrySchema: GenMessage<ShardRouteEntry> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 12);
+  messageDesc(file_classicfarm_v1_data_data_model, 16);
 
 /**
  * @generated from message classicfarm.data.v1.ShardFence
@@ -753,7 +941,7 @@ export type ShardFence = Message<"classicfarm.data.v1.ShardFence"> & {
  * Use `create(ShardFenceSchema)` to create a new message.
  */
 export const ShardFenceSchema: GenMessage<ShardFence> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 13);
+  messageDesc(file_classicfarm_v1_data_data_model, 17);
 
 /**
  * @generated from message classicfarm.data.v1.DirtyQueueEntry
@@ -820,7 +1008,7 @@ export type DirtyQueueEntry = Message<"classicfarm.data.v1.DirtyQueueEntry"> & {
  * Use `create(DirtyQueueEntrySchema)` to create a new message.
  */
 export const DirtyQueueEntrySchema: GenMessage<DirtyQueueEntry> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 14);
+  messageDesc(file_classicfarm_v1_data_data_model, 18);
 
 /**
  * @generated from message classicfarm.data.v1.DirtyBatchWriteRequest
@@ -857,7 +1045,7 @@ export type DirtyBatchWriteRequest = Message<"classicfarm.data.v1.DirtyBatchWrit
  * Use `create(DirtyBatchWriteRequestSchema)` to create a new message.
  */
 export const DirtyBatchWriteRequestSchema: GenMessage<DirtyBatchWriteRequest> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 15);
+  messageDesc(file_classicfarm_v1_data_data_model, 19);
 
 /**
  * @generated from message classicfarm.data.v1.PlayerCheckpointWrite
@@ -939,7 +1127,7 @@ export type PlayerCheckpointWrite = Message<"classicfarm.data.v1.PlayerCheckpoin
  * Use `create(PlayerCheckpointWriteSchema)` to create a new message.
  */
 export const PlayerCheckpointWriteSchema: GenMessage<PlayerCheckpointWrite> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 16);
+  messageDesc(file_classicfarm_v1_data_data_model, 20);
 
 /**
  * @generated from message classicfarm.data.v1.PlayerCheckpointWriteResult
@@ -966,7 +1154,7 @@ export type PlayerCheckpointWriteResult = Message<"classicfarm.data.v1.PlayerChe
  * Use `create(PlayerCheckpointWriteResultSchema)` to create a new message.
  */
 export const PlayerCheckpointWriteResultSchema: GenMessage<PlayerCheckpointWriteResult> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_data_data_model, 17);
+  messageDesc(file_classicfarm_v1_data_data_model, 21);
 
 /**
  * @generated from enum classicfarm.data.v1.PlotRecordState
@@ -1094,6 +1282,21 @@ export enum TaskMetric {
    * @generated from enum value: TASK_SELL_CROP = 5;
    */
   TASK_SELL_CROP = 5,
+
+  /**
+   * @generated from enum value: TASK_ADD_FRIEND = 6;
+   */
+  TASK_ADD_FRIEND = 6,
+
+  /**
+   * @generated from enum value: TASK_STEAL_CROP = 7;
+   */
+  TASK_STEAL_CROP = 7,
+
+  /**
+   * @generated from enum value: TASK_APPLY_PEST_TO_FRIEND = 8;
+   */
+  TASK_APPLY_PEST_TO_FRIEND = 8,
 }
 
 /**
@@ -1101,6 +1304,125 @@ export enum TaskMetric {
  */
 export const TaskMetricSchema: GenEnum<TaskMetric> = /*@__PURE__*/
   enumDesc(file_classicfarm_v1_data_data_model, 3);
+
+/**
+ * @generated from enum classicfarm.data.v1.FriendInteractionAction
+ */
+export enum FriendInteractionAction {
+  /**
+   * @generated from enum value: FRIEND_INTERACTION_ACTION_UNSPECIFIED = 0;
+   */
+  FRIEND_INTERACTION_ACTION_UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: APPLY_PEST_TO_FRIEND = 1;
+   */
+  APPLY_PEST_TO_FRIEND = 1,
+
+  /**
+   * @generated from enum value: CATCH_PEST_FOR_FRIEND = 2;
+   */
+  CATCH_PEST_FOR_FRIEND = 2,
+
+  /**
+   * @generated from enum value: HELP_CLEAN_FRIEND_PLOT = 3;
+   */
+  HELP_CLEAN_FRIEND_PLOT = 3,
+
+  /**
+   * @generated from enum value: STEAL_FRIEND_CROP = 4;
+   */
+  STEAL_FRIEND_CROP = 4,
+}
+
+/**
+ * Describes the enum classicfarm.data.v1.FriendInteractionAction.
+ */
+export const FriendInteractionActionSchema: GenEnum<FriendInteractionAction> = /*@__PURE__*/
+  enumDesc(file_classicfarm_v1_data_data_model, 4);
+
+/**
+ * @generated from enum classicfarm.data.v1.FriendReservationStatus
+ */
+export enum FriendReservationStatus {
+  /**
+   * @generated from enum value: FRIEND_RESERVATION_STATUS_UNSPECIFIED = 0;
+   */
+  FRIEND_RESERVATION_STATUS_UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: FRIEND_RESERVATION_RESERVED = 1;
+   */
+  FRIEND_RESERVATION_RESERVED = 1,
+
+  /**
+   * @generated from enum value: FRIEND_RESERVATION_CONSUMED = 2;
+   */
+  FRIEND_RESERVATION_CONSUMED = 2,
+
+  /**
+   * @generated from enum value: FRIEND_RESERVATION_RELEASED = 3;
+   */
+  FRIEND_RESERVATION_RELEASED = 3,
+}
+
+/**
+ * Describes the enum classicfarm.data.v1.FriendReservationStatus.
+ */
+export const FriendReservationStatusSchema: GenEnum<FriendReservationStatus> = /*@__PURE__*/
+  enumDesc(file_classicfarm_v1_data_data_model, 5);
+
+/**
+ * @generated from enum classicfarm.data.v1.FriendReceiptRole
+ */
+export enum FriendReceiptRole {
+  /**
+   * @generated from enum value: FRIEND_RECEIPT_ROLE_UNSPECIFIED = 0;
+   */
+  FRIEND_RECEIPT_ROLE_UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: FRIEND_RECEIPT_VISITOR = 1;
+   */
+  FRIEND_RECEIPT_VISITOR = 1,
+
+  /**
+   * @generated from enum value: FRIEND_RECEIPT_OWNER = 2;
+   */
+  FRIEND_RECEIPT_OWNER = 2,
+}
+
+/**
+ * Describes the enum classicfarm.data.v1.FriendReceiptRole.
+ */
+export const FriendReceiptRoleSchema: GenEnum<FriendReceiptRole> = /*@__PURE__*/
+  enumDesc(file_classicfarm_v1_data_data_model, 6);
+
+/**
+ * @generated from enum classicfarm.data.v1.FriendReceiptStatus
+ */
+export enum FriendReceiptStatus {
+  /**
+   * @generated from enum value: FRIEND_RECEIPT_STATUS_UNSPECIFIED = 0;
+   */
+  FRIEND_RECEIPT_STATUS_UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: FRIEND_RECEIPT_APPLIED = 1;
+   */
+  FRIEND_RECEIPT_APPLIED = 1,
+
+  /**
+   * @generated from enum value: FRIEND_RECEIPT_COMMITTED = 2;
+   */
+  FRIEND_RECEIPT_COMMITTED = 2,
+}
+
+/**
+ * Describes the enum classicfarm.data.v1.FriendReceiptStatus.
+ */
+export const FriendReceiptStatusSchema: GenEnum<FriendReceiptStatus> = /*@__PURE__*/
+  enumDesc(file_classicfarm_v1_data_data_model, 7);
 
 /**
  * @generated from enum classicfarm.data.v1.OutboxEventType
@@ -1121,7 +1443,7 @@ export enum OutboxEventType {
  * Describes the enum classicfarm.data.v1.OutboxEventType.
  */
 export const OutboxEventTypeSchema: GenEnum<OutboxEventType> = /*@__PURE__*/
-  enumDesc(file_classicfarm_v1_data_data_model, 4);
+  enumDesc(file_classicfarm_v1_data_data_model, 8);
 
 /**
  * @generated from enum classicfarm.data.v1.ShardRouteState
@@ -1152,7 +1474,7 @@ export enum ShardRouteState {
  * Describes the enum classicfarm.data.v1.ShardRouteState.
  */
 export const ShardRouteStateSchema: GenEnum<ShardRouteState> = /*@__PURE__*/
-  enumDesc(file_classicfarm_v1_data_data_model, 5);
+  enumDesc(file_classicfarm_v1_data_data_model, 9);
 
 /**
  * @generated from enum classicfarm.data.v1.CheckpointWriteStatus
@@ -1198,5 +1520,5 @@ export enum CheckpointWriteStatus {
  * Describes the enum classicfarm.data.v1.CheckpointWriteStatus.
  */
 export const CheckpointWriteStatusSchema: GenEnum<CheckpointWriteStatus> = /*@__PURE__*/
-  enumDesc(file_classicfarm_v1_data_data_model, 6);
+  enumDesc(file_classicfarm_v1_data_data_model, 10);
 
