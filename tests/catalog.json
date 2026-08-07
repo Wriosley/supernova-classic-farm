@@ -276,6 +276,68 @@
       "postRunWarning": "This database must not be reused for epoch-one bootstrap tests."
     },
     {
+      "id": "e2e-friend-interaction",
+      "name": "Friend interaction E2E",
+      "type": "e2e-bash",
+      "purpose": "Six-process Tcaplus dual-Zone friend link, dual visit, pest/catch/steal/help-clean, and farm-view sync",
+      "tiers": ["service"],
+      "preconditions": [
+        "Repo-root .env has working TCAPLUS_* credentials",
+        "Ports LOGIN_PORT/GATE_PORT/FRIEND_PORT (and zone/coordinator) free",
+        "FriendSvr starts via ./start-servers.sh --dual-zone --tcaplus"
+      ],
+      "estimatedDurationSec": 240,
+      "impact": "Creates three accounts and mutates friend/plot state in shared Tcaplus tables",
+      "files": [
+        "tests/e2e/run-friend-interaction.sh",
+        "server/test/e2e/friend_interaction_test.go"
+      ],
+      "command": {
+        "kind": "bash",
+        "workdir": ".",
+        "script": "tests/e2e/run-friend-interaction.sh",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083, 8084, 8085],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
+      "id": "e2e-friend-restart-recovery",
+      "name": "Friend restart recovery E2E",
+      "type": "e2e-bash",
+      "purpose": "Full friend interaction then stop/start six processes; re-login and re-enter farm",
+      "tiers": ["service"],
+      "preconditions": [
+        "Repo-root .env has working TCAPLUS_* credentials",
+        "Ports LOGIN_PORT/GATE_PORT/FRIEND_PORT free"
+      ],
+      "estimatedDurationSec": 360,
+      "impact": "Creates three accounts and verifies friend relations survive full stack restart",
+      "files": [
+        "tests/e2e/run-friend-restart-recovery.sh",
+        "server/test/e2e/friend_interaction_test.go",
+        "server/test/e2e/friend_interaction_saga_recovery_test.go"
+      ],
+      "command": {
+        "kind": "bash",
+        "workdir": ".",
+        "script": "tests/e2e/run-friend-restart-recovery.sh",
+        "args": []
+      },
+      "ports": [8080, 8081, 8082, 8083, 8084, 8085],
+      "needsMysql": false,
+      "clearMysqlDsn": true,
+      "destructive": false,
+      "repeatable": true,
+      "runnable": true,
+      "postRunWarning": ""
+    },
+    {
       "id": "manual-browser-h5",
       "name": "Browser H5 smoke",
       "type": "manual",

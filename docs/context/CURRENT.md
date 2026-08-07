@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-06
+updated: 2026-08-07
 ---
 
 # Current Handoff
@@ -23,16 +23,14 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 - The single-player owner loop is complete through `player_seq=8`.
 - Pure Tcaplus is green for auth, checkpoint, Fence, migration, Outbox and
   complete process restart.
-- The fixed dual-Zone kind cluster has five Ready Deployments and a passing
-  live owner-loop/migration E2E.
+- The fixed dual-Zone kind cluster has **six** Ready Deployments (Login,
+  Gate, Coordinator, zone-a, zone-b, FriendSvr) and passing friend
+  interaction / restart-recovery E2Es (`2026-08-07-friend-interaction-e2e`).
 - Dynamic Zone discovery and automatic scaling are outside the prototype.
-- Friend plan phases 0–5 are complete: contracts are frozen, existing
-  Gate→Zone commands plus Zone→Gate Push use HMAC-authenticated Unary gRPC,
-  FriendSvr now owns share codes, `FriendRelation`, `FriendList`
-  reservations and idempotent `TASK_ADD_FRIEND` credit via Zone
-  `PlayerSocialService`, and Gate WebSocket friend-code/list/visit actions
-  are wired to FriendSvr and to each Zone's new `VisitorZoneService`/
-  `OwnerFarmService`. Real friend Tcaplus tables exist.
+- Friend plan phases 0–7 are complete: contracts, gRPC+HMAC, FriendSvr,
+  visit sessions, FarmViewPatch/Presence, steal Saga, pest/catch/help,
+  H5 wiring, kind FriendSvr deploy, and multi-client WS E2E with full
+  stack restart recovery.
 - Farm visits return a public snapshot on `ENTER_FRIEND_FARM` and now also
   receive incremental `FarmViewPatch` pushes: public plot mutations (plant,
   fertilize, harvest, clean, natural maturity) bump an Actor-local
@@ -489,29 +487,24 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 
 ## Next actions
 
-The pure-Tcaplus runtime and fixed dual-Zone kind cluster are green. Dynamic
-Zone discovery and `2 -> 3` scaling were explicitly removed from the prototype
-scope.
+The friend prototype vertical (phases 0–7) is complete for the frozen scope in
+`../plans/friend_design_plan/06-分阶段实施方案.md`. Remaining work is
+outside that plan unless the owner expands scope:
 
-Development follows
-`../plans/friend_design_plan/06-分阶段实施方案.md`:
+1. Optional: manual three-browser demo against kind (protocol E2E already
+   covers three WS clients);
+2. Optional: production concerns deferred by design — Ingress/TLS, log
+   aggregation, dynamic Zone discovery, `2→3` scaling;
+3. Keep `go test ./...`, dual-Zone owner-loop, and
+   `./tests/e2e/run-friend-*.sh` green when touching Gate/Zone/Friend paths.
 
-1. Phases 0–5 are complete and verified by
-   `../evidence/2026-08-06-friend-phase-0-contracts.md`,
-   `../evidence/2026-08-06-friend-phase-1-grpc.md`,
-   `../evidence/2026-08-06-friend-phase-2-friendsvr.md`,
-   `../evidence/2026-08-06-friend-phase-3-visit.md`,
-   `../evidence/2026-08-06-friend-phase-4-farmview.md` and
-   `../evidence/2026-08-06-friend-phase-5-steal-saga.md`;
-2. implement phase 6 (apply-pest-to-friend, catch-pest-for-friend,
-   help-clean-friend-plot) on the same `server/internal/interaction` Saga
-   infrastructure phase 5 built;
-3. keep the existing Go, dual-Zone and Kubernetes owner-loop gates green.
+Evidence: `../evidence/2026-08-07-friend-interaction-e2e.md`.
 
 Manual owner checkpoints:
 
-- rebuild/redeploy the FriendSvr image into kind when exercising phase 2+;
-- perform the final three-H5 interaction review after phase 7.
+- rebuild/redeploy images into kind when exercising cluster demos
+  (`CLIENT_CONFIG_PUBLIC_URL` must stay aligned with Login's browser URL);
+- run `./tests/e2e/run-friend-interaction.sh` after friend/Gate/Zone changes.
 
 ## AI memory and handoff rule
 

@@ -209,6 +209,13 @@ func validateCommand(item *TestItem) error {
 		if filepath.Ext(strings.ToLower(cmd.Script)) != ".ps1" {
 			return fmt.Errorf("powershell script must end with .ps1")
 		}
+	case "bash":
+		if strings.TrimSpace(cmd.Script) == "" {
+			return fmt.Errorf("bash command requires script")
+		}
+		if filepath.Ext(strings.ToLower(cmd.Script)) != ".sh" {
+			return fmt.Errorf("bash script must end with .sh")
+		}
 	case "manual":
 		if item.Runnable {
 			return fmt.Errorf("manual command cannot be runnable")

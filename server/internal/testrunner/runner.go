@@ -282,6 +282,10 @@ func (p *Platform) buildCommand(ctx context.Context, item *testcatalog.TestItem)
 	case "powershell":
 		shell, shellArgs := powershellInvocation(filepath.Join(p.RepoRoot, filepath.FromSlash(item.Command.Script)), item.Command.Args)
 		cmd = exec.CommandContext(ctx, shell, shellArgs...)
+	case "bash":
+		script := filepath.Join(p.RepoRoot, filepath.FromSlash(item.Command.Script))
+		args := append([]string{script}, item.Command.Args...)
+		cmd = exec.CommandContext(ctx, "bash", args...)
 	default:
 		return nil, fmt.Errorf("unsupported command kind")
 	}

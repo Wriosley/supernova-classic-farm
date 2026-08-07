@@ -22,12 +22,12 @@ const (
 	MaxMessageBytes         = 64 << 10
 	DefaultGatewayID        = "local-gateway"
 	DefaultConfigURL        = "http://127.0.0.1:8080/v1/client-config/1"
-	// visitCommandTimeout and friendCommandTimeout follow the internal-gRPC
-	// contract deadlines documented on VisitorZoneService/OwnerFarmService
-	// and FriendService respectively, rather than the longer general
-	// CommandTimeout used for GameCommandService.
-	visitCommandTimeout  = 3 * time.Second
-	friendCommandTimeout = 2 * time.Second
+	// visitCommandTimeout covers ENTER/HEARTBEAT/EXIT plus multi-step
+	// interaction Sagas (steal/pest/catch/help) that each do several
+	// synchronous Tcaplus SaveCAS round-trips. Keep this above worst-case
+	// Tcaplus latency × step count; 3s was too tight under shared-table load.
+	visitCommandTimeout  = 15 * time.Second
+	friendCommandTimeout = 5 * time.Second
 )
 
 var (
