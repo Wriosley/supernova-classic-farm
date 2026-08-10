@@ -21,6 +21,8 @@ import {
   EffectViewSchema,
   ErrorCode,
   FarmPresenceKind,
+  RedDotCategory,
+  RedDotOperation,
 } from './gen/classicfarm/v1/ws/ws_pb'
 import { create } from '@bufbuild/protobuf'
 import {
@@ -42,10 +44,13 @@ import FarmDashboard, {
   type FarmActionRequest,
 } from './components/FarmDashboard.vue'
 import FriendFarmDashboard from './components/FriendFarmDashboard.vue'
+import FriendGiftPanel from './components/FriendGiftPanel.vue'
+import MailboxPanel from './components/MailboxPanel.vue'
 import PetPanel from './components/PetPanel.vue'
 import PlayerProfileModal from './components/PlayerProfileModal.vue'
 import type {
   CropCatalogEntryView,
+  MailView,
   PetPanelView,
   PetShopEntryView,
 } from './gen/classicfarm/v1/ws/ws_pb'
@@ -160,16 +165,41 @@ const petBusyBuyFood = ref(false)
 const petBusyFeed = ref(false)
 const petError = ref('')
 const petMessage = ref('')
+const mailRedDot = ref(false)
+const friendFarmRedDots = ref<Set<string>>(new Set())
+const mailboxOpen = ref(false)
+const mailboxMails = ref<MailView[]>([])
+const mailboxNextPageToken = ref('')
+const mailboxFilter = ref<'all' | 'public' | 'private' | 'gift'>('all')
+const mailboxLoading = ref(false)
+const mailboxLoadingMore = ref(false)
+const mailboxClaimingId = ref<string | null>(null)
+const mailboxError = ref('')
+const mailboxMessage = ref('')
+const giftOpen = ref(false)
+const giftRecipientId = ref<bigint>(0n)
+const giftRecipientName = ref('')
+const giftBusy = ref(false)
+const giftError = ref('')
+const giftMessage = ref('')
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let presenceNoticeTimer: ReturnType<typeof setTimeout> | undefined
 
 socket.setPlayerStateChangedHandler(handlePlayerStateChanged)
 socket.setFarmPresenceChangedHandler(handleFarmPresenceChanged)
 socket.setFarmViewChangedHandler(handleFarmViewChanged)
+socket.setRedDotChangedHandler(handleRedDotChanged)
 
 const canConnect = computed(() => Boolean(session.value) && !busy.value)
 const phaseIndex = computed(() => steps.indexOf(phase.value))
 const visiting = computed(() => visitOwnerId.value !== undefined)
+const inventoryMap = computed(() => {
+  const map = new Map<number, number>()
+  for (const item of snapshot.value?.inventory ?? []) {
+    map.set(item.itemId, item.quantity)
+  }
+  return map
+})
 const visitOwnerLabel = computed(() => {
   const ownerId = visitOwnerId.value
   if (ownerId === undefined) {
@@ -208,6 +238,23 @@ function clearResult(): void {
   petPanel.value = null
   petError.value = ''
   petMessage.value = ''
+  mailRedDot.value = false
+  friendFarmRedDots.value = new Set()
+  mailboxOpen.value = false
+  mailboxMails.value = []
+  mailboxNextPageToken.value = ''
+  mailboxFilter.value = 'all'
+  mailboxLoading.value = false
+  mailboxLoadingMore.value = false
+  mailboxClaimingId.value = null
+  mailboxError.value = ''
+  mailboxMessage.value = ''
+  giftOpen.value = false
+  giftRecipientId.value = 0n
+  giftRecipientName.value = ''
+  giftBusy.value = false
+  giftError.value = ''
+  giftMessage.value = ''
   busyAction.value = undefined
   actionMessage.value = ''
   actionError.value = ''
@@ -438,6 +485,166 @@ async function feedPet(): Promise<void> {
   }
 }
 
+function mailItemName(itemId: number): string {
+  const crop = cropCatalog.value.find((entry) => entry.cropItemId === itemId)
+  if (crop?.name) {
+    return crop.name
+  }
+  return `物品#${itemId}`
+}
+
+function clearFriendFarmRedDot(ownerId: bigint): void {
+  const key = ownerId.toString()
+  if (!friendFarmRedDots.value.has(key)) {
+    return
+  }
+  const next = new Set(friendFarmRedDots.value)
+  next.delete(key)
+  friendFarmRedDots.value = next
+}
+
+function friendHasFarmRedDot(ownerId: bigint): boolean {
+  return friendFarmRedDots.value.has(ownerId.toString())
+}
+
+async function openMailbox(): Promise<void> {
+  mailRedDot.value = false
+  mailboxOpen.value = true
+  mailboxFilter.value = 'all'
+  mailboxError.value = ''
+  mailboxMessage.value = ''
+  await refreshMailbox()
+}
+
+async function refreshMailbox(pageToken = ''): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected) {
+    mailboxError.value = '尚未连接，无法打开邮箱'
+    return
+  }
+  const loadingMore = pageToken !== ''
+  if (loadingMore) {
+    mailboxLoadingMore.value = true
+  } else {
+    mailboxLoading.value = true
+    mailboxMails.value = []
+    mailboxNextPageToken.value = ''
+  }
+  mailboxError.value = ''
+  try {
+    const response = await socket.openMailbox(playerId, 20, pageToken)
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    if (response.payload.case !== 'openMailboxResponse') {
+      throw new Error('打开邮箱响应无效')
+    }
+    const page = response.payload.value
+    mailboxMails.value = loadingMore
+      ? [...mailboxMails.value, ...page.mails]
+      : page.mails
+    mailboxNextPageToken.value = page.nextPageToken
+  } catch (error) {
+    mailboxError.value = error instanceof Error ? error.message : String(error)
+    if (!loadingMore) {
+      mailboxMails.value = []
+    }
+  } finally {
+    mailboxLoading.value = false
+    mailboxLoadingMore.value = false
+  }
+}
+
+async function markMailRead(mail: MailView): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected || mail.read) {
+    return
+  }
+  try {
+    const response = await socket.markMailRead(playerId, mail.mailId)
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    mailboxMails.value = mailboxMails.value.map((entry) =>
+      entry.mailId === mail.mailId ? { ...entry, read: true } : entry,
+    )
+  } catch (error) {
+    mailboxError.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function claimMail(mail: MailView): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected || mailboxClaimingId.value !== null) {
+    return
+  }
+  mailboxClaimingId.value = mail.mailId
+  mailboxError.value = ''
+  mailboxMessage.value = ''
+  try {
+    const response = await socket.claimMail(playerId, mail.mailId)
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    if (response.payload.case !== 'claimMailResponse') {
+      throw new Error('领取邮件响应无效')
+    }
+    await acceptMutationResponse(response)
+    mailboxMails.value = mailboxMails.value.map((entry) =>
+      entry.mailId === mail.mailId
+        ? { ...entry, read: true, claimed: true }
+        : entry,
+    )
+    mailboxMessage.value = '领取成功'
+  } catch (error) {
+    mailboxError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    mailboxClaimingId.value = null
+  }
+}
+
+function openGiftPanel(friend: FriendView): void {
+  giftRecipientId.value = friend.playerId
+  giftRecipientName.value = friend.accountName
+  giftError.value = ''
+  giftMessage.value = ''
+  giftOpen.value = true
+}
+
+async function sendFriendGift(cropItemId: number, quantity: number): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected || giftBusy.value || giftRecipientId.value === 0n) {
+    return
+  }
+  giftBusy.value = true
+  giftError.value = ''
+  giftMessage.value = ''
+  try {
+    const response = await socket.sendFriendGift(
+      playerId,
+      giftRecipientId.value,
+      cropItemId,
+      quantity,
+    )
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    if (response.payload.case !== 'sendFriendGiftResponse') {
+      throw new Error('赠礼响应无效')
+    }
+    await acceptMutationResponse(response)
+    giftMessage.value = '礼物已发送'
+  } catch (error) {
+    giftError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    giftBusy.value = false
+  }
+}
+
 function describeWsError(error: WsError): string {
   const labels: Partial<Record<ErrorCode, string>> = {
     [ErrorCode.INVALID_ARGUMENT]: '请求参数无效',
@@ -449,6 +656,7 @@ function describeWsError(error: WsError): string {
     [ErrorCode.INSUFFICIENT_COINS]: '金币不足',
     [ErrorCode.INVENTORY_TYPE_LIMIT]: '仓库种类已满',
     [ErrorCode.INVENTORY_STACK_LIMIT]: '该物品堆叠已满',
+    [ErrorCode.INVENTORY_CAPACITY_EXCEEDED]: '仓库空间不足，无法领取全部附件',
     [ErrorCode.ITEM_NOT_OWNED]: '未拥有该物品',
     [ErrorCode.INSUFFICIENT_ITEM_QUANTITY]: '物品数量不足',
     [ErrorCode.PLOT_NOT_FOUND]: '地块不存在',
@@ -682,6 +890,7 @@ async function enterFriendFarm(ownerId: bigint): Promise<void> {
   if (!playerId || !socket.connected || visitBusy.value) {
     return
   }
+  clearFriendFarmRedDot(ownerId)
   if (visitOwnerId.value !== undefined && visitOwnerId.value !== ownerId) {
     // A visitor may only be inside one friend's farm at a time; leave the
     // previous farm before entering the newly selected one.
@@ -1067,6 +1276,43 @@ function handleFarmPresenceChanged(envelope: WsEnvelope): void {
   presenceNoticeTimer = setTimeout(() => {
     presenceNotice.value = ''
   }, 5000)
+}
+
+function handleRedDotChanged(envelope: WsEnvelope): void {
+  if (envelope.payload.case !== 'redDotChangedPush') {
+    return
+  }
+  const push = envelope.payload.value
+  if (
+    push.category !== RedDotCategory.RED_DOT_CATEGORY_MAIL &&
+    push.category !== RedDotCategory.RED_DOT_CATEGORY_FRIEND_FARM
+  ) {
+    console.warn('忽略未知红点 category', push.category)
+    return
+  }
+  const set = push.operation === RedDotOperation.RED_DOT_OPERATION_SET
+  const clear = push.operation === RedDotOperation.RED_DOT_OPERATION_CLEAR
+  if (!set && !clear) {
+    console.warn('忽略未知红点 operation', push.operation)
+    return
+  }
+  if (push.category === RedDotCategory.RED_DOT_CATEGORY_MAIL) {
+    mailRedDot.value = set
+    return
+  }
+  const ownerId = push.sourcePlayerId
+  if (!ownerId) {
+    console.warn('好友农场红点缺少 source_player_id')
+    return
+  }
+  const key = ownerId.toString()
+  const next = new Set(friendFarmRedDots.value)
+  if (set) {
+    next.add(key)
+  } else {
+    next.delete(key)
+  }
+  friendFarmRedDots.value = next
 }
 
 // handleFarmViewChanged applies an incremental FarmViewPatch to the friend
@@ -1488,6 +1734,36 @@ onBeforeUnmount(() => {
       :show-compendium="!visiting"
       @close="profileOpen = false"
     />
+    <MailboxPanel
+      :open="mailboxOpen"
+      :mails="mailboxMails"
+      :next-page-token="mailboxNextPageToken"
+      :filter="mailboxFilter"
+      :loading="mailboxLoading"
+      :loading-more="mailboxLoadingMore"
+      :claiming-mail-id="mailboxClaimingId"
+      :error="mailboxError"
+      :message="mailboxMessage"
+      :item-name="mailItemName"
+      @close="mailboxOpen = false"
+      @filter="mailboxFilter = $event"
+      @refresh="refreshMailbox()"
+      @load-more="refreshMailbox(mailboxNextPageToken)"
+      @open-mail="markMailRead"
+      @claim="claimMail"
+    />
+    <FriendGiftPanel
+      :open="giftOpen"
+      :recipient-name="giftRecipientName"
+      :recipient-player-id="giftRecipientId"
+      :crops="cropCatalog"
+      :inventory="inventoryMap"
+      :busy="giftBusy"
+      :error="giftError"
+      :message="giftMessage"
+      @close="giftOpen = false"
+      @send="sendFriendGift"
+    />
 
     <section class="card auth-card" aria-labelledby="auth-title">
       <div class="section-heading">
@@ -1652,9 +1928,20 @@ onBeforeUnmount(() => {
           <p class="eyebrow">04 · FRIENDS</p>
           <h2 id="friends-title">好友与串门</h2>
         </div>
-        <button type="button" :disabled="!socket.connected || friendsBusy" @click="loadFriends">
-          刷新好友列表
-        </button>
+        <div class="friends-heading-actions">
+          <button
+            type="button"
+            class="mailbox-entry"
+            :disabled="!socket.connected"
+            @click="openMailbox"
+          >
+            邮箱
+            <span v-if="mailRedDot" class="red-dot" aria-label="有新邮件" />
+          </button>
+          <button type="button" :disabled="!socket.connected || friendsBusy" @click="loadFriends">
+            刷新好友列表
+          </button>
+        </div>
       </div>
 
       <p v-if="presenceNotice" class="success-banner">{{ presenceNotice }}</p>
@@ -1694,13 +1981,28 @@ onBeforeUnmount(() => {
           <ul v-if="friends.length" class="friends-list">
             <li v-for="friend in friends" :key="friend.playerId.toString()">
               <span>{{ friend.accountName }}</span>
-              <button
-                type="button"
-                :disabled="!socket.connected || visitBusy || visitOwnerId === friend.playerId"
-                @click="enterFriendFarm(friend.playerId)"
-              >
-                {{ visitOwnerId === friend.playerId ? '正在访问' : '进入农场' }}
-              </button>
+              <div class="friend-actions">
+                <button
+                  type="button"
+                  class="friend-enter"
+                  :disabled="!socket.connected || visitBusy || visitOwnerId === friend.playerId"
+                  @click="enterFriendFarm(friend.playerId)"
+                >
+                  {{ visitOwnerId === friend.playerId ? '正在访问' : '进入农场' }}
+                  <span
+                    v-if="friendHasFarmRedDot(friend.playerId)"
+                    class="red-dot"
+                    aria-label="好友农场有成熟作物"
+                  />
+                </button>
+                <button
+                  type="button"
+                  :disabled="!socket.connected || giftBusy"
+                  @click="openGiftPanel(friend)"
+                >
+                  赠送礼物
+                </button>
+              </div>
             </li>
           </ul>
           <p v-else class="empty-state">暂无好友，先生成好友码分享给朋友吧。</p>

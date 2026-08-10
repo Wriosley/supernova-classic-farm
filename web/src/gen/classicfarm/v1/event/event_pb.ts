@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file classicfarm/v1/event/event.proto.
  */
 export const file_classicfarm_v1_event_event: GenFile = /*@__PURE__*/
-  fileDesc("CiBjbGFzc2ljZmFybS92MS9ldmVudC9ldmVudC5wcm90bxIUY2xhc3NpY2Zhcm0uZXZlbnQudjEisgIKD0V2ZW50RW52ZWxvcGVWMRIeChZldmVudF9jb250cmFjdF92ZXJzaW9uGAEgASgNEhAKCGV2ZW50X2lkGAIgASgMEjMKCmV2ZW50X3R5cGUYAyABKA4yHy5jbGFzc2ljZmFybS5ldmVudC52MS5FdmVudFR5cGUSGwoTYWdncmVnYXRlX3BsYXllcl9pZBgEIAEoBBIcChRjYXVzZWRfYnlfcmVxdWVzdF9pZBgFIAEoDBIbChNjcmVhdGVkX293bmVyX2Vwb2NoGAYgASgEEhoKEmNyZWF0ZWRfcGxheWVyX3NlcRgHIAEoBBIVCg1jcmVhdGVkX2F0X21zGAggASgDEg8KB3BheWxvYWQYCSABKAwSFgoOcGF5bG9hZF9zaGEyNTYYCiABKAxKBAgLEGQi5QEKEkNyZWF0ZVJld2FyZE1haWxWMRIbChNyZWNpcGllbnRfcGxheWVyX2lkGAEgASgEEkEKC2F0dGFjaG1lbnRzGAIgAygLMiwuY2xhc3NpY2Zhcm0uZXZlbnQudjEuUmV3YXJkTWFpbEF0dGFjaG1lbnRWMRIYChBzdWJqZWN0X3RleHRfa2V5GAMgASgJEhUKDWJvZHlfdGV4dF9rZXkYBCABKAkSOAoGc291cmNlGAUgASgLMiguY2xhc3NpY2Zhcm0uZXZlbnQudjEuUmV3YXJkTWFpbFNvdXJjZVYxSgQIBhAUIkEKFlJld2FyZE1haWxBdHRhY2htZW50VjESDwoHaXRlbV9pZBgBIAEoDRIQCghxdWFudGl0eRgCIAEoDUoECAMQCiJiChJSZXdhcmRNYWlsU291cmNlVjESEgoKY2hhcHRlcl9pZBgBIAEoDRIeChZjaGFwdGVyX2NvbmZpZ192ZXJzaW9uGAIgASgEEhIKCnJlcXVlc3RfaWQYAyABKAxKBAgEEAoqRQoJRXZlbnRUeXBlEhoKFkVWRU5UX1RZUEVfVU5TUEVDSUZJRUQQABIWChJDUkVBVEVfUkVXQVJEX01BSUwQASIECAIQYyqVAQoRQ29uc3VtZVJlc3VsdENvZGUSHgoaQ09OU1VNRV9SRVNVTFRfVU5TUEVDSUZJRUQQABILCgdBUFBMSUVEEAESEwoPQUxSRUFEWV9BUFBMSUVEEAISFQoRUkVUUllBQkxFX0ZBSUxVUkUQAxIUChBDT1JSVVBUX0NPTkZMSUNUEAQSEQoNSU5WQUxJRF9FVkVOVBAFQlRaUmdpdGh1Yi5jb20vV3Jpb3NsZXkvc3VwZXJub3ZhLWNsYXNzaWMtZmFybS9zZXJ2ZXIvZ2VuL2NsYXNzaWNmYXJtL3YxL2V2ZW50O2V2ZW50djFiBnByb3RvMw");
+  fileDesc("CiBjbGFzc2ljZmFybS92MS9ldmVudC9ldmVudC5wcm90bxIUY2xhc3NpY2Zhcm0uZXZlbnQudjEisgIKD0V2ZW50RW52ZWxvcGVWMRIeChZldmVudF9jb250cmFjdF92ZXJzaW9uGAEgASgNEhAKCGV2ZW50X2lkGAIgASgMEjMKCmV2ZW50X3R5cGUYAyABKA4yHy5jbGFzc2ljZmFybS5ldmVudC52MS5FdmVudFR5cGUSGwoTYWdncmVnYXRlX3BsYXllcl9pZBgEIAEoBBIcChRjYXVzZWRfYnlfcmVxdWVzdF9pZBgFIAEoDBIbChNjcmVhdGVkX293bmVyX2Vwb2NoGAYgASgEEhoKEmNyZWF0ZWRfcGxheWVyX3NlcRgHIAEoBBIVCg1jcmVhdGVkX2F0X21zGAggASgDEg8KB3BheWxvYWQYCSABKAwSFgoOcGF5bG9hZF9zaGEyNTYYCiABKAxKBAgLEGQi5QEKEkNyZWF0ZVJld2FyZE1haWxWMRIbChNyZWNpcGllbnRfcGxheWVyX2lkGAEgASgEEkEKC2F0dGFjaG1lbnRzGAIgAygLMiwuY2xhc3NpY2Zhcm0uZXZlbnQudjEuUmV3YXJkTWFpbEF0dGFjaG1lbnRWMRIYChBzdWJqZWN0X3RleHRfa2V5GAMgASgJEhUKDWJvZHlfdGV4dF9rZXkYBCABKAkSOAoGc291cmNlGAUgASgLMiguY2xhc3NpY2Zhcm0uZXZlbnQudjEuUmV3YXJkTWFpbFNvdXJjZVYxSgQIBhAUIkEKFlJld2FyZE1haWxBdHRhY2htZW50VjESDwoHaXRlbV9pZBgBIAEoDRIQCghxdWFudGl0eRgCIAEoDUoECAMQCiJiChJSZXdhcmRNYWlsU291cmNlVjESEgoKY2hhcHRlcl9pZBgBIAEoDRIeChZjaGFwdGVyX2NvbmZpZ192ZXJzaW9uGAIgASgEEhIKCnJlcXVlc3RfaWQYAyABKAxKBAgEEAoiqwEKEENyZWF0ZUdpZnRNYWlsVjESGAoQc2VuZGVyX3BsYXllcl9pZBgBIAEoBBIbChNzZW5kZXJfZGlzcGxheV9uYW1lGAIgASgJEhsKE3JlY2lwaWVudF9wbGF5ZXJfaWQYAyABKAQSFAoMY3JvcF9pdGVtX2lkGAQgASgNEhAKCHF1YW50aXR5GAUgASgNEhUKDWNyZWF0ZWRfYXRfbXMYBiABKANKBAgHEBQqWwoJRXZlbnRUeXBlEhoKFkVWRU5UX1RZUEVfVU5TUEVDSUZJRUQQABIWChJDUkVBVEVfUkVXQVJEX01BSUwQARIUChBDUkVBVEVfR0lGVF9NQUlMEAIiBAgDEGMqlQEKEUNvbnN1bWVSZXN1bHRDb2RlEh4KGkNPTlNVTUVfUkVTVUxUX1VOU1BFQ0lGSUVEEAASCwoHQVBQTElFRBABEhMKD0FMUkVBRFlfQVBQTElFRBACEhUKEVJFVFJZQUJMRV9GQUlMVVJFEAMSFAoQQ09SUlVQVF9DT05GTElDVBAEEhEKDUlOVkFMSURfRVZFTlQQBUJUWlJnaXRodWIuY29tL1dyaW9zbGV5L3N1cGVybm92YS1jbGFzc2ljLWZhcm0vc2VydmVyL2dlbi9jbGFzc2ljZmFybS92MS9ldmVudDtldmVudHYxYgZwcm90bzM");
 
 /**
  * @generated from message classicfarm.event.v1.EventEnvelopeV1
@@ -161,6 +161,51 @@ export const RewardMailSourceV1Schema: GenMessage<RewardMailSourceV1> = /*@__PUR
   messageDesc(file_classicfarm_v1_event_event, 3);
 
 /**
+ * CreateGiftMailV1 is written by the sender Player Actor when SEND_FRIEND_GIFT
+ * succeeds. aggregate_player_id on the envelope is the sender.
+ *
+ * @generated from message classicfarm.event.v1.CreateGiftMailV1
+ */
+export type CreateGiftMailV1 = Message<"classicfarm.event.v1.CreateGiftMailV1"> & {
+  /**
+   * @generated from field: uint64 sender_player_id = 1;
+   */
+  senderPlayerId: bigint;
+
+  /**
+   * @generated from field: string sender_display_name = 2;
+   */
+  senderDisplayName: string;
+
+  /**
+   * @generated from field: uint64 recipient_player_id = 3;
+   */
+  recipientPlayerId: bigint;
+
+  /**
+   * @generated from field: uint32 crop_item_id = 4;
+   */
+  cropItemId: number;
+
+  /**
+   * @generated from field: uint32 quantity = 5;
+   */
+  quantity: number;
+
+  /**
+   * @generated from field: int64 created_at_ms = 6;
+   */
+  createdAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.event.v1.CreateGiftMailV1.
+ * Use `create(CreateGiftMailV1Schema)` to create a new message.
+ */
+export const CreateGiftMailV1Schema: GenMessage<CreateGiftMailV1> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_event_event, 4);
+
+/**
  * @generated from enum classicfarm.event.v1.EventType
  */
 export enum EventType {
@@ -173,6 +218,11 @@ export enum EventType {
    * @generated from enum value: CREATE_REWARD_MAIL = 1;
    */
   CREATE_REWARD_MAIL = 1,
+
+  /**
+   * @generated from enum value: CREATE_GIFT_MAIL = 2;
+   */
+  CREATE_GIFT_MAIL = 2,
 }
 
 /**

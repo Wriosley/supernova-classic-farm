@@ -20,6 +20,8 @@ export function mutationResponsePatch(
     case 'claimChapterRewardResponse':
     case 'cleanPlotResponse':
     case 'catchPestResponse':
+    case 'sendFriendGiftResponse':
+    case 'claimMailResponse':
       return response.payload.value.patch
     default:
       return undefined

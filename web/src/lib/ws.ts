@@ -21,6 +21,7 @@ type PendingRequest = {
 export type PlayerStateChangedHandler = (envelope: WsEnvelope) => void
 export type FarmPresenceChangedHandler = (envelope: WsEnvelope) => void
 export type FarmViewChangedHandler = (envelope: WsEnvelope) => void
+export type RedDotChangedHandler = (envelope: WsEnvelope) => void
 
 export type AuthenticatedConnection = {
   auth: AuthResponse
@@ -49,6 +50,7 @@ export class FarmWebSocket {
   private playerStateChangedHandler?: PlayerStateChangedHandler
   private farmPresenceChangedHandler?: FarmPresenceChangedHandler
   private farmViewChangedHandler?: FarmViewChangedHandler
+  private redDotChangedHandler?: RedDotChangedHandler
 
   get connected(): boolean {
     return this.socket?.readyState === WebSocket.OPEN
@@ -64,6 +66,10 @@ export class FarmWebSocket {
 
   setFarmViewChangedHandler(handler?: FarmViewChangedHandler): void {
     this.farmViewChangedHandler = handler
+  }
+
+  setRedDotChangedHandler(handler?: RedDotChangedHandler): void {
+    this.redDotChangedHandler = handler
   }
 
   async connectAndAuth(
@@ -236,6 +242,43 @@ export class FarmWebSocket {
     return this.sendGameRequest(playerId, Action.FEED_PET, {
       case: 'feedPetRequest',
       value: {},
+    })
+  }
+
+  async openMailbox(
+    playerId: bigint,
+    pageSize = 20,
+    pageToken = '',
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.OPEN_MAILBOX, {
+      case: 'openMailboxRequest',
+      value: { pageSize, pageToken },
+    })
+  }
+
+  async markMailRead(playerId: bigint, mailId: string): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.MARK_MAIL_READ, {
+      case: 'markMailReadRequest',
+      value: { mailId },
+    })
+  }
+
+  async claimMail(playerId: bigint, mailId: string): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.CLAIM_MAIL, {
+      case: 'claimMailRequest',
+      value: { mailId },
+    })
+  }
+
+  async sendFriendGift(
+    playerId: bigint,
+    recipientPlayerId: bigint,
+    cropItemId: number,
+    quantity: number,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.SEND_FRIEND_GIFT, {
+      case: 'sendFriendGiftRequest',
+      value: { recipientPlayerId, cropItemId, quantity },
     })
   }
 
@@ -543,6 +586,18 @@ export class FarmWebSocket {
           return
         }
         this.farmViewChangedHandler?.(envelope)
+        return
+      }
+      if (envelope.action === Action.RED_DOT_CHANGED) {
+        if (
+          envelope.stateVersion ||
+          envelope.payload.case !== 'redDotChangedPush' ||
+          !envelope.payload.value.notificationId
+        ) {
+          this.failProtocol('Gateway Push envelope 无效')
+          return
+        }
+        this.redDotChangedHandler?.(envelope)
         return
       }
       this.failProtocol('Gateway Push envelope 无效')

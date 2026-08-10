@@ -912,6 +912,36 @@ input:focus {
   border: 1px solid #c3b48e;
   border-radius: 0.65rem;
   background: #fffdf2;
+  flex-wrap: wrap;
+}
+
+.friends-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.friend-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.friend-enter,
+.mailbox-entry {
+  position: relative;
+}
+
+.red-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: 0.35rem;
+  border-radius: 50%;
+  background: #d92d20;
+  vertical-align: middle;
 }
 
 .visit-panel {
