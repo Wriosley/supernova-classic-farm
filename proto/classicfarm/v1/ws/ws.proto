@@ -22,7 +22,8 @@ enum Action {
   reserved 3 to 99;
   GET_PLAYER_SNAPSHOT = 100;
   GET_SHOP = 101;
-  reserved 102 to 199;
+  GET_PET_PANEL = 102;
+  reserved 103 to 199;
   BUY_SEEDS = 200;
   PLANT = 201;
   APPLY_FERTILIZER = 202;
@@ -32,7 +33,11 @@ enum Action {
   CLAIM_CHAPTER_REWARD = 206;
   BUY_FERTILIZER = 207;
   CATCH_PEST = 208;
-  reserved 209 to 299;
+  BUY_PET = 209;
+  DEPLOY_PET = 210;
+  BUY_PET_FOOD = 211;
+  FEED_PET = 212;
+  reserved 213 to 299;
   CREATE_FRIEND_CODE = 300;
   REDEEM_FRIEND_CODE = 301;
   LIST_FRIENDS = 302;
@@ -97,6 +102,10 @@ enum ErrorCode {
   INSUFFICIENT_ACTION_CHANCE = 724;
   INVENTORY_CAPACITY_EXCEEDED = 725;
   INTERACTION_OUTCOME_UNKNOWN = 726;
+  PET_NOT_FOUND = 800;
+  PET_ALREADY_OWNED = 801;
+  PET_NOT_OWNED = 802;
+  PET_DISABLED = 803;
 }
 
 message WsEnvelope {
@@ -159,8 +168,18 @@ message WsEnvelope {
     FarmPresencePush farm_presence_changed_push = 56;
     CatchPestRequest catch_pest_request = 57;
     CatchPestResponse catch_pest_response = 58;
+    GetPetPanelRequest get_pet_panel_request = 59;
+    GetPetPanelResponse get_pet_panel_response = 60;
+    BuyPetRequest buy_pet_request = 61;
+    BuyPetResponse buy_pet_response = 62;
+    DeployPetRequest deploy_pet_request = 63;
+    DeployPetResponse deploy_pet_response = 64;
+    BuyPetFoodRequest buy_pet_food_request = 65;
+    BuyPetFoodResponse buy_pet_food_response = 66;
+    FeedPetRequest feed_pet_request = 67;
+    FeedPetResponse feed_pet_response = 68;
   }
-  reserved 59 to 99;
+  reserved 69 to 99;
 }
 
 message StateVersion {
@@ -212,6 +231,7 @@ message GetShopRequest {}
 message GetShopResponse {
   uint64 server_config_version = 1;
   repeated ShopEntryView entries = 2;
+  repeated CropCatalogEntryView crops = 3;
 }
 
 message ShopEntryView {
@@ -235,6 +255,31 @@ message PlayerSnapshot {
   repeated PlotView plots = 4;
   ChapterView current_chapter = 5;
   uint64 server_config_version = 6;
+  PlayerCareerView career = 7;
+  CropCompendiumView crop_compendium = 8;
+}
+
+message PlayerCareerView {
+  uint64 total_harvested_crop_quantity = 1;
+  uint64 total_stolen_crop_quantity = 2;
+}
+
+message CropCompendiumView {
+  repeated uint32 unlocked_crop_ids = 1;
+}
+
+message CropCatalogEntryView {
+  uint32 crop_id = 1;
+  string name = 2;
+  uint32 seed_item_id = 3;
+  uint32 crop_item_id = 4;
+  uint64 maturity_seconds = 5;
+  uint32 base_yield = 6;
+  int64 seed_unit_price = 7;
+  uint64 seed_price_version = 8;
+  uint32 seed_shop_entry_id = 9;
+  int64 sell_unit_price = 10;
+  uint64 sell_price_version = 11;
 }
 
 message ItemStackView {
@@ -282,6 +327,8 @@ message PlayerStatePatch {
   repeated uint32 inventory_removed_item_ids = 3;
   repeated PlotView plot_upserts = 4;
   optional ChapterView current_chapter = 5;
+  optional PlayerCareerView career = 6;
+  optional CropCompendiumView crop_compendium = 7;
 }
 
 message BuySeedsRequest {
@@ -444,6 +491,8 @@ message FarmVisitSnapshot {
   uint64 owner_player_id = 1;
   FarmViewVersion version = 2;
   repeated PublicPlotView plots = 3;
+  // 访客可见的公开生涯；不含私有图鉴。
+  PlayerCareerView career = 4;
 }
 
 message FarmViewPatch {
@@ -519,4 +568,99 @@ message FriendActionResponse {
   bytes interaction_id = 1;
   PlayerStatePatch visitor_patch = 2;
   FarmViewPatch farm_patch = 3;
+  // steal_guard 仅 STEAL_FRIEND_CROP 使用：owner apply 冻结判定，visitor commit 填入实扣罚款。
+  StealGuardOutcome steal_guard = 4;
+}
+
+// StealGuardOutcome 冻结护主抽奖结果，Saga 重试不得重新抽取。
+message StealGuardOutcome {
+  uint32 pet_id = 1;
+  uint64 pet_config_version = 2;
+  bool food_active = 3;
+  uint32 guard_probability_bps = 4;
+  bool guard_triggered = 5;
+  int64 guard_penalty_configured = 6;
+  int64 guard_penalty_applied = 7;
+}
+
+message PetShopEntryView {
+  uint32 pet_id = 1;
+  string name = 2;
+  int64 price_coins = 3;
+  uint32 guard_probability_bps = 4;
+  int64 guard_penalty_coins = 5;
+  uint64 config_version = 6;
+  bool enabled = 7;
+  bool owned = 8;
+}
+
+message PetFoodShopView {
+  uint32 shop_entry_id = 1;
+  uint32 item_id = 2;
+  int64 unit_price = 3;
+  uint64 price_version = 4;
+  uint64 duration_seconds = 5;
+  bool enabled = 6;
+}
+
+message PetPanelView {
+  repeated PetShopEntryView pets = 1;
+  PetFoodShopView pet_food = 2;
+  repeated uint32 owned_pet_ids = 3;
+  uint32 active_pet_id = 4;
+  uint32 pet_food_quantity = 5;
+  int64 food_active_until_ms = 6;
+  bool guard_buff_active = 7;
+}
+
+message GetPetPanelRequest {}
+
+message GetPetPanelResponse {
+  PetPanelView panel = 1;
+}
+
+message BuyPetRequest {
+  uint32 pet_id = 1;
+  uint64 expected_config_version = 2;
+}
+
+message BuyPetResponse {
+  uint32 pet_id = 1;
+  int64 price_coins = 2;
+  PlayerStatePatch patch = 3;
+  PetPanelView panel = 4;
+}
+
+message DeployPetRequest {
+  uint32 pet_id = 1;
+}
+
+message DeployPetResponse {
+  uint32 active_pet_id = 1;
+  PlayerStatePatch patch = 2;
+  PetPanelView panel = 3;
+}
+
+message BuyPetFoodRequest {
+  uint32 shop_entry_id = 1;
+  uint32 quantity = 2;
+  uint64 expected_price_version = 3;
+}
+
+message BuyPetFoodResponse {
+  uint32 shop_entry_id = 1;
+  uint32 item_id = 2;
+  uint32 quantity = 3;
+  int64 unit_price = 4;
+  int64 total_price = 5;
+  PlayerStatePatch patch = 6;
+  PetPanelView panel = 7;
+}
+
+message FeedPetRequest {}
+
+message FeedPetResponse {
+  int64 food_active_until_ms = 1;
+  PlayerStatePatch patch = 2;
+  PetPanelView panel = 3;
 }

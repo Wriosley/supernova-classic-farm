@@ -21,11 +21,11 @@ func (r *Runtime) catchPest(
 	request *wsv1.WsEnvelope,
 	config *ConfigSnapshot,
 	now time.Time,
-) (*wsv1.WsEnvelope, bool) {
+) (*wsv1.WsEnvelope, bool, DomainChanges) {
 	requestID, err := parseRequestID(request.RequestId)
 	if err != nil {
 		return errorEnvelope(request, a.state, now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false, DomainChanges{}
 	}
 	catch := request.GetCatchPestRequest()
 	fingerprint := catchPestFingerprint(callerPlayerID, request, catch)
@@ -39,23 +39,23 @@ func (r *Runtime) catchPest(
 			stored.TargetPlayerId != request.TargetPlayerId ||
 			!bytes.Equal(stored.PayloadFingerprintSha256, fingerprint[:]) {
 			return errorEnvelope(request, a.state, now,
-				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false
+				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false, DomainChanges{}
 		}
-		return replayCatchPest(request, stored, now), false
+		return replayCatchPest(request, stored, now), false, DomainChanges{}
 	}
 
 	if catch.PlotId == 0 {
 		return r.storeCatchPestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true, DomainChanges{}
 	}
 	plot, exists := a.state.Plots[catch.PlotId]
 	if !exists {
 		return r.storeCatchPestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true, DomainChanges{}
 	}
 	if plot.State != plotv1.PlotState_GROWING || plot.PestEffect == nil {
 		return r.storeCatchPestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 
 	before := clonePlot(plot)
@@ -63,14 +63,14 @@ func (r *Runtime) catchPest(
 	if settleErr != nil || matured || plot.PestEffect == nil {
 		*plot = *before
 		return r.storeCatchPestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 	plot.PestEffect = nil
 	estimate, estimateErr := estimatePlotMatureAtMS(plot, now.UnixMilli())
 	if estimateErr != nil {
 		*plot = *before
 		return r.storeCatchPestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true, DomainChanges{}
 	}
 	plot.EstimatedMatureAtMS = &estimate
 	a.state.PlayerSeq++
@@ -101,7 +101,7 @@ func (r *Runtime) catchPest(
 		Payload: &wsv1.WsEnvelope_CatchPestResponse{
 			CatchPestResponse: payload,
 		},
-	}, true
+	}, true, DomainChanges{}.PlotChanged(catch.PlotId)
 }
 
 func (r *Runtime) storeCatchPestFailure(

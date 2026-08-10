@@ -34,6 +34,19 @@ const (
 	developmentStealQuantity             uint32 = 1
 	developmentMaxStealTimes             uint32 = 2
 	developmentProtectedOwnerYield       uint32 = 1
+
+	developmentVillageDogPetID           uint32 = 1
+	developmentShepherdDogPetID          uint32 = 2
+	developmentPetGuardProbabilityBPS    uint32 = 1000
+	developmentVillageDogPriceCoins      int64  = 5
+	developmentShepherdDogPriceCoins     int64  = 10
+	developmentVillageDogPenaltyCoins    int64  = 2
+	developmentShepherdDogPenaltyCoins   int64  = 4
+	developmentPetFoodItemID             uint32 = 1004
+	developmentPetFoodShopEntryID        uint32 = 5004
+	developmentPetFoodUnitPrice          int64  = 5
+	developmentPetFoodPriceVersion       uint64 = 11
+	developmentPetFoodDurationSeconds    uint64 = 86400
 )
 
 type ShopEntry struct {
@@ -48,6 +61,7 @@ type CropConfig struct {
 	SeedItemID            uint32
 	CropID                uint32
 	CropItemID            uint32
+	Name                  string
 	ConfigVersion         uint64
 	MaturityValueScaled9  int64
 	BaseGrowthRateScaled6 int64
@@ -76,6 +90,25 @@ type PestConfig struct {
 	ConfigVersion   uint64
 	ModifierScaled6 int64
 	DurationMS      int64
+	Enabled         bool
+}
+
+// PetConfig 描述可购买宠物的权威参数；概率使用万分比 BPS，禁止浮点。
+type PetConfig struct {
+	PetID               uint32
+	Name                string
+	PriceCoins          int64
+	GuardProbabilityBPS uint32
+	GuardPenaltyCoins   int64
+	ConfigVersion       uint64
+	Enabled             bool
+}
+
+// PetFoodConfig 描述狗粮物品与喂食时长；购买价格走 ShopEntry。
+type PetFoodConfig struct {
+	ItemID          uint32
+	DurationSeconds uint64
+	ConfigVersion   uint64
 	Enabled         bool
 }
 
@@ -126,6 +159,8 @@ type ConfigSnapshot struct {
 	cropsBySeed map[uint32]CropConfig
 	fertilizers map[uint32]FertilizerConfig
 	pests       map[uint32]PestConfig
+	pets        map[uint32]PetConfig
+	petFood     map[uint32]PetFoodConfig
 	sellRules   map[uint32]SellRule
 	chapters    map[uint32]ChapterConfig
 }
@@ -171,7 +206,7 @@ func NewConfigSnapshotWithChapters(
 	sellRules []SellRule,
 	chapters []ChapterConfig,
 ) (*ConfigSnapshot, error) {
-	return newConfigSnapshot(version, entries, crops, fertilizers, nil, sellRules, chapters)
+	return newConfigSnapshot(version, entries, crops, fertilizers, nil, nil, nil, sellRules, chapters)
 }
 
 // NewConfigSnapshotWithPests exposes the complete immutable content needed by
@@ -185,7 +220,21 @@ func NewConfigSnapshotWithPests(
 	sellRules []SellRule,
 	chapters []ChapterConfig,
 ) (*ConfigSnapshot, error) {
-	return newConfigSnapshot(version, entries, crops, fertilizers, pests, sellRules, chapters)
+	return newConfigSnapshot(version, entries, crops, fertilizers, pests, nil, nil, sellRules, chapters)
+}
+
+func NewConfigSnapshotWithPets(
+	version uint64,
+	entries []ShopEntry,
+	crops []CropConfig,
+	fertilizers []FertilizerConfig,
+	pests []PestConfig,
+	pets []PetConfig,
+	petFood []PetFoodConfig,
+	sellRules []SellRule,
+	chapters []ChapterConfig,
+) (*ConfigSnapshot, error) {
+	return newConfigSnapshot(version, entries, crops, fertilizers, pests, pets, petFood, sellRules, chapters)
 }
 
 func newConfigSnapshot(
@@ -194,6 +243,8 @@ func newConfigSnapshot(
 	crops []CropConfig,
 	fertilizers []FertilizerConfig,
 	pests []PestConfig,
+	pets []PetConfig,
+	petFood []PetFoodConfig,
 	sellRules []SellRule,
 	chapters []ChapterConfig,
 ) (*ConfigSnapshot, error) {
@@ -206,6 +257,8 @@ func newConfigSnapshot(
 		cropsBySeed: make(map[uint32]CropConfig, len(crops)),
 		fertilizers: make(map[uint32]FertilizerConfig, len(fertilizers)),
 		pests:       make(map[uint32]PestConfig, len(pests)),
+		pets:        make(map[uint32]PetConfig, len(pets)),
+		petFood:     make(map[uint32]PetFoodConfig, len(petFood)),
 		sellRules:   make(map[uint32]SellRule, len(sellRules)),
 		chapters:    make(map[uint32]ChapterConfig, len(chapters)),
 	}
@@ -232,6 +285,18 @@ func newConfigSnapshot(
 		}
 		snapshot.cropsBySeed[crop.SeedItemID] = crop
 	}
+	cropIDs := make(map[uint32]struct{}, len(crops))
+	cropItemIDs := make(map[uint32]struct{}, len(crops))
+	for _, crop := range crops {
+		if _, duplicate := cropIDs[crop.CropID]; duplicate {
+			return nil, errors.New("crop ID is duplicated")
+		}
+		if _, duplicate := cropItemIDs[crop.CropItemID]; duplicate {
+			return nil, errors.New("crop item ID is duplicated")
+		}
+		cropIDs[crop.CropID] = struct{}{}
+		cropItemIDs[crop.CropItemID] = struct{}{}
+	}
 	for _, fertilizer := range fertilizers {
 		if fertilizer.ItemID == 0 || fertilizer.ConfigVersion == 0 ||
 			fertilizer.ModifierScaled6 <= 0 || fertilizer.DurationMS <= 0 {
@@ -251,6 +316,26 @@ func newConfigSnapshot(
 			return nil, errors.New("pest ID is duplicated")
 		}
 		snapshot.pests[pest.PestID] = pest
+	}
+	for _, pet := range pets {
+		if pet.PetID == 0 || pet.Name == "" || pet.PriceCoins <= 0 ||
+			pet.GuardProbabilityBPS == 0 || pet.GuardProbabilityBPS > 10000 ||
+			pet.GuardPenaltyCoins < 0 || pet.ConfigVersion == 0 {
+			return nil, errors.New("pet config is invalid")
+		}
+		if _, duplicate := snapshot.pets[pet.PetID]; duplicate {
+			return nil, errors.New("pet ID is duplicated")
+		}
+		snapshot.pets[pet.PetID] = pet
+	}
+	for _, food := range petFood {
+		if food.ItemID == 0 || food.DurationSeconds == 0 || food.ConfigVersion == 0 {
+			return nil, errors.New("pet food config is invalid")
+		}
+		if _, duplicate := snapshot.petFood[food.ItemID]; duplicate {
+			return nil, errors.New("pet food item ID is duplicated")
+		}
+		snapshot.petFood[food.ItemID] = food
 	}
 	for _, rule := range sellRules {
 		if rule.ShopEntryID == 0 || rule.ItemID == 0 ||
@@ -314,8 +399,38 @@ func newConfigSnapshot(
 	return snapshot, nil
 }
 
+type developmentCropDef struct {
+	Name             string
+	CropID           uint32
+	SeedItemID       uint32
+	CropItemID       uint32
+	SeedShopEntryID  uint32
+	SellShopEntryID  uint32
+	SeedPrice        int64
+	SeedPriceVersion uint64
+	MaturityScaled9  int64
+	BaseYield        uint32
+	Stealable        bool
+}
+
+// developmentExtraCrops 是除演示作物外的 10 种配置驱动作物。
+func developmentExtraCrops() []developmentCropDef {
+	return []developmentCropDef{
+		{Name: "胡萝卜", CropID: 2002, SeedItemID: 1005, CropItemID: 1015, SeedShopEntryID: 5005, SellShopEntryID: 5015, SeedPrice: 3, SeedPriceVersion: 12, MaturityScaled9: 60_000_000_000, BaseYield: 3},
+		{Name: "白萝卜", CropID: 2003, SeedItemID: 1006, CropItemID: 1016, SeedShopEntryID: 5006, SellShopEntryID: 5016, SeedPrice: 3, SeedPriceVersion: 12, MaturityScaled9: 70_000_000_000, BaseYield: 3},
+		{Name: "玉米", CropID: 2004, SeedItemID: 1007, CropItemID: 1017, SeedShopEntryID: 5007, SellShopEntryID: 5017, SeedPrice: 4, SeedPriceVersion: 12, MaturityScaled9: 80_000_000_000, BaseYield: 3},
+		{Name: "番茄", CropID: 2005, SeedItemID: 1008, CropItemID: 1018, SeedShopEntryID: 5008, SellShopEntryID: 5018, SeedPrice: 4, SeedPriceVersion: 12, MaturityScaled9: 90_000_000_000, BaseYield: 4},
+		{Name: "土豆", CropID: 2006, SeedItemID: 1009, CropItemID: 1019, SeedShopEntryID: 5009, SellShopEntryID: 5019, SeedPrice: 4, SeedPriceVersion: 12, MaturityScaled9: 100_000_000_000, BaseYield: 4},
+		{Name: "茄子", CropID: 2007, SeedItemID: 1010, CropItemID: 1020, SeedShopEntryID: 5010, SellShopEntryID: 5020, SeedPrice: 4, SeedPriceVersion: 12, MaturityScaled9: 110_000_000_000, BaseYield: 5},
+		{Name: "草莓", CropID: 2008, SeedItemID: 1011, CropItemID: 1021, SeedShopEntryID: 5011, SellShopEntryID: 5021, SeedPrice: 5, SeedPriceVersion: 12, MaturityScaled9: 120_000_000_000, BaseYield: 4},
+		{Name: "南瓜", CropID: 2009, SeedItemID: 1012, CropItemID: 1022, SeedShopEntryID: 5012, SellShopEntryID: 5022, SeedPrice: 5, SeedPriceVersion: 12, MaturityScaled9: 130_000_000_000, BaseYield: 5},
+		{Name: "西瓜", CropID: 2010, SeedItemID: 1013, CropItemID: 1023, SeedShopEntryID: 5013, SellShopEntryID: 5023, SeedPrice: 5, SeedPriceVersion: 12, MaturityScaled9: 140_000_000_000, BaseYield: 5},
+		{Name: "葡萄", CropID: 2011, SeedItemID: 1014, CropItemID: 1024, SeedShopEntryID: 5014, SellShopEntryID: 5024, SeedPrice: 5, SeedPriceVersion: 12, MaturityScaled9: 150_000_000_000, BaseYield: 6},
+	}
+}
+
 func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
-	snapshot, err := NewConfigSnapshotWithPests(ServerConfigVersion, []ShopEntry{
+	shopEntries := []ShopEntry{
 		{
 			ShopEntryID:  developmentShopEntryID,
 			ItemID:       developmentSeedItemID,
@@ -330,15 +445,46 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 			PriceVersion: developmentFertilizerPriceVersion,
 			Enabled:      true,
 		},
-	}, []CropConfig{{
-		SeedItemID: developmentSeedItemID, CropID: developmentCropID,
+		{
+			ShopEntryID:  developmentPetFoodShopEntryID,
+			ItemID:       developmentPetFoodItemID,
+			UnitPrice:    developmentPetFoodUnitPrice,
+			PriceVersion: developmentPetFoodPriceVersion,
+			Enabled:      true,
+		},
+	}
+	crops := []CropConfig{{
+		Name: "演示作物", SeedItemID: developmentSeedItemID, CropID: developmentCropID,
 		CropItemID: developmentCropItemID, ConfigVersion: ServerConfigVersion,
 		MaturityValueScaled9:  developmentMaturityScaled9,
 		BaseGrowthRateScaled6: developmentGrowthRateScaled6,
 		BaseYield:             developmentBaseYield, Enabled: true,
 		StealQuantity: developmentStealQuantity, MaxStealTimes: developmentMaxStealTimes,
 		ProtectedOwnerYield: developmentProtectedOwnerYield,
-	}}, []FertilizerConfig{{
+	}}
+	sellRules := []SellRule{{
+		ShopEntryID: developmentSellEntryID, ItemID: developmentCropItemID,
+		UnitPrice:    developmentCropSellUnitPrice,
+		PriceVersion: developmentCropSellPriceVersion, Enabled: true,
+	}}
+	for _, def := range developmentExtraCrops() {
+		shopEntries = append(shopEntries, ShopEntry{
+			ShopEntryID: def.SeedShopEntryID, ItemID: def.SeedItemID,
+			UnitPrice: def.SeedPrice, PriceVersion: def.SeedPriceVersion, Enabled: true,
+		})
+		crops = append(crops, CropConfig{
+			Name: def.Name, SeedItemID: def.SeedItemID, CropID: def.CropID,
+			CropItemID: def.CropItemID, ConfigVersion: ServerConfigVersion,
+			MaturityValueScaled9: def.MaturityScaled9, BaseGrowthRateScaled6: developmentGrowthRateScaled6,
+			BaseYield: def.BaseYield, Enabled: true,
+		})
+		sellRules = append(sellRules, SellRule{
+			ShopEntryID: def.SellShopEntryID, ItemID: def.CropItemID,
+			UnitPrice: developmentCropSellUnitPrice, PriceVersion: developmentCropSellPriceVersion,
+			Enabled: true,
+		})
+	}
+	snapshot, err := NewConfigSnapshotWithPets(ServerConfigVersion, shopEntries, crops, []FertilizerConfig{{
 		ItemID: BasicFertilizerID, ConfigVersion: ServerConfigVersion,
 		ModifierScaled6: developmentFertilizerModifierScaled6,
 		DurationMS:      developmentFertilizerDurationMS, Enabled: true,
@@ -346,11 +492,25 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 		PestID: developmentPestID, ConfigVersion: ServerConfigVersion,
 		ModifierScaled6: developmentPestModifierScaled6,
 		DurationMS:      developmentPestDurationMS, Enabled: true,
-	}}, []SellRule{{
-		ShopEntryID: developmentSellEntryID, ItemID: developmentCropItemID,
-		UnitPrice:    developmentCropSellUnitPrice,
-		PriceVersion: developmentCropSellPriceVersion, Enabled: true,
-	}}, []ChapterConfig{
+	}}, []PetConfig{
+		{
+			PetID: developmentVillageDogPetID, Name: "田园犬",
+			PriceCoins: developmentVillageDogPriceCoins,
+			GuardProbabilityBPS: developmentPetGuardProbabilityBPS,
+			GuardPenaltyCoins:   developmentVillageDogPenaltyCoins,
+			ConfigVersion:       ServerConfigVersion, Enabled: true,
+		},
+		{
+			PetID: developmentShepherdDogPetID, Name: "牧羊犬",
+			PriceCoins: developmentShepherdDogPriceCoins,
+			GuardProbabilityBPS: developmentPetGuardProbabilityBPS,
+			GuardPenaltyCoins:   developmentShepherdDogPenaltyCoins,
+			ConfigVersion:       ServerConfigVersion, Enabled: true,
+		},
+	}, []PetFoodConfig{{
+		ItemID: developmentPetFoodItemID, DurationSeconds: developmentPetFoodDurationSeconds,
+		ConfigVersion: ServerConfigVersion, Enabled: true,
+	}}, sellRules, []ChapterConfig{
 		{
 			ChapterID: InitialChapterID, ConfigVersion: ServerConfigVersion,
 			Tasks: []Task{
@@ -416,6 +576,52 @@ func (c *ConfigSnapshot) Pest(pestID uint32) (PestConfig, bool) {
 	}
 	pest, exists := c.pests[pestID]
 	return pest, exists
+}
+
+func (c *ConfigSnapshot) Pet(petID uint32) (PetConfig, bool) {
+	if c == nil {
+		return PetConfig{}, false
+	}
+	pet, exists := c.pets[petID]
+	return pet, exists
+}
+
+func (c *ConfigSnapshot) PetFood(itemID uint32) (PetFoodConfig, bool) {
+	if c == nil {
+		return PetFoodConfig{}, false
+	}
+	food, exists := c.petFood[itemID]
+	return food, exists
+}
+
+func (c *ConfigSnapshot) ActivePets() []PetConfig {
+	if c == nil {
+		return nil
+	}
+	ids := make([]int, 0, len(c.pets))
+	for id, pet := range c.pets {
+		if pet.Enabled {
+			ids = append(ids, int(id))
+		}
+	}
+	sort.Ints(ids)
+	out := make([]PetConfig, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, c.pets[uint32(id)])
+	}
+	return out
+}
+
+func (c *ConfigSnapshot) PrimaryPetFood() (PetFoodConfig, ShopEntry, bool) {
+	if c == nil {
+		return PetFoodConfig{}, ShopEntry{}, false
+	}
+	for _, entry := range c.shopEntries {
+		if food, exists := c.petFood[entry.ItemID]; exists && food.Enabled && entry.Enabled {
+			return food, entry, true
+		}
+	}
+	return PetFoodConfig{}, ShopEntry{}, false
 }
 
 func (c *ConfigSnapshot) SellRule(itemID uint32) (SellRule, bool) {
@@ -495,4 +701,66 @@ func (c *ConfigSnapshot) ActiveShopEntries() []*wsv1.ShopEntryView {
 		entries = append(entries, views[uint32(id)])
 	}
 	return entries
+}
+
+func (c *ConfigSnapshot) CropByID(cropID uint32) (CropConfig, bool) {
+	if c == nil {
+		return CropConfig{}, false
+	}
+	for _, crop := range c.cropsBySeed {
+		if crop.CropID == cropID {
+			return crop, true
+		}
+	}
+	return CropConfig{}, false
+}
+
+func (c *ConfigSnapshot) shopEntryForItem(itemID uint32) (ShopEntry, bool) {
+	if c == nil {
+		return ShopEntry{}, false
+	}
+	for _, entry := range c.shopEntries {
+		if entry.ItemID == itemID && entry.Enabled {
+			return entry, true
+		}
+	}
+	return ShopEntry{}, false
+}
+
+// ActiveCropCatalog 按 crop_id 升序返回启用作物目录，供商店与图鉴展示。
+func (c *ConfigSnapshot) ActiveCropCatalog() []*wsv1.CropCatalogEntryView {
+	if c == nil {
+		return nil
+	}
+	ids := make([]int, 0, len(c.cropsBySeed))
+	byID := make(map[uint32]CropConfig, len(c.cropsBySeed))
+	for _, crop := range c.cropsBySeed {
+		if !crop.Enabled {
+			continue
+		}
+		ids = append(ids, int(crop.CropID))
+		byID[crop.CropID] = crop
+	}
+	sort.Ints(ids)
+	out := make([]*wsv1.CropCatalogEntryView, 0, len(ids))
+	for _, id := range ids {
+		crop := byID[uint32(id)]
+		entry := &wsv1.CropCatalogEntryView{
+			CropId: crop.CropID, Name: crop.Name,
+			SeedItemId: crop.SeedItemID, CropItemId: crop.CropItemID,
+			MaturitySeconds: uint64(crop.MaturityValueScaled9 / 1_000_000_000),
+			BaseYield:       crop.BaseYield,
+		}
+		if shop, ok := c.shopEntryForItem(crop.SeedItemID); ok {
+			entry.SeedUnitPrice = shop.UnitPrice
+			entry.SeedPriceVersion = shop.PriceVersion
+			entry.SeedShopEntryId = shop.ShopEntryID
+		}
+		if sell, ok := c.SellRule(crop.CropItemID); ok {
+			entry.SellUnitPrice = sell.UnitPrice
+			entry.SellPriceVersion = sell.PriceVersion
+		}
+		out = append(out, entry)
+	}
+	return out
 }

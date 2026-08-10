@@ -22,24 +22,23 @@ func newRecordingFarmViewBroadcaster() *recordingFarmViewBroadcaster {
 	return &recordingFarmViewBroadcaster{done: make(chan struct{}, 16)}
 }
 
-func (b *recordingFarmViewBroadcaster) Broadcast(
-	_ context.Context, ownerPlayerID uint64, patch *wsv1.FarmViewPatch,
-) error {
+func (b *recordingFarmViewBroadcaster) Enqueue(ownerPlayerID uint64, patch *wsv1.FarmViewPatch) {
 	b.mu.Lock()
 	b.calls++
 	b.last = patch
 	b.ownerID = ownerPlayerID
 	b.mu.Unlock()
 	b.done <- struct{}{}
-	return nil
 }
+
+func (b *recordingFarmViewBroadcaster) Close() {}
 
 func (b *recordingFarmViewBroadcaster) waitForCall(t *testing.T) {
 	t.Helper()
 	select {
 	case <-b.done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for FarmViewBroadcaster.Broadcast")
+		t.Fatal("timed out waiting for FarmViewDispatcher.Enqueue")
 	}
 }
 
@@ -54,7 +53,7 @@ func TestBuySeedsDoesNotBumpFarmViewSeq(t *testing.T) {
 	broadcaster := newRecordingFarmViewBroadcaster()
 	runtime := NewRuntime()
 	defer runtime.Close()
-	if err := runtime.SetFarmViewBroadcaster(broadcaster); err != nil {
+	if err := runtime.SetFarmViewDispatcher(broadcaster); err != nil {
 		t.Fatal(err)
 	}
 
@@ -82,7 +81,7 @@ func TestPlantBumpsFarmViewSeqAndBroadcastsPatch(t *testing.T) {
 	broadcaster := newRecordingFarmViewBroadcaster()
 	runtime := NewRuntime()
 	defer runtime.Close()
-	if err := runtime.SetFarmViewBroadcaster(broadcaster); err != nil {
+	if err := runtime.SetFarmViewDispatcher(broadcaster); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,7 +133,7 @@ func TestHarvestAndCleanPlotEachBumpFarmViewSeqOnce(t *testing.T) {
 	runtime := NewRuntime()
 	runtime.now = func() time.Time { return fixedNow }
 	defer runtime.Close()
-	if err := runtime.SetFarmViewBroadcaster(broadcaster); err != nil {
+	if err := runtime.SetFarmViewDispatcher(broadcaster); err != nil {
 		t.Fatal(err)
 	}
 
@@ -185,7 +184,7 @@ func TestHarvestAndCleanPlotEachBumpFarmViewSeqOnce(t *testing.T) {
 	}
 }
 
-func TestRuntimeWorksWithoutFarmViewBroadcasterConfigured(t *testing.T) {
+func TestRuntimeWorksWithoutFarmViewDispatcherConfigured(t *testing.T) {
 	const playerID = uint64(42)
 	runtime := NewRuntime()
 	defer runtime.Close()

@@ -53,7 +53,30 @@ func (s *TcaplusDurableCheckpointStore) Create(
 	ctx context.Context,
 	checkpoint *datav1.PlayerCheckpointV1,
 ) (CheckpointWriteResult, error) {
-	return s.checkpoints.Create(ctx, checkpoint)
+	return s.CreateInitial(ctx, checkpoint)
+}
+
+// CreateInitial 先校验当前 Zone 仍是 Shard Fence Owner，再 Insert-if-absent。
+func (s *TcaplusDurableCheckpointStore) CreateInitial(
+	ctx context.Context,
+	checkpoint *datav1.PlayerCheckpointV1,
+) (CheckpointWriteResult, error) {
+	if checkpoint == nil {
+		return CheckpointWriteResult{Status: CheckpointWriteCorruptConflict},
+			errors.New("checkpoint is required")
+	}
+	fence := &tcaplusv1.ShardFence{
+		LogicalShardId: checkpoint.LogicalShardId,
+	}
+	if err := s.client.DoGet(fence, &option.PBOpt{Ctx: ctx}, s.zoneID); err != nil {
+		return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+			fmt.Errorf("load Tcaplus create fence: %w", err)
+	}
+	if fence.OwnerZoneId != s.ownerZoneID ||
+		fence.OwnerEpoch != checkpoint.OwnerEpoch {
+		return CheckpointWriteResult{Status: CheckpointWriteFenced}, nil
+	}
+	return s.checkpoints.CreateInitial(ctx, checkpoint)
 }
 
 func (s *TcaplusDurableCheckpointStore) Load(

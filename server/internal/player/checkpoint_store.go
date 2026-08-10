@@ -60,6 +60,19 @@ type CheckpointStore interface {
 	SaveCAS(context.Context, CheckpointWrite) (CheckpointWriteResult, error)
 }
 
+// InitialCheckpointStore 在明确 NotFound 时由 Owner Zone 创建初始农田。
+// 不并入 CheckpointStore，避免所有 fake Store 被迫实现创建语义。
+type InitialCheckpointStore interface {
+	CreateInitial(
+		context.Context,
+		*datav1.PlayerCheckpointV1,
+	) (CheckpointWriteResult, error)
+}
+
+var ErrInitialCheckpointUnsupported = errors.New(
+	"checkpoint store does not support CreateInitial for new players",
+)
+
 func cloneStoreToken(token StoreToken) StoreToken {
 	return append(StoreToken(nil), token...)
 }

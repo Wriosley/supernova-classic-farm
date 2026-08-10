@@ -34,6 +34,7 @@ import {
   selectGateway,
 } from './lib/http'
 import { bytesEqual } from './lib/hash'
+import { decideFarmViewPatch } from './lib/farm-view'
 import { mutationResponsePatch } from './lib/mutation-response'
 import { FarmWebSocket } from './lib/ws'
 import FarmDashboard, {
@@ -41,6 +42,13 @@ import FarmDashboard, {
   type FarmActionRequest,
 } from './components/FarmDashboard.vue'
 import FriendFarmDashboard from './components/FriendFarmDashboard.vue'
+import PetPanel from './components/PetPanel.vue'
+import PlayerProfileModal from './components/PlayerProfileModal.vue'
+import type {
+  CropCatalogEntryView,
+  PetPanelView,
+  PetShopEntryView,
+} from './gen/classicfarm/v1/ws/ws_pb'
 
 type Phase =
   | 'idle'
@@ -104,6 +112,8 @@ const pushCount = ref(0)
 const gapRecoveryCount = ref(0)
 const lastPushReason = ref<number>()
 const shopEntries = ref<ShopEntryView[]>([])
+const cropCatalog = ref<CropCatalogEntryView[]>([])
+const profileOpen = ref(false)
 const busyAction = ref<FarmActionRequest>()
 const actionMessage = ref('')
 const actionError = ref('')
@@ -143,6 +153,13 @@ const stealBusyPlotId = ref<number>()
 const stealError = ref('')
 const stealMessage = ref('')
 const presenceNotice = ref('')
+const petPanel = ref<PetPanelView | null>(null)
+const petBusyBuyId = ref<number | null>(null)
+const petBusyDeployId = ref<number | null>(null)
+const petBusyBuyFood = ref(false)
+const petBusyFeed = ref(false)
+const petError = ref('')
+const petMessage = ref('')
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let presenceNoticeTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -186,6 +203,11 @@ function clearResult(): void {
   gapRecoveryCount.value = 0
   lastPushReason.value = undefined
   shopEntries.value = []
+  cropCatalog.value = []
+  profileOpen.value = false
+  petPanel.value = null
+  petError.value = ''
+  petMessage.value = ''
   busyAction.value = undefined
   actionMessage.value = ''
   actionError.value = ''
@@ -228,6 +250,8 @@ function applyPatch(current: PlayerSnapshot, patch: PlayerStatePatch): PlayerSna
     inventory: [...inventory.values()].sort((left, right) => left.itemId - right.itemId),
     plots: [...plots.values()].sort((left, right) => left.plotId - right.plotId),
     currentChapter: patch.currentChapter ?? current.currentChapter,
+    career: patch.career ?? current.career,
+    cropCompendium: patch.cropCompendium ?? current.cropCompendium,
   }
 }
 
@@ -265,6 +289,153 @@ async function refreshShop(): Promise<void> {
     throw new Error('商店响应 payload 无效')
   }
   shopEntries.value = response.payload.value.entries
+  cropCatalog.value = response.payload.value.crops
+}
+
+async function refreshPetPanel(): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected) {
+    return
+  }
+  const response = await socket.requestPetPanel(playerId)
+  setServerClock(response.serverTimeMs)
+  if (response.error) {
+    petError.value = describeWsError(response.error)
+    return
+  }
+  if (response.payload.case !== 'getPetPanelResponse') {
+    petError.value = '宠物面板响应无效'
+    return
+  }
+  petPanel.value = response.payload.value.panel ?? null
+  petError.value = ''
+}
+
+function applyPetPanelFromResponse(response: WsEnvelope): void {
+  switch (response.payload.case) {
+    case 'buyPetResponse':
+    case 'deployPetResponse':
+    case 'buyPetFoodResponse':
+    case 'feedPetResponse':
+      if (response.payload.value.panel) {
+        petPanel.value = response.payload.value.panel
+      }
+      break
+  }
+}
+
+async function buyPet(pet: PetShopEntryView): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected || petBusyBuyId.value !== null) {
+    return
+  }
+  petBusyBuyId.value = pet.petId
+  petError.value = ''
+  petMessage.value = ''
+  try {
+    const response = await socket.buyPet(playerId, pet.petId, pet.configVersion)
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    if (response.payload.case !== 'buyPetResponse') {
+      throw new Error('购买宠物响应无效')
+    }
+    await acceptMutationResponse(response)
+    applyPetPanelFromResponse(response)
+    petMessage.value = `已购买${pet.name}`
+  } catch (error) {
+    petError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    petBusyBuyId.value = null
+  }
+}
+
+async function deployPet(petId: number): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected || petBusyDeployId.value !== null) {
+    return
+  }
+  petBusyDeployId.value = petId
+  petError.value = ''
+  petMessage.value = ''
+  try {
+    const response = await socket.deployPet(playerId, petId)
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    if (response.payload.case !== 'deployPetResponse') {
+      throw new Error('派出宠物响应无效')
+    }
+    await acceptMutationResponse(response)
+    applyPetPanelFromResponse(response)
+    petMessage.value = '已更新出战宠物'
+  } catch (error) {
+    petError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    petBusyDeployId.value = null
+  }
+}
+
+async function buyPetFood(): Promise<void> {
+  const playerId = session.value?.playerId
+  const food = petPanel.value?.petFood
+  if (!playerId || !socket.connected || !food || petBusyBuyFood.value) {
+    return
+  }
+  petBusyBuyFood.value = true
+  petError.value = ''
+  petMessage.value = ''
+  try {
+    const response = await socket.buyPetFood(
+      playerId,
+      food.shopEntryId,
+      1,
+      food.priceVersion,
+    )
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    if (response.payload.case !== 'buyPetFoodResponse') {
+      throw new Error('购买狗粮响应无效')
+    }
+    await acceptMutationResponse(response)
+    applyPetPanelFromResponse(response)
+    petMessage.value = '已购买 1 份狗粮'
+  } catch (error) {
+    petError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    petBusyBuyFood.value = false
+  }
+}
+
+async function feedPet(): Promise<void> {
+  const playerId = session.value?.playerId
+  if (!playerId || !socket.connected || petBusyFeed.value) {
+    return
+  }
+  petBusyFeed.value = true
+  petError.value = ''
+  petMessage.value = ''
+  try {
+    const response = await socket.feedPet(playerId)
+    setServerClock(response.serverTimeMs)
+    if (response.error) {
+      throw new Error(describeWsError(response.error))
+    }
+    if (response.payload.case !== 'feedPetResponse') {
+      throw new Error('喂食响应无效')
+    }
+    await acceptMutationResponse(response)
+    applyPetPanelFromResponse(response)
+    petMessage.value = '喂食成功，狗粮有效期已延长'
+  } catch (error) {
+    petError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    petBusyFeed.value = false
+  }
 }
 
 function describeWsError(error: WsError): string {
@@ -299,6 +470,10 @@ function describeWsError(error: WsError): string {
     [ErrorCode.PEST_ALREADY_PRESENT]: '地块上已有害虫',
     [ErrorCode.PEST_SOURCE_FORBIDDEN]: '不能捉自己投下的虫',
     [ErrorCode.INSUFFICIENT_ACTION_CHANCE]: '互动机会不足',
+    [ErrorCode.PET_NOT_FOUND]: '宠物不存在',
+    [ErrorCode.PET_ALREADY_OWNED]: '已经拥有该宠物',
+    [ErrorCode.PET_NOT_OWNED]: '尚未拥有该宠物',
+    [ErrorCode.PET_DISABLED]: '该宠物暂不可用',
   }
   return labels[error.code] ?? `WebSocket 错误 ${error.code}`
 }
@@ -627,6 +802,16 @@ async function runFriendAction(
     if (currentSnapshot && patch) {
       snapshot.value = applyPatch(currentSnapshot, patch)
     }
+    if (action === 'steal') {
+      const guard = response.payload.value.stealGuard
+      if (guard?.guardTriggered) {
+        const penalty = guard.guardPenaltyApplied
+        successMessage =
+          penalty > 0n
+            ? `偷菜成功，但你偷菜被狗咬了，被罚款 ${penalty} 金币。`
+            : '偷菜成功。'
+      }
+    }
     stealMessage.value = successMessage
   } catch (error) {
     stealError.value = error instanceof Error ? error.message : String(error)
@@ -742,13 +927,19 @@ async function runFarmAction(request: FarmActionRequest): Promise<void> {
     let response: WsEnvelope
     switch (action) {
       case 'buy': {
-        const quote = shopEntries.value.find((entry) => entry.itemId === 1001)
+        const quote =
+          (request.shopEntryId
+            ? shopEntries.value.find((entry) => entry.shopEntryId === request.shopEntryId)
+            : undefined) ??
+          (request.seedItemId
+            ? shopEntries.value.find((entry) => entry.itemId === request.seedItemId)
+            : undefined)
         if (!quote) throw new Error('种子报价尚未加载')
         response = await socket.buySeeds(
           playerId,
           quote.shopEntryId,
           request.quantity ?? 1,
-          quote.priceVersion,
+          request.priceVersion ?? quote.priceVersion,
         )
         break
       }
@@ -763,9 +954,14 @@ async function runFarmAction(request: FarmActionRequest): Promise<void> {
         )
         break
       }
-      case 'plant':
-        response = await socket.plant(playerId, plotId!, 1001)
+      case 'plant': {
+        const seedItemId = request.seedItemId
+        if (!seedItemId) {
+          throw new Error('未选择种子')
+        }
+        response = await socket.plant(playerId, plotId!, seedItemId)
         break
+      }
       case 'fertilize':
         response = await socket.applyFertilizer(playerId, plotId!, 1)
         break
@@ -773,15 +969,23 @@ async function runFarmAction(request: FarmActionRequest): Promise<void> {
         response = await socket.harvest(playerId, plotId!)
         break
       case 'sell': {
-        const quote = shopEntries.value.find((entry) => entry.itemId === 1002)
-        if (!quote) throw new Error('作物收购报价尚未加载')
+        const cropItemId = request.cropItemId
+        if (!cropItemId) {
+          throw new Error('未选择出售作物')
+        }
+        const priceVersion =
+          request.priceVersion ??
+          cropCatalog.value.find((crop) => crop.cropItemId === cropItemId)?.sellPriceVersion
+        if (priceVersion === undefined) {
+          throw new Error('作物收购报价尚未加载')
+        }
         response = request.sellAll
-          ? await socket.sellAll(playerId, 1002, quote.priceVersion)
+          ? await socket.sellAll(playerId, cropItemId, priceVersion)
           : await socket.sellQuantity(
               playerId,
-              1002,
+              cropItemId,
               request.quantity ?? 1,
-              quote.priceVersion,
+              priceVersion,
             )
         break
       }
@@ -888,19 +1092,18 @@ function handleFarmViewChanged(envelope: WsEnvelope): void {
   const currentSnapshot = visitSnapshot.value
   const currentVersion = currentSnapshot?.version
   const nextVersion = patch.version
-  if (!currentSnapshot || !currentVersion || !nextVersion) {
+  const decision = decideFarmViewPatch({
+    hasCurrentSnapshot: Boolean(currentSnapshot),
+    currentEpoch: currentVersion?.farmViewEpoch,
+    currentSeq: currentVersion?.farmViewSeq,
+    nextEpoch: nextVersion?.farmViewEpoch,
+    nextSeq: nextVersion?.farmViewSeq,
+  })
+  if (decision.action === 'resync') {
     void enterFriendFarm(ownerId)
     return
   }
-  if (!bytesEqual(nextVersion.farmViewEpoch, currentVersion.farmViewEpoch)) {
-    void enterFriendFarm(ownerId)
-    return
-  }
-  if (nextVersion.farmViewSeq <= currentVersion.farmViewSeq) {
-    return
-  }
-  if (nextVersion.farmViewSeq !== currentVersion.farmViewSeq + 1n) {
-    void enterFriendFarm(ownerId)
+  if (decision.action === 'ignore' || !currentSnapshot) {
     return
   }
   visitSnapshot.value = applyFarmViewPatch(currentSnapshot, patch)
@@ -1076,6 +1279,7 @@ async function establishSnapshot(): Promise<void> {
   }
   snapshot.value = response.payload.value.snapshot
   await refreshShop()
+  await refreshPetPanel()
   phase.value = 'ready'
   await loadFriends()
   // Reload restores only the Session cookie; visit leases die with the old
@@ -1247,6 +1451,7 @@ onBeforeUnmount(() => {
       v-if="visiting"
       :snapshot="visitSnapshot"
       :owner-label="visitOwnerLabel"
+      :crop-catalog="cropCatalog"
       :connected="socket.connected"
       :busy="visitBusy"
       :steal-busy-plot-id="stealBusyPlotId"
@@ -1258,17 +1463,30 @@ onBeforeUnmount(() => {
       @catch="catchPestForFriend"
       @clean="helpCleanFriendPlot"
       @exit="exitFriendFarm"
+      @open-profile="profileOpen = true"
     />
     <FarmDashboard
       v-else-if="snapshot"
       :snapshot="snapshot"
+      :owner-label="session?.accountName || '我的农场'"
       :shop-entries="shopEntries"
+      :crop-catalog="cropCatalog"
       :connected="socket.connected"
       :busy-action="busyAction"
       :action-message="actionMessage"
       :action-error="actionError"
       :now-ms="nowMs"
       @action="runFarmAction"
+      @open-profile="profileOpen = true"
+    />
+    <PlayerProfileModal
+      :open="profileOpen"
+      :title="visiting ? `${visitOwnerLabel} 的资料` : `${session?.accountName || '我'} 的资料`"
+      :career="visiting ? visitSnapshot?.career : snapshot?.career"
+      :catalog="cropCatalog"
+      :compendium="visiting ? null : snapshot?.cropCompendium"
+      :show-compendium="!visiting"
+      @close="profileOpen = false"
     />
 
     <section class="card auth-card" aria-labelledby="auth-title">
@@ -1408,6 +1626,24 @@ onBeforeUnmount(() => {
         </article>
       </div>
       <p v-else class="empty-state">完成认证后，这里展示 Actor 返回的最小玩家投影。</p>
+    </section>
+
+    <section v-if="snapshot" class="card pet-card" aria-labelledby="pet-title">
+      <PetPanel
+        :panel="petPanel"
+        :now-ms="nowMs"
+        :busy-buy-pet-id="petBusyBuyId"
+        :busy-deploy-pet-id="petBusyDeployId"
+        :busy-buy-food="petBusyBuyFood"
+        :busy-feed="petBusyFeed"
+        :error="petError"
+        :message="petMessage"
+        @buy-pet="buyPet"
+        @deploy-pet="deployPet"
+        @buy-food="buyPetFood"
+        @feed="feedPet"
+        @refresh="refreshPetPanel"
+      />
     </section>
 
     <section v-if="snapshot" class="card friends-card" aria-labelledby="friends-title">

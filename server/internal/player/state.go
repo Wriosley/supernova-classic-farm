@@ -81,6 +81,13 @@ type State struct {
 	FriendReservations       []*datav1.FriendResourceReservation
 	FriendReceipts           []*datav1.FriendInteractionReceipt
 	FriendTaskCreditReceipts []*datav1.FriendTaskCreditReceipt
+
+	// PetState 新玩家为空：无宠物、未出战、从未喂食。
+	PetState *datav1.PetStateRecord
+
+	// Career / CropCompendium 旧 Checkpoint 缺字段时按零值处理，不做历史回填。
+	Career         *datav1.PlayerCareerRecord
+	CropCompendium *datav1.CropCompendiumRecord
 }
 
 // NewDevelopmentState is a lazy, in-memory development adapter. It is not
@@ -168,6 +175,8 @@ func (s *State) Snapshot() *wsv1.PlayerSnapshot {
 			Tasks:     taskViews,
 		},
 		ServerConfigVersion: s.ConfigVersion,
+		Career:              careerView(s),
+		CropCompendium:      compendiumView(s),
 	}
 }
 

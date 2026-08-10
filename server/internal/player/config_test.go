@@ -77,18 +77,37 @@ func TestConfigSnapshotRejectsInvalidAndDuplicateSellRules(t *testing.T) {
 }
 
 func TestDevelopmentShopIncludesSeedCropAndFertilizerQuotesInStableOrder(t *testing.T) {
-	entries := NewDevelopmentConfigSnapshot().ActiveShopEntries()
-	if len(entries) != 3 ||
-		entries[0].GetShopEntryId() != developmentShopEntryID ||
+	cfg := NewDevelopmentConfigSnapshot()
+	entries := cfg.ActiveShopEntries()
+	if len(entries) < 4 {
+		t.Fatalf("expected at least base shop entries, got %d", len(entries))
+	}
+	if entries[0].GetShopEntryId() != developmentShopEntryID ||
 		entries[1].GetShopEntryId() != developmentSellEntryID ||
-		entries[1].GetItemId() != developmentCropItemID ||
-		entries[1].GetUnitPrice() != developmentCropSellUnitPrice ||
-		entries[1].GetPriceVersion() != developmentCropSellPriceVersion ||
 		entries[2].GetShopEntryId() != developmentFertilizerShopEntryID ||
-		entries[2].GetItemId() != BasicFertilizerID ||
-		entries[2].GetUnitPrice() != developmentFertilizerUnitPrice ||
-		entries[2].GetPriceVersion() != developmentFertilizerPriceVersion {
-		t.Fatalf("development shop entries = %+v", entries)
+		entries[3].GetShopEntryId() != developmentPetFoodShopEntryID {
+		t.Fatalf("base shop entries order = %+v", entries[:4])
+	}
+	crops := cfg.ActiveCropCatalog()
+	if len(crops) != 11 {
+		t.Fatalf("crop catalog size = %d, want 11", len(crops))
+	}
+	if crops[0].GetCropId() != developmentCropID || crops[0].GetName() == "" {
+		t.Fatalf("first crop = %+v", crops[0])
+	}
+	if crops[1].GetName() != "胡萝卜" || crops[1].GetMaturitySeconds() != 60 ||
+		crops[1].GetSeedUnitPrice() != 3 {
+		t.Fatalf("carrot crop = %+v", crops[1])
+	}
+	if crops[10].GetName() != "葡萄" || crops[10].GetBaseYield() != 6 {
+		t.Fatalf("grape crop = %+v", crops[10])
+	}
+	if _, _, ok := cfg.SoleStealableCrop(); !ok {
+		t.Fatal("original crop must remain the sole stealable crop")
+	}
+	cropItemID, qty, ok := cfg.SoleStealableCrop()
+	if !ok || cropItemID != developmentCropItemID || qty != developmentStealQuantity {
+		t.Fatalf("SoleStealableCrop = %d qty=%d ok=%v", cropItemID, qty, ok)
 	}
 }
 

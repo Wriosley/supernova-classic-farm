@@ -175,7 +175,7 @@ HTTP 状态映射：
 
 `RegisterResponse` 的 Tag 1 是 `session`（`SessionView`）。
 
-注册先将账号名规范为小写，再检查唯一性。注册结果对外必须是原子的：只有账号已经处于 `ACTIVE` 状态、初始 Player 检查点及已接受的初始农场资源已经持久化，并且返回的 Session 有效时，才允许返回 201。任何失败都不得向 H5 暴露可用的部分配置账号或 Session。内部处于部分配置状态的账号不得通过认证或 Session 检查暴露，其配置过程必须可以安全重试和对账修复。
+注册先将账号名规范为小写，再检查唯一性。注册结果对外必须是原子的：只有账号已经处于 `ACTIVE` 状态并且返回的 Session 有效时，才允许返回 201。初始 Player 检查点 / 农田资源不由 LoginSvr 创建；由当前 Owner Zone 在 Player Actor 首次激活且 Load 返回 NotFound 时创建。任何失败都不得向 H5 暴露可用的部分配置账号或 Session。内部处于部分配置状态的账号不得通过认证或 Session 检查暴露，其配置过程必须可以安全重试和对账修复。
 
 当账号和 Player 记录同库放置时，本地原型可以用一个 MySQL 事务满足该保证。生产部署如果把账号和 Player 分到不同 Shard，必须使用另行定义的幂等 Provisioning 状态机、Outbox 和对账语义；本 HTTP 契约不要求也不暗示这些数据库共享一个本地事务。
 
@@ -379,7 +379,7 @@ Ticket 签发成功不代表 WebSocket 已认证。仍必须按照 `websocket-pr
 实现测试必须证明：
 
 1. Go 与 TypeScript 生成类型可以往返每种 HTTP 消息，并拒绝格式错误、尾随、超限和 Content-Type 错误的 Body。
-2. 只有账号已经 ACTIVE、初始 Player 检查点/资源已经持久化且 Session 有效时，注册才返回 201；并发同名注册对外只暴露一个可用账号。
+2. 只有账号已经 ACTIVE 且 Session 有效时，注册才返回 201；农田 Checkpoint 初始化推迟到 Owner Zone 首次激活；并发同名注册对外只暴露一个可用账号。
 3. 在每个 Provisioning 步骤注入故障时，都不会暴露可认证的部分账号或可用 Session；重试/对账最终收敛且不会重复初始化 Player；同库事务路径和模拟的分 Shard 状态机/Outbox 路径都满足同一对外保证。
 4. 密码从不以明文存储/记录；Argon2id 参数、独立 Salt、Dummy Verification 和登录时升级正常。
 5. 未知账号、错误密码、禁用账号和非 ACTIVE Provisioning 状态返回同一个通用失败，不存在有意义的人为时间差。

@@ -168,9 +168,16 @@ func (s *TcaplusCheckpointStore) Load(
 }
 
 // Create inserts the initial checkpoint only when the player key is absent.
-// It is intentionally concrete-store API because activation never creates a
-// missing player implicitly.
+// Prefer CreateInitial on Zone paths that must also honor Fence ownership.
 func (s *TcaplusCheckpointStore) Create(
+	ctx context.Context,
+	checkpoint *datav1.PlayerCheckpointV1,
+) (CheckpointWriteResult, error) {
+	return s.CreateInitial(ctx, checkpoint)
+}
+
+// CreateInitial 仅在 player key 不存在时 Insert；禁止覆盖已有存档。
+func (s *TcaplusCheckpointStore) CreateInitial(
 	ctx context.Context,
 	checkpoint *datav1.PlayerCheckpointV1,
 ) (CheckpointWriteResult, error) {

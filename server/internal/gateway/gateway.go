@@ -347,6 +347,26 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 		if request.TargetPlayerId == 0 || request.GetClaimChapterRewardRequest() == nil {
 			return errors.New("invalid claim request")
 		}
+	case wsv1.Action_GET_PET_PANEL:
+		if request.TargetPlayerId == 0 || request.GetGetPetPanelRequest() == nil {
+			return errors.New("invalid get pet panel request")
+		}
+	case wsv1.Action_BUY_PET:
+		if request.TargetPlayerId == 0 || request.GetBuyPetRequest() == nil {
+			return errors.New("invalid buy pet request")
+		}
+	case wsv1.Action_DEPLOY_PET:
+		if request.TargetPlayerId == 0 || request.GetDeployPetRequest() == nil {
+			return errors.New("invalid deploy pet request")
+		}
+	case wsv1.Action_BUY_PET_FOOD:
+		if request.TargetPlayerId == 0 || request.GetBuyPetFoodRequest() == nil {
+			return errors.New("invalid buy pet food request")
+		}
+	case wsv1.Action_FEED_PET:
+		if request.TargetPlayerId == 0 || request.GetFeedPetRequest() == nil {
+			return errors.New("invalid feed pet request")
+		}
 	case wsv1.Action_CREATE_FRIEND_CODE:
 		if request.TargetPlayerId == 0 || request.GetCreateFriendCodeRequest() == nil {
 			return errors.New("invalid create friend code request")

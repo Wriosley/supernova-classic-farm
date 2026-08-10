@@ -9,6 +9,10 @@ export function mutationResponsePatch(
   switch (response.payload.case) {
     case 'buySeedsResponse':
     case 'buyFertilizerResponse':
+    case 'buyPetResponse':
+    case 'deployPetResponse':
+    case 'buyPetFoodResponse':
+    case 'feedPetResponse':
     case 'plantResponse':
     case 'applyFertilizerResponse':
     case 'harvestResponse':

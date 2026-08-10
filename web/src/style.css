@@ -83,6 +83,58 @@ button:disabled {
   padding: 0.3rem 0.3rem 0;
 }
 
+button.owner-name {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.crop-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.crop-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, #fff 70%, transparent);
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.crop-chip.selected {
+  border-color: color-mix(in srgb, #2f6b3a 55%, transparent);
+  background: color-mix(in srgb, #d9f0dd 70%, #fff);
+  font-weight: 700;
+}
+
+.crop-chip small {
+  opacity: 0.7;
+}
+
+.sell-crop-picker {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.sell-crop-picker select {
+  min-height: 2.2rem;
+  max-width: 100%;
+}
+
 .toolbelt {
   display: flex;
   align-items: center;

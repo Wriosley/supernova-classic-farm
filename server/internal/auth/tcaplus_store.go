@@ -10,10 +10,8 @@ import (
 	"math"
 	"time"
 
-	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
 	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/protocol/option"
 	"google.golang.org/protobuf/proto"
 )
@@ -31,30 +29,26 @@ type tcaplusAuthClient interface {
 	DoUpdate(proto.Message, *option.PBOpt, ...uint32) error
 }
 
-type checkpointCreator interface {
-	Create(context.Context, *datav1.PlayerCheckpointV1) (player.CheckpointWriteResult, error)
-}
-
 type tcaplusAuthStore struct {
-	client      tcaplusAuthClient
-	zoneID      uint32
-	checkpoints checkpointCreator
+	client tcaplusAuthClient
+	zoneID uint32
 }
 
+// NewTcaplusStore 只负责账号身份（Account / PlayerID / Session）。
+// 初始农田 Checkpoint 由 Owner Zone 在 Actor 首次激活时创建。
 func NewTcaplusStore(
 	client tcaplusAuthClient,
 	zoneID uint32,
-	checkpoints checkpointCreator,
 ) (*Store, error) {
-	if client == nil || zoneID == 0 || checkpoints == nil {
-		return nil, errors.New("Tcaplus auth client, zone and checkpoint provisioner are required")
+	if client == nil || zoneID == 0 {
+		return nil, errors.New("Tcaplus auth client and zone are required")
 	}
 	store, err := NewStore()
 	if err != nil {
 		return nil, err
 	}
 	store.durable = &tcaplusAuthStore{
-		client: client, zoneID: zoneID, checkpoints: checkpoints,
+		client: client, zoneID: zoneID,
 	}
 	return store, nil
 }
@@ -109,23 +103,6 @@ func (s *tcaplusAuthStore) register(
 	playerRecord, playerVersion, err := s.ensurePlayerAccount(ctx, account, now)
 	if err != nil {
 		return "", nil, err
-	}
-	checkpoint := player.NewInitialCheckpoint(account.PlayerId, now)
-	fence, _, err := s.loadFence(ctx, checkpoint.LogicalShardId)
-	if err != nil {
-		return "", nil, fmt.Errorf("load registration fence: %w", err)
-	}
-	if fence.OwnerZoneId == "" || fence.OwnerEpoch == 0 {
-		return "", nil, errors.New("registration fence is invalid")
-	}
-	checkpoint.OwnerEpoch = fence.OwnerEpoch
-	created, err := s.checkpoints.Create(ctx, checkpoint)
-	if err != nil ||
-		(created.Status != player.CheckpointWriteApplied &&
-			created.Status != player.CheckpointWriteAlreadyApplied) {
-		return "", nil, fmt.Errorf(
-			"provision Tcaplus checkpoint: status=%d: %w", created.Status, err,
-		)
 	}
 
 	raw, session, sessionErr := newTcaplusSession(account.PlayerId, name, 1, now)
@@ -386,18 +363,6 @@ func (s *tcaplusAuthStore) loadAccountByPlayer(
 	opt := &option.PBOpt{Ctx: ctx}
 	if err := s.client.DoGet(record, opt, s.zoneID); err != nil {
 		return nil, 0, fmt.Errorf("load Tcaplus player account: %w", err)
-	}
-	return record, opt.Version, nil
-}
-
-func (s *tcaplusAuthStore) loadFence(
-	ctx context.Context,
-	shardID uint32,
-) (*tcaplusv1.ShardFence, int32, error) {
-	record := &tcaplusv1.ShardFence{LogicalShardId: shardID}
-	opt := &option.PBOpt{Ctx: ctx}
-	if err := s.client.DoGet(record, opt, s.zoneID); err != nil {
-		return nil, 0, err
 	}
 	return record, opt.Version, nil
 }

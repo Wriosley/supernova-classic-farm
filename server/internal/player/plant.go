@@ -18,10 +18,10 @@ func (r *Runtime) plant(
 	request *wsv1.WsEnvelope,
 	config *ConfigSnapshot,
 	now time.Time,
-) (*wsv1.WsEnvelope, bool) {
+) (*wsv1.WsEnvelope, bool, DomainChanges) {
 	requestID, err := parseRequestID(request.RequestId)
 	if err != nil {
-		return errorEnvelope(request, a.state, now, &wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false
+		return errorEnvelope(request, a.state, now, &wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false, DomainChanges{}
 	}
 	plant := request.GetPlantRequest()
 	fingerprint := plantFingerprint(callerPlayerID, request, plant)
@@ -35,44 +35,44 @@ func (r *Runtime) plant(
 			stored.TargetPlayerId != request.TargetPlayerId ||
 			!bytes.Equal(stored.PayloadFingerprintSha256, fingerprint[:]) {
 			return errorEnvelope(request, a.state, now,
-				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false
+				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false, DomainChanges{}
 		}
-		return replayPlant(request, stored, now), false
+		return replayPlant(request, stored, now), false, DomainChanges{}
 	}
 
 	if plant.PlotId == 0 || plant.SeedItemId == 0 {
 		return r.storePlantFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true, DomainChanges{}
 	}
 	plot, exists := a.state.Plots[plant.PlotId]
 	if !exists {
 		return r.storePlantFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true, DomainChanges{}
 	}
 	if plot.State != plotv1.PlotState_EMPTY {
 		return r.storePlantFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 	crop, exists := config.CropForSeed(plant.SeedItemId)
 	if !exists {
 		return r.storePlantFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true, DomainChanges{}
 	}
 	if !crop.Enabled {
 		return r.storePlantFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_ENTRY_DISABLED}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_ENTRY_DISABLED}), true, DomainChanges{}
 	}
 	seedQuantity := a.state.Inventory[plant.SeedItemId]
 	if seedQuantity == 0 {
 		return r.storePlantFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_ITEM_NOT_OWNED}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_ITEM_NOT_OWNED}), true, DomainChanges{}
 	}
 	estimatedMatureAtMS, err := estimateMatureAtMS(
 		now.UnixMilli(), crop.MaturityValueScaled9, crop.BaseGrowthRateScaled6,
 	)
 	if err != nil {
 		return r.storePlantFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true, DomainChanges{}
 	}
 
 	if seedQuantity == 1 {
@@ -132,7 +132,7 @@ func (r *Runtime) plant(
 		StateVersion: &wsv1.StateVersion{OwnerEpoch: a.state.OwnerEpoch, PlayerSeq: a.state.PlayerSeq},
 		ServerTimeMs: now.UnixMilli(),
 		Payload:      &wsv1.WsEnvelope_PlantResponse{PlantResponse: payload},
-	}, true
+	}, true, DomainChanges{}.PlotChanged(plant.PlotId)
 }
 
 func (r *Runtime) storePlantFailure(

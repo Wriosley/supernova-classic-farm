@@ -232,7 +232,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := runtime.SetFarmViewBroadcaster(farmViewBroadcaster); err != nil {
+	farmViewDispatcher, err := farmview.NewDispatcher(farmViewBroadcaster, logger)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer farmViewDispatcher.Close()
+	if err := runtime.SetFarmViewDispatcher(farmViewDispatcher); err != nil {
 		log.Fatal(err)
 	}
 

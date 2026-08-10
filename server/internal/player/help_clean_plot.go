@@ -58,7 +58,7 @@ func (r *Runtime) ApplyHelpCleanOnOwner(
 		a.state.UpdatedAtMS = now.UnixMilli()
 		mutated = true
 		a.markSyncPending(stepKey, pendingSyncStep{
-			revision: a.state.CheckpointRevision, farmViewPlotIDs: []uint32{plotID},
+			revision: a.state.CheckpointRevision, domainChanges: DomainChanges{}.PlotChanged(plotID),
 		})
 	}); err != nil {
 		return nil, nil, nil, false, fmt.Errorf("execute help clean mailbox: %w", err)
@@ -69,12 +69,12 @@ func (r *Runtime) ApplyHelpCleanOnOwner(
 	if !alreadyApplied && !mutated {
 		return nil, nil, nil, false, errors.New("help clean did not mutate owner state")
 	}
-	plotIDs, err := r.settleSyncStepLocked(ctx, ownerID, a, stepKey)
+	owedChanges, err := r.settleSyncStepLocked(ctx, ownerID, a, stepKey)
 	if err != nil {
 		return nil, nil, nil, false, fmt.Errorf("flush help clean: %w", err)
 	}
-	if len(plotIDs) > 0 {
-		farmPatch = r.notifyPublicPlots(ctx, a, ownerID, plotIDs)
+	if !owedChanges.Empty() {
+		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, owedChanges)
 	}
 	return resultPayload, resultDigest, farmPatch, alreadyApplied, nil
 }

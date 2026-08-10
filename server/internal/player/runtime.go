@@ -28,13 +28,21 @@ var (
 	ErrForbiddenTarget   = errors.New("target player differs from caller")
 	ErrInvalidEnvelope   = errors.New("invalid websocket envelope")
 	ErrUnsupportedAction = errors.New("unsupported action")
+	ErrRuntimeClosed     = errors.New("player runtime is closed")
 )
 
-// FarmViewBroadcaster abstracts farmview.Broadcaster so Runtime never
-// imports package farmview (which itself imports player for *Plot). The one
-// production implementation is *farmview.Broadcaster, wired by cmd/zone.
-type FarmViewBroadcaster interface {
-	Broadcast(ctx context.Context, ownerPlayerID uint64, patch *wsv1.FarmViewPatch) error
+const (
+	actorLifecycleLoading uint32 = iota
+	actorLifecycleReady
+	actorLifecycleFailed
+	actorLifecycleClosing
+)
+
+// FarmViewDispatcher 接收 Actor mailbox 内已构造好的公开农场 Patch。
+// 生产实现是 farmview.Dispatcher；业务路径不得查询访客或调用 Gate Push。
+type FarmViewDispatcher interface {
+	Enqueue(ownerPlayerID uint64, patch *wsv1.FarmViewPatch)
+	Close()
 }
 
 type runtimeActor struct {
@@ -42,6 +50,12 @@ type runtimeActor struct {
 	state             *State
 	persistedRevision uint64
 	persistedToken    StoreToken
+
+	lifecycle     atomic.Uint32
+	activationErr atomic.Value // error; published before Failed is visible
+
+	loadCtx    context.Context
+	loadCancel context.CancelFunc
 
 	// syncPending holds one pendingSyncStep per synchronous Saga step whose
 	// mutation is in this Actor's memory but not yet proven durable (see
@@ -70,9 +84,10 @@ type Runtime struct {
 	dirtyRevision map[uint64]uint64
 	store         CheckpointStore
 	pushForwarder PushForwarder
-	farmView      FarmViewBroadcaster
+	farmView      FarmViewDispatcher
 	config        atomic.Pointer[ConfigSnapshot]
 	now           func() time.Time
+	randBPS       func() uint32 // 可注入；返回值会对 10000 取模用于护主判定
 	backgroundCtx context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
@@ -137,10 +152,17 @@ func (r *Runtime) materializeOnlineMaturities(ctx context.Context) error {
 			r.shardLocks[shardID].RUnlock()
 			continue
 		}
+		if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
+			r.shardLocks[shardID].RUnlock()
+			continue
+		}
 		var events []MaturityEvent
 		var revision uint64
 		var maturityErr error
 		if err := a.mailbox.Do(ctx, func() {
+			if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
+				return
+			}
 			events, maturityErr = a.state.materializeDueMaturities(r.now())
 			revision = a.state.CheckpointRevision
 		}); err != nil {
@@ -157,7 +179,7 @@ func (r *Runtime) materializeOnlineMaturities(ctx context.Context) error {
 				r.shardLocks[shardID].RUnlock()
 				return err
 			}
-			r.notifyPublicPlots(ctx, a, playerID, maturedPlotIDs(events))
+			r.publishFarmViewChanges(ctx, a, playerID, DomainChangesFromPlotIDs(maturedPlotIDs(events)))
 		}
 		r.shardLocks[shardID].RUnlock()
 	}
@@ -190,16 +212,14 @@ func (r *Runtime) SetPushForwarder(forwarder PushForwarder) error {
 	return nil
 }
 
-// SetFarmViewBroadcaster wires the Phase 4 public FarmViewPatch fan-out.
-// Runtime works without one (development/tests): notifyPublicPlots still
-// bumps farm_view_seq so ENTER/HEARTBEAT snapshots stay correct, it simply
-// has nothing to push out over Gate.
-func (r *Runtime) SetFarmViewBroadcaster(broadcaster FarmViewBroadcaster) error {
-	if broadcaster == nil {
-		return errors.New("farm view broadcaster is required")
+// SetFarmViewDispatcher 接入有界公开农场广播投递器。
+// 未配置时仍会推进 farm_view_seq（保证快照正确），只是不对外推送。
+func (r *Runtime) SetFarmViewDispatcher(dispatcher FarmViewDispatcher) error {
+	if dispatcher == nil {
+		return errors.New("farm view dispatcher is required")
 	}
 	r.mu.Lock()
-	r.farmView = broadcaster
+	r.farmView = dispatcher
 	r.mu.Unlock()
 	return nil
 }
@@ -259,11 +279,17 @@ func (r *Runtime) flushPlayerLocked(ctx context.Context, playerID uint64) error 
 	if a == nil || !dirty {
 		return nil
 	}
+	if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
+		return nil
+	}
 	var checkpoint *datav1.PlayerCheckpointV1
 	var expectedRevision uint64
 	var expectedToken StoreToken
 	var checkpointErr error
 	if err := a.mailbox.Do(ctx, func() {
+		if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
+			return
+		}
 		if a.state.CheckpointRevision < targetRevision {
 			return
 		}
@@ -304,80 +330,260 @@ func (r *Runtime) flushPlayerLocked(ctx context.Context, playerID uint64) error 
 	return nil
 }
 
+func (a *runtimeActor) setActivationErr(err error) {
+	if err != nil {
+		a.activationErr.Store(err)
+	}
+}
+
+func (a *runtimeActor) getActivationErr() error {
+	if v := a.activationErr.Load(); v != nil {
+		return v.(error)
+	}
+	return nil
+}
+
 func (r *Runtime) actorFor(
 	ctx context.Context,
 	playerID uint64,
 	ownerEpoch uint64,
 ) (*runtimeActor, error) {
-	r.mu.Lock()
-	if existing := r.actors[playerID]; existing != nil {
-		r.mu.Unlock()
-		if existing.state.OwnerEpoch != ownerEpoch {
-			return nil, ErrNotOwner
+	if err := r.errIfClosed(); err != nil {
+		return nil, err
+	}
+	a, err := r.getOrCreateLoadingActor(playerID, ownerEpoch)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.waitForActorReady(ctx, a); err != nil {
+		return nil, err
+	}
+	if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
+		err := a.getActivationErr()
+		if err == nil {
+			err = errors.New("player actor activation failed")
 		}
+		return nil, err
+	}
+	if a.state.OwnerEpoch != ownerEpoch {
+		return nil, ErrNotOwner
+	}
+	return a, nil
+}
+
+func (r *Runtime) errIfClosed() error {
+	select {
+	case <-r.backgroundCtx.Done():
+		return ErrRuntimeClosed
+	default:
+		return nil
+	}
+}
+
+func (r *Runtime) getOrCreateLoadingActor(playerID, ownerEpoch uint64) (*runtimeActor, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if existing := r.actors[playerID]; existing != nil {
 		return existing, nil
 	}
-	r.mu.Unlock()
+	if err := r.errIfClosed(); err != nil {
+		return nil, err
+	}
+	loadCtx, loadCancel := context.WithCancel(r.backgroundCtx)
+	created := &runtimeActor{
+		mailbox:    actor.NewMailbox(64),
+		loadCtx:    loadCtx,
+		loadCancel: loadCancel,
+	}
+	created.lifecycle.Store(actorLifecycleLoading)
+	// Enqueue Load/init as the first mailbox job BEFORE publishing the Actor so
+	// concurrent waiters cannot slip an empty barrier ahead of activation.
+	if err := created.mailbox.Submit(func() {
+		r.activateActor(created, playerID, ownerEpoch)
+	}); err != nil {
+		loadCancel()
+		created.mailbox.Close()
+		return nil, fmt.Errorf("enqueue player activation: %w", err)
+	}
+	r.actors[playerID] = created
+	return created, nil
+}
+
+func (r *Runtime) waitForActorReady(ctx context.Context, a *runtimeActor) error {
+	for {
+		switch a.lifecycle.Load() {
+		case actorLifecycleReady:
+			return nil
+		case actorLifecycleFailed:
+			if err := a.getActivationErr(); err != nil {
+				return err
+			}
+			return errors.New("player actor activation failed")
+		case actorLifecycleClosing:
+			return ErrRuntimeClosed
+		}
+		// Loading: queue behind the activation job on the same mailbox, then
+		// re-check lifecycle (activation may have failed after the barrier).
+		if err := a.mailbox.Do(ctx, func() {}); err != nil {
+			switch a.lifecycle.Load() {
+			case actorLifecycleReady:
+				return nil
+			case actorLifecycleFailed:
+				if actErr := a.getActivationErr(); actErr != nil {
+					return actErr
+				}
+				return errors.New("player actor activation failed")
+			case actorLifecycleClosing:
+				return ErrRuntimeClosed
+			}
+			return err
+		}
+	}
+}
+
+func (r *Runtime) activateActor(a *runtimeActor, playerID, ownerEpoch uint64) {
+	if a.lifecycle.Load() != actorLifecycleLoading {
+		return
+	}
+	fail := func(err error) {
+		a.setActivationErr(err)
+		a.lifecycle.Store(actorLifecycleFailed)
+		r.removeActorIfSame(playerID, a)
+		// Close asynchronously: we are inside the mailbox worker and Close waits
+		// for the worker loop to exit.
+		go a.mailbox.Close()
+	}
 
 	state := NewDevelopmentState(playerID)
 	persistedRevision := state.CheckpointRevision
 	var persistedToken StoreToken
 	if r.store != nil {
-		loaded, err := r.store.Load(ctx, playerID)
-		if err != nil {
-			return nil, fmt.Errorf("load player checkpoint: %w", err)
-		}
-		if loaded.State == nil {
-			return nil, errors.New("loaded player checkpoint has no state")
-		}
-		state = loaded.State
-		persistedRevision = loaded.PersistedRevision
-		persistedToken = cloneStoreToken(loaded.Token)
-		if persistedRevision != state.CheckpointRevision {
-			return nil, errors.New("loaded checkpoint revision does not match state")
+		loaded, err := r.store.Load(a.loadCtx, playerID)
+		switch {
+		case err == nil:
+			if loaded.State == nil {
+				fail(errors.New("loaded player checkpoint has no state"))
+				return
+			}
+			state = loaded.State
+			persistedRevision = loaded.PersistedRevision
+			persistedToken = cloneStoreToken(loaded.Token)
+			if persistedRevision != state.CheckpointRevision {
+				fail(errors.New("loaded checkpoint revision does not match state"))
+				return
+			}
+		case errors.Is(err, ErrCheckpointNotFound):
+			initialized, initRevision, initToken, initErr := r.createInitialPlayerCheckpoint(
+				a.loadCtx, playerID, ownerEpoch,
+			)
+			if initErr != nil {
+				fail(initErr)
+				return
+			}
+			state = initialized
+			persistedRevision = initRevision
+			persistedToken = initToken
+		default:
+			// 临时错误 / 损坏等绝不能当成新玩家。
+			fail(fmt.Errorf("load player checkpoint: %w", err))
+			return
 		}
 	}
 	if state.OwnerEpoch > ownerEpoch {
-		return nil, ErrNotOwner
+		fail(ErrNotOwner)
+		return
 	}
 	if state.OwnerEpoch != ownerEpoch {
 		if state.CheckpointRevision == math.MaxUint64 {
-			return nil, errors.New("checkpoint revision exhausted during epoch adoption")
+			fail(errors.New("checkpoint revision exhausted during epoch adoption"))
+			return
 		}
 		state.OwnerEpoch = ownerEpoch
 		state.CheckpointRevision++
 		state.UpdatedAtMS = r.now().UTC().UnixMilli()
 	}
-	_, err := state.materializeDueMaturities(r.now())
-	if err != nil {
-		return nil, fmt.Errorf("activate player maturity: %w", err)
+	if _, err := state.materializeDueMaturities(r.now()); err != nil {
+		fail(fmt.Errorf("activate player maturity: %w", err))
+		return
 	}
 	farmViewEpoch, err := newFarmViewEpoch()
 	if err != nil {
-		return nil, fmt.Errorf("mint farm view epoch: %w", err)
+		fail(fmt.Errorf("mint farm view epoch: %w", err))
+		return
 	}
-	created := &runtimeActor{
-		mailbox:           actor.NewMailbox(64),
-		state:             state,
-		persistedRevision: persistedRevision,
-		persistedToken:    persistedToken,
-		farmViewEpoch:     farmViewEpoch,
-	}
-	r.mu.Lock()
-	if existing := r.actors[playerID]; existing != nil {
-		r.mu.Unlock()
-		created.mailbox.Close()
-		if existing.state.OwnerEpoch != ownerEpoch {
-			return nil, ErrNotOwner
-		}
-		return existing, nil
-	}
-	r.actors[playerID] = created
-	r.mu.Unlock()
+	a.state = state
+	a.persistedRevision = persistedRevision
+	a.persistedToken = persistedToken
+	a.farmViewEpoch = farmViewEpoch
+	a.lifecycle.Store(actorLifecycleReady)
 	if state.CheckpointRevision > persistedRevision {
 		r.markDirty(playerID, state.CheckpointRevision)
 	}
-	return created, nil
+}
+
+// createInitialPlayerCheckpoint 仅在 Load 明确 NotFound 时调用。
+// 必须先 CreateInitial 持久化成功，调用方才能把 Actor 标为 Ready。
+func (r *Runtime) createInitialPlayerCheckpoint(
+	ctx context.Context,
+	playerID, ownerEpoch uint64,
+) (*State, uint64, StoreToken, error) {
+	creator, ok := r.store.(InitialCheckpointStore)
+	if !ok || creator == nil {
+		return nil, 0, nil, ErrInitialCheckpointUnsupported
+	}
+	checkpoint := NewInitialCheckpoint(playerID, r.now().UTC())
+	checkpoint.OwnerEpoch = ownerEpoch
+	result, err := creator.CreateInitial(ctx, checkpoint)
+	// 创建响应丢失等不确定结果：先对账 Load，内容一致则按已应用恢复。
+	if result.Status == CheckpointWriteRetryableFailure ||
+		errors.Is(err, ErrCheckpointRetryable) {
+		if reconciled, rev, token, reconcileErr := r.reconcileInitialCheckpoint(
+			ctx, checkpoint,
+		); reconcileErr == nil {
+			return reconciled, rev, token, nil
+		}
+	}
+	if writeErr := checkpointWriteError(result, err); writeErr != nil {
+		if errors.Is(writeErr, ErrCheckpointFenced) {
+			return nil, 0, nil, ErrNotOwner
+		}
+		return nil, 0, nil, fmt.Errorf("create initial player checkpoint: %w", writeErr)
+	}
+	state, err := StateFromCheckpoint(checkpoint)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	return state, checkpoint.CheckpointRevision, cloneStoreToken(result.NewToken), nil
+}
+
+func (r *Runtime) reconcileInitialCheckpoint(
+	ctx context.Context,
+	expected *datav1.PlayerCheckpointV1,
+) (*State, uint64, StoreToken, error) {
+	loaded, err := r.store.Load(ctx, expected.PlayerId)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	same, compareErr := loadedMatchesCheckpoint(loaded, expected)
+	if compareErr != nil {
+		return nil, 0, nil, compareErr
+	}
+	if !same {
+		return nil, 0, nil, ErrCheckpointCorruptConflict
+	}
+	return loaded.State, loaded.PersistedRevision, cloneStoreToken(loaded.Token), nil
+}
+
+func (r *Runtime) removeActorIfSame(playerID uint64, a *runtimeActor) {
+	r.mu.Lock()
+	if r.actors[playerID] == a {
+		delete(r.actors, playerID)
+		delete(r.dirtyRevision, playerID)
+	}
+	r.mu.Unlock()
+	if a.loadCancel != nil {
+		a.loadCancel()
+	}
 }
 
 // Handle validates the authenticated internal command boundary and executes the
@@ -425,9 +631,20 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		request.GetSellCropRequest() != nil
 	isClaimReward := request.Action == wsv1.Action_CLAIM_CHAPTER_REWARD &&
 		request.GetClaimChapterRewardRequest() != nil
+	isGetPetPanel := request.Action == wsv1.Action_GET_PET_PANEL &&
+		request.GetGetPetPanelRequest() != nil
+	isBuyPet := request.Action == wsv1.Action_BUY_PET &&
+		request.GetBuyPetRequest() != nil
+	isDeployPet := request.Action == wsv1.Action_DEPLOY_PET &&
+		request.GetDeployPetRequest() != nil
+	isBuyPetFood := request.Action == wsv1.Action_BUY_PET_FOOD &&
+		request.GetBuyPetFoodRequest() != nil
+	isFeedPet := request.Action == wsv1.Action_FEED_PET &&
+		request.GetFeedPetRequest() != nil
 	if !isSnapshot && !isGetShop && !isBuySeeds && !isBuyFertilizer && !isPlant &&
 		!isApplyFertilizer && !isHarvest && !isCleanPlot && !isCatchPest &&
-		!isSellCrop && !isClaimReward {
+		!isSellCrop && !isClaimReward && !isGetPetPanel && !isBuyPet &&
+		!isDeployPet && !isBuyPetFood && !isFeedPet {
 		return nil, ErrUnsupportedAction
 	}
 	if isGetShop {
@@ -442,6 +659,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 				GetShopResponse: &wsv1.GetShopResponse{
 					ServerConfigVersion: config.Version(),
 					Entries:             config.ActiveShopEntries(),
+					Crops:               config.ActiveCropCatalog(),
 				},
 			},
 		}, nil
@@ -456,6 +674,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	var dirtyRevision uint64
 	var executionErr error
 	var maturityEvents []MaturityEvent
+	var domainChanges DomainChanges
 	err = a.mailbox.Do(ctx, func() {
 		var maturityErr error
 		maturityEvents, maturityErr = a.state.materializeDueMaturities(serverNow)
@@ -466,6 +685,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		if len(maturityEvents) > 0 {
 			dirty = true
 			dirtyRevision = a.state.CheckpointRevision
+			domainChanges = domainChanges.Merge(DomainChangesFromPlotIDs(maturedPlotIDs(maturityEvents)))
 		}
 		if isBuySeeds {
 			var commandDirty bool
@@ -483,39 +703,49 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		}
 		if isPlant {
 			var commandDirty bool
-			response, commandDirty = r.plant(a, callerPlayerID, request, config, serverNow)
+			var changes DomainChanges
+			response, commandDirty, changes = r.plant(a, callerPlayerID, request, config, serverNow)
+			domainChanges = domainChanges.Merge(changes)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return
 		}
 		if isApplyFertilizer {
 			var commandDirty bool
-			response, commandDirty = r.applyFertilizer(a, callerPlayerID, request, config, serverNow)
+			var changes DomainChanges
+			response, commandDirty, changes = r.applyFertilizer(a, callerPlayerID, request, config, serverNow)
+			domainChanges = domainChanges.Merge(changes)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return
 		}
 		if isHarvest {
 			var commandDirty bool
-			response, commandDirty = r.harvest(a, callerPlayerID, request, config, serverNow)
+			var changes DomainChanges
+			response, commandDirty, changes = r.harvest(a, callerPlayerID, request, config, serverNow)
+			domainChanges = domainChanges.Merge(changes)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return
 		}
 		if isCleanPlot {
 			var commandDirty bool
-			response, commandDirty = r.cleanPlot(
+			var changes DomainChanges
+			response, commandDirty, changes = r.cleanPlot(
 				a, callerPlayerID, request, config, serverNow,
 			)
+			domainChanges = domainChanges.Merge(changes)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return
 		}
 		if isCatchPest {
 			var commandDirty bool
-			response, commandDirty = r.catchPest(
+			var changes DomainChanges
+			response, commandDirty, changes = r.catchPest(
 				a, callerPlayerID, request, config, serverNow,
 			)
+			domainChanges = domainChanges.Merge(changes)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return
@@ -532,6 +762,38 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 			response, commandDirty = r.claimChapterReward(
 				a, callerPlayerID, request, config, serverNow,
 			)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isGetPetPanel {
+			response = r.getPetPanel(a, request, config, serverNow)
+			return
+		}
+		if isBuyPet {
+			var commandDirty bool
+			response, commandDirty = r.buyPet(a, callerPlayerID, request, config, serverNow)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isDeployPet {
+			var commandDirty bool
+			response, commandDirty = r.deployPet(a, callerPlayerID, request, config, serverNow)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isBuyPetFood {
+			var commandDirty bool
+			response, commandDirty = r.buyPetFood(a, callerPlayerID, request, config, serverNow)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isFeedPet {
+			var commandDirty bool
+			response, commandDirty = r.feedPet(a, callerPlayerID, request, config, serverNow)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return
@@ -568,52 +830,10 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	if !isSnapshot && len(maturityEvents) > 0 {
 		_ = r.forwardMaturityEvents(ctx, maturityEvents)
 	}
-	r.notifyPublicPlots(ctx, a, callerPlayerID, publicPlotIDsChanged(maturityEvents, request, response))
+	// DomainChanges 已在 mailbox 内收集：成熟地块 + 成功业务报告的地块。
+	// 失败/重放命令返回空变化，不会产生错误的公开事件。
+	r.publishFarmViewChanges(ctx, a, callerPlayerID, domainChanges)
 	return response, nil
-}
-
-// publicPlotIDsChanged collects the plot IDs a Handle call just changed in a
-// way visitors can see: every plot a background/foreground maturity
-// materialized to MATURE (regardless of which action triggered it), plus the
-// single plot touched by a successful, non-replayed PLANT/APPLY_FERTILIZER/
-// HARVEST/CLEAN_PLOT/CATCH_PEST. BUY_SEEDS, BUY_FERTILIZER, SELL_CROP and
-// CLAIM_CHAPTER_REWARD never mutate public plot state, so they contribute
-// nothing here.
-func publicPlotIDsChanged(
-	maturityEvents []MaturityEvent, request, response *wsv1.WsEnvelope,
-) []uint32 {
-	ids := make([]uint32, 0, len(maturityEvents)+1)
-	for _, event := range maturityEvents {
-		if plotID := event.Plot.GetPlotId(); plotID != 0 {
-			ids = append(ids, plotID)
-		}
-	}
-	if response == nil || response.Error != nil || response.Replayed {
-		return ids
-	}
-	switch request.GetAction() {
-	case wsv1.Action_PLANT:
-		if plant := request.GetPlantRequest(); plant != nil {
-			ids = append(ids, plant.PlotId)
-		}
-	case wsv1.Action_APPLY_FERTILIZER:
-		if apply := request.GetApplyFertilizerRequest(); apply != nil {
-			ids = append(ids, apply.PlotId)
-		}
-	case wsv1.Action_HARVEST:
-		if harvest := request.GetHarvestRequest(); harvest != nil {
-			ids = append(ids, harvest.PlotId)
-		}
-	case wsv1.Action_CLEAN_PLOT:
-		if clean := request.GetCleanPlotRequest(); clean != nil {
-			ids = append(ids, clean.PlotId)
-		}
-	case wsv1.Action_CATCH_PEST:
-		if catch := request.GetCatchPestRequest(); catch != nil {
-			ids = append(ids, catch.PlotId)
-		}
-	}
-	return ids
 }
 
 func maturedPlotIDs(events []MaturityEvent) []uint32 {
@@ -624,43 +844,6 @@ func maturedPlotIDs(events []MaturityEvent) []uint32 {
 		}
 	}
 	return ids
-}
-
-// notifyPublicPlots bumps a's farm_view_seq and builds a FarmViewPatch from
-// plotIDs' current state synchronously inside the mailbox (so any snapshot
-// or re-ENTER built right after this call already observes the new seq),
-// then hands the patch to the configured FarmViewBroadcaster on a detached
-// goroutine: a slow or failing Gate fan-out must never delay or fail the
-// game command that triggered it. It returns the built patch (nil if
-// nothing was built) so synchronous Saga steps such as
-// Runtime.ApplyStealOnOwner can also return it directly to their own
-// caller.
-func (r *Runtime) notifyPublicPlots(
-	ctx context.Context, a *runtimeActor, ownerPlayerID uint64, plotIDs []uint32,
-) *wsv1.FarmViewPatch {
-	if a == nil || len(plotIDs) == 0 {
-		return nil
-	}
-	var patch *wsv1.FarmViewPatch
-	err := a.mailbox.Do(ctx, func() {
-		a.farmViewSeq++
-		patch = buildFarmViewPatch(ownerPlayerID, a.farmViewEpoch, a.farmViewSeq, plotIDs, a.state.Plots)
-	})
-	if err != nil || patch == nil {
-		return nil
-	}
-	r.mu.Lock()
-	broadcaster := r.farmView
-	r.mu.Unlock()
-	if broadcaster == nil {
-		return patch
-	}
-	go func() {
-		bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = broadcaster.Broadcast(bgCtx, ownerPlayerID, patch)
-	}()
-	return patch
 }
 
 // HasActiveActorsForShard reports whether this process has materialized any
@@ -715,13 +898,21 @@ func (r *Runtime) DrainShardForMigration(
 		a := r.actors[playerID]
 		r.mu.Unlock()
 		if a == nil {
-			return nil, fmt.Errorf("player %d disappeared during shard drain", playerID)
+			continue
 		}
+		if a.loadCancel != nil {
+			a.loadCancel()
+		}
+		var ready bool
 		var checkpoint *datav1.PlayerCheckpointV1
 		var expectedRevision uint64
 		var expectedToken StoreToken
 		var checkpointErr error
 		if err := a.mailbox.Do(ctx, func() {
+			if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
+				return
+			}
+			ready = true
 			if a.state.OwnerEpoch != ownerEpoch {
 				checkpointErr = ErrNotOwner
 				return
@@ -734,7 +925,15 @@ func (r *Runtime) DrainShardForMigration(
 			expectedRevision = a.persistedRevision
 			expectedToken = cloneStoreToken(a.persistedToken)
 		}); err != nil {
+			if errors.Is(err, actor.ErrClosed) {
+				actors = append(actors, a)
+				continue
+			}
 			return nil, fmt.Errorf("drain player %d mailbox: %w", playerID, err)
+		}
+		if !ready {
+			actors = append(actors, a)
+			continue
 		}
 		if checkpointErr != nil {
 			return nil, fmt.Errorf("drain player %d checkpoint: %w", playerID, checkpointErr)
@@ -773,16 +972,20 @@ func (r *Runtime) DrainShardForMigration(
 	}
 
 	r.mu.Lock()
-	for index, playerID := range playerIDs {
-		if r.actors[playerID] != actors[index] {
-			r.mu.Unlock()
-			return nil, fmt.Errorf("player %d changed during shard drain", playerID)
+	for _, a := range actors {
+		a.lifecycle.Store(actorLifecycleClosing)
+	}
+	for _, playerID := range playerIDs {
+		if current := r.actors[playerID]; current != nil {
+			delete(r.actors, playerID)
+			delete(r.dirtyRevision, playerID)
 		}
-		delete(r.actors, playerID)
-		delete(r.dirtyRevision, playerID)
 	}
 	r.mu.Unlock()
 	for _, a := range actors {
+		if a.loadCancel != nil {
+			a.loadCancel()
+		}
 		a.mailbox.Close()
 	}
 	return manifest, nil
@@ -904,13 +1107,23 @@ func (r *Runtime) Close() {
 		cancel()
 	}
 	r.mu.Lock()
+	dispatcher := r.farmView
+	r.farmView = nil
 	actors := make([]*runtimeActor, 0, len(r.actors))
 	for _, a := range r.actors {
+		a.lifecycle.Store(actorLifecycleClosing)
 		actors = append(actors, a)
 	}
 	r.actors = make(map[uint64]*runtimeActor)
+	r.dirtyRevision = make(map[uint64]uint64)
 	r.mu.Unlock()
+	if dispatcher != nil {
+		dispatcher.Close()
+	}
 	for _, a := range actors {
+		if a.loadCancel != nil {
+			a.loadCancel()
+		}
 		a.mailbox.Close()
 	}
 }

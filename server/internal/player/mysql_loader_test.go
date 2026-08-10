@@ -216,3 +216,63 @@ func TestMySQLCheckpointWriterCommitsOutboxWithCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMySQLCreateInitialInsertsWhenFenceMatches(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	checkpoint := NewInitialCheckpoint(42, time.Date(2026, 8, 10, 9, 0, 0, 0, time.UTC))
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
+		WithArgs(checkpoint.LogicalShardId).
+		WillReturnRows(sqlmock.NewRows([]string{"owner_zone_id", "owner_epoch"}).
+			AddRow("zone-a", checkpoint.OwnerEpoch))
+	mock.ExpectExec(`(?s)INSERT INTO player_checkpoints`).
+		WithArgs(
+			checkpoint.PlayerId, checkpoint.LogicalShardId, checkpoint.OwnerEpoch,
+			checkpoint.PlayerSeq, checkpoint.CheckpointRevision, checkpoint.SchemaVersion,
+			sqlmock.AnyArg(), sqlmock.AnyArg(), checkpoint.LastAppliedConfigVersion,
+			checkpoint.CreatedAtMs, checkpoint.UpdatedAtMs,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	result, err := (&MySQLCheckpointStore{
+		DB: db, OwnerZoneID: "zone-a",
+	}).CreateInitial(context.Background(), checkpoint)
+	if err != nil || result.Status != CheckpointWriteApplied {
+		t.Fatalf("CreateInitial status=%d error=%v", result.Status, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLCreateInitialRejectsWrongFence(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	checkpoint := NewInitialCheckpoint(42, time.Date(2026, 8, 10, 9, 0, 0, 0, time.UTC))
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
+		WithArgs(checkpoint.LogicalShardId).
+		WillReturnRows(sqlmock.NewRows([]string{"owner_zone_id", "owner_epoch"}).
+			AddRow("zone-b", checkpoint.OwnerEpoch))
+	mock.ExpectRollback()
+
+	result, err := (&MySQLCheckpointStore{
+		DB: db, OwnerZoneID: "zone-a",
+	}).CreateInitial(context.Background(), checkpoint)
+	if err != nil || result.Status != CheckpointWriteFenced {
+		t.Fatalf("CreateInitial status=%d error=%v, want Fenced", result.Status, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

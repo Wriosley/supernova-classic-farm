@@ -8,25 +8,14 @@ import (
 
 	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/testtcaplus"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/protocol/option"
 )
 
 func TestTcaplusRegistrationSagaAndSessionGeneration(t *testing.T) {
 	client := testtcaplus.New()
-	shardID := routing.ShardForPlayer(1)
-	if err := client.DoInsert(&tcaplusv1.ShardFence{
-		LogicalShardId: shardID, OwnerZoneId: "zone-a",
-		OwnerEpoch: 1, RouteVersion: 1,
-	}, &option.PBOpt{}, 1); err != nil {
-		t.Fatal(err)
-	}
-	checkpoints, err := player.NewTcaplusCheckpointStoreWithClient(client, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	store, err := NewTcaplusStore(client, 1, checkpoints)
+	// 故意不写入 ShardFence / PlayerCheckpoint：注册不得依赖它们。
+	store, err := NewTcaplusStore(client, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,12 +29,32 @@ func TestTcaplusRegistrationSagaAndSessionGeneration(t *testing.T) {
 	if session.PlayerID != 1 || session.Generation != 1 || raw == "" {
 		t.Fatalf("registration Session = %+v raw=%q", session, raw)
 	}
-	loaded, err := checkpoints.Load(context.Background(), session.PlayerID)
-	if err != nil || loaded.State.OwnerEpoch != 1 {
-		t.Fatalf("initial checkpoint = %+v error=%v", loaded, err)
+
+	var accountByName tcaplusv1.AccountByName
+	accountByName.AccountName = "farmer_one"
+	if err := client.DoGet(&accountByName, &option.PBOpt{}, 1); err != nil {
+		t.Fatalf("AccountByName missing after register: %v", err)
+	}
+	var accountByPlayer tcaplusv1.AccountByPlayer
+	accountByPlayer.PlayerId = session.PlayerID
+	if err := client.DoGet(&accountByPlayer, &option.PBOpt{}, 1); err != nil {
+		t.Fatalf("AccountByPlayer missing after register: %v", err)
+	}
+	var counter tcaplusv1.PlayerIdCounter
+	counter.CounterId = 1
+	if err := client.DoGet(&counter, &option.PBOpt{}, 1); err != nil {
+		t.Fatalf("PlayerIdCounter missing after register: %v", err)
 	}
 	if _, err := store.Session(raw); err != nil {
 		t.Fatal(err)
+	}
+
+	checkpoints, err := player.NewTcaplusCheckpointStoreWithClient(client, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := checkpoints.Load(context.Background(), session.PlayerID); !errors.Is(err, player.ErrCheckpointNotFound) {
+		t.Fatalf("Load after register = %v, want ErrCheckpointNotFound", err)
 	}
 
 	loginRaw, loginSession, err := store.Login(
@@ -67,14 +76,10 @@ func TestTcaplusRegistrationSagaAndSessionGeneration(t *testing.T) {
 
 func TestTcaplusRegistrationRejectsDuplicateActiveName(t *testing.T) {
 	client := testtcaplus.New()
-	if err := client.DoInsert(&tcaplusv1.ShardFence{
-		LogicalShardId: routing.ShardForPlayer(1), OwnerZoneId: "zone-a",
-		OwnerEpoch: 1, RouteVersion: 1,
-	}, &option.PBOpt{}, 1); err != nil {
+	store, err := NewTcaplusStore(client, 1)
+	if err != nil {
 		t.Fatal(err)
 	}
-	checkpoints, _ := player.NewTcaplusCheckpointStoreWithClient(client, 1)
-	store, _ := NewTcaplusStore(client, 1, checkpoints)
 	if _, _, err := store.Register(
 		"farmer_two", "correct-horse-battery",
 	); err != nil {

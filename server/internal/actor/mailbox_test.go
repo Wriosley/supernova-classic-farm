@@ -83,3 +83,50 @@ func TestDifferentMailboxesExecuteInParallel(t *testing.T) {
 		}
 	}
 }
+
+func TestMailboxSubmitRunsBeforeLaterDo(t *testing.T) {
+	m := NewMailbox(8)
+	defer m.Close()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var order []string
+	var orderMu sync.Mutex
+	record := func(label string) {
+		orderMu.Lock()
+		order = append(order, label)
+		orderMu.Unlock()
+	}
+
+	if err := m.Submit(func() {
+		close(started)
+		<-release
+		record("submit")
+	}); err != nil {
+		t.Fatalf("Submit() error = %v", err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("Submit job did not start")
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- m.Do(context.Background(), func() {
+			record("do")
+		})
+	}()
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+
+	orderMu.Lock()
+	got := append([]string(nil), order...)
+	orderMu.Unlock()
+	if len(got) != 2 || got[0] != "submit" || got[1] != "do" {
+		t.Fatalf("order = %v, want [submit do]", got)
+	}
+}

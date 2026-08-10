@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-07
+updated: 2026-08-10
 ---
 
 # Current Handoff
@@ -31,13 +31,41 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   visit sessions, FarmViewPatch/Presence, steal Saga, pest/catch/help,
   H5 wiring, kind FriendSvr deploy, and multi-client WS E2E with full
   stack restart recovery.
+- Final delivery sprint **01 Actor register-before-load** is complete:
+  cold activation now creates a `Loading` Actor + mailbox under
+  `Runtime.mu`, `Mailbox.Submit`s Load/init as the first job, then
+  publishes the Actor so concurrent callers share one mailbox and one
+  `Store.Load`. Failed activation is removed via `removeActorIfSame` and
+  can retry; Loading actors participate in Drain/Close. Evidence:
+  `../evidence/2026-08-10-actor-register-before-load.md`.
+- Final delivery sprint **02 lazy farm init** is complete: LoginSvr
+  registration creates account identity only (no PlayerCheckpoint /
+  ShardFence). Owner Zone on first Actor activation treats clear
+  `ErrCheckpointNotFound` as new-player init via fenced
+  `CreateInitial`, and only then marks the Actor `Ready`. Evidence:
+  `../evidence/2026-08-10-zone-initial-player-checkpoint.md`.
+- Final delivery sprint **03 broadcast / business decoupling** is
+  complete: plot commands report `DomainChanges`; the owner Actor
+  builds ordered `FarmViewPatch` inside the mailbox; a bounded
+  `farmview.Dispatcher` fans out via the existing Broadcaster. Broadcast
+  remains online best-effort; H5 uses `decideFarmViewPatch` for
+  contiguous apply / duplicate ignore / gap+epoch resync. Evidence:
+  `../evidence/2026-08-10-farm-broadcast-separation.md`.
+- Final delivery sprint **04-1 pet minimum loop** is complete: players
+  start with no pets; buy/deploy 田园犬/牧羊犬, buy/feed dog food
+  (24h stackable `food_active_until_ms`), and steal guard rolls once in
+  `ApplyStealOnOwner` then freezes `StealGuardOutcome` into the Saga
+  receipt; visitor commit deducts `min(coins, penalty)` without paying
+  the owner. H5 `PetPanel.vue` is text-only. Evidence:
+  `../evidence/2026-08-11-pet-guard-e2e.md`.
 - Farm visits return a public snapshot on `ENTER_FRIEND_FARM` and now also
   receive incremental `FarmViewPatch` pushes: public plot mutations (plant,
-  fertilize, harvest, clean, natural maturity) bump an Actor-local
-  `farm_view_seq` inside the same mailbox call, and `farmview.Broadcaster`
-  fans the resulting patch out through Gate to the owner plus every
-  currently registered visitor. H5 replaces the full snapshot on an epoch
-  change or a seq gap and merges in place on `seq == local + 1`.
+  fertilize, harvest, clean, natural maturity) report `DomainChanges`, bump
+  an Actor-local `farm_view_seq` inside the same mailbox call, and
+  `farmview.Dispatcher` → `Broadcaster` fans the resulting patch out through
+  Gate to the owner plus every currently registered visitor. H5 replaces the
+  full snapshot on an epoch change or a seq gap and merges in place on
+  `seq == local + 1`.
 - The cross-Actor `FriendInteraction` Saga is live for `STEAL_FRIEND_CROP`
   (pest/catch-pest/help-clean remain Phase 6, on the same infrastructure):
   `PLANT` freezes `steal_quantity`/`max_steal_times`/`protected_owner_yield`
@@ -487,18 +515,27 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 
 ## Next actions
 
-The friend prototype vertical (phases 0–7) is complete for the frozen scope in
-`../plans/friend_design_plan/06-分阶段实施方案.md`. Remaining work is
-outside that plan unless the owner expands scope:
+Final delivery sprint **01**–**03**, **04-1 宠物**, and **04-2 图鉴/生涯/多作物**
+are done. Next is **04-3 邮件与通知** per
+`../plans/final_delivery_sprint/04-基础业务补齐/04-3-邮件与通知总阶段.md`
+(and its `04-3A`…`04-3F` children). Read the stage overview before starting.
 
-1. Optional: manual three-browser demo against kind (protocol E2E already
-   covers three WS clients);
-2. Optional: production concerns deferred by design — Ingress/TLS, log
-   aggregation, dynamic Zone discovery, `2→3` scaling;
-3. Keep `go test ./...`, dual-Zone owner-loop, and
-   `./tests/e2e/run-friend-*.sh` green when touching Gate/Zone/Friend paths.
+Friend prototype vertical (phases 0–7) remains complete for the frozen
+scope in `../plans/friend_design_plan/06-分阶段实施方案.md`.
 
-Evidence: `../evidence/2026-08-07-friend-interaction-e2e.md`.
+1. Next sprint task: **04-3 邮件**;
+2. Deferred: multi-crop steal still limited to original crop — hand off to
+   **04-5 好友偷菜规则收口**;
+3. Keep `go test ./...` green when touching Gate/Zone/Friend paths.
+
+Evidence:
+
+- `../evidence/2026-08-11-career-compendium-multi-crop.md`
+- `../evidence/2026-08-11-pet-guard-e2e.md`
+- `../evidence/2026-08-10-farm-broadcast-separation.md`
+- `../evidence/2026-08-10-zone-initial-player-checkpoint.md`
+- `../evidence/2026-08-10-actor-register-before-load.md`
+- `../evidence/2026-08-07-friend-interaction-e2e.md`
 
 Manual owner checkpoints:
 

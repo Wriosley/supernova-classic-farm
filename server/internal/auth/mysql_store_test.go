@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -9,7 +8,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 )
 
-func TestMySQLRegistrationCommitsAccountCheckpointAndSessionTogether(t *testing.T) {
+func TestMySQLRegistrationCommitsAccountAndSessionOnly(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -30,19 +29,6 @@ func TestMySQLRegistrationCommitsAccountCheckpointAndSessionTogether(t *testing.
 			now.UnixMilli(), now.UnixMilli(),
 		).
 		WillReturnResult(sqlmock.NewResult(42, 1))
-	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
-		WithArgs(sqlmock.AnyArg()).
-		WillReturnRows(
-			sqlmock.NewRows([]string{"owner_zone_id", "owner_epoch"}).
-				AddRow("zone-b", uint64(7)),
-		)
-	mock.ExpectExec(`(?s)INSERT INTO player_checkpoints`).
-		WithArgs(
-			uint64(42), sqlmock.AnyArg(), uint64(7), uint64(0),
-			uint64(1), uint32(1), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			uint64(1), now.UnixMilli(), now.UnixMilli(),
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`(?s)INSERT INTO auth_sessions`).
 		WithArgs(
 			sqlmock.AnyArg(), uint64(42), uint64(1), now.UnixMilli(),
@@ -64,7 +50,7 @@ func TestMySQLRegistrationCommitsAccountCheckpointAndSessionTogether(t *testing.
 	}
 }
 
-func TestMySQLRegistrationRollsBackWhenCheckpointInsertFails(t *testing.T) {
+func TestMySQLRegistrationRollsBackWhenSessionInsertFails(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -83,57 +69,16 @@ func TestMySQLRegistrationRollsBackWhenCheckpointInsertFails(t *testing.T) {
 			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnResult(sqlmock.NewResult(42, 1))
-	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
-		WithArgs(sqlmock.AnyArg()).
-		WillReturnRows(
-			sqlmock.NewRows([]string{"owner_zone_id", "owner_epoch"}).
-				AddRow("zone-a", uint64(1)),
-		)
-	mock.ExpectExec(`(?s)INSERT INTO player_checkpoints`).
+	mock.ExpectExec(`(?s)INSERT INTO auth_sessions`).
 		WithArgs(
-			uint64(42), sqlmock.AnyArg(), uint64(1), uint64(0),
-			uint64(1), uint32(1), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			uint64(1), sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), uint64(42), uint64(1), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
-		WillReturnError(errors.New("checkpoint write failed"))
+		WillReturnError(errors.New("session write failed"))
 	mock.ExpectRollback()
 
 	if _, _, err := store.Register("rollback_farmer", "correct horse battery staple"); err == nil {
-		t.Fatal("registration succeeded despite checkpoint failure")
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestMySQLRegistrationRollsBackWhenShardFenceIsMissing(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	store, err := NewMySQLStore(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	mock.ExpectBegin()
-	mock.ExpectExec(`(?s)INSERT INTO accounts`).
-		WithArgs(
-			"missing_fence_farmer", sqlmock.AnyArg(), sqlmock.AnyArg(),
-			argonMemoryKiB, argonTime, argonThreads, uint32(0x13),
-			sqlmock.AnyArg(), sqlmock.AnyArg(),
-		).
-		WillReturnResult(sqlmock.NewResult(42, 1))
-	mock.ExpectQuery(`(?s)SELECT owner_zone_id, owner_epoch.*FROM shard_fences`).
-		WithArgs(sqlmock.AnyArg()).
-		WillReturnError(sql.ErrNoRows)
-	mock.ExpectRollback()
-
-	if _, _, err := store.Register(
-		"missing_fence_farmer", "correct horse battery staple",
-	); err == nil {
-		t.Fatal("registration succeeded without a shard Fence")
+		t.Fatal("registration succeeded despite session failure")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

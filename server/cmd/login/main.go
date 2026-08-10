@@ -16,7 +16,6 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 )
 
 func main() {
@@ -52,8 +51,6 @@ func run() error {
 			{"TCAPLUS_ACCOUNT_BY_NAME_TABLE", "AccountByName"},
 			{"TCAPLUS_ACCOUNT_BY_PLAYER_TABLE", "AccountByPlayer"},
 			{"TCAPLUS_SESSION_TABLE", "Session"},
-			{"TCAPLUS_CHECKPOINT_TABLE", "PlayerCheckpoint"},
-			{"TCAPLUS_FENCE_TABLE", "ShardFence"},
 		}
 		tables := make([]string, 0, len(tableSpecs))
 		for _, spec := range tableSpecs {
@@ -68,19 +65,11 @@ func run() error {
 			return openErr
 		}
 		defer client.Close()
-		checkpoints, checkpointErr := player.NewTcaplusCheckpointStoreWithClient(
-			client, tcaplusConfig.ZoneID,
-		)
-		if checkpointErr != nil {
-			return checkpointErr
-		}
-		store, err = auth.NewTcaplusStore(
-			client, tcaplusConfig.ZoneID, checkpoints,
-		)
+		store, err = auth.NewTcaplusStore(client, tcaplusConfig.ZoneID)
 		if err != nil {
 			return err
 		}
-		logger.Info("using pure Tcaplus auth and checkpoint provisioning")
+		logger.Info("using pure Tcaplus auth store; registration creates account identity only")
 	} else if cfg.MySQLDSN == "" {
 		store, err = auth.NewStore()
 		if err != nil {
@@ -97,7 +86,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		logger.Info("using MySQL auth store; registration provisions account, Session, and Player checkpoint atomically")
+		logger.Info("using MySQL auth store; registration creates account and Session only")
 	}
 	handler, err := auth.NewHandler(store, auth.HandlerConfig{
 		Origin:          envOr("H5_ORIGIN", "http://localhost:5173"),

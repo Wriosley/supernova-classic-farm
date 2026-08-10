@@ -195,6 +195,50 @@ export class FarmWebSocket {
     })
   }
 
+  async requestPetPanel(playerId: bigint): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.GET_PET_PANEL, {
+      case: 'getPetPanelRequest',
+      value: {},
+    })
+  }
+
+  async buyPet(
+    playerId: bigint,
+    petId: number,
+    expectedConfigVersion: bigint,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.BUY_PET, {
+      case: 'buyPetRequest',
+      value: { petId, expectedConfigVersion },
+    })
+  }
+
+  async deployPet(playerId: bigint, petId: number): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.DEPLOY_PET, {
+      case: 'deployPetRequest',
+      value: { petId },
+    })
+  }
+
+  async buyPetFood(
+    playerId: bigint,
+    shopEntryId: number,
+    quantity: number,
+    expectedPriceVersion: bigint,
+  ): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.BUY_PET_FOOD, {
+      case: 'buyPetFoodRequest',
+      value: { shopEntryId, quantity, expectedPriceVersion },
+    })
+  }
+
+  async feedPet(playerId: bigint): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.FEED_PET, {
+      case: 'feedPetRequest',
+      value: {},
+    })
+  }
+
   async plant(playerId: bigint, plotId: number, seedItemId: number): Promise<WsEnvelope> {
     return this.sendGameRequest(playerId, Action.PLANT, {
       case: 'plantRequest',

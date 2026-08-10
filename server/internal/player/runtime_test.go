@@ -421,6 +421,7 @@ func TestRuntimePreservesAndAdvancesOpaqueStoreToken(t *testing.T) {
 }
 
 func TestRuntimeDoesNotCreateDefaultStateWhenCheckpointLoadFails(t *testing.T) {
+	// Load NotFound 但 Store 不支持 CreateInitial 时，必须失败，不能退回内存默认农田。
 	runtime, err := NewRuntimeWithStore(checkpointLoaderFunc(func(context.Context, uint64) (*State, error) {
 		return nil, ErrCheckpointNotFound
 	}))
@@ -430,8 +431,27 @@ func TestRuntimeDoesNotCreateDefaultStateWhenCheckpointLoadFails(t *testing.T) {
 	defer runtime.Close()
 	if _, err := runtime.Handle(
 		context.Background(), 42, LocalOwnerEpoch, snapshotRequest(42, "missing"),
-	); !errors.Is(err, ErrCheckpointNotFound) {
-		t.Fatalf("Handle() error = %v, want ErrCheckpointNotFound", err)
+	); !errors.Is(err, ErrInitialCheckpointUnsupported) {
+		t.Fatalf("Handle() error = %v, want ErrInitialCheckpointUnsupported", err)
+	}
+}
+
+func TestRuntimeNeverTreatsRetryableLoadFailureAsNewPlayer(t *testing.T) {
+	runtime, err := NewRuntimeWithStore(checkpointLoaderFunc(func(context.Context, uint64) (*State, error) {
+		return nil, ErrCheckpointRetryable
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	_, err = runtime.Handle(
+		context.Background(), 42, LocalOwnerEpoch, snapshotRequest(42, "retryable"),
+	)
+	if err == nil || errors.Is(err, ErrInitialCheckpointUnsupported) {
+		t.Fatalf("Handle() error = %v, want wrapped retryable load failure", err)
+	}
+	if !errors.Is(err, ErrCheckpointRetryable) {
+		t.Fatalf("Handle() error = %v, want ErrCheckpointRetryable", err)
 	}
 }
 

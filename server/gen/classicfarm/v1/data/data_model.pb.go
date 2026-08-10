@@ -717,6 +717,9 @@ type PlayerCheckpointV1 struct {
 	FriendReservations       []*FriendResourceReservation `protobuf:"bytes,17,rep,name=friend_reservations,json=friendReservations,proto3" json:"friend_reservations,omitempty"`
 	FriendReceipts           []*FriendInteractionReceipt  `protobuf:"bytes,18,rep,name=friend_receipts,json=friendReceipts,proto3" json:"friend_receipts,omitempty"`
 	FriendTaskCreditReceipts []*FriendTaskCreditReceipt   `protobuf:"bytes,19,rep,name=friend_task_credit_receipts,json=friendTaskCreditReceipts,proto3" json:"friend_task_credit_receipts,omitempty"`
+	PetState                 *PetStateRecord              `protobuf:"bytes,20,opt,name=pet_state,json=petState,proto3" json:"pet_state,omitempty"`
+	Career                   *PlayerCareerRecord          `protobuf:"bytes,21,opt,name=career,proto3" json:"career,omitempty"`
+	CropCompendium           *CropCompendiumRecord        `protobuf:"bytes,22,opt,name=crop_compendium,json=cropCompendium,proto3" json:"crop_compendium,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -884,6 +887,187 @@ func (x *PlayerCheckpointV1) GetFriendTaskCreditReceipts() []*FriendTaskCreditRe
 	return nil
 }
 
+func (x *PlayerCheckpointV1) GetPetState() *PetStateRecord {
+	if x != nil {
+		return x.PetState
+	}
+	return nil
+}
+
+func (x *PlayerCheckpointV1) GetCareer() *PlayerCareerRecord {
+	if x != nil {
+		return x.Career
+	}
+	return nil
+}
+
+func (x *PlayerCheckpointV1) GetCropCompendium() *CropCompendiumRecord {
+	if x != nil {
+		return x.CropCompendium
+	}
+	return nil
+}
+
+// PetStateRecord 属于玩家私有状态：已购宠物、当前出战与狗粮有效截止时间。
+// food_active_until_ms == 0 表示从未喂食；是否生效由服务器用 now 比较，无需 Tick。
+type PetStateRecord struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	OwnedPetIds       []uint32               `protobuf:"varint,1,rep,packed,name=owned_pet_ids,json=ownedPetIds,proto3" json:"owned_pet_ids,omitempty"`
+	ActivePetId       uint32                 `protobuf:"varint,2,opt,name=active_pet_id,json=activePetId,proto3" json:"active_pet_id,omitempty"`
+	FoodActiveUntilMs int64                  `protobuf:"varint,3,opt,name=food_active_until_ms,json=foodActiveUntilMs,proto3" json:"food_active_until_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PetStateRecord) Reset() {
+	*x = PetStateRecord{}
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetStateRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetStateRecord) ProtoMessage() {}
+
+func (x *PetStateRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetStateRecord.ProtoReflect.Descriptor instead.
+func (*PetStateRecord) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PetStateRecord) GetOwnedPetIds() []uint32 {
+	if x != nil {
+		return x.OwnedPetIds
+	}
+	return nil
+}
+
+func (x *PetStateRecord) GetActivePetId() uint32 {
+	if x != nil {
+		return x.ActivePetId
+	}
+	return 0
+}
+
+func (x *PetStateRecord) GetFoodActiveUntilMs() int64 {
+	if x != nil {
+		return x.FoodActiveUntilMs
+	}
+	return 0
+}
+
+// PlayerCareerRecord 公开生涯统计：只累计功能上线后的权威入仓量，不做历史回填。
+type PlayerCareerRecord struct {
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	TotalHarvestedCropQuantity uint64                 `protobuf:"varint,1,opt,name=total_harvested_crop_quantity,json=totalHarvestedCropQuantity,proto3" json:"total_harvested_crop_quantity,omitempty"`
+	TotalStolenCropQuantity    uint64                 `protobuf:"varint,2,opt,name=total_stolen_crop_quantity,json=totalStolenCropQuantity,proto3" json:"total_stolen_crop_quantity,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *PlayerCareerRecord) Reset() {
+	*x = PlayerCareerRecord{}
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerCareerRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerCareerRecord) ProtoMessage() {}
+
+func (x *PlayerCareerRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerCareerRecord.ProtoReflect.Descriptor instead.
+func (*PlayerCareerRecord) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PlayerCareerRecord) GetTotalHarvestedCropQuantity() uint64 {
+	if x != nil {
+		return x.TotalHarvestedCropQuantity
+	}
+	return 0
+}
+
+func (x *PlayerCareerRecord) GetTotalStolenCropQuantity() uint64 {
+	if x != nil {
+		return x.TotalStolenCropQuantity
+	}
+	return 0
+}
+
+// CropCompendiumRecord 私有图鉴：仅自己农田成功收获过的 crop_id。
+type CropCompendiumRecord struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	UnlockedCropIds []uint32               `protobuf:"varint,1,rep,packed,name=unlocked_crop_ids,json=unlockedCropIds,proto3" json:"unlocked_crop_ids,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CropCompendiumRecord) Reset() {
+	*x = CropCompendiumRecord{}
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CropCompendiumRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CropCompendiumRecord) ProtoMessage() {}
+
+func (x *CropCompendiumRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CropCompendiumRecord.ProtoReflect.Descriptor instead.
+func (*CropCompendiumRecord) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CropCompendiumRecord) GetUnlockedCropIds() []uint32 {
+	if x != nil {
+		return x.UnlockedCropIds
+	}
+	return nil
+}
+
 type InventoryStack struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
@@ -894,7 +1078,7 @@ type InventoryStack struct {
 
 func (x *InventoryStack) Reset() {
 	*x = InventoryStack{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[3]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -906,7 +1090,7 @@ func (x *InventoryStack) String() string {
 func (*InventoryStack) ProtoMessage() {}
 
 func (x *InventoryStack) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[3]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -919,7 +1103,7 @@ func (x *InventoryStack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InventoryStack.ProtoReflect.Descriptor instead.
 func (*InventoryStack) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{3}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *InventoryStack) GetItemId() uint32 {
@@ -963,7 +1147,7 @@ type PlotStateRecord struct {
 
 func (x *PlotStateRecord) Reset() {
 	*x = PlotStateRecord{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[4]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -975,7 +1159,7 @@ func (x *PlotStateRecord) String() string {
 func (*PlotStateRecord) ProtoMessage() {}
 
 func (x *PlotStateRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[4]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -988,7 +1172,7 @@ func (x *PlotStateRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlotStateRecord.ProtoReflect.Descriptor instead.
 func (*PlotStateRecord) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{4}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PlotStateRecord) GetPlotId() uint32 {
@@ -1140,7 +1324,7 @@ type TimedEffectRecord struct {
 
 func (x *TimedEffectRecord) Reset() {
 	*x = TimedEffectRecord{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[5]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1152,7 +1336,7 @@ func (x *TimedEffectRecord) String() string {
 func (*TimedEffectRecord) ProtoMessage() {}
 
 func (x *TimedEffectRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[5]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1165,7 +1349,7 @@ func (x *TimedEffectRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimedEffectRecord.ProtoReflect.Descriptor instead.
 func (*TimedEffectRecord) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{5}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TimedEffectRecord) GetEffectInstanceId() []byte {
@@ -1239,7 +1423,7 @@ type ChapterStateRecord struct {
 
 func (x *ChapterStateRecord) Reset() {
 	*x = ChapterStateRecord{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[6]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1251,7 +1435,7 @@ func (x *ChapterStateRecord) String() string {
 func (*ChapterStateRecord) ProtoMessage() {}
 
 func (x *ChapterStateRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[6]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1264,7 +1448,7 @@ func (x *ChapterStateRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChapterStateRecord.ProtoReflect.Descriptor instead.
 func (*ChapterStateRecord) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{6}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ChapterStateRecord) GetChapterId() uint32 {
@@ -1330,7 +1514,7 @@ type TaskStateRecord struct {
 
 func (x *TaskStateRecord) Reset() {
 	*x = TaskStateRecord{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[7]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1342,7 +1526,7 @@ func (x *TaskStateRecord) String() string {
 func (*TaskStateRecord) ProtoMessage() {}
 
 func (x *TaskStateRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[7]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1355,7 +1539,7 @@ func (x *TaskStateRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskStateRecord.ProtoReflect.Descriptor instead.
 func (*TaskStateRecord) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{7}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TaskStateRecord) GetTaskId() uint32 {
@@ -1411,7 +1595,7 @@ type FriendActionState struct {
 
 func (x *FriendActionState) Reset() {
 	*x = FriendActionState{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[8]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1423,7 +1607,7 @@ func (x *FriendActionState) String() string {
 func (*FriendActionState) ProtoMessage() {}
 
 func (x *FriendActionState) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[8]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1436,7 +1620,7 @@ func (x *FriendActionState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendActionState.ProtoReflect.Descriptor instead.
 func (*FriendActionState) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{8}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *FriendActionState) GetApplyPestChances() uint32 {
@@ -1476,7 +1660,7 @@ type FriendResourceReservation struct {
 
 func (x *FriendResourceReservation) Reset() {
 	*x = FriendResourceReservation{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[9]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1488,7 +1672,7 @@ func (x *FriendResourceReservation) String() string {
 func (*FriendResourceReservation) ProtoMessage() {}
 
 func (x *FriendResourceReservation) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[9]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1501,7 +1685,7 @@ func (x *FriendResourceReservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendResourceReservation.ProtoReflect.Descriptor instead.
 func (*FriendResourceReservation) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{9}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *FriendResourceReservation) GetInteractionId() []byte {
@@ -1575,7 +1759,7 @@ type FriendInteractionReceipt struct {
 
 func (x *FriendInteractionReceipt) Reset() {
 	*x = FriendInteractionReceipt{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[10]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1587,7 +1771,7 @@ func (x *FriendInteractionReceipt) String() string {
 func (*FriendInteractionReceipt) ProtoMessage() {}
 
 func (x *FriendInteractionReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[10]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1600,7 +1784,7 @@ func (x *FriendInteractionReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendInteractionReceipt.ProtoReflect.Descriptor instead.
 func (*FriendInteractionReceipt) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{10}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *FriendInteractionReceipt) GetInteractionId() []byte {
@@ -1662,7 +1846,7 @@ type FriendTaskCreditReceipt struct {
 
 func (x *FriendTaskCreditReceipt) Reset() {
 	*x = FriendTaskCreditReceipt{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[11]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1674,7 +1858,7 @@ func (x *FriendTaskCreditReceipt) String() string {
 func (*FriendTaskCreditReceipt) ProtoMessage() {}
 
 func (x *FriendTaskCreditReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[11]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1687,7 +1871,7 @@ func (x *FriendTaskCreditReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendTaskCreditReceipt.ProtoReflect.Descriptor instead.
 func (*FriendTaskCreditReceipt) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{11}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *FriendTaskCreditReceipt) GetRelationId() []byte {
@@ -1727,7 +1911,7 @@ type IdempotencyResultRecord struct {
 
 func (x *IdempotencyResultRecord) Reset() {
 	*x = IdempotencyResultRecord{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[12]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1739,7 +1923,7 @@ func (x *IdempotencyResultRecord) String() string {
 func (*IdempotencyResultRecord) ProtoMessage() {}
 
 func (x *IdempotencyResultRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[12]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1752,7 +1936,7 @@ func (x *IdempotencyResultRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IdempotencyResultRecord.ProtoReflect.Descriptor instead.
 func (*IdempotencyResultRecord) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{12}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *IdempotencyResultRecord) GetCallerPlayerId() uint64 {
@@ -1878,7 +2062,7 @@ type PendingOutboxRecord struct {
 
 func (x *PendingOutboxRecord) Reset() {
 	*x = PendingOutboxRecord{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[13]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1890,7 +2074,7 @@ func (x *PendingOutboxRecord) String() string {
 func (*PendingOutboxRecord) ProtoMessage() {}
 
 func (x *PendingOutboxRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[13]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1903,7 +2087,7 @@ func (x *PendingOutboxRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingOutboxRecord.ProtoReflect.Descriptor instead.
 func (*PendingOutboxRecord) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{13}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PendingOutboxRecord) GetEventId() []byte {
@@ -1996,7 +2180,7 @@ type OutboxRow struct {
 
 func (x *OutboxRow) Reset() {
 	*x = OutboxRow{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[14]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2008,7 +2192,7 @@ func (x *OutboxRow) String() string {
 func (*OutboxRow) ProtoMessage() {}
 
 func (x *OutboxRow) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[14]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2021,7 +2205,7 @@ func (x *OutboxRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OutboxRow.ProtoReflect.Descriptor instead.
 func (*OutboxRow) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{14}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *OutboxRow) GetEventId() []byte {
@@ -2122,7 +2306,7 @@ type ShardMapSnapshot struct {
 
 func (x *ShardMapSnapshot) Reset() {
 	*x = ShardMapSnapshot{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[15]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2134,7 +2318,7 @@ func (x *ShardMapSnapshot) String() string {
 func (*ShardMapSnapshot) ProtoMessage() {}
 
 func (x *ShardMapSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[15]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2147,7 +2331,7 @@ func (x *ShardMapSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardMapSnapshot.ProtoReflect.Descriptor instead.
 func (*ShardMapSnapshot) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{15}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ShardMapSnapshot) GetShardCount() uint32 {
@@ -2211,7 +2395,7 @@ type ShardRouteEntry struct {
 
 func (x *ShardRouteEntry) Reset() {
 	*x = ShardRouteEntry{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[16]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2223,7 +2407,7 @@ func (x *ShardRouteEntry) String() string {
 func (*ShardRouteEntry) ProtoMessage() {}
 
 func (x *ShardRouteEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[16]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2236,7 +2420,7 @@ func (x *ShardRouteEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardRouteEntry.ProtoReflect.Descriptor instead.
 func (*ShardRouteEntry) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{16}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ShardRouteEntry) GetShardId() uint32 {
@@ -2330,7 +2514,7 @@ type ShardFence struct {
 
 func (x *ShardFence) Reset() {
 	*x = ShardFence{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[17]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2342,7 +2526,7 @@ func (x *ShardFence) String() string {
 func (*ShardFence) ProtoMessage() {}
 
 func (x *ShardFence) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[17]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2355,7 +2539,7 @@ func (x *ShardFence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardFence.ProtoReflect.Descriptor instead.
 func (*ShardFence) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{17}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ShardFence) GetLogicalShardId() uint32 {
@@ -2419,7 +2603,7 @@ type DirtyQueueEntry struct {
 
 func (x *DirtyQueueEntry) Reset() {
 	*x = DirtyQueueEntry{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[18]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2431,7 +2615,7 @@ func (x *DirtyQueueEntry) String() string {
 func (*DirtyQueueEntry) ProtoMessage() {}
 
 func (x *DirtyQueueEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[18]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2444,7 +2628,7 @@ func (x *DirtyQueueEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirtyQueueEntry.ProtoReflect.Descriptor instead.
 func (*DirtyQueueEntry) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{18}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *DirtyQueueEntry) GetPlayerId() uint64 {
@@ -2537,7 +2721,7 @@ type DirtyBatchWriteRequest struct {
 
 func (x *DirtyBatchWriteRequest) Reset() {
 	*x = DirtyBatchWriteRequest{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[19]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2549,7 +2733,7 @@ func (x *DirtyBatchWriteRequest) String() string {
 func (*DirtyBatchWriteRequest) ProtoMessage() {}
 
 func (x *DirtyBatchWriteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[19]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2562,7 +2746,7 @@ func (x *DirtyBatchWriteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirtyBatchWriteRequest.ProtoReflect.Descriptor instead.
 func (*DirtyBatchWriteRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{19}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *DirtyBatchWriteRequest) GetBatchId() []byte {
@@ -2622,7 +2806,7 @@ type PlayerCheckpointWrite struct {
 
 func (x *PlayerCheckpointWrite) Reset() {
 	*x = PlayerCheckpointWrite{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[20]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2634,7 +2818,7 @@ func (x *PlayerCheckpointWrite) String() string {
 func (*PlayerCheckpointWrite) ProtoMessage() {}
 
 func (x *PlayerCheckpointWrite) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[20]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2647,7 +2831,7 @@ func (x *PlayerCheckpointWrite) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerCheckpointWrite.ProtoReflect.Descriptor instead.
 func (*PlayerCheckpointWrite) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{20}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PlayerCheckpointWrite) GetPlayerId() uint64 {
@@ -2759,7 +2943,7 @@ type PlayerCheckpointWriteResult struct {
 
 func (x *PlayerCheckpointWriteResult) Reset() {
 	*x = PlayerCheckpointWriteResult{}
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[21]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2771,7 +2955,7 @@ func (x *PlayerCheckpointWriteResult) String() string {
 func (*PlayerCheckpointWriteResult) ProtoMessage() {}
 
 func (x *PlayerCheckpointWriteResult) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[21]
+	mi := &file_classicfarm_v1_data_data_model_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2784,7 +2968,7 @@ func (x *PlayerCheckpointWriteResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerCheckpointWriteResult.ProtoReflect.Descriptor instead.
 func (*PlayerCheckpointWriteResult) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{21}
+	return file_classicfarm_v1_data_data_model_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PlayerCheckpointWriteResult) GetPlayerId() uint64 {
@@ -2816,7 +3000,8 @@ const file_classicfarm_v1_data_data_model_proto_rawDesc = "" +
 	"\fRateDecimal6\x12!\n" +
 	"\fscaled_value\x18\x01 \x01(\x03R\vscaledValue\"3\n" +
 	"\x0eGrowthDecimal9\x12!\n" +
-	"\fscaled_value\x18\x01 \x01(\x03R\vscaledValue\"\x89\t\n" +
+	"\fscaled_value\x18\x01 \x01(\x03R\vscaledValue\"\xe0\n" +
+	"\n" +
 	"\x12PlayerCheckpointV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12(\n" +
@@ -2839,7 +3024,19 @@ const file_classicfarm_v1_data_data_model_proto_rawDesc = "" +
 	"\x0efriend_actions\x18\x10 \x01(\v2&.classicfarm.data.v1.FriendActionStateR\rfriendActions\x12_\n" +
 	"\x13friend_reservations\x18\x11 \x03(\v2..classicfarm.data.v1.FriendResourceReservationR\x12friendReservations\x12V\n" +
 	"\x0ffriend_receipts\x18\x12 \x03(\v2-.classicfarm.data.v1.FriendInteractionReceiptR\x0efriendReceipts\x12k\n" +
-	"\x1bfriend_task_credit_receipts\x18\x13 \x03(\v2,.classicfarm.data.v1.FriendTaskCreditReceiptR\x18friendTaskCreditReceipts\"E\n" +
+	"\x1bfriend_task_credit_receipts\x18\x13 \x03(\v2,.classicfarm.data.v1.FriendTaskCreditReceiptR\x18friendTaskCreditReceipts\x12@\n" +
+	"\tpet_state\x18\x14 \x01(\v2#.classicfarm.data.v1.PetStateRecordR\bpetState\x12?\n" +
+	"\x06career\x18\x15 \x01(\v2'.classicfarm.data.v1.PlayerCareerRecordR\x06career\x12R\n" +
+	"\x0fcrop_compendium\x18\x16 \x01(\v2).classicfarm.data.v1.CropCompendiumRecordR\x0ecropCompendium\"\x89\x01\n" +
+	"\x0ePetStateRecord\x12\"\n" +
+	"\rowned_pet_ids\x18\x01 \x03(\rR\vownedPetIds\x12\"\n" +
+	"\ractive_pet_id\x18\x02 \x01(\rR\vactivePetId\x12/\n" +
+	"\x14food_active_until_ms\x18\x03 \x01(\x03R\x11foodActiveUntilMs\"\x94\x01\n" +
+	"\x12PlayerCareerRecord\x12A\n" +
+	"\x1dtotal_harvested_crop_quantity\x18\x01 \x01(\x04R\x1atotalHarvestedCropQuantity\x12;\n" +
+	"\x1atotal_stolen_crop_quantity\x18\x02 \x01(\x04R\x17totalStolenCropQuantity\"B\n" +
+	"\x14CropCompendiumRecord\x12*\n" +
+	"\x11unlocked_crop_ids\x18\x01 \x03(\rR\x0funlockedCropIds\"E\n" +
 	"\x0eInventoryStack\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
 	"\bquantity\x18\x02 \x01(\rR\bquantity\"\xa1\b\n" +
@@ -3139,7 +3336,7 @@ func file_classicfarm_v1_data_data_model_proto_rawDescGZIP() []byte {
 }
 
 var file_classicfarm_v1_data_data_model_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_classicfarm_v1_data_data_model_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_classicfarm_v1_data_data_model_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_classicfarm_v1_data_data_model_proto_goTypes = []any{
 	(PlotRecordState)(0),                // 0: classicfarm.data.v1.PlotRecordState
 	(EffectKind)(0),                     // 1: classicfarm.data.v1.EffectKind
@@ -3155,64 +3352,70 @@ var file_classicfarm_v1_data_data_model_proto_goTypes = []any{
 	(*RateDecimal6)(nil),                // 11: classicfarm.data.v1.RateDecimal6
 	(*GrowthDecimal9)(nil),              // 12: classicfarm.data.v1.GrowthDecimal9
 	(*PlayerCheckpointV1)(nil),          // 13: classicfarm.data.v1.PlayerCheckpointV1
-	(*InventoryStack)(nil),              // 14: classicfarm.data.v1.InventoryStack
-	(*PlotStateRecord)(nil),             // 15: classicfarm.data.v1.PlotStateRecord
-	(*TimedEffectRecord)(nil),           // 16: classicfarm.data.v1.TimedEffectRecord
-	(*ChapterStateRecord)(nil),          // 17: classicfarm.data.v1.ChapterStateRecord
-	(*TaskStateRecord)(nil),             // 18: classicfarm.data.v1.TaskStateRecord
-	(*FriendActionState)(nil),           // 19: classicfarm.data.v1.FriendActionState
-	(*FriendResourceReservation)(nil),   // 20: classicfarm.data.v1.FriendResourceReservation
-	(*FriendInteractionReceipt)(nil),    // 21: classicfarm.data.v1.FriendInteractionReceipt
-	(*FriendTaskCreditReceipt)(nil),     // 22: classicfarm.data.v1.FriendTaskCreditReceipt
-	(*IdempotencyResultRecord)(nil),     // 23: classicfarm.data.v1.IdempotencyResultRecord
-	(*PendingOutboxRecord)(nil),         // 24: classicfarm.data.v1.PendingOutboxRecord
-	(*OutboxRow)(nil),                   // 25: classicfarm.data.v1.OutboxRow
-	(*ShardMapSnapshot)(nil),            // 26: classicfarm.data.v1.ShardMapSnapshot
-	(*ShardRouteEntry)(nil),             // 27: classicfarm.data.v1.ShardRouteEntry
-	(*ShardFence)(nil),                  // 28: classicfarm.data.v1.ShardFence
-	(*DirtyQueueEntry)(nil),             // 29: classicfarm.data.v1.DirtyQueueEntry
-	(*DirtyBatchWriteRequest)(nil),      // 30: classicfarm.data.v1.DirtyBatchWriteRequest
-	(*PlayerCheckpointWrite)(nil),       // 31: classicfarm.data.v1.PlayerCheckpointWrite
-	(*PlayerCheckpointWriteResult)(nil), // 32: classicfarm.data.v1.PlayerCheckpointWriteResult
+	(*PetStateRecord)(nil),              // 14: classicfarm.data.v1.PetStateRecord
+	(*PlayerCareerRecord)(nil),          // 15: classicfarm.data.v1.PlayerCareerRecord
+	(*CropCompendiumRecord)(nil),        // 16: classicfarm.data.v1.CropCompendiumRecord
+	(*InventoryStack)(nil),              // 17: classicfarm.data.v1.InventoryStack
+	(*PlotStateRecord)(nil),             // 18: classicfarm.data.v1.PlotStateRecord
+	(*TimedEffectRecord)(nil),           // 19: classicfarm.data.v1.TimedEffectRecord
+	(*ChapterStateRecord)(nil),          // 20: classicfarm.data.v1.ChapterStateRecord
+	(*TaskStateRecord)(nil),             // 21: classicfarm.data.v1.TaskStateRecord
+	(*FriendActionState)(nil),           // 22: classicfarm.data.v1.FriendActionState
+	(*FriendResourceReservation)(nil),   // 23: classicfarm.data.v1.FriendResourceReservation
+	(*FriendInteractionReceipt)(nil),    // 24: classicfarm.data.v1.FriendInteractionReceipt
+	(*FriendTaskCreditReceipt)(nil),     // 25: classicfarm.data.v1.FriendTaskCreditReceipt
+	(*IdempotencyResultRecord)(nil),     // 26: classicfarm.data.v1.IdempotencyResultRecord
+	(*PendingOutboxRecord)(nil),         // 27: classicfarm.data.v1.PendingOutboxRecord
+	(*OutboxRow)(nil),                   // 28: classicfarm.data.v1.OutboxRow
+	(*ShardMapSnapshot)(nil),            // 29: classicfarm.data.v1.ShardMapSnapshot
+	(*ShardRouteEntry)(nil),             // 30: classicfarm.data.v1.ShardRouteEntry
+	(*ShardFence)(nil),                  // 31: classicfarm.data.v1.ShardFence
+	(*DirtyQueueEntry)(nil),             // 32: classicfarm.data.v1.DirtyQueueEntry
+	(*DirtyBatchWriteRequest)(nil),      // 33: classicfarm.data.v1.DirtyBatchWriteRequest
+	(*PlayerCheckpointWrite)(nil),       // 34: classicfarm.data.v1.PlayerCheckpointWrite
+	(*PlayerCheckpointWriteResult)(nil), // 35: classicfarm.data.v1.PlayerCheckpointWriteResult
 }
 var file_classicfarm_v1_data_data_model_proto_depIdxs = []int32{
-	14, // 0: classicfarm.data.v1.PlayerCheckpointV1.inventory:type_name -> classicfarm.data.v1.InventoryStack
-	15, // 1: classicfarm.data.v1.PlayerCheckpointV1.plots:type_name -> classicfarm.data.v1.PlotStateRecord
-	17, // 2: classicfarm.data.v1.PlayerCheckpointV1.current_chapter:type_name -> classicfarm.data.v1.ChapterStateRecord
-	23, // 3: classicfarm.data.v1.PlayerCheckpointV1.recent_results:type_name -> classicfarm.data.v1.IdempotencyResultRecord
-	24, // 4: classicfarm.data.v1.PlayerCheckpointV1.pending_outbox:type_name -> classicfarm.data.v1.PendingOutboxRecord
-	19, // 5: classicfarm.data.v1.PlayerCheckpointV1.friend_actions:type_name -> classicfarm.data.v1.FriendActionState
-	20, // 6: classicfarm.data.v1.PlayerCheckpointV1.friend_reservations:type_name -> classicfarm.data.v1.FriendResourceReservation
-	21, // 7: classicfarm.data.v1.PlayerCheckpointV1.friend_receipts:type_name -> classicfarm.data.v1.FriendInteractionReceipt
-	22, // 8: classicfarm.data.v1.PlayerCheckpointV1.friend_task_credit_receipts:type_name -> classicfarm.data.v1.FriendTaskCreditReceipt
-	0,  // 9: classicfarm.data.v1.PlotStateRecord.state:type_name -> classicfarm.data.v1.PlotRecordState
-	12, // 10: classicfarm.data.v1.PlotStateRecord.maturity_value:type_name -> classicfarm.data.v1.GrowthDecimal9
-	11, // 11: classicfarm.data.v1.PlotStateRecord.base_growth_rate:type_name -> classicfarm.data.v1.RateDecimal6
-	12, // 12: classicfarm.data.v1.PlotStateRecord.settled_growth_value:type_name -> classicfarm.data.v1.GrowthDecimal9
-	16, // 13: classicfarm.data.v1.PlotStateRecord.fertilizer_effect:type_name -> classicfarm.data.v1.TimedEffectRecord
-	16, // 14: classicfarm.data.v1.PlotStateRecord.pest_effect:type_name -> classicfarm.data.v1.TimedEffectRecord
-	1,  // 15: classicfarm.data.v1.TimedEffectRecord.effect_kind:type_name -> classicfarm.data.v1.EffectKind
-	11, // 16: classicfarm.data.v1.TimedEffectRecord.modifier:type_name -> classicfarm.data.v1.RateDecimal6
-	2,  // 17: classicfarm.data.v1.ChapterStateRecord.status:type_name -> classicfarm.data.v1.ChapterRecordStatus
-	18, // 18: classicfarm.data.v1.ChapterStateRecord.tasks:type_name -> classicfarm.data.v1.TaskStateRecord
-	3,  // 19: classicfarm.data.v1.TaskStateRecord.metric:type_name -> classicfarm.data.v1.TaskMetric
-	4,  // 20: classicfarm.data.v1.FriendResourceReservation.action:type_name -> classicfarm.data.v1.FriendInteractionAction
-	5,  // 21: classicfarm.data.v1.FriendResourceReservation.status:type_name -> classicfarm.data.v1.FriendReservationStatus
-	6,  // 22: classicfarm.data.v1.FriendInteractionReceipt.role:type_name -> classicfarm.data.v1.FriendReceiptRole
-	4,  // 23: classicfarm.data.v1.FriendInteractionReceipt.action:type_name -> classicfarm.data.v1.FriendInteractionAction
-	7,  // 24: classicfarm.data.v1.FriendInteractionReceipt.status:type_name -> classicfarm.data.v1.FriendReceiptStatus
-	8,  // 25: classicfarm.data.v1.PendingOutboxRecord.event_type:type_name -> classicfarm.data.v1.OutboxEventType
-	8,  // 26: classicfarm.data.v1.OutboxRow.event_type:type_name -> classicfarm.data.v1.OutboxEventType
-	27, // 27: classicfarm.data.v1.ShardMapSnapshot.entries:type_name -> classicfarm.data.v1.ShardRouteEntry
-	9,  // 28: classicfarm.data.v1.ShardRouteEntry.state:type_name -> classicfarm.data.v1.ShardRouteState
-	31, // 29: classicfarm.data.v1.DirtyBatchWriteRequest.entries:type_name -> classicfarm.data.v1.PlayerCheckpointWrite
-	25, // 30: classicfarm.data.v1.PlayerCheckpointWrite.outbox_rows:type_name -> classicfarm.data.v1.OutboxRow
-	10, // 31: classicfarm.data.v1.PlayerCheckpointWriteResult.status:type_name -> classicfarm.data.v1.CheckpointWriteStatus
-	32, // [32:32] is the sub-list for method output_type
-	32, // [32:32] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	17, // 0: classicfarm.data.v1.PlayerCheckpointV1.inventory:type_name -> classicfarm.data.v1.InventoryStack
+	18, // 1: classicfarm.data.v1.PlayerCheckpointV1.plots:type_name -> classicfarm.data.v1.PlotStateRecord
+	20, // 2: classicfarm.data.v1.PlayerCheckpointV1.current_chapter:type_name -> classicfarm.data.v1.ChapterStateRecord
+	26, // 3: classicfarm.data.v1.PlayerCheckpointV1.recent_results:type_name -> classicfarm.data.v1.IdempotencyResultRecord
+	27, // 4: classicfarm.data.v1.PlayerCheckpointV1.pending_outbox:type_name -> classicfarm.data.v1.PendingOutboxRecord
+	22, // 5: classicfarm.data.v1.PlayerCheckpointV1.friend_actions:type_name -> classicfarm.data.v1.FriendActionState
+	23, // 6: classicfarm.data.v1.PlayerCheckpointV1.friend_reservations:type_name -> classicfarm.data.v1.FriendResourceReservation
+	24, // 7: classicfarm.data.v1.PlayerCheckpointV1.friend_receipts:type_name -> classicfarm.data.v1.FriendInteractionReceipt
+	25, // 8: classicfarm.data.v1.PlayerCheckpointV1.friend_task_credit_receipts:type_name -> classicfarm.data.v1.FriendTaskCreditReceipt
+	14, // 9: classicfarm.data.v1.PlayerCheckpointV1.pet_state:type_name -> classicfarm.data.v1.PetStateRecord
+	15, // 10: classicfarm.data.v1.PlayerCheckpointV1.career:type_name -> classicfarm.data.v1.PlayerCareerRecord
+	16, // 11: classicfarm.data.v1.PlayerCheckpointV1.crop_compendium:type_name -> classicfarm.data.v1.CropCompendiumRecord
+	0,  // 12: classicfarm.data.v1.PlotStateRecord.state:type_name -> classicfarm.data.v1.PlotRecordState
+	12, // 13: classicfarm.data.v1.PlotStateRecord.maturity_value:type_name -> classicfarm.data.v1.GrowthDecimal9
+	11, // 14: classicfarm.data.v1.PlotStateRecord.base_growth_rate:type_name -> classicfarm.data.v1.RateDecimal6
+	12, // 15: classicfarm.data.v1.PlotStateRecord.settled_growth_value:type_name -> classicfarm.data.v1.GrowthDecimal9
+	19, // 16: classicfarm.data.v1.PlotStateRecord.fertilizer_effect:type_name -> classicfarm.data.v1.TimedEffectRecord
+	19, // 17: classicfarm.data.v1.PlotStateRecord.pest_effect:type_name -> classicfarm.data.v1.TimedEffectRecord
+	1,  // 18: classicfarm.data.v1.TimedEffectRecord.effect_kind:type_name -> classicfarm.data.v1.EffectKind
+	11, // 19: classicfarm.data.v1.TimedEffectRecord.modifier:type_name -> classicfarm.data.v1.RateDecimal6
+	2,  // 20: classicfarm.data.v1.ChapterStateRecord.status:type_name -> classicfarm.data.v1.ChapterRecordStatus
+	21, // 21: classicfarm.data.v1.ChapterStateRecord.tasks:type_name -> classicfarm.data.v1.TaskStateRecord
+	3,  // 22: classicfarm.data.v1.TaskStateRecord.metric:type_name -> classicfarm.data.v1.TaskMetric
+	4,  // 23: classicfarm.data.v1.FriendResourceReservation.action:type_name -> classicfarm.data.v1.FriendInteractionAction
+	5,  // 24: classicfarm.data.v1.FriendResourceReservation.status:type_name -> classicfarm.data.v1.FriendReservationStatus
+	6,  // 25: classicfarm.data.v1.FriendInteractionReceipt.role:type_name -> classicfarm.data.v1.FriendReceiptRole
+	4,  // 26: classicfarm.data.v1.FriendInteractionReceipt.action:type_name -> classicfarm.data.v1.FriendInteractionAction
+	7,  // 27: classicfarm.data.v1.FriendInteractionReceipt.status:type_name -> classicfarm.data.v1.FriendReceiptStatus
+	8,  // 28: classicfarm.data.v1.PendingOutboxRecord.event_type:type_name -> classicfarm.data.v1.OutboxEventType
+	8,  // 29: classicfarm.data.v1.OutboxRow.event_type:type_name -> classicfarm.data.v1.OutboxEventType
+	30, // 30: classicfarm.data.v1.ShardMapSnapshot.entries:type_name -> classicfarm.data.v1.ShardRouteEntry
+	9,  // 31: classicfarm.data.v1.ShardRouteEntry.state:type_name -> classicfarm.data.v1.ShardRouteState
+	34, // 32: classicfarm.data.v1.DirtyBatchWriteRequest.entries:type_name -> classicfarm.data.v1.PlayerCheckpointWrite
+	28, // 33: classicfarm.data.v1.PlayerCheckpointWrite.outbox_rows:type_name -> classicfarm.data.v1.OutboxRow
+	10, // 34: classicfarm.data.v1.PlayerCheckpointWriteResult.status:type_name -> classicfarm.data.v1.CheckpointWriteStatus
+	35, // [35:35] is the sub-list for method output_type
+	35, // [35:35] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_data_data_model_proto_init() }
@@ -3220,20 +3423,20 @@ func file_classicfarm_v1_data_data_model_proto_init() {
 	if File_classicfarm_v1_data_data_model_proto != nil {
 		return
 	}
-	file_classicfarm_v1_data_data_model_proto_msgTypes[4].OneofWrappers = []any{}
-	file_classicfarm_v1_data_data_model_proto_msgTypes[5].OneofWrappers = []any{}
-	file_classicfarm_v1_data_data_model_proto_msgTypes[6].OneofWrappers = []any{}
+	file_classicfarm_v1_data_data_model_proto_msgTypes[7].OneofWrappers = []any{}
+	file_classicfarm_v1_data_data_model_proto_msgTypes[8].OneofWrappers = []any{}
 	file_classicfarm_v1_data_data_model_proto_msgTypes[9].OneofWrappers = []any{}
 	file_classicfarm_v1_data_data_model_proto_msgTypes[12].OneofWrappers = []any{}
-	file_classicfarm_v1_data_data_model_proto_msgTypes[16].OneofWrappers = []any{}
-	file_classicfarm_v1_data_data_model_proto_msgTypes[18].OneofWrappers = []any{}
+	file_classicfarm_v1_data_data_model_proto_msgTypes[15].OneofWrappers = []any{}
+	file_classicfarm_v1_data_data_model_proto_msgTypes[19].OneofWrappers = []any{}
+	file_classicfarm_v1_data_data_model_proto_msgTypes[21].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_data_data_model_proto_rawDesc), len(file_classicfarm_v1_data_data_model_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   22,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

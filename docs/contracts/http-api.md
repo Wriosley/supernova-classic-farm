@@ -174,7 +174,7 @@ The default deployment is same-origin and emits no CORS headers. If H5 and API o
 
 `RegisterResponse` contains `session` (`SessionView`) at tag 1.
 
-Registration canonicalizes the account name to lowercase before uniqueness checking. The registration result is externally atomic: a 201 response is allowed only after the account is `ACTIVE`, the initial Player checkpoint and accepted initial farm resources are durably initialized, and the returned Session is valid. Any failure MUST expose no usable partially provisioned account or Session to H5. An internal partially provisioned account MUST NOT authenticate or appear through Session inspection, and its provisioning MUST be safely retryable and reconcilable.
+Registration canonicalizes the account name to lowercase before uniqueness checking. The registration result is externally atomic: a 201 response is allowed only after the account is `ACTIVE` and the returned Session is valid. Initial Player checkpoint / farm resources are NOT created by LoginSvr; the current Owner Zone creates them on first Player Actor activation when Load returns NotFound. Any registration failure MUST expose no usable partially provisioned account or Session to H5. An internal partially provisioned account MUST NOT authenticate or appear through Session inspection, and its provisioning MUST be safely retryable and reconcilable.
 
 The local prototype MAY satisfy this guarantee with one MySQL transaction when account and Player records are co-located. A production deployment that separates account and Player shards MUST use a separately defined idempotent provisioning state machine with Outbox and reconciliation semantics; this HTTP contract does not require or imply a local transaction shared by those databases.
 
@@ -378,7 +378,7 @@ Accepted by ADR-0010 for the local prototype:
 Implementation tests MUST prove:
 
 1. Go and TypeScript generated types round-trip every HTTP message and reject malformed, trailing, oversized, and wrong-content-type bodies.
-2. Registration returns 201 only after the account is ACTIVE, the initial Player checkpoint/resources are durable, and the Session is valid; concurrent same-name registration exposes only one usable account.
+2. Registration returns 201 only after the account is ACTIVE and the Session is valid; farm checkpoint initialization is deferred to Owner Zone first activation; concurrent same-name registration exposes only one usable account.
 3. Injected failures at every provisioning step expose no authenticatable partial account or usable Session, and retries/reconciliation converge without duplicate Player initialization; the co-located transaction path and a simulated separated-shard state-machine/Outbox path both satisfy the same external guarantee.
 4. Passwords are never stored/logged in plaintext; Argon2id parameters, unique salts, dummy verification, and upgrade-on-login work.
 5. Login returns one generic failure for unknown account, wrong password, disabled account, and non-ACTIVE provisioning state, without a meaningful intentional timing distinction.

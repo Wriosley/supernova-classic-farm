@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 // MySQLCheckpointStore preserves the existing transactional Fence,
@@ -91,6 +92,95 @@ func (l *MySQLCheckpointStore) SaveCAS(
 			Status: CheckpointWriteRetryableFailure,
 		}, err
 	}
+}
+
+// CreateInitial 在事务内校验 Fence，仅 INSERT；已存在则按内容判定 AlreadyApplied / CorruptConflict。
+func (l *MySQLCheckpointStore) CreateInitial(
+	ctx context.Context,
+	checkpoint *datav1.PlayerCheckpointV1,
+) (CheckpointWriteResult, error) {
+	if l == nil || l.DB == nil {
+		return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+			errors.New("MySQL checkpoint store is not configured")
+	}
+	if err := ValidateCheckpoint(checkpoint); err != nil {
+		return CheckpointWriteResult{Status: CheckpointWriteCorruptConflict}, err
+	}
+	blob, digest, err := MarshalCheckpoint(checkpoint)
+	if err != nil {
+		return CheckpointWriteResult{Status: CheckpointWriteCorruptConflict}, err
+	}
+	tx, err := l.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+			fmt.Errorf("begin initial checkpoint: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var ownerZoneID string
+	var ownerEpoch uint64
+	err = tx.QueryRowContext(ctx, `
+		SELECT owner_zone_id, owner_epoch
+		FROM shard_fences
+		WHERE logical_shard_id = ?
+		FOR UPDATE`,
+		checkpoint.LogicalShardId,
+	).Scan(&ownerZoneID, &ownerEpoch)
+	if errors.Is(err, sql.ErrNoRows) {
+		return CheckpointWriteResult{Status: CheckpointWriteFenced}, nil
+	}
+	if err != nil {
+		return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+			fmt.Errorf("read initial checkpoint fence: %w", err)
+	}
+	if ownerZoneID != l.ownerZoneID() || ownerEpoch != checkpoint.OwnerEpoch {
+		return CheckpointWriteResult{Status: CheckpointWriteFenced}, nil
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO player_checkpoints (
+			player_id, db_shard_id, logical_shard_id, owner_epoch, player_seq,
+			checkpoint_revision, checkpoint_schema_version, checkpoint_blob,
+			checkpoint_sha256, last_applied_config_version, created_at_ms, updated_at_ms
+		) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		checkpoint.PlayerId, checkpoint.LogicalShardId, checkpoint.OwnerEpoch,
+		checkpoint.PlayerSeq, checkpoint.CheckpointRevision, checkpoint.SchemaVersion,
+		blob, digest[:], checkpoint.LastAppliedConfigVersion,
+		checkpoint.CreatedAtMs, checkpoint.UpdatedAtMs,
+	)
+	if err != nil {
+		if mysqlDuplicateKey(err) {
+			_ = tx.Rollback()
+			loaded, loadErr := l.Load(ctx, checkpoint.PlayerId)
+			if loadErr != nil {
+				return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+					fmt.Errorf("reconcile duplicate initial checkpoint: %w", loadErr)
+			}
+			same, compareErr := loadedMatchesCheckpoint(loaded, checkpoint)
+			if compareErr != nil {
+				return CheckpointWriteResult{Status: CheckpointWriteCorruptConflict}, compareErr
+			}
+			if same {
+				return CheckpointWriteResult{
+					Status:   CheckpointWriteAlreadyApplied,
+					NewToken: cloneStoreToken(loaded.Token),
+				}, nil
+			}
+			return CheckpointWriteResult{Status: CheckpointWriteCorruptConflict}, nil
+		}
+		return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+			fmt.Errorf("insert initial checkpoint: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return CheckpointWriteResult{Status: CheckpointWriteRetryableFailure},
+			fmt.Errorf("commit initial checkpoint: %w", err)
+	}
+	return CheckpointWriteResult{Status: CheckpointWriteApplied}, nil
+}
+
+func mysqlDuplicateKey(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
 // Save is retained for focused MySQL adapter tests and migration diagnostics.

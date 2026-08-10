@@ -64,6 +64,10 @@ func (r *Runtime) buySeeds(
 		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_SHOP_ENTRY_NOT_FOUND}), true
 	}
+	if _, isPetFood := config.PetFood(entry.ItemID); isPetFood {
+		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now,
+			&wsv1.Error{Code: wsv1.ErrorCode_SHOP_ENTRY_NOT_FOUND}), true
+	}
 	if buy.ExpectedPriceVersion != entry.PriceVersion {
 		return r.storeBuySeedsFailure(a, request, requestID, fingerprint, config.Version(), now, &wsv1.Error{
 			Code:            wsv1.ErrorCode_PRICE_CHANGED,

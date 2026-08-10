@@ -60,7 +60,9 @@ func (r *Runtime) BuildPublicFarmSnapshot(
 			dirty = true
 			dirtyRevision = a.state.CheckpointRevision
 		}
-		snapshot = publicFarmSnapshot(ownerPlayerID, a.farmViewEpoch, a.farmViewSeq, a.state.Plots)
+		snapshot = publicFarmSnapshot(
+			ownerPlayerID, a.farmViewEpoch, a.farmViewSeq, a.state.Plots, careerView(a.state),
+		)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("execute player mailbox: %w", err)
@@ -87,6 +89,7 @@ func publicFarmSnapshot(
 	farmViewEpoch []byte,
 	farmViewSeq uint64,
 	plots map[uint32]*Plot,
+	career *wsv1.PlayerCareerView,
 ) *wsv1.FarmVisitSnapshot {
 	plotIDs := make([]uint32, 0, len(plots))
 	for plotID := range plots {
@@ -97,13 +100,17 @@ func publicFarmSnapshot(
 	for _, plotID := range plotIDs {
 		views = append(views, publicPlotView(plots[plotID]))
 	}
+	if career == nil {
+		career = &wsv1.PlayerCareerView{}
+	}
 	return &wsv1.FarmVisitSnapshot{
 		OwnerPlayerId: ownerPlayerID,
 		Version: &wsv1.FarmViewVersion{
 			FarmViewEpoch: append([]byte(nil), farmViewEpoch...),
 			FarmViewSeq:   farmViewSeq,
 		},
-		Plots: views,
+		Plots:  views,
+		Career: career,
 	}
 }
 

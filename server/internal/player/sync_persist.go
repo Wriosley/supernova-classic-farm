@@ -46,11 +46,9 @@ type pendingSyncStep struct {
 	// step is durable once persistedRevision reaches it, because every
 	// checkpoint write is a full-state snapshot at its own revision.
 	revision uint64
-	// farmViewPlotIDs is non-empty when the step still owes visitors a
-	// FarmViewPatch for those plots. The broadcast is deliberately deferred
-	// until the mutation is durable, so it is emitted by whichever attempt
-	// retires this marker: exactly once, with exactly one farm_view_seq bump.
-	farmViewPlotIDs []uint32
+	// domainChanges 非空时，本步骤在权威持久化成功后还欠一次公开农场事件。
+	// 广播故意推迟到 SaveCAS 成功之后，由结算该 marker 的那次尝试恰好发布一次。
+	domainChanges DomainChanges
 }
 
 func syncStepKey(kind syncStepKind, id []byte) string {
@@ -85,11 +83,10 @@ func (a *runtimeActor) markSyncPending(key string, step pendingSyncStep) {
 // cannot interleave with or overtake the periodic flusher.
 //
 // Callers must hold the player's shard read lock, like every other
-// flushPlayerLocked caller. The returned plot IDs are the FarmViewPatch this
-// call now owns and must broadcast.
+// flushPlayerLocked caller. 返回的 DomainChanges 由调用方在持久化成功后发布。
 func (r *Runtime) settleSyncStepLocked(
 	ctx context.Context, playerID uint64, a *runtimeActor, key string,
-) (farmViewPlotIDs []uint32, err error) {
+) (changes DomainChanges, err error) {
 	var pending pendingSyncStep
 	var found bool
 	var persistedRevision, currentRevision uint64
@@ -98,10 +95,10 @@ func (r *Runtime) settleSyncStepLocked(
 		persistedRevision = a.persistedRevision
 		currentRevision = a.state.CheckpointRevision
 	}); err != nil {
-		return nil, fmt.Errorf("inspect pending step for player %d: %w", playerID, err)
+		return DomainChanges{}, fmt.Errorf("inspect pending step for player %d: %w", playerID, err)
 	}
 	if !found {
-		return nil, nil
+		return DomainChanges{}, nil
 	}
 	// Without a store nothing is durable by construction (development
 	// runtime): the marker is retired so behavior matches the store-backed
@@ -109,15 +106,15 @@ func (r *Runtime) settleSyncStepLocked(
 	if r.store != nil && persistedRevision < pending.revision {
 		r.markDirty(playerID, currentRevision)
 		if err := r.flushPlayerLocked(ctx, playerID); err != nil {
-			return nil, err
+			return DomainChanges{}, err
 		}
 		if err := a.mailbox.Do(ctx, func() {
 			persistedRevision = a.persistedRevision
 		}); err != nil {
-			return nil, fmt.Errorf("confirm durable checkpoint for player %d: %w", playerID, err)
+			return DomainChanges{}, fmt.Errorf("confirm durable checkpoint for player %d: %w", playerID, err)
 		}
 		if persistedRevision < pending.revision {
-			return nil, fmt.Errorf(
+			return DomainChanges{}, fmt.Errorf(
 				"%w: player %d persisted revision %d is below %d",
 				ErrCheckpointNotDurable, playerID, persistedRevision, pending.revision,
 			)
@@ -130,9 +127,9 @@ func (r *Runtime) settleSyncStepLocked(
 			return
 		}
 		delete(a.syncPending, key)
-		farmViewPlotIDs = pending.farmViewPlotIDs
+		changes = pending.domainChanges
 	}); err != nil {
-		return nil, fmt.Errorf("retire pending step for player %d: %w", playerID, err)
+		return DomainChanges{}, fmt.Errorf("retire pending step for player %d: %w", playerID, err)
 	}
-	return farmViewPlotIDs, nil
+	return changes, nil
 }

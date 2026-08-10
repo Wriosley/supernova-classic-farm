@@ -9,6 +9,8 @@ import (
 
 var ErrClosed = errors.New("actor mailbox closed")
 
+var errMailboxFull = errors.New("actor mailbox full")
+
 type job struct {
 	run  func()
 	done chan struct{}
@@ -45,6 +47,24 @@ func (m *Mailbox) loop() {
 		}
 		j.run()
 		close(j.done)
+	}
+}
+
+// Submit enqueues fn without waiting for it to finish. Once admitted, fn always
+// runs to completion so later jobs cannot overtake it. Returns ErrClosed if the
+// mailbox is closed, or errMailboxFull if the bounded queue rejects the job.
+func (m *Mailbox) Submit(fn func()) error {
+	j := job{run: fn, done: make(chan struct{})}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.isClosed {
+		return ErrClosed
+	}
+	select {
+	case m.jobs <- j:
+		return nil
+	default:
+		return errMailboxFull
 	}
 }
 

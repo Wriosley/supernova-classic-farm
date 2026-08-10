@@ -20,10 +20,10 @@ func (r *Runtime) applyFertilizer(
 	request *wsv1.WsEnvelope,
 	config *ConfigSnapshot,
 	now time.Time,
-) (*wsv1.WsEnvelope, bool) {
+) (*wsv1.WsEnvelope, bool, DomainChanges) {
 	requestID, err := parseRequestID(request.RequestId)
 	if err != nil {
-		return errorEnvelope(request, a.state, now, &wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false
+		return errorEnvelope(request, a.state, now, &wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false, DomainChanges{}
 	}
 	apply := request.GetApplyFertilizerRequest()
 	fingerprint := fertilizerFingerprint(callerPlayerID, request, apply)
@@ -37,45 +37,45 @@ func (r *Runtime) applyFertilizer(
 			stored.TargetPlayerId != request.TargetPlayerId ||
 			!bytes.Equal(stored.PayloadFingerprintSha256, fingerprint[:]) {
 			return errorEnvelope(request, a.state, now,
-				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false
+				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false, DomainChanges{}
 		}
-		return replayFertilizer(request, stored, now), false
+		return replayFertilizer(request, stored, now), false, DomainChanges{}
 	}
 
 	if apply.PlotId == 0 || apply.FertilizerItemId == 0 {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true, DomainChanges{}
 	}
 	plot, exists := a.state.Plots[apply.PlotId]
 	if !exists {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true, DomainChanges{}
 	}
 	if plot.State != plotv1.PlotState_GROWING {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 	if plot.FertilizerEffect != nil && now.UnixMilli() < plot.FertilizerEffect.EndAtMs {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_FERTILIZER_ALREADY_ACTIVE, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_FERTILIZER_ALREADY_ACTIVE, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 	fertilizer, exists := config.Fertilizer(apply.FertilizerItemId)
 	if !exists {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true, DomainChanges{}
 	}
 	if !fertilizer.Enabled {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_ENTRY_DISABLED}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_ENTRY_DISABLED}), true, DomainChanges{}
 	}
 	itemQuantity := a.state.Inventory[apply.FertilizerItemId]
 	if itemQuantity == 0 {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_ITEM_NOT_OWNED}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_ITEM_NOT_OWNED}), true, DomainChanges{}
 	}
 	if now.UnixMilli() > math.MaxInt64-fertilizer.DurationMS {
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true, DomainChanges{}
 	}
 
 	before := clonePlot(plot)
@@ -83,7 +83,7 @@ func (r *Runtime) applyFertilizer(
 	if err != nil || matured {
 		*plot = *before
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 	effectID := fertilizerEffectID(callerPlayerID, requestID)
 	plot.FertilizerEffect = &datav1.TimedEffectRecord{
@@ -96,7 +96,7 @@ func (r *Runtime) applyFertilizer(
 	if err != nil {
 		*plot = *before
 		return r.storeFertilizerFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true, DomainChanges{}
 	}
 	plot.EstimatedMatureAtMS = &estimate
 	if itemQuantity == 1 {
@@ -148,7 +148,7 @@ func (r *Runtime) applyFertilizer(
 		Payload: &wsv1.WsEnvelope_ApplyFertilizerResponse{
 			ApplyFertilizerResponse: payload,
 		},
-	}, true
+	}, true, DomainChanges{}.PlotChanged(apply.PlotId)
 }
 
 func (r *Runtime) storeFertilizerFailure(

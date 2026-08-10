@@ -27,8 +27,8 @@ const (
 	CheckpointSchemaVersion uint32 = 2
 )
 
-// NewInitialCheckpoint creates the durable aggregate committed atomically with
-// a new account and Session by the local MySQL registration path.
+// NewInitialCheckpoint 构造新玩家的确定性初始农田聚合。
+// 由 Owner Zone 在 Actor 首次激活且 Load 返回 NotFound 时创建并持久化。
 func NewInitialCheckpoint(playerID uint64, now time.Time) *datav1.PlayerCheckpointV1 {
 	nowMS := now.UnixMilli()
 	return &datav1.PlayerCheckpointV1{
@@ -180,6 +180,73 @@ func ValidateCheckpoint(checkpoint *datav1.PlayerCheckpointV1) error {
 		}
 		outboxIDs[string(pending.EventId)] = struct{}{}
 		previousOutbox = pending
+	}
+	if err := validatePetState(checkpoint.PetState); err != nil {
+		return err
+	}
+	if err := validateCareer(checkpoint.Career); err != nil {
+		return err
+	}
+	if err := validateCompendium(checkpoint.CropCompendium); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateCareer(career *datav1.PlayerCareerRecord) error {
+	// uint64 fields cannot be negative; nil is treated as zero.
+	_ = career
+	return nil
+}
+
+func validateCompendium(compendium *datav1.CropCompendiumRecord) error {
+	if compendium == nil {
+		return nil
+	}
+	var previous uint32
+	seen := make(map[uint32]struct{}, len(compendium.UnlockedCropIds))
+	for i, cropID := range compendium.UnlockedCropIds {
+		if cropID == 0 {
+			return errors.New("checkpoint unlocked_crop_ids contains zero")
+		}
+		if _, duplicate := seen[cropID]; duplicate {
+			return errors.New("checkpoint unlocked_crop_ids contains duplicate")
+		}
+		if i > 0 && cropID <= previous {
+			return errors.New("checkpoint unlocked_crop_ids is not ascending")
+		}
+		seen[cropID] = struct{}{}
+		previous = cropID
+	}
+	return nil
+}
+
+func validatePetState(pet *datav1.PetStateRecord) error {
+	if pet == nil {
+		return nil
+	}
+	if pet.FoodActiveUntilMs < 0 {
+		return errors.New("checkpoint pet food_active_until_ms is negative")
+	}
+	owned := make(map[uint32]struct{}, len(pet.OwnedPetIds))
+	var previous uint32
+	for i, petID := range pet.OwnedPetIds {
+		if petID == 0 {
+			return errors.New("checkpoint owned_pet_ids contains zero")
+		}
+		if _, duplicate := owned[petID]; duplicate {
+			return errors.New("checkpoint owned_pet_ids contains duplicate")
+		}
+		if i > 0 && petID <= previous {
+			return errors.New("checkpoint owned_pet_ids is not ascending")
+		}
+		owned[petID] = struct{}{}
+		previous = petID
+	}
+	if pet.ActivePetId != 0 {
+		if _, exists := owned[pet.ActivePetId]; !exists {
+			return errors.New("checkpoint active_pet_id is not owned")
+		}
 	}
 	return nil
 }
@@ -405,6 +472,17 @@ func StateFromCheckpoint(checkpoint *datav1.PlayerCheckpointV1) (*State, error) 
 			proto.Clone(receipt).(*datav1.FriendTaskCreditReceipt),
 		)
 	}
+	if checkpoint.PetState != nil {
+		state.PetState = proto.Clone(checkpoint.PetState).(*datav1.PetStateRecord)
+	}
+	if checkpoint.Career != nil {
+		state.Career = proto.Clone(checkpoint.Career).(*datav1.PlayerCareerRecord)
+	}
+	if checkpoint.CropCompendium != nil {
+		state.CropCompendium = normalizeCompendium(
+			proto.Clone(checkpoint.CropCompendium).(*datav1.CropCompendiumRecord),
+		)
+	}
 	return state, nil
 }
 
@@ -524,10 +602,45 @@ func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
 			checkpoint.FriendTaskCreditReceipts[j].RelationId,
 		) < 0
 	})
+	if s.PetState != nil {
+		checkpoint.PetState = normalizePetState(s.PetState)
+	}
+	if s.Career != nil {
+		checkpoint.Career = proto.Clone(s.Career).(*datav1.PlayerCareerRecord)
+	}
+	if s.CropCompendium != nil {
+		checkpoint.CropCompendium = normalizeCompendium(s.CropCompendium)
+	}
 	if err := ValidateCheckpoint(checkpoint); err != nil {
 		return nil, err
 	}
 	return checkpoint, nil
+}
+
+func normalizePetState(pet *datav1.PetStateRecord) *datav1.PetStateRecord {
+	if pet == nil {
+		return nil
+	}
+	out := &datav1.PetStateRecord{
+		ActivePetId:        pet.ActivePetId,
+		FoodActiveUntilMs:  pet.FoodActiveUntilMs,
+		OwnedPetIds:        append([]uint32(nil), pet.OwnedPetIds...),
+	}
+	sort.Slice(out.OwnedPetIds, func(i, j int) bool {
+		return out.OwnedPetIds[i] < out.OwnedPetIds[j]
+	})
+	// 去重（防御性）
+	unique := out.OwnedPetIds[:0]
+	var last uint32
+	for i, id := range out.OwnedPetIds {
+		if i > 0 && id == last {
+			continue
+		}
+		unique = append(unique, id)
+		last = id
+	}
+	out.OwnedPetIds = unique
+	return out
 }
 
 func plotFromRecord(record *datav1.PlotStateRecord) *Plot {

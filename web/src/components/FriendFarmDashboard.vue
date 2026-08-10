@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { FarmVisitSnapshot, PublicPlotView } from '../gen/classicfarm/v1/ws/ws_pb'
+import type {
+  CropCatalogEntryView,
+  FarmVisitSnapshot,
+  PublicPlotView,
+} from '../gen/classicfarm/v1/ws/ws_pb'
 import { PlotState } from '../gen/classicfarm/v1/ws/plot/plot_state_pb'
 
 import plotEmpty from '../../../frontend/src/assets/art/runtime/plots/empty.png'
@@ -19,6 +23,7 @@ type VisitTool = 'pest' | 'catch' | 'steal' | 'clean'
 const props = defineProps<{
   snapshot?: FarmVisitSnapshot
   ownerLabel: string
+  cropCatalog: CropCatalogEntryView[]
   connected: boolean
   busy: boolean
   stealBusyPlotId?: number
@@ -33,6 +38,7 @@ const emit = defineEmits<{
   catch: [plotId: number]
   clean: [plotId: number]
   exit: []
+  openProfile: []
 }>()
 
 const selectedTool = ref<VisitTool>('steal')
@@ -47,6 +53,10 @@ const toolOptions: Array<{ id: VisitTool; label: string; icon: string; hint: str
   { id: 'steal', label: '偷菜', icon: handTool, hint: '可偷的成熟地块' },
   { id: 'clean', label: '清理', icon: shovelTool, hint: '待清理地块' },
 ]
+
+function cropNameById(cropId: number): string {
+  return props.cropCatalog.find((crop) => crop.cropId === cropId)?.name ?? `作物#${cropId}`
+}
 
 function canApplyPest(plot: PublicPlotView): boolean {
   return plot.plotState === PlotState.GROWING && !plot.pestActive
@@ -73,18 +83,30 @@ function isValidTarget(plot: PublicPlotView): boolean {
   }
 }
 
+function formatCountdown(seconds: number): string {
+  const safe = Math.max(0, seconds)
+  const mins = Math.floor(safe / 60)
+  const secs = safe % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
 function plotPresentation(plot: PublicPlotView) {
+  const name = plot.cropId > 0 ? cropNameById(plot.cropId) : ''
   switch (plot.plotState) {
     case PlotState.GROWING:
       return {
-        label: plot.pestActive ? '成长中 · 有虫' : '成长中',
+        label: plot.pestActive ? `${name}成长中 · 有虫` : `${name}成长中`,
         base: plotGrowing,
         crop: cropGrowing,
       }
     case PlotState.MATURE:
-      return { label: plot.canSteal ? '可以偷菜' : '已成熟', base: plotMature, crop: cropMature }
+      return {
+        label: plot.canSteal ? `${name}可偷` : `${name}已成熟`,
+        base: plotMature,
+        crop: cropMature,
+      }
     case PlotState.NEED_CLEANUP:
-      return { label: '等待清理', base: plotCleanup, crop: undefined }
+      return { label: `${name || '作物'}待清理`, base: plotCleanup, crop: undefined }
     default:
       return { label: '空地', base: plotEmpty, crop: undefined }
   }
@@ -116,7 +138,7 @@ function plotMeta(plot: PublicPlotView): string {
     }
   } else if (plot.plotState === PlotState.GROWING) {
     const seconds = estimatedSeconds(plot)
-    parts.push(seconds > 0 ? `${seconds} 秒后成熟` : '即将成熟')
+    parts.push(seconds > 0 ? `成熟倒计时：${formatCountdown(seconds)}` : '即将成熟')
   } else if (plot.plotState === PlotState.MATURE) {
     parts.push(plot.canSteal ? '可偷' : '本批作物不可偷')
   } else if (plot.plotState === PlotState.NEED_CLEANUP) {
@@ -162,7 +184,12 @@ function clickPlot(plot: PublicPlotView): void {
     <header class="farm-toolbar">
       <div>
         <p class="eyebrow">FRIEND FARM · PUBLIC PLOTS</p>
-        <h2>{{ ownerLabel }} 的农场</h2>
+        <h2>
+          <button type="button" class="owner-name" @click="emit('openProfile')">
+            {{ ownerLabel }}
+          </button>
+          的农场
+        </h2>
       </div>
       <button type="button" class="primary" :disabled="busy" @click="emit('exit')">
         离开农场

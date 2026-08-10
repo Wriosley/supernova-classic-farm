@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	driver "github.com/go-sql-driver/mysql"
 )
 
@@ -72,40 +71,7 @@ func (m *mysqlStore) register(
 	}
 	session.PlayerID = uint64(playerID)
 
-	checkpoint := player.NewInitialCheckpoint(session.PlayerID, now)
-	var fenceOwnerZoneID string
-	var fenceOwnerEpoch uint64
-	if err := tx.QueryRowContext(ctx, `
-		SELECT owner_zone_id, owner_epoch
-		FROM shard_fences
-		WHERE logical_shard_id = ?
-		FOR UPDATE`,
-		checkpoint.LogicalShardId,
-	).Scan(&fenceOwnerZoneID, &fenceOwnerEpoch); err != nil {
-		return "", nil, fmt.Errorf("verify initial checkpoint fence: %w", err)
-	}
-	if fenceOwnerZoneID == "" || fenceOwnerEpoch == 0 {
-		return "", nil, errors.New("initial checkpoint fence is invalid")
-	}
-	checkpoint.OwnerEpoch = fenceOwnerEpoch
-	blob, checkpointSHA, err := player.MarshalCheckpoint(checkpoint)
-	if err != nil {
-		return "", nil, fmt.Errorf("create initial checkpoint: %w", err)
-	}
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO player_checkpoints (
-			player_id, db_shard_id, logical_shard_id, owner_epoch, player_seq,
-			checkpoint_revision, checkpoint_schema_version, checkpoint_blob,
-			checkpoint_sha256, last_applied_config_version, created_at_ms, updated_at_ms
-		) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		checkpoint.PlayerId, checkpoint.LogicalShardId, checkpoint.OwnerEpoch,
-		checkpoint.PlayerSeq, checkpoint.CheckpointRevision, checkpoint.SchemaVersion,
-		blob, checkpointSHA[:], checkpoint.LastAppliedConfigVersion,
-		checkpoint.CreatedAtMs, checkpoint.UpdatedAtMs,
-	)
-	if err != nil {
-		return "", nil, fmt.Errorf("insert initial checkpoint: %w", err)
-	}
+	// 注册事务只提交账号与 Session；农田 Checkpoint 留给 Owner Zone 首次激活。
 	if err := insertSession(ctx, tx, session); err != nil {
 		return "", nil, err
 	}

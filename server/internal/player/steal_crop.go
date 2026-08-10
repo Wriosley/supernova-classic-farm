@@ -227,7 +227,12 @@ func (r *Runtime) ApplyStealOnOwner(
 		plot.StealCount++
 		plot.StolenQuantity += plot.StealQuantity
 
-		payload := &wsv1.FriendActionResponse{InteractionId: append([]byte(nil), interactionID...)}
+		config := r.config.Load()
+		guard := r.evaluateStealGuard(a.state, config, now.UnixMilli())
+		payload := &wsv1.FriendActionResponse{
+			InteractionId: append([]byte(nil), interactionID...),
+			StealGuard:    guard,
+		}
 		body, marshalErr := proto.MarshalOptions{Deterministic: true}.Marshal(payload)
 		if marshalErr != nil {
 			stealErr = fmt.Errorf("marshal steal apply result: %w", marshalErr)
@@ -249,7 +254,7 @@ func (r *Runtime) ApplyStealOnOwner(
 		mutated = true
 		a.markSyncPending(stepKey, pendingSyncStep{
 			revision:        a.state.CheckpointRevision,
-			farmViewPlotIDs: []uint32{plotID},
+			domainChanges: DomainChanges{}.PlotChanged(plotID),
 		})
 		resultPayload = body
 		resultDigest = digest[:]
@@ -262,12 +267,12 @@ func (r *Runtime) ApplyStealOnOwner(
 	if !alreadyApplied && !mutated {
 		return nil, nil, nil, false, errors.New("apply steal did not mutate owner state")
 	}
-	owedPlotIDs, err := r.settleSyncStepLocked(ctx, ownerID, a, stepKey)
+	owedChanges, err := r.settleSyncStepLocked(ctx, ownerID, a, stepKey)
 	if err != nil {
 		return nil, nil, nil, false, fmt.Errorf("flush steal apply: %w", err)
 	}
-	if len(owedPlotIDs) > 0 {
-		farmPatch = r.notifyPublicPlots(ctx, a, ownerID, owedPlotIDs)
+	if !owedChanges.Empty() {
+		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, owedChanges)
 	}
 	return resultPayload, resultDigest, farmPatch, alreadyApplied, nil
 }
@@ -350,22 +355,45 @@ func (r *Runtime) CommitSteal(
 		}
 		newQuantity := a.state.Inventory[cropItemID] + quantity
 		a.state.Inventory[cropItemID] = newQuantity
+		if err := addStolenCareer(a.state, quantity); err != nil {
+			commitErr = err
+			return
+		}
 		incrementStealTask(a.state)
 
 		var ownerFarmPatch *wsv1.FarmViewPatch
+		var stealGuard *wsv1.StealGuardOutcome
 		if len(ownerResultPayload) > 0 {
 			ownerResponse := &wsv1.FriendActionResponse{}
 			if proto.Unmarshal(ownerResultPayload, ownerResponse) == nil {
 				ownerFarmPatch = ownerResponse.FarmPatch
+				stealGuard = ownerResponse.StealGuard
 			}
+		}
+		var coinBalance *int64
+		appliedPenalty := int64(0)
+		if stealGuard != nil && stealGuard.GuardTriggered && stealGuard.GuardPenaltyConfigured > 0 {
+			appliedPenalty = stealGuard.GuardPenaltyConfigured
+			if a.state.Coins < appliedPenalty {
+				appliedPenalty = a.state.Coins
+			}
+			a.state.Coins -= appliedPenalty
+			balance := a.state.Coins
+			coinBalance = &balance
+			// 冻结实扣金额，重试读取 receipt 不再改金币。
+			stealGuard = proto.Clone(stealGuard).(*wsv1.StealGuardOutcome)
+			stealGuard.GuardPenaltyApplied = appliedPenalty
 		}
 		friendResponse := &wsv1.FriendActionResponse{
 			InteractionId: append([]byte(nil), interactionID...),
 			VisitorPatch: &wsv1.PlayerStatePatch{
+				CoinBalance:      coinBalance,
 				InventoryUpserts: []*wsv1.ItemStackView{{ItemId: cropItemID, Quantity: newQuantity}},
 				CurrentChapter:   a.state.Snapshot().CurrentChapter,
+				Career:           careerView(a.state),
 			},
-			FarmPatch: ownerFarmPatch,
+			FarmPatch:  ownerFarmPatch,
+			StealGuard: stealGuard,
 		}
 		body, marshalErr := proto.MarshalOptions{Deterministic: true}.Marshal(friendResponse)
 		if marshalErr != nil {

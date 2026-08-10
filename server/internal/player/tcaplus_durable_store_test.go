@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -98,5 +99,27 @@ func TestTcaplusDurableStoreChecksFenceAndPersistsOutbox(t *testing.T) {
 	})
 	if err != nil || fenced.Status != CheckpointWriteFenced {
 		t.Fatalf("fenced SaveCAS status=%d error=%v", fenced.Status, err)
+	}
+}
+
+func TestTcaplusDurableCreateInitialRejectsWrongFence(t *testing.T) {
+	ctx := context.Background()
+	client := testtcaplus.New()
+	checkpoint := NewInitialCheckpoint(99, time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC))
+	if err := client.DoInsert(&tcaplusv1.ShardFence{
+		LogicalShardId: checkpoint.LogicalShardId,
+		OwnerZoneId:    "zone-b", OwnerEpoch: checkpoint.OwnerEpoch,
+		RouteVersion: 1,
+	}, &option.PBOpt{}, 1); err != nil {
+		t.Fatal(err)
+	}
+	base, _ := NewTcaplusCheckpointStoreWithClient(client, 1)
+	durable, _ := NewTcaplusDurableCheckpointStore(base, client, 1, "zone-a")
+	result, err := durable.CreateInitial(ctx, checkpoint)
+	if err != nil || result.Status != CheckpointWriteFenced {
+		t.Fatalf("CreateInitial status=%d error=%v, want Fenced", result.Status, err)
+	}
+	if _, err := base.Load(ctx, checkpoint.PlayerId); !errors.Is(err, ErrCheckpointNotFound) {
+		t.Fatalf("checkpoint should remain absent after fenced create: %v", err)
 	}
 }

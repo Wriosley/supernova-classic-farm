@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type {
+  CropCatalogEntryView,
   PlayerSnapshot,
   PlotView,
   ShopEntryView,
@@ -41,13 +42,19 @@ export type FarmActionRequest = {
   plotId?: number
   quantity?: number
   sellAll?: boolean
+  seedItemId?: number
+  shopEntryId?: number
+  cropItemId?: number
+  priceVersion?: bigint
 }
 
 type FarmTool = 'seed' | 'fertilizer' | 'catch' | 'shovel' | 'hand'
 
 const props = defineProps<{
   snapshot?: PlayerSnapshot
+  ownerLabel: string
   shopEntries: ShopEntryView[]
+  cropCatalog: CropCatalogEntryView[]
   connected: boolean
   busyAction?: FarmActionRequest
   actionMessage: string
@@ -57,18 +64,38 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   action: [request: FarmActionRequest]
+  openProfile: []
 }>()
 
 const selectedTool = ref<FarmTool>('seed')
+const selectedSeedCropId = ref<number>(0)
+const selectedSellCropItemId = ref<number>(0)
 const buyQuantity = ref(3)
 const fertilizerBuyQuantity = ref(1)
 const sellQuantity = ref(1)
 const localMessage = ref('')
 const chapter = computed(() => props.snapshot?.currentChapter)
 const plots = computed(() => [...(props.snapshot?.plots ?? [])].sort((a, b) => a.plotId - b.plotId))
-const seedQuote = computed(() => props.shopEntries.find((entry) => entry.itemId === 1001))
+const seedCrops = computed(() => props.cropCatalog.filter((crop) => crop.seedShopEntryId > 0))
+const selectedSeed = computed(
+  () =>
+    seedCrops.value.find((crop) => crop.cropId === selectedSeedCropId.value) ??
+    seedCrops.value[0],
+)
+const seedQuote = computed(() => {
+  const seed = selectedSeed.value
+  if (!seed) {
+    return undefined
+  }
+  return props.shopEntries.find((entry) => entry.shopEntryId === seed.seedShopEntryId) ?? {
+    shopEntryId: seed.seedShopEntryId,
+    itemId: seed.seedItemId,
+    unitPrice: seed.seedUnitPrice,
+    priceVersion: seed.seedPriceVersion,
+    enabled: true,
+  }
+})
 const fertilizerQuote = computed(() => props.shopEntries.find((entry) => entry.itemId === 1))
-const cropQuote = computed(() => props.shopEntries.find((entry) => entry.itemId === 1002))
 const inventory = computed(() => {
   const quantities = new Map<number, number>()
   for (const item of props.snapshot?.inventory ?? []) {
@@ -76,10 +103,49 @@ const inventory = computed(() => {
   }
   return quantities
 })
-const seedQuantity = computed(() => inventory.value.get(1001) ?? 0)
-const cropQuantity = computed(() => inventory.value.get(1002) ?? 0)
+const sellableCrops = computed(() =>
+  props.cropCatalog.filter((crop) => (inventory.value.get(crop.cropItemId) ?? 0) > 0),
+)
+const selectedSellCrop = computed(
+  () =>
+    sellableCrops.value.find((crop) => crop.cropItemId === selectedSellCropItemId.value) ??
+    sellableCrops.value[0],
+)
+const cropQuote = computed(() => {
+  const crop = selectedSellCrop.value
+  if (!crop) {
+    return undefined
+  }
+  return props.shopEntries.find(
+    (entry) => entry.itemId === crop.cropItemId && entry.unitPrice === crop.sellUnitPrice,
+  ) ?? {
+    shopEntryId: 0,
+    itemId: crop.cropItemId,
+    unitPrice: crop.sellUnitPrice,
+    priceVersion: crop.sellPriceVersion,
+    enabled: true,
+  }
+})
+const seedQuantity = computed(() => {
+  const seed = selectedSeed.value
+  return seed ? inventory.value.get(seed.seedItemId) ?? 0 : 0
+})
+const cropQuantity = computed(() => {
+  const crop = selectedSellCrop.value
+  return crop ? inventory.value.get(crop.cropItemId) ?? 0 : 0
+})
 const fertilizerQuantity = computed(() => inventory.value.get(1) ?? 0)
 const nextSeedQuantity = computed(() => inventory.value.get(1003) ?? 0)
+const totalSeedQuantity = computed(() =>
+  seedCrops.value.reduce((sum, crop) => sum + (inventory.value.get(crop.seedItemId) ?? 0), 0),
+)
+const totalCropQuantity = computed(() =>
+  props.cropCatalog.reduce((sum, crop) => sum + (inventory.value.get(crop.cropItemId) ?? 0), 0),
+)
+function cropNameById(cropId: number): string {
+  return props.cropCatalog.find((crop) => crop.cropId === cropId)?.name ?? `作物#${cropId}`
+}
+
 const buyTotal = computed(() => (seedQuote.value?.unitPrice ?? 0n) * BigInt(buyQuantity.value))
 const fertilizerBuyTotal = computed(
   () => (fertilizerQuote.value?.unitPrice ?? 0n) * BigInt(fertilizerBuyQuantity.value),
@@ -98,6 +164,7 @@ const chapterStatusLabel = computed(() => {
 const canBuy = computed(() => Boolean(
   props.connected &&
   seedQuote.value?.enabled &&
+  selectedSeed.value &&
   props.snapshot &&
   buyQuantity.value >= 1 &&
   buyQuantity.value <= 50 &&
@@ -115,7 +182,8 @@ const canBuyFertilizer = computed(() => Boolean(
 ))
 const canSell = computed(() => Boolean(
   props.connected &&
-  cropQuote.value?.enabled &&
+  selectedSellCrop.value &&
+  cropQuote.value &&
   sellQuantity.value >= 1 &&
   sellQuantity.value <= cropQuantity.value,
 ))
@@ -139,6 +207,33 @@ const taskNames = new Map<number, string>([
   [5, '出售至少 1 个作物'],
 ])
 
+watch(
+  seedCrops,
+  (crops) => {
+    if (crops.length === 0) {
+      return
+    }
+    if (!crops.some((crop) => crop.cropId === selectedSeedCropId.value)) {
+      selectedSeedCropId.value = crops[0].cropId
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  sellableCrops,
+  (crops) => {
+    if (crops.length === 0) {
+      selectedSellCropItemId.value = 0
+      return
+    }
+    if (!crops.some((crop) => crop.cropItemId === selectedSellCropItemId.value)) {
+      selectedSellCropItemId.value = crops[0].cropItemId
+    }
+  },
+  { immediate: true },
+)
+
 watch(cropQuantity, (quantity) => {
   sellQuantity.value = quantity > 0 ? Math.min(Math.max(sellQuantity.value, 1), quantity) : 1
 })
@@ -161,18 +256,26 @@ function clampSell(): void {
   )
 }
 
+function formatCountdown(seconds: number): string {
+  const safe = Math.max(0, seconds)
+  const mins = Math.floor(safe / 60)
+  const secs = safe % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
 function plotPresentation(plot: PlotView) {
+  const name = plot.cropId > 0 ? cropNameById(plot.cropId) : ''
   switch (plot.plotState) {
     case PlotState.GROWING:
       return {
-        label: plot.pestEffect ? '成长中 · 有虫' : '成长中',
+        label: plot.pestEffect ? `${name}成长中 · 有虫` : `${name}成长中`,
         base: plotGrowing,
         crop: cropGrowing,
       }
     case PlotState.MATURE:
-      return { label: '可以收获', base: plotMature, crop: cropMature }
+      return { label: `${name}已成熟`, base: plotMature, crop: cropMature }
     case PlotState.NEED_CLEANUP:
-      return { label: '等待清理', base: plotCleanup, crop: undefined }
+      return { label: `${name || '作物'}待清理`, base: plotCleanup, crop: undefined }
     default:
       return { label: '空地', base: plotEmpty, crop: undefined }
   }
@@ -192,29 +295,37 @@ function plotMeta(plot: PlotView): string {
       parts.push('有害虫')
     }
     const seconds = estimatedSeconds(plot)
-    parts.push(seconds > 0 ? `${seconds} 秒后成熟` : '等待服务器确认成熟')
+    parts.push(seconds > 0 ? `成熟倒计时：${formatCountdown(seconds)}` : '等待服务器确认成熟')
     if (selectedTool.value === 'catch' && plot.pestEffect) {
       parts.push('点击捉虫')
     }
     return parts.join(' · ')
   }
   if (plot.plotState === PlotState.MATURE) {
-    return `可收获 ${plot.harvestableQuantity} 个作物`
+    return `可收获 ${plot.harvestableQuantity} 个`
   }
   if (plot.plotState === PlotState.NEED_CLEANUP) {
     return '收获完成，等待铲子清理'
   }
-  return '空地可种植'
+  const seed = selectedSeed.value
+  return seed ? `空地可种植（当前：${seed.name}）` : '空地可种植'
 }
 
 function targetAction(plot: PlotView): FarmActionRequest | undefined {
   switch (selectedTool.value) {
-    case 'seed':
-      if (plot.plotState === PlotState.EMPTY && seedQuantity.value > 0) {
-        return { action: 'plant', plotId: plot.plotId }
+    case 'seed': {
+      const seed = selectedSeed.value
+      if (plot.plotState === PlotState.EMPTY && seed && seedQuantity.value > 0) {
+        return { action: 'plant', plotId: plot.plotId, seedItemId: seed.seedItemId }
       }
-      localMessage.value = plot.plotState !== PlotState.EMPTY ? '种子只能用于空地。' : '仓库里没有可用种子。'
+      localMessage.value =
+        plot.plotState !== PlotState.EMPTY
+          ? '种子只能用于空地。'
+          : seed
+            ? '仓库里没有所选种子。'
+            : '仓库里没有可用种子。'
       return undefined
+    }
     case 'fertilizer':
       if (
         plot.plotState === PlotState.GROWING &&
@@ -303,7 +414,11 @@ function run(request: FarmActionRequest): void {
     <header class="farm-toolbar">
       <div>
         <p class="eyebrow">PLAYER FARM · FOUR AUTHORITATIVE PLOTS</p>
-        <h2>我的农场</h2>
+        <h2>
+          <button type="button" class="owner-name" @click="emit('openProfile')">
+            {{ ownerLabel || '我的农场' }}
+          </button>
+        </h2>
       </div>
       <div class="wallet">
         <img :src="coinIcon" alt="" />
@@ -398,11 +513,27 @@ function run(request: FarmActionRequest): void {
             </div>
             <span v-if="seedQuote" class="price-tag">{{ seedQuote.unitPrice }} 金币 / 粒</span>
           </div>
+          <div class="crop-picker" role="listbox" aria-label="选择种子">
+            <button
+              v-for="crop in seedCrops"
+              :key="crop.cropId"
+              type="button"
+              class="crop-chip"
+              :class="{ selected: selectedSeed?.cropId === crop.cropId }"
+              @click="selectedSeedCropId = crop.cropId"
+            >
+              {{ crop.name }}
+              <small>×{{ inventory.get(crop.seedItemId) ?? 0 }}</small>
+            </button>
+          </div>
           <div class="shop-item">
-            <img class="item-icon pixel-art" :src="seedIcon" alt="演示种子" />
+            <img class="item-icon pixel-art" :src="seedIcon" alt="作物种子" />
             <div class="shop-copy">
-              <strong>演示作物种子</strong>
-              <small>单次购买 1–50 粒 · 仓库堆叠上限 300</small>
+              <strong>{{ selectedSeed?.name ?? '作物' }}种子</strong>
+              <small>
+                {{ selectedSeed?.maturitySeconds ?? '—' }} 秒成熟 · 产量
+                {{ selectedSeed?.baseYield ?? '—' }} · 仓库上限 300
+              </small>
             </div>
           </div>
           <div class="shop-item">
@@ -450,8 +581,16 @@ function run(request: FarmActionRequest): void {
             <button
               class="primary"
               type="button"
-              :disabled="!canBuy || Boolean(busyAction)"
-              @click="run({ action: 'buy', quantity: buyQuantity })"
+              :disabled="!canBuy || Boolean(busyAction) || !selectedSeed || !seedQuote"
+              @click="
+                run({
+                  action: 'buy',
+                  quantity: buyQuantity,
+                  shopEntryId: seedQuote?.shopEntryId,
+                  seedItemId: selectedSeed?.seedItemId,
+                  priceVersion: seedQuote?.priceVersion,
+                })
+              "
             >
               {{ busyAction?.action === 'buy' ? '购买中…' : `购买 ${buyQuantity} 粒` }}
             </button>
@@ -468,7 +607,7 @@ function run(request: FarmActionRequest): void {
           <div class="inventory-grid">
             <div class="inventory-slot">
               <img class="pixel-art" :src="seedIcon" alt="" />
-              <span>种子</span><strong>× {{ seedQuantity }}</strong>
+              <span>种子合计</span><strong>× {{ totalSeedQuantity }}</strong>
             </div>
             <div class="inventory-slot">
               <img class="pixel-art" :src="fertilizerIcon" alt="" />
@@ -476,7 +615,7 @@ function run(request: FarmActionRequest): void {
             </div>
             <div class="inventory-slot">
               <img class="pixel-art" :src="cropIcon" alt="" />
-              <span>作物</span><strong>× {{ cropQuantity }}</strong>
+              <span>作物合计</span><strong>× {{ totalCropQuantity }}</strong>
             </div>
             <div class="inventory-slot">
               <img class="pixel-art" :src="seedIcon" alt="" />
@@ -484,7 +623,23 @@ function run(request: FarmActionRequest): void {
             </div>
           </div>
           <div class="sell-controls">
-            <span>出售作物</span>
+            <label class="sell-crop-picker">
+              出售作物
+              <select
+                v-model.number="selectedSellCropItemId"
+                :disabled="sellableCrops.length === 0"
+                aria-label="选择出售作物"
+              >
+                <option v-if="sellableCrops.length === 0" :value="0">暂无可售作物</option>
+                <option
+                  v-for="crop in sellableCrops"
+                  :key="crop.cropItemId"
+                  :value="crop.cropItemId"
+                >
+                  {{ crop.name }} ×{{ inventory.get(crop.cropItemId) ?? 0 }}
+                </option>
+              </select>
+            </label>
             <div class="quantity-row">
               <button type="button" aria-label="减少出售数量" @click="sellQuantity--; clampSell()">−</button>
               <input
@@ -497,22 +652,35 @@ function run(request: FarmActionRequest): void {
                 @change="clampSell"
               />
               <button type="button" aria-label="增加出售数量" @click="sellQuantity++; clampSell()">＋</button>
-              <span>预计 {{ sellTotal }} 金币</span>
-            </div>
-            <div class="sell-buttons">
+              <span>合计 {{ sellTotal }} 金币</span>
               <button
+                class="primary"
                 type="button"
                 :disabled="!canSell || Boolean(busyAction)"
-                @click="run({ action: 'sell', quantity: sellQuantity })"
+                @click="
+                  run({
+                    action: 'sell',
+                    quantity: sellQuantity,
+                    cropItemId: selectedSellCrop?.cropItemId,
+                    priceVersion: cropQuote?.priceVersion,
+                  })
+                "
               >
-                出售 {{ sellQuantity }} 个
+                {{ busyAction?.action === 'sell' && !busyAction.sellAll ? '出售中…' : `出售 ${sellQuantity}` }}
               </button>
               <button
                 type="button"
-                :disabled="cropQuantity < 1 || !connected || Boolean(busyAction)"
-                @click="run({ action: 'sell', sellAll: true })"
+                :disabled="!canSell || Boolean(busyAction)"
+                @click="
+                  run({
+                    action: 'sell',
+                    sellAll: true,
+                    cropItemId: selectedSellCrop?.cropItemId,
+                    priceVersion: cropQuote?.priceVersion,
+                  })
+                "
               >
-                {{ busyAction?.action === 'sell' ? '出售中…' : '全部出售' }}
+                {{ busyAction?.action === 'sell' && busyAction.sellAll ? '全部出售中…' : '全部出售' }}
               </button>
             </div>
           </div>

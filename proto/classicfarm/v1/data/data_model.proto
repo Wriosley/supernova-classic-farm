@@ -114,6 +114,28 @@ message PlayerCheckpointV1 {
   repeated FriendResourceReservation friend_reservations = 17;
   repeated FriendInteractionReceipt friend_receipts = 18;
   repeated FriendTaskCreditReceipt friend_task_credit_receipts = 19;
+  PetStateRecord pet_state = 20;
+  PlayerCareerRecord career = 21;
+  CropCompendiumRecord crop_compendium = 22;
+}
+
+// PetStateRecord 属于玩家私有状态：已购宠物、当前出战与狗粮有效截止时间。
+// food_active_until_ms == 0 表示从未喂食；是否生效由服务器用 now 比较，无需 Tick。
+message PetStateRecord {
+  repeated uint32 owned_pet_ids = 1;
+  uint32 active_pet_id = 2;
+  int64 food_active_until_ms = 3;
+}
+
+// PlayerCareerRecord 公开生涯统计：只累计功能上线后的权威入仓量，不做历史回填。
+message PlayerCareerRecord {
+  uint64 total_harvested_crop_quantity = 1;
+  uint64 total_stolen_crop_quantity = 2;
+}
+
+// CropCompendiumRecord 私有图鉴：仅自己农田成功收获过的 crop_id。
+message CropCompendiumRecord {
+  repeated uint32 unlocked_crop_ids = 1;
 }
 
 message InventoryStack {

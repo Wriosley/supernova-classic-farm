@@ -18,11 +18,11 @@ func (r *Runtime) cleanPlot(
 	request *wsv1.WsEnvelope,
 	config *ConfigSnapshot,
 	now time.Time,
-) (*wsv1.WsEnvelope, bool) {
+) (*wsv1.WsEnvelope, bool, DomainChanges) {
 	requestID, err := parseRequestID(request.RequestId)
 	if err != nil {
 		return errorEnvelope(request, a.state, now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false, DomainChanges{}
 	}
 	clean := request.GetCleanPlotRequest()
 	fingerprint := cleanPlotFingerprint(callerPlayerID, request, clean)
@@ -36,23 +36,23 @@ func (r *Runtime) cleanPlot(
 			stored.TargetPlayerId != request.TargetPlayerId ||
 			!bytes.Equal(stored.PayloadFingerprintSha256, fingerprint[:]) {
 			return errorEnvelope(request, a.state, now,
-				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false
+				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false, DomainChanges{}
 		}
-		return replayCleanPlot(request, stored, now), false
+		return replayCleanPlot(request, stored, now), false, DomainChanges{}
 	}
 
 	if clean.PlotId == 0 {
 		return r.storeCleanPlotFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true, DomainChanges{}
 	}
 	plot, exists := a.state.Plots[clean.PlotId]
 	if !exists {
 		return r.storeCleanPlotFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true, DomainChanges{}
 	}
 	if plot.State != plotv1.PlotState_NEED_CLEANUP {
 		return r.storeCleanPlotFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 
 	*plot = Plot{ID: clean.PlotId, State: plotv1.PlotState_EMPTY}
@@ -84,7 +84,7 @@ func (r *Runtime) cleanPlot(
 		Payload: &wsv1.WsEnvelope_CleanPlotResponse{
 			CleanPlotResponse: payload,
 		},
-	}, true
+	}, true, DomainChanges{}.PlotChanged(clean.PlotId)
 }
 
 func (r *Runtime) storeCleanPlotFailure(

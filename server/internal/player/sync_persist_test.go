@@ -170,7 +170,7 @@ func TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce(t *testing.T) {
 	broadcaster := newRecordingFarmViewBroadcaster()
 	runtime := flakyRuntime(store, now)
 	defer runtime.Close()
-	if err := runtime.SetFarmViewBroadcaster(broadcaster); err != nil {
+	if err := runtime.SetFarmViewDispatcher(broadcaster); err != nil {
 		t.Fatal(err)
 	}
 
@@ -496,13 +496,13 @@ func TestSettleSyncStepRejectsAFlushThatDidNotReachTheMarkedRevision(t *testing.
 
 	shardID := routing.ShardForPlayer(playerID)
 	runtime.shardLocks[shardID].RLock()
-	owedPlotIDs, err := runtime.settleSyncStepLocked(ctx, playerID, a, stepKey)
+	owedChanges, err := runtime.settleSyncStepLocked(ctx, playerID, a, stepKey)
 	runtime.shardLocks[shardID].RUnlock()
 	if !errors.Is(err, ErrCheckpointNotDurable) {
 		t.Fatalf("settleSyncStepLocked error = %v, want ErrCheckpointNotDurable", err)
 	}
-	if owedPlotIDs != nil {
-		t.Fatalf("a step that is not durable must not hand over its broadcast, got %v", owedPlotIDs)
+	if !owedChanges.Empty() {
+		t.Fatalf("a step that is not durable must not hand over its broadcast, got %v", owedChanges.PlotIDs())
 	}
 	if len(store.saved) != 1 {
 		t.Fatalf("expected the settle attempt to have issued one write, got %d", len(store.saved))

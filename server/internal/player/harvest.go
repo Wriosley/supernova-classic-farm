@@ -23,11 +23,11 @@ func (r *Runtime) harvest(
 	request *wsv1.WsEnvelope,
 	config *ConfigSnapshot,
 	now time.Time,
-) (*wsv1.WsEnvelope, bool) {
+) (*wsv1.WsEnvelope, bool, DomainChanges) {
 	requestID, err := parseRequestID(request.RequestId)
 	if err != nil {
 		return errorEnvelope(request, a.state, now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), false, DomainChanges{}
 	}
 	harvest := request.GetHarvestRequest()
 	fingerprint := harvestFingerprint(callerPlayerID, request, harvest)
@@ -41,42 +41,50 @@ func (r *Runtime) harvest(
 			stored.TargetPlayerId != request.TargetPlayerId ||
 			!bytes.Equal(stored.PayloadFingerprintSha256, fingerprint[:]) {
 			return errorEnvelope(request, a.state, now,
-				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false
+				&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}), false, DomainChanges{}
 		}
-		return replayHarvest(request, stored, now), false
+		return replayHarvest(request, stored, now), false, DomainChanges{}
 	}
 
 	if harvest.PlotId == 0 {
 		return r.storeHarvestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true, DomainChanges{}
 	}
 	plot, exists := a.state.Plots[harvest.PlotId]
 	if !exists {
 		return r.storeHarvestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_NOT_FOUND}), true, DomainChanges{}
 	}
 	if plot.State == plotv1.PlotState_GROWING {
 		return r.storeHarvestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CROP_NOT_MATURE, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_CROP_NOT_MATURE, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 	if plot.State != plotv1.PlotState_MATURE {
 		return r.storeHarvestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_PLOT_STATE_CONFLICT, CurrentPlot: plot.View()}), true, DomainChanges{}
 	}
 
 	harvestedQuantity := plot.BaseYield - plot.StolenQuantity
 	currentQuantity := a.state.Inventory[plot.CropItemID]
 	if harvestedQuantity > 0 && currentQuantity == 0 && len(a.state.Inventory) >= inventoryTypeLimit {
 		return r.storeHarvestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVENTORY_TYPE_LIMIT}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_INVENTORY_TYPE_LIMIT}), true, DomainChanges{}
 	}
 	if uint64(currentQuantity)+uint64(harvestedQuantity) > inventoryStackLimit {
 		return r.storeHarvestFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_INVENTORY_STACK_LIMIT}), true
+			&wsv1.Error{Code: wsv1.ErrorCode_INVENTORY_STACK_LIMIT}), true, DomainChanges{}
 	}
 
 	if harvestedQuantity > 0 {
+		career := ensureCareer(a.state)
+		nextHarvested, err := checkedAddUint64(career.TotalHarvestedCropQuantity, uint64(harvestedQuantity))
+		if err != nil {
+			return r.storeHarvestFailure(a, request, requestID, fingerprint, config.Version(), now,
+				&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}), true, DomainChanges{}
+		}
 		a.state.Inventory[plot.CropItemID] = currentQuantity + harvestedQuantity
+		career.TotalHarvestedCropQuantity = nextHarvested
+		unlockCrop(a.state, plot.CropID)
 	}
 	plot.State = plotv1.PlotState_NEED_CLEANUP
 	plot.MaturityValueScaled9 = 0
@@ -100,6 +108,8 @@ func (r *Runtime) harvest(
 	patch := &wsv1.PlayerStatePatch{
 		PlotUpserts:    []*wsv1.PlotView{plot.View()},
 		CurrentChapter: a.state.Snapshot().CurrentChapter,
+		Career:         careerView(a.state),
+		CropCompendium: compendiumView(a.state),
 	}
 	if harvestedQuantity > 0 {
 		patch.InventoryUpserts = []*wsv1.ItemStackView{{
@@ -126,7 +136,7 @@ func (r *Runtime) harvest(
 		StateVersion: &wsv1.StateVersion{OwnerEpoch: a.state.OwnerEpoch, PlayerSeq: a.state.PlayerSeq},
 		ServerTimeMs: now.UnixMilli(),
 		Payload:      &wsv1.WsEnvelope_HarvestResponse{HarvestResponse: payload},
-	}, true
+	}, true, DomainChanges{}.PlotChanged(harvest.PlotId)
 }
 
 func (r *Runtime) storeHarvestFailure(
