@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: verified
 date: 2026-08-10
 parent:
   - ./04-3-邮件与通知阶段总计划.md
@@ -105,15 +105,15 @@ deploy/k8s/
 
 ## Task 1：存储模型
 
-- [ ] 定义公开邮件、私人邮件、附件、游标和玩家邮件状态 Protobuf。
-- [ ] 建立 Tcaplus Store 接口和 fake Store。
-- [ ] 实现公开邮件 Insert/Get/ListSince。
-- [ ] 实现私人邮件 Insert/ListByRecipient。
-- [ ] 实现邮箱 Cursor Load/SaveCAS。
-- [ ] 实现 PlayerMailState 的已读字段。
-- [ ] `source_event_id` 唯一去重。
-- [ ] 所有列表按 `(created_at_ms, mail_id)` 稳定倒序。
-- [ ] 增加分页和单页上限。
+- [x] 定义公开邮件、私人邮件、附件、游标和玩家邮件状态 Protobuf。
+- [x] 建立 Tcaplus Store 接口和 fake Store。
+- [x] 实现公开邮件 Insert/Get/ListSince。
+- [x] 实现私人邮件 Insert/ListByRecipient。
+- [x] 实现邮箱 Cursor Load/SaveCAS。
+- [x] 实现 PlayerMailState 的已读字段。
+- [x] `source_event_id` 唯一去重。
+- [x] 所有列表按 `(created_at_ms, mail_id)` 稳定倒序。
+- [x] 增加分页和单页上限。
 
 ## Task 2：运营 Admin API
 
@@ -122,14 +122,14 @@ POST /internal/v1/admin/mails/public
 POST /internal/v1/admin/mails/private
 ```
 
-- [ ] 验证 Admin Token/HMAC。
-- [ ] 默认只监听或允许内网来源。
-- [ ] 校验标题、正文、附件数量和数量上限。
-- [ ] 公开邮件只写一条。
-- [ ] 私人邮件写入指定 recipient。
-- [ ] 私人邮件创建成功后调用 InfoSvr。
-- [ ] InfoSvr 失败不回滚邮件创建。
-- [ ] Admin Token 不写日志。
+- [x] 验证 Admin Token/HMAC。
+- [x] 默认只监听或允许内网来源。
+- [x] 校验标题、正文、附件数量和数量上限。
+- [x] 公开邮件只写一条。
+- [x] 私人邮件写入指定 recipient。
+- [x] 私人邮件创建成功后调用 InfoSvr。
+- [x] InfoSvr 失败不回滚邮件创建。
+- [x] Admin Token 不写日志。
 
 ## Task 3：邮箱查询
 
@@ -141,21 +141,21 @@ MarkMailRead
 CheckMailboxIndicator
 ```
 
-- [ ] `OpenMailbox` 合并：
+- [x] `OpenMailbox` 合并：
   - 注册后发布的公开邮件；
   - 当前玩家私人邮件；
   - 后续 GiftMail。
-- [ ] 公开邮件过滤：
+- [x] 公开邮件过滤：
 
 ```text
 published_at_ms > registered_at_ms
 ```
 
-- [ ] 打开成功后更新 `last_mailbox_opened_at_ms`。
-- [ ] `CheckMailboxIndicator` 查询上次打开后的新内容。
-- [ ] 查询本身不领取附件。
-- [ ] 已读状态按玩家保存。
-- [ ] 注册前公开邮件不可见、不可领取。
+- [x] 打开成功后更新 `last_mailbox_opened_at_ms`。
+- [x] `CheckMailboxIndicator` 查询上次打开后的新内容。
+- [x] 查询本身不领取附件。
+- [x] 已读状态按玩家保存。
+- [x] 注册前公开邮件不可见、不可领取。
 
 ## Task 4：启动和验证
 
@@ -187,12 +187,12 @@ docs/evidence/2026-08-12-mailsvr-query.md
 
 ## 完成检查
 
-- [ ] 公开邮件只保存一份；
-- [ ] 注册时间过滤正确；
-- [ ] 私人邮件隔离正确；
-- [ ] 邮箱游标正确；
-- [ ] Admin API 有鉴权；
-- [ ] 邮件不过期；
-- [ ] 查询支持分页；
-- [ ] InfoSvr 失败不回滚邮件；
-- [ ] Evidence 和 `CURRENT.md` 更新。
+- [x] 公开邮件只保存一份；
+- [x] 注册时间过滤正确；
+- [x] 私人邮件隔离正确；
+- [x] 邮箱游标正确；
+- [x] Admin API 有鉴权；
+- [x] 邮件不过期；
+- [x] 查询支持分页；
+- [x] InfoSvr 失败不回滚邮件；
+- [x] Evidence 和 `CURRENT.md` 更新。

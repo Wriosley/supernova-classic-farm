@@ -103,11 +103,11 @@ func TestDevelopmentShopIncludesSeedCropAndFertilizerQuotesInStableOrder(t *test
 		t.Fatalf("grape crop = %+v", crops[10])
 	}
 	if _, _, ok := cfg.SoleStealableCrop(); !ok {
-		t.Fatal("original crop must remain the sole stealable crop")
+		t.Fatal("development crops must remain stealable")
 	}
 	cropItemID, qty, ok := cfg.SoleStealableCrop()
 	if !ok || cropItemID != developmentCropItemID || qty != developmentStealQuantity {
-		t.Fatalf("SoleStealableCrop = %d qty=%d ok=%v", cropItemID, qty, ok)
+		t.Fatalf("SoleStealableCrop lowest = %d qty=%d ok=%v", cropItemID, qty, ok)
 	}
 }
 

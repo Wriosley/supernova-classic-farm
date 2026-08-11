@@ -13,6 +13,7 @@ type MaturityEvent struct {
 	PlayerSeq    uint64
 	ServerTimeMS int64
 	Plot         *wsv1.PlotView
+	Stealable    bool
 }
 
 func (e MaturityEvent) Envelope() *wsv1.WsEnvelope {

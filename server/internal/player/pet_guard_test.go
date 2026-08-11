@@ -47,9 +47,7 @@ func TestStealWithoutActivePetDoesNotRollGuard(t *testing.T) {
 	runtime.randBPS = func() uint32 { t.Fatal("randBPS must not be called"); return 0 }
 	defer runtime.Close()
 
-	payload, _, _, _, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionIDFixture(0xA1), plotID,
-	)
+	payload, _, _, _, err := applySteal(t, runtime, ownerID, 99, interactionIDFixture(0xA1), plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,9 +70,7 @@ func TestStealWithoutActiveFoodDoesNotRollGuard(t *testing.T) {
 	runtime.randBPS = func() uint32 { called = true; return 0 }
 	defer runtime.Close()
 
-	payload, _, _, _, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionIDFixture(0xA2), plotID,
-	)
+	payload, _, _, _, err := applySteal(t, runtime, ownerID, 99, interactionIDFixture(0xA2), plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,9 +112,7 @@ func TestVillageDogGuardDeductsTwoCoins(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	ownerPayload, _, _, _, err := ownerRuntime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, visitorID, interactionID, plotID,
-	)
+	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,9 +171,7 @@ func TestShepherdGuardDeductsUpToFourCoins(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	ownerPayload, _, _, _, err := ownerRuntime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, visitorID, interactionID, plotID,
-	)
+	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,9 +214,7 @@ func TestPetGuardNeverMakesVisitorCoinsNegative(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	ownerPayload, _, _, _, err := ownerRuntime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, visitorID, interactionID, plotID,
-	)
+	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,15 +248,11 @@ func TestPetGuardOutcomeIsStableAcrossSagaRetry(t *testing.T) {
 	defer runtime.Close()
 
 	interactionID := interactionIDFixture(0xB4)
-	payload1, digest1, _, _, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionID, plotID,
-	)
+	payload1, digest1, _, _, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload2, digest2, _, already, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionID, plotID,
-	)
+	payload2, digest2, _, already, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if err != nil || !already {
 		t.Fatalf("retry already=%v err=%v", already, err)
 	}
@@ -322,9 +308,7 @@ func TestPetGuardPenaltyIsAppliedOnceAfterCrashRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ownerPayload, _, _, _, err := ownerRuntime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, visitorID, interactionID, plotID,
-	)
+	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}

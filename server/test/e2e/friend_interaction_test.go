@@ -111,7 +111,21 @@ func TestFriendInteraction(t *testing.T) {
 	_ = readMatchingPush(t, visitorA.conn, wsv1.Action_FARM_VIEW_CHANGED, 5*time.Second)
 
 	waitPlotMature(t, owner, friendPlotID, visitA, visitB, visitorA, visitorB, owner.id)
-	stealResponse := stealFriendCrop(t, visitorA, owner.id, visitA.GetVisitId(), friendPlotID)
+	visitSnap := visitA.GetSnapshot()
+	cropItemID := uint32(0)
+	for _, plot := range visitSnap.GetPlots() {
+		if plot.GetPlotId() == friendPlotID {
+			cropItemID = plot.GetCropItemId()
+			break
+		}
+	}
+	if cropItemID == 0 {
+		t.Fatal("visit snapshot missing crop_item_id for steal plot")
+	}
+	stealResponse := stealFriendCrop(
+		t, visitorA, owner.id, visitA.GetVisitId(), friendPlotID,
+		cropItemID, visitSnap.GetVersion().GetFarmViewEpoch(), visitSnap.GetVersion().GetFarmViewSeq(),
+	)
 	if stealResponse.GetVisitorPatch() == nil {
 		t.Fatalf("steal missing visitor patch: %+v", stealResponse)
 	}
@@ -428,12 +442,16 @@ func catchPestForFriend(
 
 func stealFriendCrop(
 	t *testing.T, visitor *friendPlayer, ownerID uint64, visitID []byte, plotID uint32,
+	cropItemID uint32, farmViewEpoch []byte, farmViewSeq uint64,
 ) *wsv1.FriendActionResponse {
 	t.Helper()
 	return friendAction(t, visitor, wsv1.Action_STEAL_FRIEND_CROP,
 		&wsv1.WsEnvelope_StealFriendCropRequest{
 			StealFriendCropRequest: &wsv1.StealFriendCropRequest{
 				OwnerPlayerId: ownerID, VisitId: visitID, PlotId: plotID,
+				ExpectedCropItemId: cropItemID,
+				FarmViewEpoch:      farmViewEpoch,
+				FarmViewSeq:        farmViewSeq,
 			},
 		})
 }

@@ -149,6 +149,7 @@ func (c *inProcessOwnerClient) ApplyVisitorAction(
 	payload, digest, farmPatch, _, err := c.runtime.ApplyStealOnOwner(
 		ctx, req.GetOwnerPlayerId(), c.ownerEpoch, req.GetVisitorPlayerId(),
 		req.GetInteractionId(), req.GetPlotId(),
+		req.GetExpectedCropItemId(), req.GetFarmViewEpoch(), req.GetFarmViewSeq(),
 	)
 	if err != nil {
 		if code, ok := ownerDomainErrorCode(err); ok {

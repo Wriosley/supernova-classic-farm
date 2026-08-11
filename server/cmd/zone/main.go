@@ -10,8 +10,10 @@ import (
 	"time"
 
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/connection"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/farmview"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/interaction"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/outbox"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
@@ -21,6 +23,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/push"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
 	"google.golang.org/grpc"
@@ -73,6 +76,8 @@ func main() {
 	var interactionScanner interface {
 		Traverse(proto.Message) ([]proto.Message, error)
 	}
+	var tcaplusClient *tcaplusdb.Client
+	var tcaplusZoneID uint32
 	storageMode := strings.TrimSpace(os.Getenv("STORAGE_MODE"))
 	if storageMode == "tcaplus" {
 		if dsn != "" {
@@ -106,13 +111,22 @@ func main() {
 		if configErr != nil {
 			log.Fatal(configErr)
 		}
+		accountTable, configErr := tcaplusdb.TableName(
+			"TCAPLUS_ACCOUNT_BY_PLAYER_TABLE", "AccountByPlayer",
+		)
+		if configErr != nil {
+			log.Fatal(configErr)
+		}
 		client, openErr := tcaplusdb.Open(
-			config, checkpointTable, fenceTable, outboxTable, friendInteractionTable,
+			config, checkpointTable, fenceTable, outboxTable,
+			friendInteractionTable, accountTable,
 		)
 		if openErr != nil {
 			log.Fatal(openErr)
 		}
 		defer client.Close()
+		tcaplusClient = client
+		tcaplusZoneID = config.ZoneID
 		checkpoints, storeErr := player.NewTcaplusCheckpointStoreWithClient(
 			client, config.ZoneID,
 		)
@@ -134,6 +148,7 @@ func main() {
 			log.Fatal(err)
 		}
 		interactionScanner = client
+		runtime.SetAccountNamer(accountNameLookup{client: client, zoneID: config.ZoneID})
 		logger.Info("using pure Tcaplus Player checkpoint store")
 	} else if dsn == "" {
 		runtime = player.NewRuntime()
@@ -228,7 +243,10 @@ func main() {
 	}
 	go ownerFarmService.RunEvictionLoop(ctx)
 
-	farmViewBroadcaster, err := farmview.NewBroadcaster(pushForwarder, ownerFarmService, gatewayID)
+	connectionRegistry := connection.NewRegistry()
+	go runConnectionEvictionLoop(ctx, connectionRegistry, logger)
+
+	farmViewBroadcaster, err := farmview.NewBroadcaster(pushForwarder, ownerFarmService, connectionRegistry)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -240,6 +258,23 @@ func main() {
 	if err := runtime.SetFarmViewDispatcher(farmViewDispatcher); err != nil {
 		log.Fatal(err)
 	}
+	pushDispatcher, err := push.NewDispatcher(
+		push.StaticGateResolver{GateID: gatewayID, Client: pushForwarder},
+		connectionRegistry,
+		logger,
+		push.Config{},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pushDispatcher.Close()
+
+	infoNotifier, infoErr := newInfoStealableNotifier(rpcKey, environmentOr("INFO_RPC_URL", "http://127.0.0.1:8086"), logger)
+	if infoErr != nil {
+		log.Fatal(infoErr)
+	}
+	defer infoNotifier.Close()
+	runtime.SetStealableNotifier(infoNotifier)
 
 	// Phase 5: the STEAL_FRIEND_CROP interaction Saga. ownerFarmClient
 	// already implements interaction.OwnerFarmClient (its
@@ -262,8 +297,38 @@ func main() {
 	interactionReconciler.WithActionSaga(actionSaga)
 	go runInteractionReconcileLoop(ctx, interactionReconciler, logger)
 
+	if tcaplusClient != nil {
+		mailURL := strings.TrimSpace(os.Getenv("MAIL_RPC_URL"))
+		if mailURL == "" {
+			logger.Warn("MAIL_RPC_URL unset; gift Outbox relay disabled")
+		} else {
+			mailClient, mailErr := outbox.NewMailClient(rpcKey, ownerZoneID, mailURL)
+			if mailErr != nil {
+				log.Fatal(mailErr)
+			}
+			defer func() { _ = mailClient.Close() }()
+			outboxStore, storeErr := outbox.NewTcaplusStore(tcaplusClient, tcaplusZoneID)
+			if storeErr != nil {
+				log.Fatal(storeErr)
+			}
+			relay, relayErr := outbox.NewRelay(
+				outboxStore,
+				mailClient,
+				authorizationShardOwner{auth: authorization, zoneID: ownerZoneID},
+				time.Now,
+				logger,
+			)
+			if relayErr != nil {
+				log.Fatal(relayErr)
+			}
+			go relay.Run(ctx)
+			logger.Info("gift Outbox relay started", "mail_rpc_url", mailURL)
+		}
+	}
+
 	mux := http.NewServeMux()
 	if lifecycle != nil {
+		lifecycle.connections = connectionRegistry
 		mux.HandleFunc("POST /internal/v1/shards/{shard_id}/drain", lifecycle.drain)
 		mux.HandleFunc("POST /internal/v1/shards/{shard_id}/drain-complete", lifecycle.completeDrain)
 		mux.HandleFunc("POST /internal/v1/shards/{shard_id}/prepare", lifecycle.prepareMigration)
@@ -278,6 +343,7 @@ func main() {
 		AllowedCallers: map[string][]string{
 			rpcv1.GameCommandService_ExecutePlayerCommand_FullMethodName:   {"gate"},
 			rpcv1.PlayerSocialService_ApplyFriendTaskCredit_FullMethodName: {"friend"},
+			rpcv1.PlayerSocialService_ApplyMailReward_FullMethodName:       {"mail"},
 			rpcv1.VisitorZoneService_EnterFriendFarm_FullMethodName:        {"gate"},
 			rpcv1.VisitorZoneService_HeartbeatFriendFarm_FullMethodName:    {"gate"},
 			rpcv1.VisitorZoneService_ExitFriendFarm_FullMethodName:         {"gate"},
@@ -287,6 +353,10 @@ func main() {
 			rpcv1.OwnerFarmService_GetPublicFarmSnapshot_FullMethodName:    {"zone-local", "zone-a", "zone-b"},
 			rpcv1.VisitorZoneService_ExecuteFriendAction_FullMethodName:    {"gate"},
 			rpcv1.OwnerFarmService_ApplyVisitorAction_FullMethodName:       {"zone-local", "zone-a", "zone-b"},
+			rpcv1.PlayerConnectionService_RegisterPlayerConnection_FullMethodName:   {"gate"},
+			rpcv1.PlayerConnectionService_RefreshPlayerConnection_FullMethodName:    {"gate"},
+			rpcv1.PlayerConnectionService_UnregisterPlayerConnection_FullMethodName: {"gate"},
+			rpcv1.ZoneNotificationService_DispatchRedDot_FullMethodName:             {"info"},
 		},
 	})
 	if err != nil {
@@ -315,6 +385,14 @@ func main() {
 	ownerFarmServer.withRuntime(runtime)
 	ownerFarmServer.enableFriendActions()
 	rpcv1.RegisterOwnerFarmServiceServer(grpcServer, ownerFarmServer)
+	rpcv1.RegisterPlayerConnectionServiceServer(
+		grpcServer,
+		newPlayerConnectionRPCServer(connectionRegistry, authorization, gates, time.Now, gatewayID),
+	)
+	rpcv1.RegisterZoneNotificationServiceServer(
+		grpcServer,
+		newZoneNotificationRPCServer(pushDispatcher, authorization, gates, time.Now),
+	)
 
 	server := &http.Server{
 		Addr:              listenAddress,
@@ -398,6 +476,22 @@ func runInteractionReconcileLoop(ctx context.Context, reconciler *interaction.Re
 		case <-ticker.C:
 			if err := reconciler.ReconcileDue(ctx, time.Now()); err != nil {
 				logger.Error("friend interaction Saga reconcile failed", "error", err)
+			}
+		}
+	}
+}
+
+func runConnectionEvictionLoop(ctx context.Context, registry *connection.Registry, logger *slog.Logger) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			removed := registry.EvictExpired(time.Now())
+			if len(removed) > 0 {
+				logger.Debug("evicted expired player connections", "count", len(removed))
 			}
 		}
 	}

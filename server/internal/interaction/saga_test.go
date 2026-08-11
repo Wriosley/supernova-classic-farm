@@ -18,6 +18,11 @@ const (
 	testPlotID    = uint32(1)
 )
 
+var (
+	testFarmViewEpoch []byte
+	testFarmViewSeq   uint64
+)
+
 func newTestFixture(t *testing.T, failAtUpdateIndices ...int) (
 	*StealSaga, *playerMemStore, *playerMemStore, *inProcessOwnerClient, Store,
 ) {
@@ -39,6 +44,13 @@ func newTestFixture(t *testing.T, failAtUpdateIndices ...int) (
 		visitorRuntime.Close()
 	})
 
+	snap, err := ownerRuntime.BuildPublicFarmSnapshot(context.Background(), testOwnerID, player.LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("BuildPublicFarmSnapshot: %v", err)
+	}
+	testFarmViewEpoch = append([]byte(nil), snap.GetVersion().GetFarmViewEpoch()...)
+	testFarmViewSeq = snap.GetVersion().GetFarmViewSeq()
+
 	ownerClient := newInProcessOwnerClient(ownerRuntime, player.LocalOwnerEpoch)
 	saga, err := NewStealSaga(store, visitorRuntime, ownerClient)
 	if err != nil {
@@ -53,6 +65,8 @@ func testStealRequest(interactionID []byte) StealRequest {
 		VisitorOwnerEpoch: player.LocalOwnerEpoch, OwnerPlayerID: testOwnerID,
 		OwnerRoute: dummyOwnerRoute(), VisitID: fixedVisitID(0xAA),
 		PlotID: testPlotID, CropItemID: 4001, Quantity: 1,
+		FarmViewEpoch: append([]byte(nil), testFarmViewEpoch...),
+		FarmViewSeq:   testFarmViewSeq,
 	}
 }
 
@@ -120,15 +134,16 @@ func TestStealSagaRejectsDigestConflict(t *testing.T) {
 }
 
 func TestStealSagaDeterministicOwnerRejectionReleasesAndAborts(t *testing.T) {
-	saga, ownerStore, visitorStore, ownerRuntime, store := newTestFixtureWithRuntime(t)
+	saga, ownerStore, visitorStore, ownerClient, store := newTestFixture(t)
 	ctx := context.Background()
 	now := time.Now()
 
 	// Exhaust max_steal_times=2 directly on the owner before the Saga runs,
 	// so ApplyStealOnOwner deterministically rejects with STEAL_NOT_AVAILABLE.
 	for i := 0; i < 2; i++ {
-		if _, _, _, _, err := ownerRuntime.ApplyStealOnOwner(
-			ctx, testOwnerID, player.LocalOwnerEpoch, 999, fixedVisitID(byte(0x40+i)), testPlotID,
+		if _, _, _, _, err := ownerClient.runtime.ApplyStealOnOwner(
+			ctx, testOwnerID, player.LocalOwnerEpoch, uint64(900+i), fixedVisitID(byte(0x40+i)), testPlotID,
+			4001, testFarmViewEpoch, testFarmViewSeq,
 		); err != nil {
 			t.Fatalf("prime steal %d: %v", i, err)
 		}

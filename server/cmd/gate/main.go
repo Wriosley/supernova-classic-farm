@@ -65,6 +65,12 @@ func run() error {
 		return err
 	}
 	defer friendCommander.Close()
+	mailURL := envOr("MAIL_RPC_URL", "http://127.0.0.1:8087")
+	mailCommander, err := gateway.NewGRPCMailCommander(rpcKey, mailURL)
+	if err != nil {
+		return err
+	}
+	defer mailCommander.Close()
 	client := newInternalHTTPClient()
 	clientConfigURL := envOr("CLIENT_CONFIG_URL", gateway.DefaultConfigURL)
 	configSHA, err := configuredSHA(client, clientConfigURL)
@@ -89,6 +95,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("warm route cache: %w", err)
 	}
+	connectionClient, err := gateway.NewGRPCPlayerConnectionClient(rpcKey, gatewayID)
+	if err != nil {
+		return err
+	}
+	defer connectionClient.Close()
 	wsHandler, err := gateway.NewHandler(gateway.Config{
 		Tickets: &gateway.HTTPTicketConsumer{
 			Client: client, Endpoint: envOr("LOGIN_TICKET_CONSUME_URL", "http://127.0.0.1:8080/internal/v1/ws-tickets/consume"),
@@ -98,6 +109,9 @@ func run() error {
 		Zone:            zoneCommander,
 		Visitor:         visitorCommander,
 		Friends:         friendCommander,
+		Mail:            mailCommander,
+		Connections:     connectionClient,
+		GatewayID:       gatewayID,
 		ClientConfigURL: publicConfigURL,
 		ClientConfigSHA: configSHA,
 	})
@@ -125,6 +139,9 @@ func run() error {
 				"zone-local", "zone-a", "zone-b",
 			},
 			rpcv1.GatePushService_PublishFarmViewPatch_FullMethodName: {
+				"zone-local", "zone-a", "zone-b",
+			},
+			rpcv1.GatePushService_PublishRedDotChanged_FullMethodName: {
 				"zone-local", "zone-a", "zone-b",
 			},
 		},

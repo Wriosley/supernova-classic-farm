@@ -202,6 +202,16 @@ func validatePushEnvelope(envelope *wsv1.WsEnvelope) error {
 			push.GetVersion().GetFarmViewSeq() == 0 {
 			return errors.New("invalid push payload")
 		}
+	case wsv1.Action_RED_DOT_CHANGED:
+		if envelope.StateVersion != nil {
+			return errors.New("invalid push envelope")
+		}
+		push := envelope.GetRedDotChangedPush()
+		if push == nil || push.NotificationId == "" ||
+			push.Category == wsv1.RedDotCategory_RED_DOT_CATEGORY_UNSPECIFIED ||
+			push.Operation == wsv1.RedDotOperation_RED_DOT_OPERATION_UNSPECIFIED {
+			return errors.New("invalid push payload")
+		}
 	default:
 		return errors.New("invalid push envelope")
 	}

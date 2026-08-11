@@ -155,6 +155,18 @@ func recordKey(message proto.Message) string {
 		key = fmt.Sprintf("%x", record.LinkId)
 	case *tcaplusv1.FriendInteraction:
 		key = fmt.Sprintf("%x", record.InteractionId)
+	case *tcaplusv1.PublicMail:
+		key = record.MailId
+	case *tcaplusv1.PrivateMail:
+		key = strconv.FormatUint(record.RecipientPlayerId, 10) + ":" + record.MailId
+	case *tcaplusv1.PlayerMailboxCursor:
+		key = strconv.FormatUint(record.PlayerId, 10)
+	case *tcaplusv1.PlayerMailState:
+		key = strconv.FormatUint(record.PlayerId, 10) + ":" + record.MailId
+	case *tcaplusv1.MailSourceDedup:
+		key = record.SourceEventId
+	case *tcaplusv1.MailClaimSaga:
+		key = fmt.Sprintf("%x", record.ClaimId)
 	default:
 		panic(fmt.Sprintf("unsupported fake Tcaplus message %T", message))
 	}

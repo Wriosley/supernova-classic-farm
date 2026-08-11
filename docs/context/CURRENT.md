@@ -58,6 +58,43 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   receipt; visitor commit deducts `min(coins, penalty)` without paying
   the owner. H5 `PetPanel.vue` is text-only. Evidence:
   `../evidence/2026-08-11-pet-guard-e2e.md`.
+- Final delivery sprint **04-3A MailSvr** is complete: independent MailSvr
+  (`:8087`) with Public/Private mail tables, mailbox cursor, read state,
+  intranet Admin Bearer APIs, registration-time public-mail filtering, and
+  fail-open InfoSvr red-dot notify on private create. Evidence:
+  `../evidence/2026-08-12-mailsvr-query.md`.
+- Final delivery sprint **04-3B friend gift Outbox** is complete: Gate checks
+  mutual friendship, the sender Actor deducts crop inventory and appends a
+  deterministic `CREATE_GIFT_MAIL` Outbox in one commit, and the Zone Relay
+  delivers to MailSvr `CreateGiftMail` with `source_event_id` dedup +
+  fail-open Info red-dot. Evidence:
+  `../evidence/2026-08-12-friend-gift-outbox.md`.
+- Final delivery sprint **04-3C mail claim Saga** is complete: MailSvr
+  orchestrates `BeginClaim → Zone ApplyMailReward → CompleteClaim`; Player
+  Actor grants attachments all-or-nothing with sync SaveCAS
+  `MailClaimReceipt`; ClaimReconciler recovers the three crash windows.
+  Evidence: `../evidence/2026-08-12-mail-claim-saga.md`.
+- Final delivery sprint **04-3F H5 mailbox + red dots** is complete: Gate
+  proxies `OPEN_MAILBOX`/`MARK_MAIL_READ`/`CLAIM_MAIL`; H5 shows mailbox
+  modal, friend gift panel, mail/friend-farm red dots (local-only, cleared on
+  click). Evidence: `../evidence/2026-08-12-h5-mail-red-dot.md`.
+- Mail claim now carries the recipient version end to end: Zone
+  `ApplyMailRewardResponse` reports `owner_epoch` beside `player_seq`, MailSvr
+  `ClaimMailResponse` forwards a `state_version`, and Gate stamps it on the
+  response envelope. Without it H5 rejected every successful claim with
+  "写命令响应缺少 patch 或 state_version". The version is deliberately absent
+  when an earlier attempt already applied the reward, and H5 then reloads a
+  snapshot instead of sequencing the patch.
+- `CHECK_MAILBOX_INDICATOR` (Action 328) closes the offline red-dot hole:
+  `RED_DOT_CHANGED` only reaches players connected at delivery time and public
+  mail never pushes at all, so H5 queries the indicator once after
+  authentication. A failure there leaves the dot untouched and never blocks
+  login. Evidence: `../evidence/2026-08-12-h5-mail-red-dot.md`.
+- Final delivery sprint **04-5 multi-crop steal** is complete: all 11 crops
+  freeze steal limits from `ceil(base_yield/2)`; steal requests carry
+  `expected_crop_item_id` + farm-view version; FriendInteraction persists
+  crop/qty; same visitor once per crop round; H5 sends plot `crop_item_id`.
+  Evidence: `../evidence/2026-08-12-multi-crop-steal.md`.
 - Farm visits return a public snapshot on `ENTER_FRIEND_FARM` and now also
   receive incremental `FarmViewPatch` pushes: public plot mutations (plant,
   fertilize, harvest, clean, natural maturity) report `DomainChanges`, bump
@@ -515,21 +552,29 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 
 ## Next actions
 
-Final delivery sprint **01**–**03**, **04-1 宠物**, and **04-2 图鉴/生涯/多作物**
-are done. Next is **04-3 邮件与通知** per
-`../plans/final_delivery_sprint/04-基础业务补齐/04-3-邮件与通知总阶段.md`
-(and its `04-3A`…`04-3F` children). Read the stage overview before starting.
+Final delivery sprint **01**–**03**, **04-1**, **04-2**, and all **04-3A–F**
+mail/notification subplans are done. Finish **04-3 邮件与通知** with:
+
+1. Stage E2E → `docs/evidence/2026-08-12-mail-notification-e2e.md`
+
+Read `../plans/final_delivery_sprint/04-基础业务补齐/04-3-邮件与通知总阶段.md`
+before coding the E2E harness.
 
 Friend prototype vertical (phases 0–7) remains complete for the frozen
 scope in `../plans/friend_design_plan/06-分阶段实施方案.md`.
 
-1. Next sprint task: **04-3 邮件**;
-2. Deferred: multi-crop steal still limited to original crop — hand off to
-   **04-5 好友偷菜规则收口**;
-3. Keep `go test ./...` green when touching Gate/Zone/Friend paths.
+1. Next sprint task: **04-3 stage E2E** (mail + gift + claim + red-dot);
+2. Keep `go test ./...` green when touching Gate/Zone/Friend/Info/Mail paths.
 
 Evidence:
 
+- `../evidence/2026-08-12-multi-crop-steal.md`
+- `../evidence/2026-08-12-h5-mail-red-dot.md`
+- `../evidence/2026-08-12-mail-claim-saga.md`
+- `../evidence/2026-08-12-friend-gift-outbox.md`
+- `../evidence/2026-08-12-mailsvr-query.md`
+- `../evidence/2026-08-12-infosvr-red-dot.md`
+- `../evidence/2026-08-12-zone-connection-push.md`
 - `../evidence/2026-08-11-career-compendium-multi-crop.md`
 - `../evidence/2026-08-11-pet-guard-e2e.md`
 - `../evidence/2026-08-10-farm-broadcast-separation.md`

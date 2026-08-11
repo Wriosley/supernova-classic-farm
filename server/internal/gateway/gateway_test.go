@@ -97,6 +97,10 @@ func (f *fakeFriendClient) List(ctx context.Context, caller uint64, request *wsv
 	return f.list(ctx, caller, request)
 }
 
+func (f *fakeFriendClient) CheckMutualFriend(context.Context, uint64, uint64) (bool, error) {
+	return true, nil
+}
+
 func TestHTTPTicketConsumerSingleUseAndGatewayIdentity(t *testing.T) {
 	var consumed atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -483,6 +487,9 @@ func stealFriendCropRequest(requestID string, playerID, ownerID uint64, visitID 
 		Payload: &wsv1.WsEnvelope_StealFriendCropRequest{
 			StealFriendCropRequest: &wsv1.StealFriendCropRequest{
 				OwnerPlayerId: ownerID, VisitId: visitID, PlotId: plotID,
+				ExpectedCropItemId: 4001,
+				FarmViewEpoch:      make([]byte, 16),
+				FarmViewSeq:        1,
 			},
 		},
 	}
@@ -619,6 +626,24 @@ func TestValidateRequestTupleAcceptsFriendAndVisitActions(t *testing.T) {
 	}
 }
 
+func TestValidateRequestTupleAcceptsCheckMailboxIndicator(t *testing.T) {
+	request := &wsv1.WsEnvelope{
+		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,
+		Action: wsv1.Action_CHECK_MAILBOX_INDICATOR, RequestId: "req-1", TargetPlayerId: 42,
+		Payload: &wsv1.WsEnvelope_CheckMailboxIndicatorRequest{
+			CheckMailboxIndicatorRequest: &wsv1.CheckMailboxIndicatorRequest{},
+		},
+	}
+	if err := validateRequestTuple(request); err != nil {
+		t.Fatalf("validateRequestTuple(check mailbox indicator) = %v, want nil", err)
+	}
+	missingPayload := proto.Clone(request).(*wsv1.WsEnvelope)
+	missingPayload.Payload = nil
+	if err := validateRequestTuple(missingPayload); err == nil {
+		t.Fatal("validateRequestTuple(check mailbox indicator without payload) = nil, want error")
+	}
+}
+
 func TestValidateRequestTupleRejectsInvalidStealFriendCrop(t *testing.T) {
 	base := stealFriendCropRequest("req-1", 42, 7, make([]byte, 16), 3)
 	tests := []struct {
@@ -629,6 +654,8 @@ func TestValidateRequestTupleRejectsInvalidStealFriendCrop(t *testing.T) {
 		{"short visit_id", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().VisitId = []byte{1, 2, 3} }},
 		{"nil visit_id", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().VisitId = nil }},
 		{"zero plot_id", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().PlotId = 0 }},
+		{"zero crop", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().ExpectedCropItemId = 0 }},
+		{"short epoch", func(e *wsv1.WsEnvelope) { e.GetStealFriendCropRequest().FarmViewEpoch = []byte{1} }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

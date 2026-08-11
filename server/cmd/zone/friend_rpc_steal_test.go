@@ -142,11 +142,19 @@ func TestZoneStealFriendCropEndToEnd(t *testing.T) {
 	visitorZoneServer := newVisitorZoneRPCServer(nil, localAuthorization{}, routing.DefaultZoneID)
 	visitorZoneServer.withStealSaga(visitorRuntime, stealSaga)
 
-	response, err := visitorZoneServer.ExecuteFriendAction(ctx, &rpcv1.ExecuteFriendActionRequest{
+	snap, err := ownerRuntime.BuildPublicFarmSnapshot(ctx, ownerID, player.LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("BuildPublicFarmSnapshot: %v", err)
+	}
+	stealReq := &rpcv1.ExecuteFriendActionRequest{
 		CallerPlayerId: visitorID, OwnerPlayerId: ownerID, VisitId: visitID,
 		GateId: "local-gateway", RequestId: "00112233-4455-6677-8899-aabbccddeeff",
 		Action: datav1.FriendInteractionAction_STEAL_FRIEND_CROP, PlotId: plotID,
-	})
+		ExpectedCropItemId: 4001,
+		FarmViewEpoch:      snap.GetVersion().GetFarmViewEpoch(),
+		FarmViewSeq:        snap.GetVersion().GetFarmViewSeq(),
+	}
+	response, err := visitorZoneServer.ExecuteFriendAction(ctx, stealReq)
 	if err != nil {
 		t.Fatalf("ExecuteFriendAction: %v", err)
 	}
@@ -158,11 +166,7 @@ func TestZoneStealFriendCropEndToEnd(t *testing.T) {
 	}
 
 	// Retrying the identical request_id must replay without mutating again.
-	response2, err := visitorZoneServer.ExecuteFriendAction(ctx, &rpcv1.ExecuteFriendActionRequest{
-		CallerPlayerId: visitorID, OwnerPlayerId: ownerID, VisitId: visitID,
-		GateId: "local-gateway", RequestId: "00112233-4455-6677-8899-aabbccddeeff",
-		Action: datav1.FriendInteractionAction_STEAL_FRIEND_CROP, PlotId: plotID,
-	})
+	response2, err := visitorZoneServer.ExecuteFriendAction(ctx, stealReq)
 	if err != nil {
 		t.Fatalf("ExecuteFriendAction retry: %v", err)
 	}

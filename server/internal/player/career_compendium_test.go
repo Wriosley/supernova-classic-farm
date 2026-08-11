@@ -153,9 +153,7 @@ func TestStealCareerDoesNotUnlockCompendium(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	ownerPayload, _, _, _, err := ownerRuntime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, visitorID, interactionID, plotID,
-	)
+	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}

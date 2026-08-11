@@ -11,6 +11,7 @@ import (
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcnet"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/push"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -140,6 +141,33 @@ func (f *GRPCPushForwarder) PublishFarmViewPatch(
 	)
 	if err != nil {
 		return fmt.Errorf("publish farm view patch: %w", err)
+	}
+	return nil
+}
+
+// PublishRedDotChanged implements push.GateClient for Zone→Gate red-dot fan-out.
+func (f *GRPCPushForwarder) PublishRedDotChanged(
+	ctx context.Context,
+	gateID string,
+	recipientPlayerIDs []uint64,
+	payload *push.RedDotChanged,
+) error {
+	if f == nil || f.client == nil || payload == nil || len(recipientPlayerIDs) == 0 {
+		return errors.New("gRPC push forwarder is not configured")
+	}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+	}
+	_, err := f.client.PublishRedDotChanged(
+		ctx,
+		&rpcv1.PublishRedDotChangedRequest{
+			GateId: gateID, RecipientPlayerIds: recipientPlayerIDs, RedDot: payload.ToPush(),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("publish red dot changed: %w", err)
 	}
 	return nil
 }

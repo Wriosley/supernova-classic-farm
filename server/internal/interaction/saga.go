@@ -99,11 +99,8 @@ type OwnerFarmClient interface {
 }
 
 // StealRequest carries everything one STEAL_FRIEND_CROP interaction needs.
-// CropItemID and Quantity are resolved by the caller before invoking the
-// Saga (see cmd/zone's use of player.Runtime.SoleStealableCrop): they are
-// not persisted on FriendInteraction, so Resume (used by the Reconciler)
-// must re-resolve them identically on every call, exactly like
-// VisitorOwnerEpoch and OwnerRoute.
+// CropItemID, Quantity and farm-view identity are frozen onto FriendInteraction
+// at create time so Resume never re-derives them from ConfigSnapshot.
 //
 // OwnerRoute is advisory: the production OwnerFarmClient
 // (visit.ZoneOwnerFarmClient) re-resolves the owner's live route from
@@ -120,12 +117,15 @@ type StealRequest struct {
 	PlotID            uint32
 	CropItemID        uint32
 	Quantity          uint32
+	FarmViewEpoch     []byte
+	FarmViewSeq       uint64
 }
 
 func (r StealRequest) validate() error {
 	if len(r.InteractionID) != 16 || r.VisitorPlayerID == 0 || r.VisitorOwnerEpoch == 0 ||
 		r.OwnerPlayerID == 0 || len(r.VisitID) != 16 ||
-		r.PlotID == 0 || r.CropItemID == 0 || r.Quantity == 0 {
+		r.PlotID == 0 || r.CropItemID == 0 || r.Quantity == 0 ||
+		len(r.FarmViewEpoch) != 16 {
 		return errors.New("steal request is incomplete")
 	}
 	return nil
@@ -159,6 +159,7 @@ func (s *StealSaga) Execute(ctx context.Context, req StealRequest, now time.Time
 	digest := RequestDigest(
 		datav1.FriendInteractionAction_STEAL_FRIEND_CROP,
 		req.VisitorPlayerID, req.OwnerPlayerID, req.VisitID, req.PlotID, 0,
+		req.CropItemID, req.FarmViewEpoch, req.FarmViewSeq,
 	)
 	record, version, err := s.createOrLoad(ctx, req, digest, now)
 	if err != nil {
@@ -206,6 +207,10 @@ func (s *StealSaga) createOrLoad(
 		Status:              tcaplusv1.FriendInteractionStatus_FRIEND_INTERACTION_STATUS_INIT,
 		CreatedAtMs:         now.UnixMilli(),
 		UpdatedAtMs:         now.UnixMilli(),
+		CropItemId:          req.CropItemID,
+		Quantity:            req.Quantity,
+		FarmViewEpoch:       append([]byte(nil), req.FarmViewEpoch...),
+		FarmViewSeq:         req.FarmViewSeq,
 	}
 	version, err = s.store.Insert(ctx, record)
 	if err == nil {
@@ -258,6 +263,9 @@ func (s *StealSaga) advance(
 				InteractionId: record.InteractionId,
 				Action:        datav1.FriendInteractionAction_STEAL_FRIEND_CROP,
 				PlotId:        req.PlotID, RequestDigestSha256: record.RequestDigestSha256,
+				ExpectedCropItemId: req.CropItemID,
+				FarmViewEpoch:      req.FarmViewEpoch,
+				FarmViewSeq:        req.FarmViewSeq,
 			})
 			if err != nil {
 				return s.deferRetry(ctx, record, version, err, now)

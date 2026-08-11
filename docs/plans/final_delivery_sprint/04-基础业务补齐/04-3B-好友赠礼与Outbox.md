@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: verified
 date: 2026-08-10
 parent:
   - ./04-3-邮件与通知阶段总计划.md
@@ -70,38 +70,38 @@ CreateGiftMail {
 }
 ```
 
-- [ ] 事件 ID 在重试中稳定。
-- [ ] 事件 payload 使用确定性 Protobuf。
-- [ ] Outbox type 不复用奖励邮件的错误语义。
-- [ ] 重新生成 Go/TypeScript 类型。
+- [x] 事件 ID 在重试中稳定。
+- [x] 事件 payload 使用确定性 Protobuf。
+- [x] Outbox type 不复用奖励邮件的错误语义。
+- [x] 重新生成 Go/TypeScript 类型。
 
 ## Task 2：寄件人 Actor
 
-- [ ] FriendSvr 校验双方为好友。
-- [ ] Actor 校验：
+- [x] FriendSvr 校验双方为好友。
+- [x] Actor 校验：
   - recipient 非自己；
   - Item 是作物；
   - quantity 为 1–10；
   - 仓库数量足够。
-- [ ] 同一次 Actor 提交：
+- [x] 同一次 Actor 提交：
   - 扣除作物；
   - 写入 `CreateGiftMail` Outbox；
   - 保存幂等结果；
   - 增加版本并标 Dirty。
-- [ ] 相同 request ID 返回第一次结果。
-- [ ] 相同 ID 不同内容返回冲突。
-- [ ] MailSvr 不可用不阻塞本次 Actor 内存提交。
+- [x] 相同 request ID 返回第一次结果。
+- [x] 相同 ID 不同内容返回冲突。
+- [x] MailSvr 不可用不阻塞本次 Actor 内存提交。
 
 ## Task 3：Relay 和 MailSvr 去重
 
-- [ ] Relay 扫描 `CreateGiftMail`。
-- [ ] 使用 `event_id` 调用 MailSvr。
-- [ ] MailSvr 按 `source_event_id` 去重。
-- [ ] 创建私人 GiftMail。
-- [ ] 创建成功后通知 InfoSvr。
-- [ ] InfoSvr 失败不重复创建邮件。
-- [ ] Relay 不确定结果时重新查询或幂等重投。
-- [ ] 成功后按现有 Outbox 语义标记已投递。
+- [x] Relay 扫描 `CreateGiftMail`。
+- [x] 使用 `event_id` 调用 MailSvr。
+- [x] MailSvr 按 `source_event_id` 去重。
+- [x] 创建私人 GiftMail。
+- [x] 创建成功后通知 InfoSvr。
+- [x] InfoSvr 失败不重复创建邮件。
+- [x] Relay 不确定结果时重新查询或幂等重投。
+- [x] 成功后按现有 Outbox 语义标记已投递。
 
 ## Task 4：验证
 
@@ -134,13 +134,13 @@ docs/evidence/2026-08-12-friend-gift-outbox.md
 
 ## 完成检查
 
-- [ ] 非好友不能赠送；
-- [ ] 不能赠送给自己；
-- [ ] 只能赠送作物；
-- [ ] 数量范围正确；
-- [ ] 扣除和 Outbox 原子；
-- [ ] 重试不重复扣除；
-- [ ] Relay 最终投递；
-- [ ] MailSvr 去重；
-- [ ] 离线好友可接收；
-- [ ] Evidence 和 `CURRENT.md` 更新。
+- [x] 非好友不能赠送；
+- [x] 不能赠送给自己；
+- [x] 只能赠送作物；
+- [x] 数量范围正确；
+- [x] 扣除和 Outbox 原子；
+- [x] 重试不重复扣除；
+- [x] Relay 最终投递；
+- [x] MailSvr 去重；
+- [x] 离线好友可接收；
+- [x] Evidence 和 `CURRENT.md` 更新。

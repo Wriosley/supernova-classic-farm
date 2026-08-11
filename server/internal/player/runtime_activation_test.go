@@ -761,6 +761,77 @@ func TestRuntimeReconcilesAmbiguousInitialCheckpointCreate(t *testing.T) {
 	}
 }
 
+// repairingCheckpointStore mimics the Tcaplus durable store: it hands back a
+// state one revision ahead of the persisted row because loading pruned Outbox
+// entries the Relay already delivered.
+type repairingCheckpointStore struct {
+	state  *State
+	behind bool
+	saves  atomic.Int64
+}
+
+func (s *repairingCheckpointStore) Load(_ context.Context, playerID uint64) (LoadedCheckpoint, error) {
+	if s.state == nil || s.state.PlayerID != playerID {
+		return LoadedCheckpoint{}, ErrCheckpointNotFound
+	}
+	persisted := s.state.CheckpointRevision
+	if s.behind {
+		persisted++
+	} else {
+		s.state.CheckpointRevision++
+	}
+	return LoadedCheckpoint{State: s.state, PersistedRevision: persisted}, nil
+}
+
+func (s *repairingCheckpointStore) SaveCAS(context.Context, CheckpointWrite) (CheckpointWriteResult, error) {
+	s.saves.Add(1)
+	return CheckpointWriteResult{Status: CheckpointWriteApplied}, nil
+}
+
+// TestActivationAcceptsRepairedCheckpointRevision covers the gift sender who
+// could never log in again: the durable store prunes a delivered Outbox entry,
+// reports the repair as a higher revision, and activation used to reject that
+// as corruption — permanently, since every retry repeats the same prune.
+func TestActivationAcceptsRepairedCheckpointRevision(t *testing.T) {
+	const playerID = uint64(9301)
+	state := NewDevelopmentState(playerID)
+	base := state.CheckpointRevision
+	store := &repairingCheckpointStore{state: state}
+	runtime, err := NewRuntimeWithStore(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+
+	a, err := runtime.actorFor(context.Background(), playerID, LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("actorFor = %v, want nil", err)
+	}
+	if a.state.CheckpointRevision != base+1 {
+		t.Fatalf("state revision = %d, want %d", a.state.CheckpointRevision, base+1)
+	}
+	if a.persistedRevision != base {
+		t.Fatalf("persisted revision = %d, want %d", a.persistedRevision, base)
+	}
+}
+
+// TestActivationRejectsStaleCheckpointState keeps the corruption guard: a state
+// older than the row it came from must never be served.
+func TestActivationRejectsStaleCheckpointState(t *testing.T) {
+	const playerID = uint64(9302)
+	store := &repairingCheckpointStore{state: NewDevelopmentState(playerID), behind: true}
+	runtime, err := NewRuntimeWithStore(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+
+	_, err = runtime.actorFor(context.Background(), playerID, LocalOwnerEpoch)
+	if err == nil || !strings.Contains(err.Error(), "behind the persisted revision") {
+		t.Fatalf("actorFor = %v, want behind-the-persisted-revision failure", err)
+	}
+}
+
 type reconcileInitialStore struct {
 	inner *initialCheckpointFake
 	loads *atomic.Int64

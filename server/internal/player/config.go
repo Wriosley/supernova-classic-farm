@@ -32,8 +32,8 @@ const (
 	developmentNextSeedItemID            uint32 = 1003
 	developmentChapterRewardCoins        int64  = 10
 	developmentStealQuantity             uint32 = 1
-	developmentMaxStealTimes             uint32 = 2
-	developmentProtectedOwnerYield       uint32 = 1
+	developmentMaxStealTimes             uint32 = 1
+	developmentProtectedOwnerYield       uint32 = 2
 
 	developmentVillageDogPetID           uint32 = 1
 	developmentShepherdDogPetID          uint32 = 2
@@ -477,6 +477,9 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 			CropItemID: def.CropItemID, ConfigVersion: ServerConfigVersion,
 			MaturityValueScaled9: def.MaturityScaled9, BaseGrowthRateScaled6: developmentGrowthRateScaled6,
 			BaseYield: def.BaseYield, Enabled: true,
+			StealQuantity: stealQuantityFromBaseYield(def.BaseYield),
+			MaxStealTimes: maxStealTimesFromBaseYield(def.BaseYield),
+			ProtectedOwnerYield: protectedOwnerYieldFromBaseYield(def.BaseYield),
 		})
 		sellRules = append(sellRules, SellRule{
 			ShopEntryID: def.SellShopEntryID, ItemID: def.CropItemID,
@@ -632,6 +635,12 @@ func (c *ConfigSnapshot) SellRule(itemID uint32) (SellRule, bool) {
 	return rule, exists
 }
 
+// IsCropItem reports whether itemID is a configured harvest crop (has a sell rule).
+func (c *ConfigSnapshot) IsCropItem(itemID uint32) bool {
+	rule, exists := c.SellRule(itemID)
+	return exists && rule.Enabled
+}
+
 func (c *ConfigSnapshot) Chapter(chapterID uint32) (ChapterConfig, bool) {
 	if c == nil {
 		return ChapterConfig{}, false
@@ -645,17 +654,9 @@ func (c *ConfigSnapshot) Chapter(chapterID uint32) (ChapterConfig, bool) {
 	return chapter, true
 }
 
-// SoleStealableCrop returns the (cropItemID, stealQuantity) of the single
-// stealable CropConfig in this snapshot (StealQuantity>0 and
-// MaxStealTimes>0), deterministically picking the lowest CropItemID if more
-// than one qualifies. This is a documented Phase 5 simplification: Zone's
-// ExecuteFriendAction handler needs to resolve an authoritative
-// crop_item_id/quantity for ReserveSteal before the owner's plot is known
-// (StealFriendCropRequest itself carries no crop hint), and
-// docs/plans/friend_design_plan/06-分阶段实施方案.md's development config
-// only ever defines one stealable crop. A future multi-crop config would
-// need Zone to resolve this from the owner's actual plot (e.g. via a
-// GetPublicFarmSnapshot read) instead of guessing from config alone.
+// SoleStealableCrop is retained for legacy unit fixtures that still assert
+// a deterministic stealable crop identity. Steal Saga entry points must not
+// call this: crop comes from the visitor request / FriendInteraction row.
 func (c *ConfigSnapshot) SoleStealableCrop() (cropItemID uint32, stealQuantity uint32, ok bool) {
 	if c == nil {
 		return 0, 0, false
@@ -675,6 +676,29 @@ func (c *ConfigSnapshot) SoleStealableCrop() (cropItemID uint32, stealQuantity u
 		}
 	}
 	return cropItemID, stealQuantity, ok
+}
+
+// protectedOwnerYieldFromBaseYield is ceil(base_yield / 2).
+func protectedOwnerYieldFromBaseYield(baseYield uint32) uint32 {
+	if baseYield == 0 {
+		return 0
+	}
+	return (baseYield + 1) / 2
+}
+
+func maxStealTimesFromBaseYield(baseYield uint32) uint32 {
+	protected := protectedOwnerYieldFromBaseYield(baseYield)
+	if baseYield <= protected {
+		return 0
+	}
+	return baseYield - protected
+}
+
+func stealQuantityFromBaseYield(baseYield uint32) uint32 {
+	if maxStealTimesFromBaseYield(baseYield) == 0 {
+		return 0
+	}
+	return 1
 }
 
 func (c *ConfigSnapshot) ActiveShopEntries() []*wsv1.ShopEntryView {

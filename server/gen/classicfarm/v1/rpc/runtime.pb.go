@@ -581,8 +581,13 @@ type ExecuteFriendActionRequest struct {
 	Action         data.FriendInteractionAction `protobuf:"varint,6,opt,name=action,proto3,enum=classicfarm.data.v1.FriendInteractionAction" json:"action,omitempty"`
 	PlotId         uint32                       `protobuf:"varint,7,opt,name=plot_id,json=plotId,proto3" json:"plot_id,omitempty"`
 	PestId         *uint32                      `protobuf:"varint,8,opt,name=pest_id,json=pestId,proto3,oneof" json:"pest_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// STEAL_FRIEND_CROP only: visitor-visible crop + farm view version for
+	// reserve and stale-request rejection. Owner Actor re-validates.
+	ExpectedCropItemId uint32 `protobuf:"varint,9,opt,name=expected_crop_item_id,json=expectedCropItemId,proto3" json:"expected_crop_item_id,omitempty"`
+	FarmViewEpoch      []byte `protobuf:"bytes,10,opt,name=farm_view_epoch,json=farmViewEpoch,proto3" json:"farm_view_epoch,omitempty"`
+	FarmViewSeq        uint64 `protobuf:"varint,11,opt,name=farm_view_seq,json=farmViewSeq,proto3" json:"farm_view_seq,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ExecuteFriendActionRequest) Reset() {
@@ -667,6 +672,27 @@ func (x *ExecuteFriendActionRequest) GetPlotId() uint32 {
 func (x *ExecuteFriendActionRequest) GetPestId() uint32 {
 	if x != nil && x.PestId != nil {
 		return *x.PestId
+	}
+	return 0
+}
+
+func (x *ExecuteFriendActionRequest) GetExpectedCropItemId() uint32 {
+	if x != nil {
+		return x.ExpectedCropItemId
+	}
+	return 0
+}
+
+func (x *ExecuteFriendActionRequest) GetFarmViewEpoch() []byte {
+	if x != nil {
+		return x.FarmViewEpoch
+	}
+	return nil
+}
+
+func (x *ExecuteFriendActionRequest) GetFarmViewSeq() uint64 {
+	if x != nil {
+		return x.FarmViewSeq
 	}
 	return 0
 }
@@ -1246,6 +1272,9 @@ type ApplyVisitorActionRequest struct {
 	PlotId              uint32                       `protobuf:"varint,7,opt,name=plot_id,json=plotId,proto3" json:"plot_id,omitempty"`
 	PestId              *uint32                      `protobuf:"varint,8,opt,name=pest_id,json=pestId,proto3,oneof" json:"pest_id,omitempty"`
 	RequestDigestSha256 []byte                       `protobuf:"bytes,9,opt,name=request_digest_sha256,json=requestDigestSha256,proto3" json:"request_digest_sha256,omitempty"`
+	ExpectedCropItemId  uint32                       `protobuf:"varint,10,opt,name=expected_crop_item_id,json=expectedCropItemId,proto3" json:"expected_crop_item_id,omitempty"`
+	FarmViewEpoch       []byte                       `protobuf:"bytes,11,opt,name=farm_view_epoch,json=farmViewEpoch,proto3" json:"farm_view_epoch,omitempty"`
+	FarmViewSeq         uint64                       `protobuf:"varint,12,opt,name=farm_view_seq,json=farmViewSeq,proto3" json:"farm_view_seq,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1341,6 +1370,27 @@ func (x *ApplyVisitorActionRequest) GetRequestDigestSha256() []byte {
 		return x.RequestDigestSha256
 	}
 	return nil
+}
+
+func (x *ApplyVisitorActionRequest) GetExpectedCropItemId() uint32 {
+	if x != nil {
+		return x.ExpectedCropItemId
+	}
+	return 0
+}
+
+func (x *ApplyVisitorActionRequest) GetFarmViewEpoch() []byte {
+	if x != nil {
+		return x.FarmViewEpoch
+	}
+	return nil
+}
+
+func (x *ApplyVisitorActionRequest) GetFarmViewSeq() uint64 {
+	if x != nil {
+		return x.FarmViewSeq
+	}
+	return 0
 }
 
 type ApplyVisitorActionResponse struct {
@@ -1591,6 +1641,66 @@ func (x *PublishFarmPresenceRequest) GetPresence() *ws.FarmPresencePush {
 	return nil
 }
 
+type PublishRedDotChangedRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	GateId             string                 `protobuf:"bytes,1,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
+	RecipientPlayerIds []uint64               `protobuf:"varint,2,rep,packed,name=recipient_player_ids,json=recipientPlayerIds,proto3" json:"recipient_player_ids,omitempty"`
+	RedDot             *ws.RedDotChangedPush  `protobuf:"bytes,3,opt,name=red_dot,json=redDot,proto3" json:"red_dot,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *PublishRedDotChangedRequest) Reset() {
+	*x = PublishRedDotChangedRequest{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishRedDotChangedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishRedDotChangedRequest) ProtoMessage() {}
+
+func (x *PublishRedDotChangedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishRedDotChangedRequest.ProtoReflect.Descriptor instead.
+func (*PublishRedDotChangedRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *PublishRedDotChangedRequest) GetGateId() string {
+	if x != nil {
+		return x.GateId
+	}
+	return ""
+}
+
+func (x *PublishRedDotChangedRequest) GetRecipientPlayerIds() []uint64 {
+	if x != nil {
+		return x.RecipientPlayerIds
+	}
+	return nil
+}
+
+func (x *PublishRedDotChangedRequest) GetRedDot() *ws.RedDotChangedPush {
+	if x != nil {
+		return x.RedDot
+	}
+	return nil
+}
+
 type PublishPlayerStateChangedResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1599,7 +1709,7 @@ type PublishPlayerStateChangedResponse struct {
 
 func (x *PublishPlayerStateChangedResponse) Reset() {
 	*x = PublishPlayerStateChangedResponse{}
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[24]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1611,7 +1721,7 @@ func (x *PublishPlayerStateChangedResponse) String() string {
 func (*PublishPlayerStateChangedResponse) ProtoMessage() {}
 
 func (x *PublishPlayerStateChangedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[24]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1624,7 +1734,7 @@ func (x *PublishPlayerStateChangedResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use PublishPlayerStateChangedResponse.ProtoReflect.Descriptor instead.
 func (*PublishPlayerStateChangedResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{24}
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{25}
 }
 
 type PublishFarmViewPatchResponse struct {
@@ -1635,7 +1745,7 @@ type PublishFarmViewPatchResponse struct {
 
 func (x *PublishFarmViewPatchResponse) Reset() {
 	*x = PublishFarmViewPatchResponse{}
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[25]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1647,7 +1757,7 @@ func (x *PublishFarmViewPatchResponse) String() string {
 func (*PublishFarmViewPatchResponse) ProtoMessage() {}
 
 func (x *PublishFarmViewPatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[25]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1660,7 +1770,7 @@ func (x *PublishFarmViewPatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishFarmViewPatchResponse.ProtoReflect.Descriptor instead.
 func (*PublishFarmViewPatchResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{25}
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{26}
 }
 
 type PublishFarmPresenceResponse struct {
@@ -1671,7 +1781,7 @@ type PublishFarmPresenceResponse struct {
 
 func (x *PublishFarmPresenceResponse) Reset() {
 	*x = PublishFarmPresenceResponse{}
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[26]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1683,7 +1793,7 @@ func (x *PublishFarmPresenceResponse) String() string {
 func (*PublishFarmPresenceResponse) ProtoMessage() {}
 
 func (x *PublishFarmPresenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[26]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1696,7 +1806,499 @@ func (x *PublishFarmPresenceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishFarmPresenceResponse.ProtoReflect.Descriptor instead.
 func (*PublishFarmPresenceResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{26}
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{27}
+}
+
+type PublishRedDotChangedResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishRedDotChangedResponse) Reset() {
+	*x = PublishRedDotChangedResponse{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishRedDotChangedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishRedDotChangedResponse) ProtoMessage() {}
+
+func (x *PublishRedDotChangedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishRedDotChangedResponse.ProtoReflect.Descriptor instead.
+func (*PublishRedDotChangedResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{28}
+}
+
+type DispatchRedDotRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	RecipientRoute     *CommittedRoute        `protobuf:"bytes,1,opt,name=recipient_route,json=recipientRoute,proto3" json:"recipient_route,omitempty"`
+	RecipientPlayerIds []uint64               `protobuf:"varint,2,rep,packed,name=recipient_player_ids,json=recipientPlayerIds,proto3" json:"recipient_player_ids,omitempty"`
+	RedDot             *ws.RedDotChangedPush  `protobuf:"bytes,3,opt,name=red_dot,json=redDot,proto3" json:"red_dot,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *DispatchRedDotRequest) Reset() {
+	*x = DispatchRedDotRequest{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DispatchRedDotRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DispatchRedDotRequest) ProtoMessage() {}
+
+func (x *DispatchRedDotRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DispatchRedDotRequest.ProtoReflect.Descriptor instead.
+func (*DispatchRedDotRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *DispatchRedDotRequest) GetRecipientRoute() *CommittedRoute {
+	if x != nil {
+		return x.RecipientRoute
+	}
+	return nil
+}
+
+func (x *DispatchRedDotRequest) GetRecipientPlayerIds() []uint64 {
+	if x != nil {
+		return x.RecipientPlayerIds
+	}
+	return nil
+}
+
+func (x *DispatchRedDotRequest) GetRedDot() *ws.RedDotChangedPush {
+	if x != nil {
+		return x.RedDot
+	}
+	return nil
+}
+
+type DispatchRedDotResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DispatchRedDotResponse) Reset() {
+	*x = DispatchRedDotResponse{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DispatchRedDotResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DispatchRedDotResponse) ProtoMessage() {}
+
+func (x *DispatchRedDotResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DispatchRedDotResponse.ProtoReflect.Descriptor instead.
+func (*DispatchRedDotResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *DispatchRedDotResponse) GetError() *ws.Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+type RegisterPlayerConnectionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	GateId        string                 `protobuf:"bytes,2,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
+	ConnectionId  string                 `protobuf:"bytes,3,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	Route         *CommittedRoute        `protobuf:"bytes,4,opt,name=route,proto3" json:"route,omitempty"`
+	ExpiresAtMs   int64                  `protobuf:"varint,5,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterPlayerConnectionRequest) Reset() {
+	*x = RegisterPlayerConnectionRequest{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterPlayerConnectionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterPlayerConnectionRequest) ProtoMessage() {}
+
+func (x *RegisterPlayerConnectionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterPlayerConnectionRequest.ProtoReflect.Descriptor instead.
+func (*RegisterPlayerConnectionRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *RegisterPlayerConnectionRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *RegisterPlayerConnectionRequest) GetGateId() string {
+	if x != nil {
+		return x.GateId
+	}
+	return ""
+}
+
+func (x *RegisterPlayerConnectionRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *RegisterPlayerConnectionRequest) GetRoute() *CommittedRoute {
+	if x != nil {
+		return x.Route
+	}
+	return nil
+}
+
+func (x *RegisterPlayerConnectionRequest) GetExpiresAtMs() int64 {
+	if x != nil {
+		return x.ExpiresAtMs
+	}
+	return 0
+}
+
+type RegisterPlayerConnectionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterPlayerConnectionResponse) Reset() {
+	*x = RegisterPlayerConnectionResponse{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterPlayerConnectionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterPlayerConnectionResponse) ProtoMessage() {}
+
+func (x *RegisterPlayerConnectionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterPlayerConnectionResponse.ProtoReflect.Descriptor instead.
+func (*RegisterPlayerConnectionResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *RegisterPlayerConnectionResponse) GetError() *ws.Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+type RefreshPlayerConnectionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	GateId        string                 `protobuf:"bytes,2,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
+	ConnectionId  string                 `protobuf:"bytes,3,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	Route         *CommittedRoute        `protobuf:"bytes,4,opt,name=route,proto3" json:"route,omitempty"`
+	ExpiresAtMs   int64                  `protobuf:"varint,5,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshPlayerConnectionRequest) Reset() {
+	*x = RefreshPlayerConnectionRequest{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshPlayerConnectionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshPlayerConnectionRequest) ProtoMessage() {}
+
+func (x *RefreshPlayerConnectionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshPlayerConnectionRequest.ProtoReflect.Descriptor instead.
+func (*RefreshPlayerConnectionRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *RefreshPlayerConnectionRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *RefreshPlayerConnectionRequest) GetGateId() string {
+	if x != nil {
+		return x.GateId
+	}
+	return ""
+}
+
+func (x *RefreshPlayerConnectionRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *RefreshPlayerConnectionRequest) GetRoute() *CommittedRoute {
+	if x != nil {
+		return x.Route
+	}
+	return nil
+}
+
+func (x *RefreshPlayerConnectionRequest) GetExpiresAtMs() int64 {
+	if x != nil {
+		return x.ExpiresAtMs
+	}
+	return 0
+}
+
+type RefreshPlayerConnectionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshPlayerConnectionResponse) Reset() {
+	*x = RefreshPlayerConnectionResponse{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshPlayerConnectionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshPlayerConnectionResponse) ProtoMessage() {}
+
+func (x *RefreshPlayerConnectionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshPlayerConnectionResponse.ProtoReflect.Descriptor instead.
+func (*RefreshPlayerConnectionResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *RefreshPlayerConnectionResponse) GetError() *ws.Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+type UnregisterPlayerConnectionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	GateId        string                 `protobuf:"bytes,2,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
+	ConnectionId  string                 `protobuf:"bytes,3,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	Route         *CommittedRoute        `protobuf:"bytes,4,opt,name=route,proto3" json:"route,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnregisterPlayerConnectionRequest) Reset() {
+	*x = UnregisterPlayerConnectionRequest{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnregisterPlayerConnectionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnregisterPlayerConnectionRequest) ProtoMessage() {}
+
+func (x *UnregisterPlayerConnectionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnregisterPlayerConnectionRequest.ProtoReflect.Descriptor instead.
+func (*UnregisterPlayerConnectionRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *UnregisterPlayerConnectionRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *UnregisterPlayerConnectionRequest) GetGateId() string {
+	if x != nil {
+		return x.GateId
+	}
+	return ""
+}
+
+func (x *UnregisterPlayerConnectionRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *UnregisterPlayerConnectionRequest) GetRoute() *CommittedRoute {
+	if x != nil {
+		return x.Route
+	}
+	return nil
+}
+
+type UnregisterPlayerConnectionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnregisterPlayerConnectionResponse) Reset() {
+	*x = UnregisterPlayerConnectionResponse{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnregisterPlayerConnectionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnregisterPlayerConnectionResponse) ProtoMessage() {}
+
+func (x *UnregisterPlayerConnectionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnregisterPlayerConnectionResponse.ProtoReflect.Descriptor instead.
+func (*UnregisterPlayerConnectionResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *UnregisterPlayerConnectionResponse) GetError() *ws.Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
 }
 
 type ApplyFriendTaskCreditRequest struct {
@@ -1710,7 +2312,7 @@ type ApplyFriendTaskCreditRequest struct {
 
 func (x *ApplyFriendTaskCreditRequest) Reset() {
 	*x = ApplyFriendTaskCreditRequest{}
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[27]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1722,7 +2324,7 @@ func (x *ApplyFriendTaskCreditRequest) String() string {
 func (*ApplyFriendTaskCreditRequest) ProtoMessage() {}
 
 func (x *ApplyFriendTaskCreditRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[27]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1735,7 +2337,7 @@ func (x *ApplyFriendTaskCreditRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyFriendTaskCreditRequest.ProtoReflect.Descriptor instead.
 func (*ApplyFriendTaskCreditRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{27}
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ApplyFriendTaskCreditRequest) GetPlayerRoute() *CommittedRoute {
@@ -1770,7 +2372,7 @@ type ApplyFriendTaskCreditResponse struct {
 
 func (x *ApplyFriendTaskCreditResponse) Reset() {
 	*x = ApplyFriendTaskCreditResponse{}
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[28]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1782,7 +2384,7 @@ func (x *ApplyFriendTaskCreditResponse) String() string {
 func (*ApplyFriendTaskCreditResponse) ProtoMessage() {}
 
 func (x *ApplyFriendTaskCreditResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[28]
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1795,7 +2397,7 @@ func (x *ApplyFriendTaskCreditResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyFriendTaskCreditResponse.ProtoReflect.Descriptor instead.
 func (*ApplyFriendTaskCreditResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{28}
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ApplyFriendTaskCreditResponse) GetNewlyApplied() bool {
@@ -1813,6 +2415,220 @@ func (x *ApplyFriendTaskCreditResponse) GetPlayerSeq() uint64 {
 }
 
 func (x *ApplyFriendTaskCreditResponse) GetError() *ws.Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+type MailRewardAttachment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Quantity      uint32                 `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MailRewardAttachment) Reset() {
+	*x = MailRewardAttachment{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MailRewardAttachment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MailRewardAttachment) ProtoMessage() {}
+
+func (x *MailRewardAttachment) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MailRewardAttachment.ProtoReflect.Descriptor instead.
+func (*MailRewardAttachment) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *MailRewardAttachment) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *MailRewardAttachment) GetQuantity() uint32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+type ApplyMailRewardRequest struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	PlayerRoute   *CommittedRoute         `protobuf:"bytes,1,opt,name=player_route,json=playerRoute,proto3" json:"player_route,omitempty"`
+	PlayerId      uint64                  `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	ClaimId       []byte                  `protobuf:"bytes,3,opt,name=claim_id,json=claimId,proto3" json:"claim_id,omitempty"`
+	MailId        string                  `protobuf:"bytes,4,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	Attachments   []*MailRewardAttachment `protobuf:"bytes,5,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApplyMailRewardRequest) Reset() {
+	*x = ApplyMailRewardRequest{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApplyMailRewardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApplyMailRewardRequest) ProtoMessage() {}
+
+func (x *ApplyMailRewardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApplyMailRewardRequest.ProtoReflect.Descriptor instead.
+func (*ApplyMailRewardRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *ApplyMailRewardRequest) GetPlayerRoute() *CommittedRoute {
+	if x != nil {
+		return x.PlayerRoute
+	}
+	return nil
+}
+
+func (x *ApplyMailRewardRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *ApplyMailRewardRequest) GetClaimId() []byte {
+	if x != nil {
+		return x.ClaimId
+	}
+	return nil
+}
+
+func (x *ApplyMailRewardRequest) GetMailId() string {
+	if x != nil {
+		return x.MailId
+	}
+	return ""
+}
+
+func (x *ApplyMailRewardRequest) GetAttachments() []*MailRewardAttachment {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
+type ApplyMailRewardResponse struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	NewlyApplied bool                   `protobuf:"varint,1,opt,name=newly_applied,json=newlyApplied,proto3" json:"newly_applied,omitempty"`
+	PlayerSeq    uint64                 `protobuf:"varint,2,opt,name=player_seq,json=playerSeq,proto3" json:"player_seq,omitempty"`
+	ItemsAdded   []*ws.ItemStackView    `protobuf:"bytes,3,rep,name=items_added,json=itemsAdded,proto3" json:"items_added,omitempty"`
+	Patch        *ws.PlayerStatePatch   `protobuf:"bytes,4,opt,name=patch,proto3" json:"patch,omitempty"`
+	// owner_epoch pairs with player_seq so callers can rebuild the StateVersion
+	// that H5 needs to apply patch incrementally.
+	OwnerEpoch    uint64    `protobuf:"varint,5,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
+	Error         *ws.Error `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApplyMailRewardResponse) Reset() {
+	*x = ApplyMailRewardResponse{}
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApplyMailRewardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApplyMailRewardResponse) ProtoMessage() {}
+
+func (x *ApplyMailRewardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_rpc_runtime_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApplyMailRewardResponse.ProtoReflect.Descriptor instead.
+func (*ApplyMailRewardResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *ApplyMailRewardResponse) GetNewlyApplied() bool {
+	if x != nil {
+		return x.NewlyApplied
+	}
+	return false
+}
+
+func (x *ApplyMailRewardResponse) GetPlayerSeq() uint64 {
+	if x != nil {
+		return x.PlayerSeq
+	}
+	return 0
+}
+
+func (x *ApplyMailRewardResponse) GetItemsAdded() []*ws.ItemStackView {
+	if x != nil {
+		return x.ItemsAdded
+	}
+	return nil
+}
+
+func (x *ApplyMailRewardResponse) GetPatch() *ws.PlayerStatePatch {
+	if x != nil {
+		return x.Patch
+	}
+	return nil
+}
+
+func (x *ApplyMailRewardResponse) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
+	}
+	return 0
+}
+
+func (x *ApplyMailRewardResponse) GetError() *ws.Error {
 	if x != nil {
 		return x.Error
 	}
@@ -1864,7 +2680,7 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x05 \x01(\tR\trequestId\"H\n" +
 	"\x16ExitFriendFarmResponse\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xca\x02\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xc9\x03\n" +
 	"\x1aExecuteFriendActionRequest\x12(\n" +
 	"\x10caller_player_id\x18\x01 \x01(\x04R\x0ecallerPlayerId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x19\n" +
@@ -1874,7 +2690,11 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"request_id\x18\x05 \x01(\tR\trequestId\x12D\n" +
 	"\x06action\x18\x06 \x01(\x0e2,.classicfarm.data.v1.FriendInteractionActionR\x06action\x12\x17\n" +
 	"\aplot_id\x18\a \x01(\rR\x06plotId\x12\x1c\n" +
-	"\apest_id\x18\b \x01(\rH\x00R\x06pestId\x88\x01\x01B\n" +
+	"\apest_id\x18\b \x01(\rH\x00R\x06pestId\x88\x01\x01\x121\n" +
+	"\x15expected_crop_item_id\x18\t \x01(\rR\x12expectedCropItemId\x12&\n" +
+	"\x0ffarm_view_epoch\x18\n" +
+	" \x01(\fR\rfarmViewEpoch\x12\"\n" +
+	"\rfarm_view_seq\x18\v \x01(\x04R\vfarmViewSeqB\n" +
 	"\n" +
 	"\b_pest_id\"\x8e\x01\n" +
 	"\x1bExecuteFriendActionResponse\x12?\n" +
@@ -1921,7 +2741,7 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\bvisit_id\x18\x04 \x01(\fR\avisitId\"\x91\x01\n" +
 	"\x1dGetPublicFarmSnapshotResponse\x12@\n" +
 	"\bsnapshot\x18\x01 \x01(\v2$.classicfarm.ws.v1.FarmVisitSnapshotR\bsnapshot\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xb3\x03\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xb2\x04\n" +
 	"\x19ApplyVisitorActionRequest\x12C\n" +
 	"\vowner_route\x18\x01 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\n" +
 	"ownerRoute\x12&\n" +
@@ -1932,7 +2752,11 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\x06action\x18\x06 \x01(\x0e2,.classicfarm.data.v1.FriendInteractionActionR\x06action\x12\x17\n" +
 	"\aplot_id\x18\a \x01(\rR\x06plotId\x12\x1c\n" +
 	"\apest_id\x18\b \x01(\rH\x00R\x06pestId\x88\x01\x01\x122\n" +
-	"\x15request_digest_sha256\x18\t \x01(\fR\x13requestDigestSha256B\n" +
+	"\x15request_digest_sha256\x18\t \x01(\fR\x13requestDigestSha256\x121\n" +
+	"\x15expected_crop_item_id\x18\n" +
+	" \x01(\rR\x12expectedCropItemId\x12&\n" +
+	"\x0ffarm_view_epoch\x18\v \x01(\fR\rfarmViewEpoch\x12\"\n" +
+	"\rfarm_view_seq\x18\f \x01(\x04R\vfarmViewSeqB\n" +
 	"\n" +
 	"\b_pest_id\"\xe6\x01\n" +
 	"\x1aApplyVisitorActionResponse\x120\n" +
@@ -1952,10 +2776,44 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\x1aPublishFarmPresenceRequest\x12\x17\n" +
 	"\agate_id\x18\x01 \x01(\tR\x06gateId\x12.\n" +
 	"\x13recipient_player_id\x18\x02 \x01(\x04R\x11recipientPlayerId\x12?\n" +
-	"\bpresence\x18\x03 \x01(\v2#.classicfarm.ws.v1.FarmPresencePushR\bpresence\"#\n" +
+	"\bpresence\x18\x03 \x01(\v2#.classicfarm.ws.v1.FarmPresencePushR\bpresence\"\xa7\x01\n" +
+	"\x1bPublishRedDotChangedRequest\x12\x17\n" +
+	"\agate_id\x18\x01 \x01(\tR\x06gateId\x120\n" +
+	"\x14recipient_player_ids\x18\x02 \x03(\x04R\x12recipientPlayerIds\x12=\n" +
+	"\ared_dot\x18\x03 \x01(\v2$.classicfarm.ws.v1.RedDotChangedPushR\x06redDot\"#\n" +
 	"!PublishPlayerStateChangedResponse\"\x1e\n" +
 	"\x1cPublishFarmViewPatchResponse\"\x1d\n" +
-	"\x1bPublishFarmPresenceResponse\"\xa3\x01\n" +
+	"\x1bPublishFarmPresenceResponse\"\x1e\n" +
+	"\x1cPublishRedDotChangedResponse\"\xd5\x01\n" +
+	"\x15DispatchRedDotRequest\x12K\n" +
+	"\x0frecipient_route\x18\x01 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\x0erecipientRoute\x120\n" +
+	"\x14recipient_player_ids\x18\x02 \x03(\x04R\x12recipientPlayerIds\x12=\n" +
+	"\ared_dot\x18\x03 \x01(\v2$.classicfarm.ws.v1.RedDotChangedPushR\x06redDot\"H\n" +
+	"\x16DispatchRedDotResponse\x12.\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xda\x01\n" +
+	"\x1fRegisterPlayerConnectionRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
+	"\agate_id\x18\x02 \x01(\tR\x06gateId\x12#\n" +
+	"\rconnection_id\x18\x03 \x01(\tR\fconnectionId\x128\n" +
+	"\x05route\x18\x04 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\x05route\x12\"\n" +
+	"\rexpires_at_ms\x18\x05 \x01(\x03R\vexpiresAtMs\"R\n" +
+	" RegisterPlayerConnectionResponse\x12.\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xd9\x01\n" +
+	"\x1eRefreshPlayerConnectionRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
+	"\agate_id\x18\x02 \x01(\tR\x06gateId\x12#\n" +
+	"\rconnection_id\x18\x03 \x01(\tR\fconnectionId\x128\n" +
+	"\x05route\x18\x04 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\x05route\x12\"\n" +
+	"\rexpires_at_ms\x18\x05 \x01(\x03R\vexpiresAtMs\"Q\n" +
+	"\x1fRefreshPlayerConnectionResponse\x12.\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xb8\x01\n" +
+	"!UnregisterPlayerConnectionRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
+	"\agate_id\x18\x02 \x01(\tR\x06gateId\x12#\n" +
+	"\rconnection_id\x18\x03 \x01(\tR\fconnectionId\x128\n" +
+	"\x05route\x18\x04 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\x05route\"T\n" +
+	"\"UnregisterPlayerConnectionResponse\x12.\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xa3\x01\n" +
 	"\x1cApplyFriendTaskCreditRequest\x12E\n" +
 	"\fplayer_route\x18\x01 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\vplayerRoute\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1f\n" +
@@ -1965,6 +2823,25 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\rnewly_applied\x18\x01 \x01(\bR\fnewlyApplied\x12\x1d\n" +
 	"\n" +
 	"player_seq\x18\x02 \x01(\x04R\tplayerSeq\x12.\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"K\n" +
+	"\x14MailRewardAttachment\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
+	"\bquantity\x18\x02 \x01(\rR\bquantity\"\xfc\x01\n" +
+	"\x16ApplyMailRewardRequest\x12E\n" +
+	"\fplayer_route\x18\x01 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\vplayerRoute\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
+	"\bclaim_id\x18\x03 \x01(\fR\aclaimId\x12\x17\n" +
+	"\amail_id\x18\x04 \x01(\tR\x06mailId\x12J\n" +
+	"\vattachments\x18\x05 \x03(\v2(.classicfarm.rpc.v1.MailRewardAttachmentR\vattachments\"\xac\x02\n" +
+	"\x17ApplyMailRewardResponse\x12#\n" +
+	"\rnewly_applied\x18\x01 \x01(\bR\fnewlyApplied\x12\x1d\n" +
+	"\n" +
+	"player_seq\x18\x02 \x01(\x04R\tplayerSeq\x12A\n" +
+	"\vitems_added\x18\x03 \x03(\v2 .classicfarm.ws.v1.ItemStackViewR\n" +
+	"itemsAdded\x129\n" +
+	"\x05patch\x18\x04 \x01(\v2#.classicfarm.ws.v1.PlayerStatePatchR\x05patch\x12\x1f\n" +
+	"\vowner_epoch\x18\x05 \x01(\x04R\n" +
+	"ownerEpoch\x12.\n" +
 	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error2\x8f\x01\n" +
 	"\x12GameCommandService\x12y\n" +
 	"\x14ExecutePlayerCommand\x12/.classicfarm.rpc.v1.ExecutePlayerCommandRequest\x1a0.classicfarm.rpc.v1.ExecutePlayerCommandResponse2\xd9\x03\n" +
@@ -1978,13 +2855,21 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\x17RefreshVisitorHeartbeat\x122.classicfarm.rpc.v1.RefreshVisitorHeartbeatRequest\x1a3.classicfarm.rpc.v1.RefreshVisitorHeartbeatResponse\x12^\n" +
 	"\vExitVisitor\x12&.classicfarm.rpc.v1.ExitVisitorRequest\x1a'.classicfarm.rpc.v1.ExitVisitorResponse\x12|\n" +
 	"\x15GetPublicFarmSnapshot\x120.classicfarm.rpc.v1.GetPublicFarmSnapshotRequest\x1a1.classicfarm.rpc.v1.GetPublicFarmSnapshotResponse\x12s\n" +
-	"\x12ApplyVisitorAction\x12-.classicfarm.rpc.v1.ApplyVisitorActionRequest\x1a..classicfarm.rpc.v1.ApplyVisitorActionResponse2\x8f\x03\n" +
+	"\x12ApplyVisitorAction\x12-.classicfarm.rpc.v1.ApplyVisitorActionRequest\x1a..classicfarm.rpc.v1.ApplyVisitorActionResponse2\x8a\x04\n" +
 	"\x0fGatePushService\x12\x88\x01\n" +
 	"\x19PublishPlayerStateChanged\x124.classicfarm.rpc.v1.PublishPlayerStateChangedRequest\x1a5.classicfarm.rpc.v1.PublishPlayerStateChangedResponse\x12y\n" +
 	"\x14PublishFarmViewPatch\x12/.classicfarm.rpc.v1.PublishFarmViewPatchRequest\x1a0.classicfarm.rpc.v1.PublishFarmViewPatchResponse\x12v\n" +
-	"\x13PublishFarmPresence\x12..classicfarm.rpc.v1.PublishFarmPresenceRequest\x1a/.classicfarm.rpc.v1.PublishFarmPresenceResponse2\x93\x01\n" +
+	"\x13PublishFarmPresence\x12..classicfarm.rpc.v1.PublishFarmPresenceRequest\x1a/.classicfarm.rpc.v1.PublishFarmPresenceResponse\x12y\n" +
+	"\x14PublishRedDotChanged\x12/.classicfarm.rpc.v1.PublishRedDotChangedRequest\x1a0.classicfarm.rpc.v1.PublishRedDotChangedResponse2\xb4\x03\n" +
+	"\x17PlayerConnectionService\x12\x85\x01\n" +
+	"\x18RegisterPlayerConnection\x123.classicfarm.rpc.v1.RegisterPlayerConnectionRequest\x1a4.classicfarm.rpc.v1.RegisterPlayerConnectionResponse\x12\x82\x01\n" +
+	"\x17RefreshPlayerConnection\x122.classicfarm.rpc.v1.RefreshPlayerConnectionRequest\x1a3.classicfarm.rpc.v1.RefreshPlayerConnectionResponse\x12\x8b\x01\n" +
+	"\x1aUnregisterPlayerConnection\x125.classicfarm.rpc.v1.UnregisterPlayerConnectionRequest\x1a6.classicfarm.rpc.v1.UnregisterPlayerConnectionResponse2\x82\x01\n" +
+	"\x17ZoneNotificationService\x12g\n" +
+	"\x0eDispatchRedDot\x12).classicfarm.rpc.v1.DispatchRedDotRequest\x1a*.classicfarm.rpc.v1.DispatchRedDotResponse2\xff\x01\n" +
 	"\x13PlayerSocialService\x12|\n" +
-	"\x15ApplyFriendTaskCredit\x120.classicfarm.rpc.v1.ApplyFriendTaskCreditRequest\x1a1.classicfarm.rpc.v1.ApplyFriendTaskCreditResponseBPZNgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc;rpcv1b\x06proto3"
+	"\x15ApplyFriendTaskCredit\x120.classicfarm.rpc.v1.ApplyFriendTaskCreditRequest\x1a1.classicfarm.rpc.v1.ApplyFriendTaskCreditResponse\x12j\n" +
+	"\x0fApplyMailReward\x12*.classicfarm.rpc.v1.ApplyMailRewardRequest\x1a+.classicfarm.rpc.v1.ApplyMailRewardResponseBPZNgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc;rpcv1b\x06proto3"
 
 var (
 	file_classicfarm_v1_rpc_runtime_proto_rawDescOnce sync.Once
@@ -1998,111 +2883,154 @@ func file_classicfarm_v1_rpc_runtime_proto_rawDescGZIP() []byte {
 	return file_classicfarm_v1_rpc_runtime_proto_rawDescData
 }
 
-var file_classicfarm_v1_rpc_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_classicfarm_v1_rpc_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_classicfarm_v1_rpc_runtime_proto_goTypes = []any{
-	(*CommittedRoute)(nil),                    // 0: classicfarm.rpc.v1.CommittedRoute
-	(*ExecutePlayerCommandRequest)(nil),       // 1: classicfarm.rpc.v1.ExecutePlayerCommandRequest
-	(*ExecutePlayerCommandResponse)(nil),      // 2: classicfarm.rpc.v1.ExecutePlayerCommandResponse
-	(*EnterFriendFarmRequest)(nil),            // 3: classicfarm.rpc.v1.EnterFriendFarmRequest
-	(*EnterFriendFarmResponse)(nil),           // 4: classicfarm.rpc.v1.EnterFriendFarmResponse
-	(*HeartbeatFriendFarmRequest)(nil),        // 5: classicfarm.rpc.v1.HeartbeatFriendFarmRequest
-	(*HeartbeatFriendFarmResponse)(nil),       // 6: classicfarm.rpc.v1.HeartbeatFriendFarmResponse
-	(*ExitFriendFarmRequest)(nil),             // 7: classicfarm.rpc.v1.ExitFriendFarmRequest
-	(*ExitFriendFarmResponse)(nil),            // 8: classicfarm.rpc.v1.ExitFriendFarmResponse
-	(*ExecuteFriendActionRequest)(nil),        // 9: classicfarm.rpc.v1.ExecuteFriendActionRequest
-	(*ExecuteFriendActionResponse)(nil),       // 10: classicfarm.rpc.v1.ExecuteFriendActionResponse
-	(*EnterVisitorRequest)(nil),               // 11: classicfarm.rpc.v1.EnterVisitorRequest
-	(*EnterVisitorResponse)(nil),              // 12: classicfarm.rpc.v1.EnterVisitorResponse
-	(*RefreshVisitorHeartbeatRequest)(nil),    // 13: classicfarm.rpc.v1.RefreshVisitorHeartbeatRequest
-	(*RefreshVisitorHeartbeatResponse)(nil),   // 14: classicfarm.rpc.v1.RefreshVisitorHeartbeatResponse
-	(*ExitVisitorRequest)(nil),                // 15: classicfarm.rpc.v1.ExitVisitorRequest
-	(*ExitVisitorResponse)(nil),               // 16: classicfarm.rpc.v1.ExitVisitorResponse
-	(*GetPublicFarmSnapshotRequest)(nil),      // 17: classicfarm.rpc.v1.GetPublicFarmSnapshotRequest
-	(*GetPublicFarmSnapshotResponse)(nil),     // 18: classicfarm.rpc.v1.GetPublicFarmSnapshotResponse
-	(*ApplyVisitorActionRequest)(nil),         // 19: classicfarm.rpc.v1.ApplyVisitorActionRequest
-	(*ApplyVisitorActionResponse)(nil),        // 20: classicfarm.rpc.v1.ApplyVisitorActionResponse
-	(*PublishPlayerStateChangedRequest)(nil),  // 21: classicfarm.rpc.v1.PublishPlayerStateChangedRequest
-	(*PublishFarmViewPatchRequest)(nil),       // 22: classicfarm.rpc.v1.PublishFarmViewPatchRequest
-	(*PublishFarmPresenceRequest)(nil),        // 23: classicfarm.rpc.v1.PublishFarmPresenceRequest
-	(*PublishPlayerStateChangedResponse)(nil), // 24: classicfarm.rpc.v1.PublishPlayerStateChangedResponse
-	(*PublishFarmViewPatchResponse)(nil),      // 25: classicfarm.rpc.v1.PublishFarmViewPatchResponse
-	(*PublishFarmPresenceResponse)(nil),       // 26: classicfarm.rpc.v1.PublishFarmPresenceResponse
-	(*ApplyFriendTaskCreditRequest)(nil),      // 27: classicfarm.rpc.v1.ApplyFriendTaskCreditRequest
-	(*ApplyFriendTaskCreditResponse)(nil),     // 28: classicfarm.rpc.v1.ApplyFriendTaskCreditResponse
-	(*ws.WsEnvelope)(nil),                     // 29: classicfarm.ws.v1.WsEnvelope
-	(*ws.EnterFriendFarmResponse)(nil),        // 30: classicfarm.ws.v1.EnterFriendFarmResponse
-	(*ws.Error)(nil),                          // 31: classicfarm.ws.v1.Error
-	(*ws.FarmHeartbeatResponse)(nil),          // 32: classicfarm.ws.v1.FarmHeartbeatResponse
-	(data.FriendInteractionAction)(0),         // 33: classicfarm.data.v1.FriendInteractionAction
-	(*ws.FriendActionResponse)(nil),           // 34: classicfarm.ws.v1.FriendActionResponse
-	(*ws.FarmVisitSnapshot)(nil),              // 35: classicfarm.ws.v1.FarmVisitSnapshot
-	(*ws.FarmViewPatch)(nil),                  // 36: classicfarm.ws.v1.FarmViewPatch
-	(*ws.FarmPresencePush)(nil),               // 37: classicfarm.ws.v1.FarmPresencePush
+	(*CommittedRoute)(nil),                     // 0: classicfarm.rpc.v1.CommittedRoute
+	(*ExecutePlayerCommandRequest)(nil),        // 1: classicfarm.rpc.v1.ExecutePlayerCommandRequest
+	(*ExecutePlayerCommandResponse)(nil),       // 2: classicfarm.rpc.v1.ExecutePlayerCommandResponse
+	(*EnterFriendFarmRequest)(nil),             // 3: classicfarm.rpc.v1.EnterFriendFarmRequest
+	(*EnterFriendFarmResponse)(nil),            // 4: classicfarm.rpc.v1.EnterFriendFarmResponse
+	(*HeartbeatFriendFarmRequest)(nil),         // 5: classicfarm.rpc.v1.HeartbeatFriendFarmRequest
+	(*HeartbeatFriendFarmResponse)(nil),        // 6: classicfarm.rpc.v1.HeartbeatFriendFarmResponse
+	(*ExitFriendFarmRequest)(nil),              // 7: classicfarm.rpc.v1.ExitFriendFarmRequest
+	(*ExitFriendFarmResponse)(nil),             // 8: classicfarm.rpc.v1.ExitFriendFarmResponse
+	(*ExecuteFriendActionRequest)(nil),         // 9: classicfarm.rpc.v1.ExecuteFriendActionRequest
+	(*ExecuteFriendActionResponse)(nil),        // 10: classicfarm.rpc.v1.ExecuteFriendActionResponse
+	(*EnterVisitorRequest)(nil),                // 11: classicfarm.rpc.v1.EnterVisitorRequest
+	(*EnterVisitorResponse)(nil),               // 12: classicfarm.rpc.v1.EnterVisitorResponse
+	(*RefreshVisitorHeartbeatRequest)(nil),     // 13: classicfarm.rpc.v1.RefreshVisitorHeartbeatRequest
+	(*RefreshVisitorHeartbeatResponse)(nil),    // 14: classicfarm.rpc.v1.RefreshVisitorHeartbeatResponse
+	(*ExitVisitorRequest)(nil),                 // 15: classicfarm.rpc.v1.ExitVisitorRequest
+	(*ExitVisitorResponse)(nil),                // 16: classicfarm.rpc.v1.ExitVisitorResponse
+	(*GetPublicFarmSnapshotRequest)(nil),       // 17: classicfarm.rpc.v1.GetPublicFarmSnapshotRequest
+	(*GetPublicFarmSnapshotResponse)(nil),      // 18: classicfarm.rpc.v1.GetPublicFarmSnapshotResponse
+	(*ApplyVisitorActionRequest)(nil),          // 19: classicfarm.rpc.v1.ApplyVisitorActionRequest
+	(*ApplyVisitorActionResponse)(nil),         // 20: classicfarm.rpc.v1.ApplyVisitorActionResponse
+	(*PublishPlayerStateChangedRequest)(nil),   // 21: classicfarm.rpc.v1.PublishPlayerStateChangedRequest
+	(*PublishFarmViewPatchRequest)(nil),        // 22: classicfarm.rpc.v1.PublishFarmViewPatchRequest
+	(*PublishFarmPresenceRequest)(nil),         // 23: classicfarm.rpc.v1.PublishFarmPresenceRequest
+	(*PublishRedDotChangedRequest)(nil),        // 24: classicfarm.rpc.v1.PublishRedDotChangedRequest
+	(*PublishPlayerStateChangedResponse)(nil),  // 25: classicfarm.rpc.v1.PublishPlayerStateChangedResponse
+	(*PublishFarmViewPatchResponse)(nil),       // 26: classicfarm.rpc.v1.PublishFarmViewPatchResponse
+	(*PublishFarmPresenceResponse)(nil),        // 27: classicfarm.rpc.v1.PublishFarmPresenceResponse
+	(*PublishRedDotChangedResponse)(nil),       // 28: classicfarm.rpc.v1.PublishRedDotChangedResponse
+	(*DispatchRedDotRequest)(nil),              // 29: classicfarm.rpc.v1.DispatchRedDotRequest
+	(*DispatchRedDotResponse)(nil),             // 30: classicfarm.rpc.v1.DispatchRedDotResponse
+	(*RegisterPlayerConnectionRequest)(nil),    // 31: classicfarm.rpc.v1.RegisterPlayerConnectionRequest
+	(*RegisterPlayerConnectionResponse)(nil),   // 32: classicfarm.rpc.v1.RegisterPlayerConnectionResponse
+	(*RefreshPlayerConnectionRequest)(nil),     // 33: classicfarm.rpc.v1.RefreshPlayerConnectionRequest
+	(*RefreshPlayerConnectionResponse)(nil),    // 34: classicfarm.rpc.v1.RefreshPlayerConnectionResponse
+	(*UnregisterPlayerConnectionRequest)(nil),  // 35: classicfarm.rpc.v1.UnregisterPlayerConnectionRequest
+	(*UnregisterPlayerConnectionResponse)(nil), // 36: classicfarm.rpc.v1.UnregisterPlayerConnectionResponse
+	(*ApplyFriendTaskCreditRequest)(nil),       // 37: classicfarm.rpc.v1.ApplyFriendTaskCreditRequest
+	(*ApplyFriendTaskCreditResponse)(nil),      // 38: classicfarm.rpc.v1.ApplyFriendTaskCreditResponse
+	(*MailRewardAttachment)(nil),               // 39: classicfarm.rpc.v1.MailRewardAttachment
+	(*ApplyMailRewardRequest)(nil),             // 40: classicfarm.rpc.v1.ApplyMailRewardRequest
+	(*ApplyMailRewardResponse)(nil),            // 41: classicfarm.rpc.v1.ApplyMailRewardResponse
+	(*ws.WsEnvelope)(nil),                      // 42: classicfarm.ws.v1.WsEnvelope
+	(*ws.EnterFriendFarmResponse)(nil),         // 43: classicfarm.ws.v1.EnterFriendFarmResponse
+	(*ws.Error)(nil),                           // 44: classicfarm.ws.v1.Error
+	(*ws.FarmHeartbeatResponse)(nil),           // 45: classicfarm.ws.v1.FarmHeartbeatResponse
+	(data.FriendInteractionAction)(0),          // 46: classicfarm.data.v1.FriendInteractionAction
+	(*ws.FriendActionResponse)(nil),            // 47: classicfarm.ws.v1.FriendActionResponse
+	(*ws.FarmVisitSnapshot)(nil),               // 48: classicfarm.ws.v1.FarmVisitSnapshot
+	(*ws.FarmViewPatch)(nil),                   // 49: classicfarm.ws.v1.FarmViewPatch
+	(*ws.FarmPresencePush)(nil),                // 50: classicfarm.ws.v1.FarmPresencePush
+	(*ws.RedDotChangedPush)(nil),               // 51: classicfarm.ws.v1.RedDotChangedPush
+	(*ws.ItemStackView)(nil),                   // 52: classicfarm.ws.v1.ItemStackView
+	(*ws.PlayerStatePatch)(nil),                // 53: classicfarm.ws.v1.PlayerStatePatch
 }
 var file_classicfarm_v1_rpc_runtime_proto_depIdxs = []int32{
 	0,  // 0: classicfarm.rpc.v1.ExecutePlayerCommandRequest.route:type_name -> classicfarm.rpc.v1.CommittedRoute
-	29, // 1: classicfarm.rpc.v1.ExecutePlayerCommandRequest.envelope:type_name -> classicfarm.ws.v1.WsEnvelope
-	29, // 2: classicfarm.rpc.v1.ExecutePlayerCommandResponse.envelope:type_name -> classicfarm.ws.v1.WsEnvelope
-	30, // 3: classicfarm.rpc.v1.EnterFriendFarmResponse.result:type_name -> classicfarm.ws.v1.EnterFriendFarmResponse
-	31, // 4: classicfarm.rpc.v1.EnterFriendFarmResponse.error:type_name -> classicfarm.ws.v1.Error
-	32, // 5: classicfarm.rpc.v1.HeartbeatFriendFarmResponse.result:type_name -> classicfarm.ws.v1.FarmHeartbeatResponse
-	31, // 6: classicfarm.rpc.v1.HeartbeatFriendFarmResponse.error:type_name -> classicfarm.ws.v1.Error
-	31, // 7: classicfarm.rpc.v1.ExitFriendFarmResponse.error:type_name -> classicfarm.ws.v1.Error
-	33, // 8: classicfarm.rpc.v1.ExecuteFriendActionRequest.action:type_name -> classicfarm.data.v1.FriendInteractionAction
-	34, // 9: classicfarm.rpc.v1.ExecuteFriendActionResponse.result:type_name -> classicfarm.ws.v1.FriendActionResponse
-	31, // 10: classicfarm.rpc.v1.ExecuteFriendActionResponse.error:type_name -> classicfarm.ws.v1.Error
+	42, // 1: classicfarm.rpc.v1.ExecutePlayerCommandRequest.envelope:type_name -> classicfarm.ws.v1.WsEnvelope
+	42, // 2: classicfarm.rpc.v1.ExecutePlayerCommandResponse.envelope:type_name -> classicfarm.ws.v1.WsEnvelope
+	43, // 3: classicfarm.rpc.v1.EnterFriendFarmResponse.result:type_name -> classicfarm.ws.v1.EnterFriendFarmResponse
+	44, // 4: classicfarm.rpc.v1.EnterFriendFarmResponse.error:type_name -> classicfarm.ws.v1.Error
+	45, // 5: classicfarm.rpc.v1.HeartbeatFriendFarmResponse.result:type_name -> classicfarm.ws.v1.FarmHeartbeatResponse
+	44, // 6: classicfarm.rpc.v1.HeartbeatFriendFarmResponse.error:type_name -> classicfarm.ws.v1.Error
+	44, // 7: classicfarm.rpc.v1.ExitFriendFarmResponse.error:type_name -> classicfarm.ws.v1.Error
+	46, // 8: classicfarm.rpc.v1.ExecuteFriendActionRequest.action:type_name -> classicfarm.data.v1.FriendInteractionAction
+	47, // 9: classicfarm.rpc.v1.ExecuteFriendActionResponse.result:type_name -> classicfarm.ws.v1.FriendActionResponse
+	44, // 10: classicfarm.rpc.v1.ExecuteFriendActionResponse.error:type_name -> classicfarm.ws.v1.Error
 	0,  // 11: classicfarm.rpc.v1.EnterVisitorRequest.owner_route:type_name -> classicfarm.rpc.v1.CommittedRoute
-	35, // 12: classicfarm.rpc.v1.EnterVisitorResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
-	31, // 13: classicfarm.rpc.v1.EnterVisitorResponse.error:type_name -> classicfarm.ws.v1.Error
+	48, // 12: classicfarm.rpc.v1.EnterVisitorResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
+	44, // 13: classicfarm.rpc.v1.EnterVisitorResponse.error:type_name -> classicfarm.ws.v1.Error
 	0,  // 14: classicfarm.rpc.v1.RefreshVisitorHeartbeatRequest.owner_route:type_name -> classicfarm.rpc.v1.CommittedRoute
-	31, // 15: classicfarm.rpc.v1.RefreshVisitorHeartbeatResponse.error:type_name -> classicfarm.ws.v1.Error
+	44, // 15: classicfarm.rpc.v1.RefreshVisitorHeartbeatResponse.error:type_name -> classicfarm.ws.v1.Error
 	0,  // 16: classicfarm.rpc.v1.ExitVisitorRequest.owner_route:type_name -> classicfarm.rpc.v1.CommittedRoute
-	31, // 17: classicfarm.rpc.v1.ExitVisitorResponse.error:type_name -> classicfarm.ws.v1.Error
+	44, // 17: classicfarm.rpc.v1.ExitVisitorResponse.error:type_name -> classicfarm.ws.v1.Error
 	0,  // 18: classicfarm.rpc.v1.GetPublicFarmSnapshotRequest.owner_route:type_name -> classicfarm.rpc.v1.CommittedRoute
-	35, // 19: classicfarm.rpc.v1.GetPublicFarmSnapshotResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
-	31, // 20: classicfarm.rpc.v1.GetPublicFarmSnapshotResponse.error:type_name -> classicfarm.ws.v1.Error
+	48, // 19: classicfarm.rpc.v1.GetPublicFarmSnapshotResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
+	44, // 20: classicfarm.rpc.v1.GetPublicFarmSnapshotResponse.error:type_name -> classicfarm.ws.v1.Error
 	0,  // 21: classicfarm.rpc.v1.ApplyVisitorActionRequest.owner_route:type_name -> classicfarm.rpc.v1.CommittedRoute
-	33, // 22: classicfarm.rpc.v1.ApplyVisitorActionRequest.action:type_name -> classicfarm.data.v1.FriendInteractionAction
-	36, // 23: classicfarm.rpc.v1.ApplyVisitorActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
-	31, // 24: classicfarm.rpc.v1.ApplyVisitorActionResponse.error:type_name -> classicfarm.ws.v1.Error
-	29, // 25: classicfarm.rpc.v1.PublishPlayerStateChangedRequest.envelope:type_name -> classicfarm.ws.v1.WsEnvelope
-	36, // 26: classicfarm.rpc.v1.PublishFarmViewPatchRequest.patch:type_name -> classicfarm.ws.v1.FarmViewPatch
-	37, // 27: classicfarm.rpc.v1.PublishFarmPresenceRequest.presence:type_name -> classicfarm.ws.v1.FarmPresencePush
-	0,  // 28: classicfarm.rpc.v1.ApplyFriendTaskCreditRequest.player_route:type_name -> classicfarm.rpc.v1.CommittedRoute
-	31, // 29: classicfarm.rpc.v1.ApplyFriendTaskCreditResponse.error:type_name -> classicfarm.ws.v1.Error
-	1,  // 30: classicfarm.rpc.v1.GameCommandService.ExecutePlayerCommand:input_type -> classicfarm.rpc.v1.ExecutePlayerCommandRequest
-	3,  // 31: classicfarm.rpc.v1.VisitorZoneService.EnterFriendFarm:input_type -> classicfarm.rpc.v1.EnterFriendFarmRequest
-	5,  // 32: classicfarm.rpc.v1.VisitorZoneService.HeartbeatFriendFarm:input_type -> classicfarm.rpc.v1.HeartbeatFriendFarmRequest
-	7,  // 33: classicfarm.rpc.v1.VisitorZoneService.ExitFriendFarm:input_type -> classicfarm.rpc.v1.ExitFriendFarmRequest
-	9,  // 34: classicfarm.rpc.v1.VisitorZoneService.ExecuteFriendAction:input_type -> classicfarm.rpc.v1.ExecuteFriendActionRequest
-	11, // 35: classicfarm.rpc.v1.OwnerFarmService.EnterVisitor:input_type -> classicfarm.rpc.v1.EnterVisitorRequest
-	13, // 36: classicfarm.rpc.v1.OwnerFarmService.RefreshVisitorHeartbeat:input_type -> classicfarm.rpc.v1.RefreshVisitorHeartbeatRequest
-	15, // 37: classicfarm.rpc.v1.OwnerFarmService.ExitVisitor:input_type -> classicfarm.rpc.v1.ExitVisitorRequest
-	17, // 38: classicfarm.rpc.v1.OwnerFarmService.GetPublicFarmSnapshot:input_type -> classicfarm.rpc.v1.GetPublicFarmSnapshotRequest
-	19, // 39: classicfarm.rpc.v1.OwnerFarmService.ApplyVisitorAction:input_type -> classicfarm.rpc.v1.ApplyVisitorActionRequest
-	21, // 40: classicfarm.rpc.v1.GatePushService.PublishPlayerStateChanged:input_type -> classicfarm.rpc.v1.PublishPlayerStateChangedRequest
-	22, // 41: classicfarm.rpc.v1.GatePushService.PublishFarmViewPatch:input_type -> classicfarm.rpc.v1.PublishFarmViewPatchRequest
-	23, // 42: classicfarm.rpc.v1.GatePushService.PublishFarmPresence:input_type -> classicfarm.rpc.v1.PublishFarmPresenceRequest
-	27, // 43: classicfarm.rpc.v1.PlayerSocialService.ApplyFriendTaskCredit:input_type -> classicfarm.rpc.v1.ApplyFriendTaskCreditRequest
-	2,  // 44: classicfarm.rpc.v1.GameCommandService.ExecutePlayerCommand:output_type -> classicfarm.rpc.v1.ExecutePlayerCommandResponse
-	4,  // 45: classicfarm.rpc.v1.VisitorZoneService.EnterFriendFarm:output_type -> classicfarm.rpc.v1.EnterFriendFarmResponse
-	6,  // 46: classicfarm.rpc.v1.VisitorZoneService.HeartbeatFriendFarm:output_type -> classicfarm.rpc.v1.HeartbeatFriendFarmResponse
-	8,  // 47: classicfarm.rpc.v1.VisitorZoneService.ExitFriendFarm:output_type -> classicfarm.rpc.v1.ExitFriendFarmResponse
-	10, // 48: classicfarm.rpc.v1.VisitorZoneService.ExecuteFriendAction:output_type -> classicfarm.rpc.v1.ExecuteFriendActionResponse
-	12, // 49: classicfarm.rpc.v1.OwnerFarmService.EnterVisitor:output_type -> classicfarm.rpc.v1.EnterVisitorResponse
-	14, // 50: classicfarm.rpc.v1.OwnerFarmService.RefreshVisitorHeartbeat:output_type -> classicfarm.rpc.v1.RefreshVisitorHeartbeatResponse
-	16, // 51: classicfarm.rpc.v1.OwnerFarmService.ExitVisitor:output_type -> classicfarm.rpc.v1.ExitVisitorResponse
-	18, // 52: classicfarm.rpc.v1.OwnerFarmService.GetPublicFarmSnapshot:output_type -> classicfarm.rpc.v1.GetPublicFarmSnapshotResponse
-	20, // 53: classicfarm.rpc.v1.OwnerFarmService.ApplyVisitorAction:output_type -> classicfarm.rpc.v1.ApplyVisitorActionResponse
-	24, // 54: classicfarm.rpc.v1.GatePushService.PublishPlayerStateChanged:output_type -> classicfarm.rpc.v1.PublishPlayerStateChangedResponse
-	25, // 55: classicfarm.rpc.v1.GatePushService.PublishFarmViewPatch:output_type -> classicfarm.rpc.v1.PublishFarmViewPatchResponse
-	26, // 56: classicfarm.rpc.v1.GatePushService.PublishFarmPresence:output_type -> classicfarm.rpc.v1.PublishFarmPresenceResponse
-	28, // 57: classicfarm.rpc.v1.PlayerSocialService.ApplyFriendTaskCredit:output_type -> classicfarm.rpc.v1.ApplyFriendTaskCreditResponse
-	44, // [44:58] is the sub-list for method output_type
-	30, // [30:44] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	46, // 22: classicfarm.rpc.v1.ApplyVisitorActionRequest.action:type_name -> classicfarm.data.v1.FriendInteractionAction
+	49, // 23: classicfarm.rpc.v1.ApplyVisitorActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
+	44, // 24: classicfarm.rpc.v1.ApplyVisitorActionResponse.error:type_name -> classicfarm.ws.v1.Error
+	42, // 25: classicfarm.rpc.v1.PublishPlayerStateChangedRequest.envelope:type_name -> classicfarm.ws.v1.WsEnvelope
+	49, // 26: classicfarm.rpc.v1.PublishFarmViewPatchRequest.patch:type_name -> classicfarm.ws.v1.FarmViewPatch
+	50, // 27: classicfarm.rpc.v1.PublishFarmPresenceRequest.presence:type_name -> classicfarm.ws.v1.FarmPresencePush
+	51, // 28: classicfarm.rpc.v1.PublishRedDotChangedRequest.red_dot:type_name -> classicfarm.ws.v1.RedDotChangedPush
+	0,  // 29: classicfarm.rpc.v1.DispatchRedDotRequest.recipient_route:type_name -> classicfarm.rpc.v1.CommittedRoute
+	51, // 30: classicfarm.rpc.v1.DispatchRedDotRequest.red_dot:type_name -> classicfarm.ws.v1.RedDotChangedPush
+	44, // 31: classicfarm.rpc.v1.DispatchRedDotResponse.error:type_name -> classicfarm.ws.v1.Error
+	0,  // 32: classicfarm.rpc.v1.RegisterPlayerConnectionRequest.route:type_name -> classicfarm.rpc.v1.CommittedRoute
+	44, // 33: classicfarm.rpc.v1.RegisterPlayerConnectionResponse.error:type_name -> classicfarm.ws.v1.Error
+	0,  // 34: classicfarm.rpc.v1.RefreshPlayerConnectionRequest.route:type_name -> classicfarm.rpc.v1.CommittedRoute
+	44, // 35: classicfarm.rpc.v1.RefreshPlayerConnectionResponse.error:type_name -> classicfarm.ws.v1.Error
+	0,  // 36: classicfarm.rpc.v1.UnregisterPlayerConnectionRequest.route:type_name -> classicfarm.rpc.v1.CommittedRoute
+	44, // 37: classicfarm.rpc.v1.UnregisterPlayerConnectionResponse.error:type_name -> classicfarm.ws.v1.Error
+	0,  // 38: classicfarm.rpc.v1.ApplyFriendTaskCreditRequest.player_route:type_name -> classicfarm.rpc.v1.CommittedRoute
+	44, // 39: classicfarm.rpc.v1.ApplyFriendTaskCreditResponse.error:type_name -> classicfarm.ws.v1.Error
+	0,  // 40: classicfarm.rpc.v1.ApplyMailRewardRequest.player_route:type_name -> classicfarm.rpc.v1.CommittedRoute
+	39, // 41: classicfarm.rpc.v1.ApplyMailRewardRequest.attachments:type_name -> classicfarm.rpc.v1.MailRewardAttachment
+	52, // 42: classicfarm.rpc.v1.ApplyMailRewardResponse.items_added:type_name -> classicfarm.ws.v1.ItemStackView
+	53, // 43: classicfarm.rpc.v1.ApplyMailRewardResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	44, // 44: classicfarm.rpc.v1.ApplyMailRewardResponse.error:type_name -> classicfarm.ws.v1.Error
+	1,  // 45: classicfarm.rpc.v1.GameCommandService.ExecutePlayerCommand:input_type -> classicfarm.rpc.v1.ExecutePlayerCommandRequest
+	3,  // 46: classicfarm.rpc.v1.VisitorZoneService.EnterFriendFarm:input_type -> classicfarm.rpc.v1.EnterFriendFarmRequest
+	5,  // 47: classicfarm.rpc.v1.VisitorZoneService.HeartbeatFriendFarm:input_type -> classicfarm.rpc.v1.HeartbeatFriendFarmRequest
+	7,  // 48: classicfarm.rpc.v1.VisitorZoneService.ExitFriendFarm:input_type -> classicfarm.rpc.v1.ExitFriendFarmRequest
+	9,  // 49: classicfarm.rpc.v1.VisitorZoneService.ExecuteFriendAction:input_type -> classicfarm.rpc.v1.ExecuteFriendActionRequest
+	11, // 50: classicfarm.rpc.v1.OwnerFarmService.EnterVisitor:input_type -> classicfarm.rpc.v1.EnterVisitorRequest
+	13, // 51: classicfarm.rpc.v1.OwnerFarmService.RefreshVisitorHeartbeat:input_type -> classicfarm.rpc.v1.RefreshVisitorHeartbeatRequest
+	15, // 52: classicfarm.rpc.v1.OwnerFarmService.ExitVisitor:input_type -> classicfarm.rpc.v1.ExitVisitorRequest
+	17, // 53: classicfarm.rpc.v1.OwnerFarmService.GetPublicFarmSnapshot:input_type -> classicfarm.rpc.v1.GetPublicFarmSnapshotRequest
+	19, // 54: classicfarm.rpc.v1.OwnerFarmService.ApplyVisitorAction:input_type -> classicfarm.rpc.v1.ApplyVisitorActionRequest
+	21, // 55: classicfarm.rpc.v1.GatePushService.PublishPlayerStateChanged:input_type -> classicfarm.rpc.v1.PublishPlayerStateChangedRequest
+	22, // 56: classicfarm.rpc.v1.GatePushService.PublishFarmViewPatch:input_type -> classicfarm.rpc.v1.PublishFarmViewPatchRequest
+	23, // 57: classicfarm.rpc.v1.GatePushService.PublishFarmPresence:input_type -> classicfarm.rpc.v1.PublishFarmPresenceRequest
+	24, // 58: classicfarm.rpc.v1.GatePushService.PublishRedDotChanged:input_type -> classicfarm.rpc.v1.PublishRedDotChangedRequest
+	31, // 59: classicfarm.rpc.v1.PlayerConnectionService.RegisterPlayerConnection:input_type -> classicfarm.rpc.v1.RegisterPlayerConnectionRequest
+	33, // 60: classicfarm.rpc.v1.PlayerConnectionService.RefreshPlayerConnection:input_type -> classicfarm.rpc.v1.RefreshPlayerConnectionRequest
+	35, // 61: classicfarm.rpc.v1.PlayerConnectionService.UnregisterPlayerConnection:input_type -> classicfarm.rpc.v1.UnregisterPlayerConnectionRequest
+	29, // 62: classicfarm.rpc.v1.ZoneNotificationService.DispatchRedDot:input_type -> classicfarm.rpc.v1.DispatchRedDotRequest
+	37, // 63: classicfarm.rpc.v1.PlayerSocialService.ApplyFriendTaskCredit:input_type -> classicfarm.rpc.v1.ApplyFriendTaskCreditRequest
+	40, // 64: classicfarm.rpc.v1.PlayerSocialService.ApplyMailReward:input_type -> classicfarm.rpc.v1.ApplyMailRewardRequest
+	2,  // 65: classicfarm.rpc.v1.GameCommandService.ExecutePlayerCommand:output_type -> classicfarm.rpc.v1.ExecutePlayerCommandResponse
+	4,  // 66: classicfarm.rpc.v1.VisitorZoneService.EnterFriendFarm:output_type -> classicfarm.rpc.v1.EnterFriendFarmResponse
+	6,  // 67: classicfarm.rpc.v1.VisitorZoneService.HeartbeatFriendFarm:output_type -> classicfarm.rpc.v1.HeartbeatFriendFarmResponse
+	8,  // 68: classicfarm.rpc.v1.VisitorZoneService.ExitFriendFarm:output_type -> classicfarm.rpc.v1.ExitFriendFarmResponse
+	10, // 69: classicfarm.rpc.v1.VisitorZoneService.ExecuteFriendAction:output_type -> classicfarm.rpc.v1.ExecuteFriendActionResponse
+	12, // 70: classicfarm.rpc.v1.OwnerFarmService.EnterVisitor:output_type -> classicfarm.rpc.v1.EnterVisitorResponse
+	14, // 71: classicfarm.rpc.v1.OwnerFarmService.RefreshVisitorHeartbeat:output_type -> classicfarm.rpc.v1.RefreshVisitorHeartbeatResponse
+	16, // 72: classicfarm.rpc.v1.OwnerFarmService.ExitVisitor:output_type -> classicfarm.rpc.v1.ExitVisitorResponse
+	18, // 73: classicfarm.rpc.v1.OwnerFarmService.GetPublicFarmSnapshot:output_type -> classicfarm.rpc.v1.GetPublicFarmSnapshotResponse
+	20, // 74: classicfarm.rpc.v1.OwnerFarmService.ApplyVisitorAction:output_type -> classicfarm.rpc.v1.ApplyVisitorActionResponse
+	25, // 75: classicfarm.rpc.v1.GatePushService.PublishPlayerStateChanged:output_type -> classicfarm.rpc.v1.PublishPlayerStateChangedResponse
+	26, // 76: classicfarm.rpc.v1.GatePushService.PublishFarmViewPatch:output_type -> classicfarm.rpc.v1.PublishFarmViewPatchResponse
+	27, // 77: classicfarm.rpc.v1.GatePushService.PublishFarmPresence:output_type -> classicfarm.rpc.v1.PublishFarmPresenceResponse
+	28, // 78: classicfarm.rpc.v1.GatePushService.PublishRedDotChanged:output_type -> classicfarm.rpc.v1.PublishRedDotChangedResponse
+	32, // 79: classicfarm.rpc.v1.PlayerConnectionService.RegisterPlayerConnection:output_type -> classicfarm.rpc.v1.RegisterPlayerConnectionResponse
+	34, // 80: classicfarm.rpc.v1.PlayerConnectionService.RefreshPlayerConnection:output_type -> classicfarm.rpc.v1.RefreshPlayerConnectionResponse
+	36, // 81: classicfarm.rpc.v1.PlayerConnectionService.UnregisterPlayerConnection:output_type -> classicfarm.rpc.v1.UnregisterPlayerConnectionResponse
+	30, // 82: classicfarm.rpc.v1.ZoneNotificationService.DispatchRedDot:output_type -> classicfarm.rpc.v1.DispatchRedDotResponse
+	38, // 83: classicfarm.rpc.v1.PlayerSocialService.ApplyFriendTaskCredit:output_type -> classicfarm.rpc.v1.ApplyFriendTaskCreditResponse
+	41, // 84: classicfarm.rpc.v1.PlayerSocialService.ApplyMailReward:output_type -> classicfarm.rpc.v1.ApplyMailRewardResponse
+	65, // [65:85] is the sub-list for method output_type
+	45, // [45:65] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_rpc_runtime_proto_init() }
@@ -2118,9 +3046,9 @@ func file_classicfarm_v1_rpc_runtime_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_rpc_runtime_proto_rawDesc), len(file_classicfarm_v1_rpc_runtime_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   42,
 			NumExtensions: 0,
-			NumServices:   5,
+			NumServices:   7,
 		},
 		GoTypes:           file_classicfarm_v1_rpc_runtime_proto_goTypes,
 		DependencyIndexes: file_classicfarm_v1_rpc_runtime_proto_depIdxs,

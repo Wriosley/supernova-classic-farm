@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,6 +65,9 @@ type Config struct {
 	Zone              ZoneCommander
 	Visitor           VisitorZoneClient
 	Friends           FriendClient
+	Mail              MailClient
+	Connections       PlayerConnectionClient
+	GatewayID         string
 	AuthTimeout       time.Duration
 	CommandTimeout    time.Duration
 	HeartbeatInterval time.Duration
@@ -78,6 +82,9 @@ type Handler struct {
 	zone              ZoneCommander
 	visitor           VisitorZoneClient
 	friends           FriendClient
+	mail              MailClient
+	connections       PlayerConnectionClient
+	gatewayID         string
 	authTimeout       time.Duration
 	commandTimeout    time.Duration
 	heartbeatInterval time.Duration
@@ -122,9 +129,13 @@ func NewHandler(cfg Config) (*Handler, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if strings.TrimSpace(cfg.GatewayID) == "" {
+		cfg.GatewayID = DefaultGatewayID
+	}
 	return &Handler{
 		tickets: cfg.Tickets, routes: cfg.Routes, zone: cfg.Zone,
-		visitor: cfg.Visitor, friends: cfg.Friends,
+		visitor: cfg.Visitor, friends: cfg.Friends, mail: cfg.Mail, connections: cfg.Connections,
+		gatewayID: cfg.GatewayID,
 		authTimeout: cfg.AuthTimeout, commandTimeout: cfg.CommandTimeout,
 		heartbeatInterval: cfg.HeartbeatInterval,
 		clientConfigURL:   cfg.ClientConfigURL,
@@ -204,8 +215,18 @@ func (h *Handler) serveConnection(parent context.Context, conn *websocket.Conn) 
 	var caller uint64
 	var authenticated bool
 	var subscription *connectionSubscription
+	var connectionID string
+	var stopConnectionRefresh func()
 	var workers sync.WaitGroup
-	defer func() { h.pushHub.unsubscribe(subscription) }()
+	defer func() {
+		if stopConnectionRefresh != nil {
+			stopConnectionRefresh()
+		}
+		if connectionID != "" && caller != 0 {
+			h.syncPlayerConnection(context.Background(), caller, connectionID, "unregister")
+		}
+		h.pushHub.unsubscribe(subscription)
+	}()
 
 	for {
 		messageType, body, err := conn.Read(ctx)
@@ -267,6 +288,11 @@ func (h *Handler) serveConnection(parent context.Context, conn *websocket.Conn) 
 			authenticated = true
 			subscription = h.pushHub.subscribe(playerID, writer, ctx)
 			authTimer.Stop()
+			if id, idErr := newConnectionID(); idErr == nil {
+				connectionID = id
+				h.syncPlayerConnection(ctx, caller, connectionID, "register")
+				stopConnectionRefresh = h.startConnectionRefresh(ctx, caller, connectionID)
+			}
 			if writer.write(ctx, marshalResponse(h.authResponse(request, playerID))) != nil {
 				break
 			}
@@ -278,10 +304,10 @@ func (h *Handler) serveConnection(parent context.Context, conn *websocket.Conn) 
 		}
 
 		workers.Add(1)
-		go func(req *wsv1.WsEnvelope, raw []byte) {
+		go func(req *wsv1.WsEnvelope, raw []byte, connID string) {
 			defer workers.Done()
-			h.handleGame(ctx, writer, subscription, caller, req, raw)
-		}(request, append([]byte(nil), body...))
+			h.handleGame(ctx, writer, subscription, caller, connID, req, raw)
+		}(request, append([]byte(nil), body...), connectionID)
 	}
 	cancel()
 	workers.Wait()
@@ -347,6 +373,30 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 		if request.TargetPlayerId == 0 || request.GetClaimChapterRewardRequest() == nil {
 			return errors.New("invalid claim request")
 		}
+	case wsv1.Action_SEND_FRIEND_GIFT:
+		gift := request.GetSendFriendGiftRequest()
+		if request.TargetPlayerId == 0 || gift == nil || gift.RecipientPlayerId == 0 ||
+			gift.CropItemId == 0 || gift.Quantity == 0 || gift.Quantity > 10 {
+			return errors.New("invalid send friend gift request")
+		}
+	case wsv1.Action_CLAIM_MAIL:
+		if request.TargetPlayerId == 0 || request.GetClaimMailRequest() == nil ||
+			request.GetClaimMailRequest().MailId == "" {
+			return errors.New("invalid claim mail request")
+		}
+	case wsv1.Action_OPEN_MAILBOX:
+		if request.TargetPlayerId == 0 || request.GetOpenMailboxRequest() == nil {
+			return errors.New("invalid open mailbox request")
+		}
+	case wsv1.Action_MARK_MAIL_READ:
+		if request.TargetPlayerId == 0 || request.GetMarkMailReadRequest() == nil ||
+			request.GetMarkMailReadRequest().MailId == "" {
+			return errors.New("invalid mark mail read request")
+		}
+	case wsv1.Action_CHECK_MAILBOX_INDICATOR:
+		if request.TargetPlayerId == 0 || request.GetCheckMailboxIndicatorRequest() == nil {
+			return errors.New("invalid check mailbox indicator request")
+		}
 	case wsv1.Action_GET_PET_PANEL:
 		if request.TargetPlayerId == 0 || request.GetGetPetPanelRequest() == nil {
 			return errors.New("invalid get pet panel request")
@@ -394,7 +444,8 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 	case wsv1.Action_STEAL_FRIEND_CROP:
 		steal := request.GetStealFriendCropRequest()
 		if request.TargetPlayerId == 0 || steal == nil || steal.OwnerPlayerId == 0 ||
-			len(steal.VisitId) != 16 || steal.PlotId == 0 {
+			len(steal.VisitId) != 16 || steal.PlotId == 0 || steal.ExpectedCropItemId == 0 ||
+			len(steal.FarmViewEpoch) != 16 {
 			return errors.New("invalid steal friend crop request")
 		}
 	case wsv1.Action_APPLY_PEST_TO_FRIEND:
@@ -453,6 +504,7 @@ func (h *Handler) handleGame(
 	writer *serializedWriter,
 	subscription *connectionSubscription,
 	caller uint64,
+	connectionID string,
 	request *wsv1.WsEnvelope,
 	raw []byte,
 ) {
@@ -464,11 +516,19 @@ func (h *Handler) handleGame(
 	case wsv1.Action_CREATE_FRIEND_CODE, wsv1.Action_REDEEM_FRIEND_CODE, wsv1.Action_LIST_FRIENDS:
 		h.handleFriendAction(parent, writer, caller, request)
 		return
+	case wsv1.Action_CLAIM_MAIL, wsv1.Action_OPEN_MAILBOX, wsv1.Action_MARK_MAIL_READ,
+		wsv1.Action_CHECK_MAILBOX_INDICATOR:
+		h.handleMailAction(parent, writer, caller, request)
+		return
 	case wsv1.Action_ENTER_FRIEND_FARM, wsv1.Action_FARM_HEARTBEAT, wsv1.Action_EXIT_FRIEND_FARM,
 		wsv1.Action_STEAL_FRIEND_CROP, wsv1.Action_APPLY_PEST_TO_FRIEND,
 		wsv1.Action_CATCH_PEST_FOR_FRIEND, wsv1.Action_HELP_CLEAN_FRIEND_PLOT:
 		h.handleVisitAction(parent, writer, caller, request)
 		return
+	case wsv1.Action_SEND_FRIEND_GIFT:
+		if !h.ensureMutualFriendForGift(parent, writer, caller, request) {
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(parent, h.commandTimeout)
@@ -511,6 +571,9 @@ func (h *Handler) handleGame(
 					}
 				} else {
 					_ = writer.write(parent, response)
+					if connectionID != "" {
+						h.syncPlayerConnection(parent, caller, connectionID, "refresh")
+					}
 					return
 				}
 			}
@@ -551,6 +614,65 @@ func (h *Handler) handleFriendAction(
 		failureSource = "friend_command_" + zoneFailure.kind
 	}
 	h.writeDomainResult(parent, writer, request, failureSource, response, err)
+}
+
+func (h *Handler) handleMailAction(
+	parent context.Context, writer *serializedWriter, caller uint64, request *wsv1.WsEnvelope,
+) {
+	if h.mail == nil {
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_SERVICE_UNAVAILABLE, true, h.now)))
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, friendCommandTimeout)
+	defer cancel()
+	failureSource := "mail_command"
+	var response []byte
+	var err error
+	switch request.Action {
+	case wsv1.Action_CLAIM_MAIL:
+		response, err = h.mail.ClaimMail(ctx, caller, request)
+	case wsv1.Action_OPEN_MAILBOX:
+		response, err = h.mail.OpenMailbox(ctx, caller, request)
+	case wsv1.Action_MARK_MAIL_READ:
+		response, err = h.mail.MarkMailRead(ctx, caller, request)
+	case wsv1.Action_CHECK_MAILBOX_INDICATOR:
+		response, err = h.mail.CheckMailboxIndicator(ctx, caller, request)
+	default:
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_UNKNOWN_ACTION, false, h.now)))
+		return
+	}
+	h.writeDomainResult(parent, writer, request, failureSource, response, err)
+}
+
+func (h *Handler) ensureMutualFriendForGift(
+	parent context.Context, writer *serializedWriter, caller uint64, request *wsv1.WsEnvelope,
+) bool {
+	gift := request.GetSendFriendGiftRequest()
+	if gift == nil {
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_INVALID_ARGUMENT, false, h.now)))
+		return false
+	}
+	if gift.RecipientPlayerId == caller {
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_CANNOT_FRIEND_SELF, false, h.now)))
+		return false
+	}
+	if h.friends == nil {
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_SERVICE_UNAVAILABLE, true, h.now)))
+		return false
+	}
+	ctx, cancel := context.WithTimeout(parent, friendCommandTimeout)
+	defer cancel()
+	mutual, err := h.friends.CheckMutualFriend(ctx, caller, gift.RecipientPlayerId)
+	if err != nil {
+		h.recordFailure("friend_check", err)
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_SERVICE_UNAVAILABLE, true, h.now)))
+		return false
+	}
+	if !mutual {
+		_ = writer.write(parent, marshalResponse(errorResponse(request, wsv1.ErrorCode_NOT_MUTUAL_FRIEND, false, h.now)))
+		return false
+	}
+	return true
 }
 
 // handleVisitAction routes ENTER_FRIEND_FARM, FARM_HEARTBEAT,

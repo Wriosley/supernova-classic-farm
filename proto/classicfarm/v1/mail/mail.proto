@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package classicfarm.mail.v1;
+
+import "classicfarm/v1/ws/ws.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/mail;mailv1";
+
+// MailService is unary and requires the internal HMAC metadata contract.
+// Client deadline is three seconds. registered_at_ms must come from a trusted
+// Gate/Login account context — never from H5 free text.
+service MailService {
+  rpc OpenMailbox(OpenMailboxRequest) returns (OpenMailboxResponse);
+  rpc MarkMailRead(MarkMailReadRequest) returns (MarkMailReadResponse);
+  rpc CheckMailboxIndicator(CheckMailboxIndicatorRequest) returns (CheckMailboxIndicatorResponse);
+  // CreateGiftMail is internal (Zone Outbox relay). Dedupes on source_event_id.
+  rpc CreateGiftMail(CreateGiftMailRequest) returns (CreateGiftMailResponse);
+  // ClaimMail orchestrates BeginClaim -> Zone ApplyMailReward -> CompleteClaim.
+  rpc ClaimMail(ClaimMailRequest) returns (ClaimMailResponse);
+}
+
+enum MailKind {
+  MAIL_KIND_UNSPECIFIED = 0;
+  MAIL_KIND_PUBLIC = 1;
+  MAIL_KIND_PRIVATE = 2;
+  MAIL_KIND_GIFT = 3;
+}
+
+message MailAttachmentView {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+}
+
+message MailView {
+  string mail_id = 1;
+  MailKind kind = 2;
+  int64 created_at_ms = 3;
+  int64 published_at_ms = 4;
+  string sender_display_name = 5;
+  uint64 sender_player_id = 6;
+  uint64 recipient_player_id = 7;
+  string title = 8;
+  string content = 9;
+  repeated MailAttachmentView attachments = 10;
+  bool read = 11;
+  bool claimed = 12;
+}
+
+message OpenMailboxRequest {
+  uint64 player_id = 1;
+  int64 registered_at_ms = 2;
+  uint32 page_size = 3;
+  string page_token = 4;
+}
+
+message OpenMailboxResponse {
+  repeated MailView mails = 1;
+  string next_page_token = 2;
+  int64 last_mailbox_opened_at_ms = 3;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message MarkMailReadRequest {
+  uint64 player_id = 1;
+  string mail_id = 2;
+  int64 registered_at_ms = 3;
+}
+
+message MarkMailReadResponse {
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message CheckMailboxIndicatorRequest {
+  uint64 player_id = 1;
+  int64 registered_at_ms = 2;
+}
+
+message CheckMailboxIndicatorResponse {
+  bool has_new_mail = 1;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message CreateGiftMailRequest {
+  bytes source_event_id = 1;
+  uint64 sender_player_id = 2;
+  string sender_display_name = 3;
+  uint64 recipient_player_id = 4;
+  uint32 crop_item_id = 5;
+  uint32 quantity = 6;
+  int64 created_at_ms = 7;
+}
+
+message CreateGiftMailResponse {
+  string mail_id = 1;
+  bool already_applied = 2;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message ClaimMailRequest {
+  uint64 player_id = 1;
+  string mail_id = 2;
+  bytes claim_id = 3;
+  int64 registered_at_ms = 4;
+}
+
+message ClaimMailResponse {
+  string mail_id = 1;
+  repeated classicfarm.ws.v1.ItemStackView items_added = 2;
+  classicfarm.ws.v1.PlayerStatePatch patch = 3;
+  // state_version is the recipient Actor version that produced patch. It is
+  // absent when an earlier attempt already completed the claim, because the
+  // version that applied it is not replayable: callers must then reload an
+  // authoritative snapshot instead of applying patch.
+  classicfarm.ws.v1.StateVersion state_version = 4;
+  classicfarm.ws.v1.Error error = 15;
+}

@@ -992,7 +992,13 @@ type FriendInteraction struct {
 	CreatedAtMs         int64                   `protobuf:"varint,13,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	UpdatedAtMs         int64                   `protobuf:"varint,14,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
 	// Zero means the action carries no pest; only APPLY_PEST_TO_FRIEND sets it.
-	PestId        uint32 `protobuf:"varint,15,opt,name=pest_id,json=pestId,proto3" json:"pest_id,omitempty"`
+	PestId uint32 `protobuf:"varint,15,opt,name=pest_id,json=pestId,proto3" json:"pest_id,omitempty"`
+	// STEAL_FRIEND_CROP: reserved crop and quantity frozen at Begin so Resume
+	// never re-derives crop from ConfigSnapshot.
+	CropItemId    uint32 `protobuf:"varint,16,opt,name=crop_item_id,json=cropItemId,proto3" json:"crop_item_id,omitempty"`
+	Quantity      uint32 `protobuf:"varint,17,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	FarmViewEpoch []byte `protobuf:"bytes,18,opt,name=farm_view_epoch,json=farmViewEpoch,proto3" json:"farm_view_epoch,omitempty"`
+	FarmViewSeq   uint64 `protobuf:"varint,19,opt,name=farm_view_seq,json=farmViewSeq,proto3" json:"farm_view_seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1132,6 +1138,34 @@ func (x *FriendInteraction) GetPestId() uint32 {
 	return 0
 }
 
+func (x *FriendInteraction) GetCropItemId() uint32 {
+	if x != nil {
+		return x.CropItemId
+	}
+	return 0
+}
+
+func (x *FriendInteraction) GetQuantity() uint32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *FriendInteraction) GetFarmViewEpoch() []byte {
+	if x != nil {
+		return x.FarmViewEpoch
+	}
+	return nil
+}
+
+func (x *FriendInteraction) GetFarmViewSeq() uint64 {
+	if x != nil {
+		return x.FarmViewSeq
+	}
+	return 0
+}
+
 var File_classicfarm_v1_tcaplus_friend_tables_proto protoreflect.FileDescriptor
 
 const file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc = "" +
@@ -1194,7 +1228,7 @@ const file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc = "" +
 	"\x0flast_error_code\x18\v \x01(\tR\rlastErrorCode\x12\x1e\n" +
 	"\vretry_at_ms\x18\f \x01(\x03R\tretryAtMs\x12\"\n" +
 	"\rcreated_at_ms\x18\r \x01(\x03R\vcreatedAtMs\x12\"\n" +
-	"\rupdated_at_ms\x18\x0e \x01(\x03R\vupdatedAtMs:\v\x82\xa6\x1d\alink_id\"\xe4\x04\n" +
+	"\rupdated_at_ms\x18\x0e \x01(\x03R\vupdatedAtMs:\v\x82\xa6\x1d\alink_id\"\xee\x05\n" +
 	"\x11FriendInteraction\x12%\n" +
 	"\x0einteraction_id\x18\x01 \x01(\fR\rinteractionId\x12*\n" +
 	"\x11visitor_player_id\x18\x02 \x01(\x04R\x0fvisitorPlayerId\x12&\n" +
@@ -1212,7 +1246,12 @@ const file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc = "" +
 	"\vretry_at_ms\x18\f \x01(\x03R\tretryAtMs\x12\"\n" +
 	"\rcreated_at_ms\x18\r \x01(\x03R\vcreatedAtMs\x12\"\n" +
 	"\rupdated_at_ms\x18\x0e \x01(\x03R\vupdatedAtMs\x12\x17\n" +
-	"\apest_id\x18\x0f \x01(\rR\x06pestId:\x12\x82\xa6\x1d\x0einteraction_id*\x96\x01\n" +
+	"\apest_id\x18\x0f \x01(\rR\x06pestId\x12 \n" +
+	"\fcrop_item_id\x18\x10 \x01(\rR\n" +
+	"cropItemId\x12\x1a\n" +
+	"\bquantity\x18\x11 \x01(\rR\bquantity\x12&\n" +
+	"\x0ffarm_view_epoch\x18\x12 \x01(\fR\rfarmViewEpoch\x12\"\n" +
+	"\rfarm_view_seq\x18\x13 \x01(\x04R\vfarmViewSeq:\x12\x82\xa6\x1d\x0einteraction_id*\x96\x01\n" +
 	"\x10FriendCodeStatus\x12\"\n" +
 	"\x1eFRIEND_CODE_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19FRIEND_CODE_STATUS_ACTIVE\x10\x01\x12\x1e\n" +

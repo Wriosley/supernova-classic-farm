@@ -67,6 +67,9 @@ This directory separates current project truth, design reasoning, executable con
 - `decisions/`: major alternatives, decisions, costs, and validation methods.
 - `plans/`: unresolved-question boards and bounded execution plans.
 - `evidence/`: reproducible tests, measurements, and limitations.
+- `bugs/`: root-cause writeups for defects that locked players out or corrupted
+  state (phenomenon, cause, investigation, fix). Reference only; current
+  capability still lives in `context/CURRENT.md` and dated `evidence/`.
 - `context/`: stable project context and mutable current handoff.
 - `ai-workflow/`: concise AI collaboration records; never formal truth by itself.
 

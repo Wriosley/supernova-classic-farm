@@ -77,6 +77,12 @@ cp .env.example .env
 ./start-servers.sh --dual-zone --tcaplus
 ```
 
+后端只监听回环地址，也只对外广播回环 URL。从另一台机器用局域网 IP
+打开 Vite 页面时，`/v1` 与 `/ws` 都由 Vite 代理转发到本机后端，浏览器
+不直连 LoginSvr 和 Gate；因此无需（也不应）把服务改成监听 `0.0.0.0`。
+注意浏览器只在 `https` 或 `localhost` 下提供 WebCrypto，H5 已对摘要与
+UUID 提供等价兜底实现，用明文 IP 访问不会退化。
+
 Kubernetes 最小集群的构建、Secret、部署和排错命令见：
 
 ```text

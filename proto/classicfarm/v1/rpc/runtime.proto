@@ -38,11 +38,27 @@ service GatePushService {
   rpc PublishPlayerStateChanged(PublishPlayerStateChangedRequest) returns (PublishPlayerStateChangedResponse);
   rpc PublishFarmViewPatch(PublishFarmViewPatchRequest) returns (PublishFarmViewPatchResponse);
   rpc PublishFarmPresence(PublishFarmPresenceRequest) returns (PublishFarmPresenceResponse);
+  rpc PublishRedDotChanged(PublishRedDotChangedRequest) returns (PublishRedDotChangedResponse);
+}
+
+// Player connection registration uses a two-second client deadline. Gate AUTH
+// registers, refreshes every 30s (Zone lease 90s), and unregisters on disconnect.
+service PlayerConnectionService {
+  rpc RegisterPlayerConnection(RegisterPlayerConnectionRequest) returns (RegisterPlayerConnectionResponse);
+  rpc RefreshPlayerConnection(RefreshPlayerConnectionRequest) returns (RefreshPlayerConnectionResponse);
+  rpc UnregisterPlayerConnection(UnregisterPlayerConnectionRequest) returns (UnregisterPlayerConnectionResponse);
+}
+
+// Zone notification fan-out uses a two-second client deadline. InfoSvr routes
+// red-dot events here; the Zone Dispatcher looks up Gate connections.
+service ZoneNotificationService {
+  rpc DispatchRedDot(DispatchRedDotRequest) returns (DispatchRedDotResponse);
 }
 
 // Task-credit calls use a five-second client deadline.
 service PlayerSocialService {
   rpc ApplyFriendTaskCredit(ApplyFriendTaskCreditRequest) returns (ApplyFriendTaskCreditResponse);
+  rpc ApplyMailReward(ApplyMailRewardRequest) returns (ApplyMailRewardResponse);
 }
 
 message CommittedRoute {
@@ -109,6 +125,11 @@ message ExecuteFriendActionRequest {
   classicfarm.data.v1.FriendInteractionAction action = 6;
   uint32 plot_id = 7;
   optional uint32 pest_id = 8;
+  // STEAL_FRIEND_CROP only: visitor-visible crop + farm view version for
+  // reserve and stale-request rejection. Owner Actor re-validates.
+  uint32 expected_crop_item_id = 9;
+  bytes farm_view_epoch = 10;
+  uint64 farm_view_seq = 11;
 }
 
 message ExecuteFriendActionResponse {
@@ -178,6 +199,9 @@ message ApplyVisitorActionRequest {
   uint32 plot_id = 7;
   optional uint32 pest_id = 8;
   bytes request_digest_sha256 = 9;
+  uint32 expected_crop_item_id = 10;
+  bytes farm_view_epoch = 11;
+  uint64 farm_view_seq = 12;
 }
 
 message ApplyVisitorActionResponse {
@@ -205,11 +229,64 @@ message PublishFarmPresenceRequest {
   classicfarm.ws.v1.FarmPresencePush presence = 3;
 }
 
+message PublishRedDotChangedRequest {
+  string gate_id = 1;
+  repeated uint64 recipient_player_ids = 2;
+  classicfarm.ws.v1.RedDotChangedPush red_dot = 3;
+}
+
 message PublishPlayerStateChangedResponse {}
 
 message PublishFarmViewPatchResponse {}
 
 message PublishFarmPresenceResponse {}
+
+message PublishRedDotChangedResponse {}
+
+message DispatchRedDotRequest {
+  classicfarm.rpc.v1.CommittedRoute recipient_route = 1;
+  repeated uint64 recipient_player_ids = 2;
+  classicfarm.ws.v1.RedDotChangedPush red_dot = 3;
+}
+
+message DispatchRedDotResponse {
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message RegisterPlayerConnectionRequest {
+  uint64 player_id = 1;
+  string gate_id = 2;
+  string connection_id = 3;
+  CommittedRoute route = 4;
+  int64 expires_at_ms = 5;
+}
+
+message RegisterPlayerConnectionResponse {
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message RefreshPlayerConnectionRequest {
+  uint64 player_id = 1;
+  string gate_id = 2;
+  string connection_id = 3;
+  CommittedRoute route = 4;
+  int64 expires_at_ms = 5;
+}
+
+message RefreshPlayerConnectionResponse {
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message UnregisterPlayerConnectionRequest {
+  uint64 player_id = 1;
+  string gate_id = 2;
+  string connection_id = 3;
+  CommittedRoute route = 4;
+}
+
+message UnregisterPlayerConnectionResponse {
+  classicfarm.ws.v1.Error error = 15;
+}
 
 message ApplyFriendTaskCreditRequest {
   CommittedRoute player_route = 1;
@@ -220,5 +297,29 @@ message ApplyFriendTaskCreditRequest {
 message ApplyFriendTaskCreditResponse {
   bool newly_applied = 1;
   uint64 player_seq = 2;
+  classicfarm.ws.v1.Error error = 15;
+}
+
+message MailRewardAttachment {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+}
+
+message ApplyMailRewardRequest {
+  CommittedRoute player_route = 1;
+  uint64 player_id = 2;
+  bytes claim_id = 3;
+  string mail_id = 4;
+  repeated MailRewardAttachment attachments = 5;
+}
+
+message ApplyMailRewardResponse {
+  bool newly_applied = 1;
+  uint64 player_seq = 2;
+  repeated classicfarm.ws.v1.ItemStackView items_added = 3;
+  classicfarm.ws.v1.PlayerStatePatch patch = 4;
+  // owner_epoch pairs with player_seq so callers can rebuild the StateVersion
+  // that H5 needs to apply patch incrementally.
+  uint64 owner_epoch = 5;
   classicfarm.ws.v1.Error error = 15;
 }

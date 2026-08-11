@@ -26,6 +26,7 @@ type EventType int32
 const (
 	EventType_EVENT_TYPE_UNSPECIFIED EventType = 0
 	EventType_CREATE_REWARD_MAIL     EventType = 1
+	EventType_CREATE_GIFT_MAIL       EventType = 2
 )
 
 // Enum value maps for EventType.
@@ -33,10 +34,12 @@ var (
 	EventType_name = map[int32]string{
 		0: "EVENT_TYPE_UNSPECIFIED",
 		1: "CREATE_REWARD_MAIL",
+		2: "CREATE_GIFT_MAIL",
 	}
 	EventType_value = map[string]int32{
 		"EVENT_TYPE_UNSPECIFIED": 0,
 		"CREATE_REWARD_MAIL":     1,
+		"CREATE_GIFT_MAIL":       2,
 	}
 )
 
@@ -429,6 +432,92 @@ func (x *RewardMailSourceV1) GetRequestId() []byte {
 	return nil
 }
 
+// CreateGiftMailV1 is written by the sender Player Actor when SEND_FRIEND_GIFT
+// succeeds. aggregate_player_id on the envelope is the sender.
+type CreateGiftMailV1 struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SenderPlayerId    uint64                 `protobuf:"varint,1,opt,name=sender_player_id,json=senderPlayerId,proto3" json:"sender_player_id,omitempty"`
+	SenderDisplayName string                 `protobuf:"bytes,2,opt,name=sender_display_name,json=senderDisplayName,proto3" json:"sender_display_name,omitempty"`
+	RecipientPlayerId uint64                 `protobuf:"varint,3,opt,name=recipient_player_id,json=recipientPlayerId,proto3" json:"recipient_player_id,omitempty"`
+	CropItemId        uint32                 `protobuf:"varint,4,opt,name=crop_item_id,json=cropItemId,proto3" json:"crop_item_id,omitempty"`
+	Quantity          uint32                 `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	CreatedAtMs       int64                  `protobuf:"varint,6,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *CreateGiftMailV1) Reset() {
+	*x = CreateGiftMailV1{}
+	mi := &file_classicfarm_v1_event_event_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateGiftMailV1) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateGiftMailV1) ProtoMessage() {}
+
+func (x *CreateGiftMailV1) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_event_event_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateGiftMailV1.ProtoReflect.Descriptor instead.
+func (*CreateGiftMailV1) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_event_event_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CreateGiftMailV1) GetSenderPlayerId() uint64 {
+	if x != nil {
+		return x.SenderPlayerId
+	}
+	return 0
+}
+
+func (x *CreateGiftMailV1) GetSenderDisplayName() string {
+	if x != nil {
+		return x.SenderDisplayName
+	}
+	return ""
+}
+
+func (x *CreateGiftMailV1) GetRecipientPlayerId() uint64 {
+	if x != nil {
+		return x.RecipientPlayerId
+	}
+	return 0
+}
+
+func (x *CreateGiftMailV1) GetCropItemId() uint32 {
+	if x != nil {
+		return x.CropItemId
+	}
+	return 0
+}
+
+func (x *CreateGiftMailV1) GetQuantity() uint32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *CreateGiftMailV1) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
 var File_classicfarm_v1_event_event_proto protoreflect.FileDescriptor
 
 const file_classicfarm_v1_event_event_proto_rawDesc = "" +
@@ -463,10 +552,19 @@ const file_classicfarm_v1_event_event_proto_rawDesc = "" +
 	"\x16chapter_config_version\x18\x02 \x01(\x04R\x14chapterConfigVersion\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x03 \x01(\fR\trequestIdJ\x04\b\x04\x10\n" +
-	"*E\n" +
+	"\"\x84\x02\n" +
+	"\x10CreateGiftMailV1\x12(\n" +
+	"\x10sender_player_id\x18\x01 \x01(\x04R\x0esenderPlayerId\x12.\n" +
+	"\x13sender_display_name\x18\x02 \x01(\tR\x11senderDisplayName\x12.\n" +
+	"\x13recipient_player_id\x18\x03 \x01(\x04R\x11recipientPlayerId\x12 \n" +
+	"\fcrop_item_id\x18\x04 \x01(\rR\n" +
+	"cropItemId\x12\x1a\n" +
+	"\bquantity\x18\x05 \x01(\rR\bquantity\x12\"\n" +
+	"\rcreated_at_ms\x18\x06 \x01(\x03R\vcreatedAtMsJ\x04\b\a\x10\x14*[\n" +
 	"\tEventType\x12\x1a\n" +
 	"\x16EVENT_TYPE_UNSPECIFIED\x10\x00\x12\x16\n" +
-	"\x12CREATE_REWARD_MAIL\x10\x01\"\x04\b\x02\x10c*\x95\x01\n" +
+	"\x12CREATE_REWARD_MAIL\x10\x01\x12\x14\n" +
+	"\x10CREATE_GIFT_MAIL\x10\x02\"\x04\b\x03\x10c*\x95\x01\n" +
 	"\x11ConsumeResultCode\x12\x1e\n" +
 	"\x1aCONSUME_RESULT_UNSPECIFIED\x10\x00\x12\v\n" +
 	"\aAPPLIED\x10\x01\x12\x13\n" +
@@ -488,7 +586,7 @@ func file_classicfarm_v1_event_event_proto_rawDescGZIP() []byte {
 }
 
 var file_classicfarm_v1_event_event_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_classicfarm_v1_event_event_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_classicfarm_v1_event_event_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_classicfarm_v1_event_event_proto_goTypes = []any{
 	(EventType)(0),                 // 0: classicfarm.event.v1.EventType
 	(ConsumeResultCode)(0),         // 1: classicfarm.event.v1.ConsumeResultCode
@@ -496,6 +594,7 @@ var file_classicfarm_v1_event_event_proto_goTypes = []any{
 	(*CreateRewardMailV1)(nil),     // 3: classicfarm.event.v1.CreateRewardMailV1
 	(*RewardMailAttachmentV1)(nil), // 4: classicfarm.event.v1.RewardMailAttachmentV1
 	(*RewardMailSourceV1)(nil),     // 5: classicfarm.event.v1.RewardMailSourceV1
+	(*CreateGiftMailV1)(nil),       // 6: classicfarm.event.v1.CreateGiftMailV1
 }
 var file_classicfarm_v1_event_event_proto_depIdxs = []int32{
 	0, // 0: classicfarm.event.v1.EventEnvelopeV1.event_type:type_name -> classicfarm.event.v1.EventType
@@ -519,7 +618,7 @@ func file_classicfarm_v1_event_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_event_event_proto_rawDesc), len(file_classicfarm_v1_event_event_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

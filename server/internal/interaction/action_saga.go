@@ -65,7 +65,7 @@ func (s *ActionSaga) Execute(ctx context.Context, req ActionRequest, now time.Ti
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
-	digest := RequestDigest(req.Action, req.VisitorPlayerID, req.OwnerPlayerID, req.VisitID, req.PlotID, req.PestID)
+	digest := RequestDigest(req.Action, req.VisitorPlayerID, req.OwnerPlayerID, req.VisitID, req.PlotID, req.PestID, 0, nil, 0)
 	record, version, err := s.createOrLoad(ctx, req, digest, now)
 	if err != nil {
 		return nil, err

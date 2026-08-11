@@ -50,12 +50,18 @@ enum Action {
   CATCH_PEST_FOR_FRIEND = 321;
   HELP_CLEAN_FRIEND_PLOT = 322;
   STEAL_FRIEND_CROP = 323;
-  reserved 324 to 999;
+  SEND_FRIEND_GIFT = 324;
+  CLAIM_MAIL = 325;
+  OPEN_MAILBOX = 326;
+  MARK_MAIL_READ = 327;
+  CHECK_MAILBOX_INDICATOR = 328;
+  reserved 329 to 999;
   PLAYER_STATE_CHANGED = 1000;
   reserved 1001 to 1099;
   FARM_VIEW_CHANGED = 1100;
   FARM_PRESENCE_CHANGED = 1101;
-  reserved 1102 to 1999;
+  RED_DOT_CHANGED = 1102;
+  reserved 1103 to 1999;
 }
 
 enum ErrorCode {
@@ -178,8 +184,19 @@ message WsEnvelope {
     BuyPetFoodResponse buy_pet_food_response = 66;
     FeedPetRequest feed_pet_request = 67;
     FeedPetResponse feed_pet_response = 68;
+    RedDotChangedPush red_dot_changed_push = 69;
+    SendFriendGiftRequest send_friend_gift_request = 70;
+    SendFriendGiftResponse send_friend_gift_response = 71;
+    ClaimMailRequest claim_mail_request = 72;
+    ClaimMailResponse claim_mail_response = 73;
+    OpenMailboxRequest open_mailbox_request = 74;
+    OpenMailboxResponse open_mailbox_response = 75;
+    MarkMailReadRequest mark_mail_read_request = 76;
+    MarkMailReadResponse mark_mail_read_response = 77;
+    CheckMailboxIndicatorRequest check_mailbox_indicator_request = 78;
+    CheckMailboxIndicatorResponse check_mailbox_indicator_response = 79;
   }
-  reserved 69 to 99;
+  reserved 80 to 99;
 }
 
 message StateVersion {
@@ -485,6 +502,8 @@ message PublicPlotView {
   uint32 harvestable_quantity = 5;
   bool pest_active = 6;
   bool can_steal = 7;
+  uint32 crop_item_id = 8;
+  uint32 steal_count = 9;
 }
 
 message FarmVisitSnapshot {
@@ -511,6 +530,26 @@ message FarmPresencePush {
   uint64 owner_player_id = 1;
   FarmPresenceKind kind = 2;
   optional string visitor_account_name = 3;
+}
+
+enum RedDotCategory {
+  RED_DOT_CATEGORY_UNSPECIFIED = 0;
+  RED_DOT_CATEGORY_MAIL = 1;
+  RED_DOT_CATEGORY_FRIEND_FARM = 2;
+}
+
+enum RedDotOperation {
+  RED_DOT_OPERATION_UNSPECIFIED = 0;
+  RED_DOT_OPERATION_SET = 1;
+  RED_DOT_OPERATION_CLEAR = 2;
+}
+
+// RedDotChangedPush is unversioned; H5 clears locally on click. Loss is OK.
+message RedDotChangedPush {
+  string notification_id = 1;
+  RedDotCategory category = 2;
+  RedDotOperation operation = 3;
+  optional uint64 source_player_id = 4;
 }
 
 message EnterFriendFarmRequest {
@@ -562,6 +601,12 @@ message StealFriendCropRequest {
   uint64 owner_player_id = 1;
   bytes visit_id = 2;
   uint32 plot_id = 3;
+  // expected_crop_item_id comes from the visitor's public farm view and is
+  // used only to reserve inventory / reject obviously stale requests. The
+  // owner Actor remains authoritative.
+  uint32 expected_crop_item_id = 4;
+  bytes farm_view_epoch = 5;
+  uint64 farm_view_seq = 6;
 }
 
 message FriendActionResponse {
@@ -663,4 +708,81 @@ message FeedPetResponse {
   int64 food_active_until_ms = 1;
   PlayerStatePatch patch = 2;
   PetPanelView panel = 3;
+}
+
+message SendFriendGiftRequest {
+  uint64 recipient_player_id = 1;
+  uint32 crop_item_id = 2;
+  uint32 quantity = 3;
+}
+
+message SendFriendGiftResponse {
+  bytes outbox_event_id = 1;
+  uint32 crop_item_id = 2;
+  uint32 quantity = 3;
+  PlayerStatePatch patch = 4;
+}
+
+message ClaimMailRequest {
+  string mail_id = 1;
+}
+
+message ClaimMailResponse {
+  string mail_id = 1;
+  repeated ItemStackView items_added = 2;
+  PlayerStatePatch patch = 3;
+}
+
+// MailKind mirrors classicfarm.mail.v1.MailKind for H5 without circular imports.
+enum MailKind {
+  MAIL_KIND_UNSPECIFIED = 0;
+  MAIL_KIND_PUBLIC = 1;
+  MAIL_KIND_PRIVATE = 2;
+  MAIL_KIND_GIFT = 3;
+}
+
+message MailAttachmentView {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+}
+
+message MailView {
+  string mail_id = 1;
+  MailKind kind = 2;
+  int64 created_at_ms = 3;
+  int64 published_at_ms = 4;
+  string sender_display_name = 5;
+  uint64 sender_player_id = 6;
+  uint64 recipient_player_id = 7;
+  string title = 8;
+  string content = 9;
+  repeated MailAttachmentView attachments = 10;
+  bool read = 11;
+  bool claimed = 12;
+}
+
+message OpenMailboxRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+message OpenMailboxResponse {
+  repeated MailView mails = 1;
+  string next_page_token = 2;
+  int64 last_mailbox_opened_at_ms = 3;
+}
+
+message MarkMailReadRequest {
+  string mail_id = 1;
+}
+
+message MarkMailReadResponse {}
+
+message CheckMailboxIndicatorRequest {}
+
+// CheckMailboxIndicatorResponse lets H5 recover the mailbox red dot after a
+// reconnect: RED_DOT_CHANGED Push only reaches players who were online when
+// the mail arrived, and public mail never pushes at all.
+message CheckMailboxIndicatorResponse {
+  bool has_new_mail = 1;
 }

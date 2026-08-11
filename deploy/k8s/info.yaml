@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: info
+  namespace: classic-farm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: info
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: info
+        app.kubernetes.io/part-of: classic-farm
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: info
+          image: classic-farm/info:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: classic-farm-runtime
+            - secretRef:
+                name: classic-farm-internal-rpc
+          env:
+            - name: INFO_PORT
+              value: ""
+            - name: HTTP_ADDRESS
+              value: 0.0.0.0:8086
+          ports:
+            - name: http
+              containerPort: 8086
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

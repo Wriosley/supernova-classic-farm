@@ -189,12 +189,15 @@ func (r *Runtime) ApplyStealOnOwner(
 	ownerID, ownerEpoch, visitorID uint64,
 	interactionID []byte,
 	plotID uint32,
+	expectedCropItemID uint32,
+	farmViewEpoch []byte,
+	farmViewSeq uint64,
 ) (resultPayload []byte, resultDigest []byte, farmPatch *wsv1.FarmViewPatch, alreadyApplied bool, err error) {
-	_ = visitorID // identifies the caller for audit only; CanSteal is visitor-agnostic.
 	if ownerEpoch == 0 {
 		return nil, nil, nil, false, ErrNotOwner
 	}
-	if len(interactionID) != 16 || plotID == 0 {
+	if len(interactionID) != 16 || plotID == 0 || expectedCropItemID == 0 ||
+		len(farmViewEpoch) != 16 || visitorID == 0 {
 		return nil, nil, nil, false, errors.New("invalid steal apply request")
 	}
 	shardID := routing.ShardForPlayer(ownerID)
@@ -219,13 +222,19 @@ func (r *Runtime) ApplyStealOnOwner(
 			return
 		}
 		migrateFriendSchema(a.state, now)
+		if !bytes.Equal(a.farmViewEpoch, farmViewEpoch) {
+			stealErr = ErrStealNotAvailable
+			return
+		}
+		_ = farmViewSeq // advisory for clients; crop identity is authoritative
 		plot := a.state.Plots[plotID]
-		if !CanSteal(plot) {
+		if !CanSteal(plot) || plot.CropItemID != expectedCropItemID || visitorAlreadyStole(plot, visitorID) {
 			stealErr = ErrStealNotAvailable
 			return
 		}
 		plot.StealCount++
 		plot.StolenQuantity += plot.StealQuantity
+		plot.StealVisitorPlayerIDs = append(plot.StealVisitorPlayerIDs, visitorID)
 
 		config := r.config.Load()
 		guard := r.evaluateStealGuard(a.state, config, now.UnixMilli())
@@ -253,7 +262,7 @@ func (r *Runtime) ApplyStealOnOwner(
 		a.state.UpdatedAtMS = now.UnixMilli()
 		mutated = true
 		a.markSyncPending(stepKey, pendingSyncStep{
-			revision:        a.state.CheckpointRevision,
+			revision:      a.state.CheckpointRevision,
 			domainChanges: DomainChanges{}.PlotChanged(plotID),
 		})
 		resultPayload = body

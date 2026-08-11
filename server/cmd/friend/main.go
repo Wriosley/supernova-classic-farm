@@ -107,8 +107,8 @@ func run() error {
 		AllowedCallers: map[string][]string{
 			friendv1.FriendService_CreateShareCode_FullMethodName:   {"gate"},
 			friendv1.FriendService_RedeemShareCode_FullMethodName:   {"gate"},
-			friendv1.FriendService_ListFriends_FullMethodName:       {"gate"},
-			friendv1.FriendService_CheckMutualFriend_FullMethodName: {"zone-local", "zone-a", "zone-b"},
+			friendv1.FriendService_ListFriends_FullMethodName:       {"gate", "info"},
+			friendv1.FriendService_CheckMutualFriend_FullMethodName: {"zone-local", "zone-a", "zone-b", "gate"},
 		},
 	})
 	if err != nil {

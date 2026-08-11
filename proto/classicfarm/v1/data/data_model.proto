@@ -67,6 +67,7 @@ enum FriendReceiptStatus {
 enum OutboxEventType {
   OUTBOX_EVENT_TYPE_UNSPECIFIED = 0;
   CREATE_REWARD_MAIL = 1;
+  CREATE_GIFT_MAIL = 2;
 }
 
 enum ShardRouteState {
@@ -117,6 +118,15 @@ message PlayerCheckpointV1 {
   PetStateRecord pet_state = 20;
   PlayerCareerRecord career = 21;
   CropCompendiumRecord crop_compendium = 22;
+  repeated MailClaimReceipt mail_claim_receipts = 23;
+}
+
+// MailClaimReceipt proves ApplyMailReward durably applied one claim once.
+message MailClaimReceipt {
+  string mail_id = 1;
+  bytes claim_id = 2;
+  int64 applied_at_ms = 3;
+  repeated InventoryStack attachments = 4;
 }
 
 // PetStateRecord 属于玩家私有状态：已购宠物、当前出战与狗粮有效截止时间。
@@ -163,6 +173,8 @@ message PlotStateRecord {
   uint32 steal_quantity = 17;
   uint32 max_steal_times = 18;
   uint32 protected_owner_yield = 19;
+  // Visitors who already stole from this crop round (cleared on replant).
+  repeated uint64 steal_visitor_player_ids = 20;
 }
 
 message TimedEffectRecord {

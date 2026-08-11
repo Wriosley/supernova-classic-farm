@@ -18,9 +18,9 @@ Usage: ./start-servers.sh [--dual-zone] [--mysql|--tcaplus] [--run-seconds N]
   --mysql          Use MySQL persistence. MYSQL_DSN is preferred; otherwise
                    local MYSQL_* fields are used to construct it.
   --tcaplus        Use Tcaplus for auth, checkpoints, fences, migration
-                   progress, Outbox and friend tables. Also starts FriendSvr
-                   (FriendSvr has no in-memory mode). Requires --dual-zone
-                   and TCAPLUS_*.
+                   progress, Outbox, friend and mail tables. Also starts
+                   FriendSvr and MailSvr (no in-memory mode). Requires
+                   --dual-zone and TCAPLUS_*.
   --run-seconds N  Stop automatically after N seconds. Zero waits for Ctrl+C.
 
 This script is for the Linux loopback baseline. It does not deploy Kubernetes.
@@ -183,21 +183,23 @@ zone_port="${ZONE_PORT:-8082}"
 coordinator_port="${COORDINATOR_PORT:-8083}"
 zone_b_port="${ZONE_B_PORT:-8084}"
 friend_port="${FRIEND_PORT:-8085}"
+info_port="${INFO_PORT:-8086}"
+mail_port="${MAIL_PORT:-8087}"
 
 for port in "${login_port}" "${gate_port}" "${zone_port}" \
-    "${coordinator_port}" "${zone_b_port}" "${friend_port}"; do
+    "${coordinator_port}" "${zone_b_port}" "${friend_port}" "${info_port}" "${mail_port}"; do
     if [[ ! "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
         echo "Invalid backend port: ${port}" >&2
         exit 1
     fi
 done
 
-ports=("${login_port}" "${gate_port}" "${zone_port}" "${coordinator_port}")
+ports=("${login_port}" "${gate_port}" "${zone_port}" "${coordinator_port}" "${info_port}")
 if [[ "${dual_zone}" == true ]]; then
     ports+=("${zone_b_port}")
 fi
 if [[ "${tcaplus_mode}" == true ]]; then
-    ports+=("${friend_port}")
+    ports+=("${friend_port}" "${mail_port}")
 fi
 for port in "${ports[@]}"; do
     if port_is_open "${port}"; then
@@ -250,14 +252,20 @@ if [[ "${tcaplus_mode}" == true ]]; then
     export TCAPLUS_FRIEND_LIST_TABLE="${TCAPLUS_FRIEND_LIST_TABLE:-FriendList}"
     export TCAPLUS_FRIEND_LINK_SAGA_TABLE="${TCAPLUS_FRIEND_LINK_SAGA_TABLE:-FriendLinkSaga}"
     export TCAPLUS_FRIEND_INTERACTION_TABLE="${TCAPLUS_FRIEND_INTERACTION_TABLE:-FriendInteraction}"
+    export TCAPLUS_PUBLIC_MAIL_TABLE="${TCAPLUS_PUBLIC_MAIL_TABLE:-PublicMail}"
+    export TCAPLUS_PRIVATE_MAIL_TABLE="${TCAPLUS_PRIVATE_MAIL_TABLE:-PrivateMail}"
+    export TCAPLUS_PLAYER_MAILBOX_CURSOR_TABLE="${TCAPLUS_PLAYER_MAILBOX_CURSOR_TABLE:-PlayerMailboxCursor}"
+    export TCAPLUS_PLAYER_MAIL_STATE_TABLE="${TCAPLUS_PLAYER_MAIL_STATE_TABLE:-PlayerMailState}"
+    export TCAPLUS_MAIL_SOURCE_DEDUP_TABLE="${TCAPLUS_MAIL_SOURCE_DEDUP_TABLE:-MailSourceDedup}"
+    export TCAPLUS_MAIL_CLAIM_SAGA_TABLE="${TCAPLUS_MAIL_CLAIM_SAGA_TABLE:-MailClaimSaga}"
 fi
 
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/classic-farm-servers.XXXXXX")"
 trap stop_services INT TERM EXIT
 
-build_targets=(login zone coordinator gate)
+build_targets=(login zone coordinator gate info)
 if [[ "${tcaplus_mode}" == true ]]; then
-    build_targets+=(friend)
+    build_targets+=(friend mail)
 fi
 for name in "${build_targets[@]}"; do
     echo "[build] ${name}"
@@ -275,8 +283,11 @@ export CLIENT_CONFIG_URL="${CLIENT_CONFIG_URL:-http://127.0.0.1:${login_port}/v1
 export LOGIN_TICKET_CONSUME_URL="${LOGIN_TICKET_CONSUME_URL:-http://127.0.0.1:${login_port}/internal/v1/ws-tickets/consume}"
 export COORDINATOR_URL="${COORDINATOR_URL:-http://127.0.0.1:${coordinator_port}}"
 export GATE_RPC_URL="${GATE_RPC_URL:-http://127.0.0.1:${gate_port}}"
+export INFO_RPC_URL="${INFO_RPC_URL:-http://127.0.0.1:${info_port}}"
 if [[ "${tcaplus_mode}" == true ]]; then
     export FRIEND_RPC_URL="${FRIEND_RPC_URL:-http://127.0.0.1:${friend_port}}"
+    export MAIL_RPC_URL="${MAIL_RPC_URL:-http://127.0.0.1:${mail_port}}"
+    export MAIL_ADMIN_TOKEN="${MAIL_ADMIN_TOKEN:-classic-farm-local-mail-admin-token}"
 fi
 export INTERNAL_GRPC_HMAC_KEY="${INTERNAL_GRPC_HMAC_KEY:-classic-farm-local-development-hmac-key-2026}"
 export ROUTING_MODE="$([[ "${dual_zone}" == true ]] && echo static-dual-zone || echo local)"
@@ -333,7 +344,19 @@ if [[ "${tcaplus_mode}" == true ]]; then
         "HTTP_ADDRESS=127.0.0.1:${friend_port}"
     friend_pid="${service_pid}"
     wait_ready friend "http://127.0.0.1:${friend_port}/readyz" "${friend_pid}"
+
+    start_service mail "${run_root}/mail" \
+        "MAIL_PORT=" \
+        "HTTP_ADDRESS=127.0.0.1:${mail_port}"
+    mail_pid="${service_pid}"
+    wait_ready mail "http://127.0.0.1:${mail_port}/readyz" "${mail_pid}"
 fi
+
+start_service info "${run_root}/info" \
+    "INFO_PORT=" \
+    "HTTP_ADDRESS=127.0.0.1:${info_port}"
+info_pid="${service_pid}"
+wait_ready info "http://127.0.0.1:${info_port}/readyz" "${info_pid}"
 
 start_service gate "${run_root}/gate" \
     "GATE_PORT=" \
@@ -348,9 +371,11 @@ if [[ "${mysql_mode}" == true ]]; then
 elif [[ "${tcaplus_mode}" == true ]]; then
     echo "Data mode: pure TcaplusDB."
     echo "FriendSvr: http://127.0.0.1:${friend_port}"
+    echo "MailSvr: http://127.0.0.1:${mail_port}"
 else
     echo "Data mode: development-only in-memory."
 fi
+echo "InfoSvr: http://127.0.0.1:${info_port}"
 
 deadline=0
 if (( run_seconds > 0 )); then

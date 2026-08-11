@@ -6,8 +6,35 @@ import (
 	"time"
 
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
+	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
 )
+
+
+func farmViewFor(t *testing.T, runtime *Runtime, playerID uint64) ([]byte, uint64) {
+	t.Helper()
+	snap, err := runtime.BuildPublicFarmSnapshot(context.Background(), playerID, LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("BuildPublicFarmSnapshot: %v", err)
+	}
+	return append([]byte(nil), snap.GetVersion().GetFarmViewEpoch()...), snap.GetVersion().GetFarmViewSeq()
+}
+
+func applySteal(
+	t *testing.T,
+	runtime *Runtime,
+	ownerID, visitorID uint64,
+	interactionID []byte,
+	plotID uint32,
+	cropItemID uint32,
+) (payload, digest []byte, patch *wsv1.FarmViewPatch, already bool, err error) {
+	t.Helper()
+	epoch, seq := farmViewFor(t, runtime, ownerID)
+	return runtime.ApplyStealOnOwner(
+		context.Background(), ownerID, LocalOwnerEpoch, visitorID, interactionID, plotID,
+		cropItemID, epoch, seq,
+	)
+}
 
 func inventoryQuantity(checkpoint *datav1.PlayerCheckpointV1, itemID uint32) uint32 {
 	for _, stack := range checkpoint.Inventory {
@@ -185,9 +212,7 @@ func TestApplyStealOnOwnerMutatesOnceAndDedupesRetry(t *testing.T) {
 	defer runtime.Close()
 
 	interactionID := interactionIDFixture(0x10)
-	payload1, digest1, patch1, already1, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionID, plotID,
-	)
+	payload1, digest1, patch1, already1, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatalf("first ApplyStealOnOwner: %v", err)
 	}
@@ -227,9 +252,7 @@ func TestApplyStealOnOwnerMutatesOnceAndDedupesRetry(t *testing.T) {
 		t.Fatalf("expected owner player_seq=1, got %d", saved.PlayerSeq)
 	}
 
-	payload2, digest2, patch2, already2, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionID, plotID,
-	)
+	payload2, digest2, patch2, already2, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatalf("second ApplyStealOnOwner: %v", err)
 	}
@@ -259,9 +282,7 @@ func TestApplyStealOnOwnerRejectsWhenNotStealableWithoutMutating(t *testing.T) {
 	runtime.now = func() time.Time { return now }
 	defer runtime.Close()
 
-	_, _, _, _, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionIDFixture(0x11), plotID,
-	)
+	_, _, _, _, err := applySteal(t, runtime, ownerID, 99, interactionIDFixture(0x11), plotID, 4001)
 	if err != ErrStealNotAvailable {
 		t.Fatalf("expected ErrStealNotAvailable, got %v", err)
 	}
@@ -283,17 +304,13 @@ func TestApplyStealOnOwnerConcurrentVisitorsRespectMaxStealTimes(t *testing.T) {
 	defer runtime.Close()
 
 	for i, fill := range []byte{0x20, 0x21} {
-		_, _, _, already, err := runtime.ApplyStealOnOwner(
-			context.Background(), ownerID, LocalOwnerEpoch, uint64(100+i), interactionIDFixture(fill), plotID,
-		)
+		_, _, _, already, err := applySteal(t, runtime, ownerID, uint64(100+i), interactionIDFixture(fill), plotID, 4001)
 		if err != nil || already {
 			t.Fatalf("visitor %d ApplyStealOnOwner: already=%v err=%v", i, already, err)
 		}
 	}
 	// max_steal_times=2 is now exhausted; a third distinct visitor/interaction must fail deterministically.
-	_, _, _, _, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 102, interactionIDFixture(0x22), plotID,
-	)
+	_, _, _, _, err := applySteal(t, runtime, ownerID, 102, interactionIDFixture(0x22), plotID, 4001)
 	if err != ErrStealNotAvailable {
 		t.Fatalf("expected third steal to be rejected once max_steal_times is reached, got %v", err)
 	}

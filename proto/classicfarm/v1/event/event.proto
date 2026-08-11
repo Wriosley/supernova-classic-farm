@@ -7,7 +7,8 @@ option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/class
 enum EventType {
   EVENT_TYPE_UNSPECIFIED = 0;
   CREATE_REWARD_MAIL = 1;
-  reserved 2 to 99;
+  CREATE_GIFT_MAIL = 2;
+  reserved 3 to 99;
 }
 
 enum ConsumeResultCode {
@@ -53,4 +54,16 @@ message RewardMailSourceV1 {
   uint64 chapter_config_version = 2;
   bytes request_id = 3;
   reserved 4 to 9;
+}
+
+// CreateGiftMailV1 is written by the sender Player Actor when SEND_FRIEND_GIFT
+// succeeds. aggregate_player_id on the envelope is the sender.
+message CreateGiftMailV1 {
+  uint64 sender_player_id = 1;
+  string sender_display_name = 2;
+  uint64 recipient_player_id = 3;
+  uint32 crop_item_id = 4;
+  uint32 quantity = 5;
+  int64 created_at_ms = 6;
+  reserved 7 to 19;
 }

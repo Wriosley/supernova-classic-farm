@@ -79,38 +79,44 @@ func (MessageKind) EnumDescriptor() ([]byte, []int) {
 type Action int32
 
 const (
-	Action_ACTION_UNSPECIFIED     Action = 0
-	Action_AUTH                   Action = 1
-	Action_PING                   Action = 2
-	Action_GET_PLAYER_SNAPSHOT    Action = 100
-	Action_GET_SHOP               Action = 101
-	Action_GET_PET_PANEL          Action = 102
-	Action_BUY_SEEDS              Action = 200
-	Action_PLANT                  Action = 201
-	Action_APPLY_FERTILIZER       Action = 202
-	Action_HARVEST                Action = 203
-	Action_CLEAN_PLOT             Action = 204
-	Action_SELL_CROP              Action = 205
-	Action_CLAIM_CHAPTER_REWARD   Action = 206
-	Action_BUY_FERTILIZER         Action = 207
-	Action_CATCH_PEST             Action = 208
-	Action_BUY_PET                Action = 209
-	Action_DEPLOY_PET             Action = 210
-	Action_BUY_PET_FOOD           Action = 211
-	Action_FEED_PET               Action = 212
-	Action_CREATE_FRIEND_CODE     Action = 300
-	Action_REDEEM_FRIEND_CODE     Action = 301
-	Action_LIST_FRIENDS           Action = 302
-	Action_ENTER_FRIEND_FARM      Action = 310
-	Action_FARM_HEARTBEAT         Action = 311
-	Action_EXIT_FRIEND_FARM       Action = 312
-	Action_APPLY_PEST_TO_FRIEND   Action = 320
-	Action_CATCH_PEST_FOR_FRIEND  Action = 321
-	Action_HELP_CLEAN_FRIEND_PLOT Action = 322
-	Action_STEAL_FRIEND_CROP      Action = 323
-	Action_PLAYER_STATE_CHANGED   Action = 1000
-	Action_FARM_VIEW_CHANGED      Action = 1100
-	Action_FARM_PRESENCE_CHANGED  Action = 1101
+	Action_ACTION_UNSPECIFIED      Action = 0
+	Action_AUTH                    Action = 1
+	Action_PING                    Action = 2
+	Action_GET_PLAYER_SNAPSHOT     Action = 100
+	Action_GET_SHOP                Action = 101
+	Action_GET_PET_PANEL           Action = 102
+	Action_BUY_SEEDS               Action = 200
+	Action_PLANT                   Action = 201
+	Action_APPLY_FERTILIZER        Action = 202
+	Action_HARVEST                 Action = 203
+	Action_CLEAN_PLOT              Action = 204
+	Action_SELL_CROP               Action = 205
+	Action_CLAIM_CHAPTER_REWARD    Action = 206
+	Action_BUY_FERTILIZER          Action = 207
+	Action_CATCH_PEST              Action = 208
+	Action_BUY_PET                 Action = 209
+	Action_DEPLOY_PET              Action = 210
+	Action_BUY_PET_FOOD            Action = 211
+	Action_FEED_PET                Action = 212
+	Action_CREATE_FRIEND_CODE      Action = 300
+	Action_REDEEM_FRIEND_CODE      Action = 301
+	Action_LIST_FRIENDS            Action = 302
+	Action_ENTER_FRIEND_FARM       Action = 310
+	Action_FARM_HEARTBEAT          Action = 311
+	Action_EXIT_FRIEND_FARM        Action = 312
+	Action_APPLY_PEST_TO_FRIEND    Action = 320
+	Action_CATCH_PEST_FOR_FRIEND   Action = 321
+	Action_HELP_CLEAN_FRIEND_PLOT  Action = 322
+	Action_STEAL_FRIEND_CROP       Action = 323
+	Action_SEND_FRIEND_GIFT        Action = 324
+	Action_CLAIM_MAIL              Action = 325
+	Action_OPEN_MAILBOX            Action = 326
+	Action_MARK_MAIL_READ          Action = 327
+	Action_CHECK_MAILBOX_INDICATOR Action = 328
+	Action_PLAYER_STATE_CHANGED    Action = 1000
+	Action_FARM_VIEW_CHANGED       Action = 1100
+	Action_FARM_PRESENCE_CHANGED   Action = 1101
+	Action_RED_DOT_CHANGED         Action = 1102
 )
 
 // Enum value maps for Action.
@@ -145,43 +151,55 @@ var (
 		321:  "CATCH_PEST_FOR_FRIEND",
 		322:  "HELP_CLEAN_FRIEND_PLOT",
 		323:  "STEAL_FRIEND_CROP",
+		324:  "SEND_FRIEND_GIFT",
+		325:  "CLAIM_MAIL",
+		326:  "OPEN_MAILBOX",
+		327:  "MARK_MAIL_READ",
+		328:  "CHECK_MAILBOX_INDICATOR",
 		1000: "PLAYER_STATE_CHANGED",
 		1100: "FARM_VIEW_CHANGED",
 		1101: "FARM_PRESENCE_CHANGED",
+		1102: "RED_DOT_CHANGED",
 	}
 	Action_value = map[string]int32{
-		"ACTION_UNSPECIFIED":     0,
-		"AUTH":                   1,
-		"PING":                   2,
-		"GET_PLAYER_SNAPSHOT":    100,
-		"GET_SHOP":               101,
-		"GET_PET_PANEL":          102,
-		"BUY_SEEDS":              200,
-		"PLANT":                  201,
-		"APPLY_FERTILIZER":       202,
-		"HARVEST":                203,
-		"CLEAN_PLOT":             204,
-		"SELL_CROP":              205,
-		"CLAIM_CHAPTER_REWARD":   206,
-		"BUY_FERTILIZER":         207,
-		"CATCH_PEST":             208,
-		"BUY_PET":                209,
-		"DEPLOY_PET":             210,
-		"BUY_PET_FOOD":           211,
-		"FEED_PET":               212,
-		"CREATE_FRIEND_CODE":     300,
-		"REDEEM_FRIEND_CODE":     301,
-		"LIST_FRIENDS":           302,
-		"ENTER_FRIEND_FARM":      310,
-		"FARM_HEARTBEAT":         311,
-		"EXIT_FRIEND_FARM":       312,
-		"APPLY_PEST_TO_FRIEND":   320,
-		"CATCH_PEST_FOR_FRIEND":  321,
-		"HELP_CLEAN_FRIEND_PLOT": 322,
-		"STEAL_FRIEND_CROP":      323,
-		"PLAYER_STATE_CHANGED":   1000,
-		"FARM_VIEW_CHANGED":      1100,
-		"FARM_PRESENCE_CHANGED":  1101,
+		"ACTION_UNSPECIFIED":      0,
+		"AUTH":                    1,
+		"PING":                    2,
+		"GET_PLAYER_SNAPSHOT":     100,
+		"GET_SHOP":                101,
+		"GET_PET_PANEL":           102,
+		"BUY_SEEDS":               200,
+		"PLANT":                   201,
+		"APPLY_FERTILIZER":        202,
+		"HARVEST":                 203,
+		"CLEAN_PLOT":              204,
+		"SELL_CROP":               205,
+		"CLAIM_CHAPTER_REWARD":    206,
+		"BUY_FERTILIZER":          207,
+		"CATCH_PEST":              208,
+		"BUY_PET":                 209,
+		"DEPLOY_PET":              210,
+		"BUY_PET_FOOD":            211,
+		"FEED_PET":                212,
+		"CREATE_FRIEND_CODE":      300,
+		"REDEEM_FRIEND_CODE":      301,
+		"LIST_FRIENDS":            302,
+		"ENTER_FRIEND_FARM":       310,
+		"FARM_HEARTBEAT":          311,
+		"EXIT_FRIEND_FARM":        312,
+		"APPLY_PEST_TO_FRIEND":    320,
+		"CATCH_PEST_FOR_FRIEND":   321,
+		"HELP_CLEAN_FRIEND_PLOT":  322,
+		"STEAL_FRIEND_CROP":       323,
+		"SEND_FRIEND_GIFT":        324,
+		"CLAIM_MAIL":              325,
+		"OPEN_MAILBOX":            326,
+		"MARK_MAIL_READ":          327,
+		"CHECK_MAILBOX_INDICATOR": 328,
+		"PLAYER_STATE_CHANGED":    1000,
+		"FARM_VIEW_CHANGED":       1100,
+		"FARM_PRESENCE_CHANGED":   1101,
+		"RED_DOT_CHANGED":         1102,
 	}
 )
 
@@ -442,6 +460,157 @@ func (FarmPresenceKind) EnumDescriptor() ([]byte, []int) {
 	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{3}
 }
 
+type RedDotCategory int32
+
+const (
+	RedDotCategory_RED_DOT_CATEGORY_UNSPECIFIED RedDotCategory = 0
+	RedDotCategory_RED_DOT_CATEGORY_MAIL        RedDotCategory = 1
+	RedDotCategory_RED_DOT_CATEGORY_FRIEND_FARM RedDotCategory = 2
+)
+
+// Enum value maps for RedDotCategory.
+var (
+	RedDotCategory_name = map[int32]string{
+		0: "RED_DOT_CATEGORY_UNSPECIFIED",
+		1: "RED_DOT_CATEGORY_MAIL",
+		2: "RED_DOT_CATEGORY_FRIEND_FARM",
+	}
+	RedDotCategory_value = map[string]int32{
+		"RED_DOT_CATEGORY_UNSPECIFIED": 0,
+		"RED_DOT_CATEGORY_MAIL":        1,
+		"RED_DOT_CATEGORY_FRIEND_FARM": 2,
+	}
+)
+
+func (x RedDotCategory) Enum() *RedDotCategory {
+	p := new(RedDotCategory)
+	*p = x
+	return p
+}
+
+func (x RedDotCategory) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RedDotCategory) Descriptor() protoreflect.EnumDescriptor {
+	return file_classicfarm_v1_ws_ws_proto_enumTypes[4].Descriptor()
+}
+
+func (RedDotCategory) Type() protoreflect.EnumType {
+	return &file_classicfarm_v1_ws_ws_proto_enumTypes[4]
+}
+
+func (x RedDotCategory) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RedDotCategory.Descriptor instead.
+func (RedDotCategory) EnumDescriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{4}
+}
+
+type RedDotOperation int32
+
+const (
+	RedDotOperation_RED_DOT_OPERATION_UNSPECIFIED RedDotOperation = 0
+	RedDotOperation_RED_DOT_OPERATION_SET         RedDotOperation = 1
+	RedDotOperation_RED_DOT_OPERATION_CLEAR       RedDotOperation = 2
+)
+
+// Enum value maps for RedDotOperation.
+var (
+	RedDotOperation_name = map[int32]string{
+		0: "RED_DOT_OPERATION_UNSPECIFIED",
+		1: "RED_DOT_OPERATION_SET",
+		2: "RED_DOT_OPERATION_CLEAR",
+	}
+	RedDotOperation_value = map[string]int32{
+		"RED_DOT_OPERATION_UNSPECIFIED": 0,
+		"RED_DOT_OPERATION_SET":         1,
+		"RED_DOT_OPERATION_CLEAR":       2,
+	}
+)
+
+func (x RedDotOperation) Enum() *RedDotOperation {
+	p := new(RedDotOperation)
+	*p = x
+	return p
+}
+
+func (x RedDotOperation) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RedDotOperation) Descriptor() protoreflect.EnumDescriptor {
+	return file_classicfarm_v1_ws_ws_proto_enumTypes[5].Descriptor()
+}
+
+func (RedDotOperation) Type() protoreflect.EnumType {
+	return &file_classicfarm_v1_ws_ws_proto_enumTypes[5]
+}
+
+func (x RedDotOperation) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RedDotOperation.Descriptor instead.
+func (RedDotOperation) EnumDescriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{5}
+}
+
+// MailKind mirrors classicfarm.mail.v1.MailKind for H5 without circular imports.
+type MailKind int32
+
+const (
+	MailKind_MAIL_KIND_UNSPECIFIED MailKind = 0
+	MailKind_MAIL_KIND_PUBLIC      MailKind = 1
+	MailKind_MAIL_KIND_PRIVATE     MailKind = 2
+	MailKind_MAIL_KIND_GIFT        MailKind = 3
+)
+
+// Enum value maps for MailKind.
+var (
+	MailKind_name = map[int32]string{
+		0: "MAIL_KIND_UNSPECIFIED",
+		1: "MAIL_KIND_PUBLIC",
+		2: "MAIL_KIND_PRIVATE",
+		3: "MAIL_KIND_GIFT",
+	}
+	MailKind_value = map[string]int32{
+		"MAIL_KIND_UNSPECIFIED": 0,
+		"MAIL_KIND_PUBLIC":      1,
+		"MAIL_KIND_PRIVATE":     2,
+		"MAIL_KIND_GIFT":        3,
+	}
+)
+
+func (x MailKind) Enum() *MailKind {
+	p := new(MailKind)
+	*p = x
+	return p
+}
+
+func (x MailKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MailKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_classicfarm_v1_ws_ws_proto_enumTypes[6].Descriptor()
+}
+
+func (MailKind) Type() protoreflect.EnumType {
+	return &file_classicfarm_v1_ws_ws_proto_enumTypes[6]
+}
+
+func (x MailKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MailKind.Descriptor instead.
+func (MailKind) EnumDescriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{6}
+}
+
 type WsEnvelope struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ProtocolVersion uint32                 `protobuf:"varint,1,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
@@ -514,6 +683,17 @@ type WsEnvelope struct {
 	//	*WsEnvelope_BuyPetFoodResponse
 	//	*WsEnvelope_FeedPetRequest
 	//	*WsEnvelope_FeedPetResponse
+	//	*WsEnvelope_RedDotChangedPush
+	//	*WsEnvelope_SendFriendGiftRequest
+	//	*WsEnvelope_SendFriendGiftResponse
+	//	*WsEnvelope_ClaimMailRequest
+	//	*WsEnvelope_ClaimMailResponse
+	//	*WsEnvelope_OpenMailboxRequest
+	//	*WsEnvelope_OpenMailboxResponse
+	//	*WsEnvelope_MarkMailReadRequest
+	//	*WsEnvelope_MarkMailReadResponse
+	//	*WsEnvelope_CheckMailboxIndicatorRequest
+	//	*WsEnvelope_CheckMailboxIndicatorResponse
 	Payload       isWsEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1150,6 +1330,105 @@ func (x *WsEnvelope) GetFeedPetResponse() *FeedPetResponse {
 	return nil
 }
 
+func (x *WsEnvelope) GetRedDotChangedPush() *RedDotChangedPush {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_RedDotChangedPush); ok {
+			return x.RedDotChangedPush
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetSendFriendGiftRequest() *SendFriendGiftRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_SendFriendGiftRequest); ok {
+			return x.SendFriendGiftRequest
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetSendFriendGiftResponse() *SendFriendGiftResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_SendFriendGiftResponse); ok {
+			return x.SendFriendGiftResponse
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetClaimMailRequest() *ClaimMailRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_ClaimMailRequest); ok {
+			return x.ClaimMailRequest
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetClaimMailResponse() *ClaimMailResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_ClaimMailResponse); ok {
+			return x.ClaimMailResponse
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetOpenMailboxRequest() *OpenMailboxRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_OpenMailboxRequest); ok {
+			return x.OpenMailboxRequest
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetOpenMailboxResponse() *OpenMailboxResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_OpenMailboxResponse); ok {
+			return x.OpenMailboxResponse
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetMarkMailReadRequest() *MarkMailReadRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_MarkMailReadRequest); ok {
+			return x.MarkMailReadRequest
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetMarkMailReadResponse() *MarkMailReadResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_MarkMailReadResponse); ok {
+			return x.MarkMailReadResponse
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetCheckMailboxIndicatorRequest() *CheckMailboxIndicatorRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_CheckMailboxIndicatorRequest); ok {
+			return x.CheckMailboxIndicatorRequest
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetCheckMailboxIndicatorResponse() *CheckMailboxIndicatorResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_CheckMailboxIndicatorResponse); ok {
+			return x.CheckMailboxIndicatorResponse
+		}
+	}
+	return nil
+}
+
 type isWsEnvelope_Payload interface {
 	isWsEnvelope_Payload()
 }
@@ -1390,6 +1669,50 @@ type WsEnvelope_FeedPetResponse struct {
 	FeedPetResponse *FeedPetResponse `protobuf:"bytes,68,opt,name=feed_pet_response,json=feedPetResponse,proto3,oneof"`
 }
 
+type WsEnvelope_RedDotChangedPush struct {
+	RedDotChangedPush *RedDotChangedPush `protobuf:"bytes,69,opt,name=red_dot_changed_push,json=redDotChangedPush,proto3,oneof"`
+}
+
+type WsEnvelope_SendFriendGiftRequest struct {
+	SendFriendGiftRequest *SendFriendGiftRequest `protobuf:"bytes,70,opt,name=send_friend_gift_request,json=sendFriendGiftRequest,proto3,oneof"`
+}
+
+type WsEnvelope_SendFriendGiftResponse struct {
+	SendFriendGiftResponse *SendFriendGiftResponse `protobuf:"bytes,71,opt,name=send_friend_gift_response,json=sendFriendGiftResponse,proto3,oneof"`
+}
+
+type WsEnvelope_ClaimMailRequest struct {
+	ClaimMailRequest *ClaimMailRequest `protobuf:"bytes,72,opt,name=claim_mail_request,json=claimMailRequest,proto3,oneof"`
+}
+
+type WsEnvelope_ClaimMailResponse struct {
+	ClaimMailResponse *ClaimMailResponse `protobuf:"bytes,73,opt,name=claim_mail_response,json=claimMailResponse,proto3,oneof"`
+}
+
+type WsEnvelope_OpenMailboxRequest struct {
+	OpenMailboxRequest *OpenMailboxRequest `protobuf:"bytes,74,opt,name=open_mailbox_request,json=openMailboxRequest,proto3,oneof"`
+}
+
+type WsEnvelope_OpenMailboxResponse struct {
+	OpenMailboxResponse *OpenMailboxResponse `protobuf:"bytes,75,opt,name=open_mailbox_response,json=openMailboxResponse,proto3,oneof"`
+}
+
+type WsEnvelope_MarkMailReadRequest struct {
+	MarkMailReadRequest *MarkMailReadRequest `protobuf:"bytes,76,opt,name=mark_mail_read_request,json=markMailReadRequest,proto3,oneof"`
+}
+
+type WsEnvelope_MarkMailReadResponse struct {
+	MarkMailReadResponse *MarkMailReadResponse `protobuf:"bytes,77,opt,name=mark_mail_read_response,json=markMailReadResponse,proto3,oneof"`
+}
+
+type WsEnvelope_CheckMailboxIndicatorRequest struct {
+	CheckMailboxIndicatorRequest *CheckMailboxIndicatorRequest `protobuf:"bytes,78,opt,name=check_mailbox_indicator_request,json=checkMailboxIndicatorRequest,proto3,oneof"`
+}
+
+type WsEnvelope_CheckMailboxIndicatorResponse struct {
+	CheckMailboxIndicatorResponse *CheckMailboxIndicatorResponse `protobuf:"bytes,79,opt,name=check_mailbox_indicator_response,json=checkMailboxIndicatorResponse,proto3,oneof"`
+}
+
 func (*WsEnvelope_AuthRequest) isWsEnvelope_Payload() {}
 
 func (*WsEnvelope_AuthResponse) isWsEnvelope_Payload() {}
@@ -1507,6 +1830,28 @@ func (*WsEnvelope_BuyPetFoodResponse) isWsEnvelope_Payload() {}
 func (*WsEnvelope_FeedPetRequest) isWsEnvelope_Payload() {}
 
 func (*WsEnvelope_FeedPetResponse) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_RedDotChangedPush) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_SendFriendGiftRequest) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_SendFriendGiftResponse) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_ClaimMailRequest) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_ClaimMailResponse) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_OpenMailboxRequest) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_OpenMailboxResponse) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_MarkMailReadRequest) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_MarkMailReadResponse) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_CheckMailboxIndicatorRequest) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_CheckMailboxIndicatorResponse) isWsEnvelope_Payload() {}
 
 type StateVersion struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -4511,6 +4856,8 @@ type PublicPlotView struct {
 	HarvestableQuantity uint32                 `protobuf:"varint,5,opt,name=harvestable_quantity,json=harvestableQuantity,proto3" json:"harvestable_quantity,omitempty"`
 	PestActive          bool                   `protobuf:"varint,6,opt,name=pest_active,json=pestActive,proto3" json:"pest_active,omitempty"`
 	CanSteal            bool                   `protobuf:"varint,7,opt,name=can_steal,json=canSteal,proto3" json:"can_steal,omitempty"`
+	CropItemId          uint32                 `protobuf:"varint,8,opt,name=crop_item_id,json=cropItemId,proto3" json:"crop_item_id,omitempty"`
+	StealCount          uint32                 `protobuf:"varint,9,opt,name=steal_count,json=stealCount,proto3" json:"steal_count,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -4592,6 +4939,20 @@ func (x *PublicPlotView) GetCanSteal() bool {
 		return x.CanSteal
 	}
 	return false
+}
+
+func (x *PublicPlotView) GetCropItemId() uint32 {
+	if x != nil {
+		return x.CropItemId
+	}
+	return 0
+}
+
+func (x *PublicPlotView) GetStealCount() uint32 {
+	if x != nil {
+		return x.StealCount
+	}
+	return 0
 }
 
 type FarmVisitSnapshot struct {
@@ -4783,6 +5144,75 @@ func (x *FarmPresencePush) GetVisitorAccountName() string {
 	return ""
 }
 
+// RedDotChangedPush is unversioned; H5 clears locally on click. Loss is OK.
+type RedDotChangedPush struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	NotificationId string                 `protobuf:"bytes,1,opt,name=notification_id,json=notificationId,proto3" json:"notification_id,omitempty"`
+	Category       RedDotCategory         `protobuf:"varint,2,opt,name=category,proto3,enum=classicfarm.ws.v1.RedDotCategory" json:"category,omitempty"`
+	Operation      RedDotOperation        `protobuf:"varint,3,opt,name=operation,proto3,enum=classicfarm.ws.v1.RedDotOperation" json:"operation,omitempty"`
+	SourcePlayerId *uint64                `protobuf:"varint,4,opt,name=source_player_id,json=sourcePlayerId,proto3,oneof" json:"source_player_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RedDotChangedPush) Reset() {
+	*x = RedDotChangedPush{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedDotChangedPush) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedDotChangedPush) ProtoMessage() {}
+
+func (x *RedDotChangedPush) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedDotChangedPush.ProtoReflect.Descriptor instead.
+func (*RedDotChangedPush) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *RedDotChangedPush) GetNotificationId() string {
+	if x != nil {
+		return x.NotificationId
+	}
+	return ""
+}
+
+func (x *RedDotChangedPush) GetCategory() RedDotCategory {
+	if x != nil {
+		return x.Category
+	}
+	return RedDotCategory_RED_DOT_CATEGORY_UNSPECIFIED
+}
+
+func (x *RedDotChangedPush) GetOperation() RedDotOperation {
+	if x != nil {
+		return x.Operation
+	}
+	return RedDotOperation_RED_DOT_OPERATION_UNSPECIFIED
+}
+
+func (x *RedDotChangedPush) GetSourcePlayerId() uint64 {
+	if x != nil && x.SourcePlayerId != nil {
+		return *x.SourcePlayerId
+	}
+	return 0
+}
+
 type EnterFriendFarmRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OwnerPlayerId uint64                 `protobuf:"varint,1,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
@@ -4792,7 +5222,7 @@ type EnterFriendFarmRequest struct {
 
 func (x *EnterFriendFarmRequest) Reset() {
 	*x = EnterFriendFarmRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[54]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4804,7 +5234,7 @@ func (x *EnterFriendFarmRequest) String() string {
 func (*EnterFriendFarmRequest) ProtoMessage() {}
 
 func (x *EnterFriendFarmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[54]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4817,7 +5247,7 @@ func (x *EnterFriendFarmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnterFriendFarmRequest.ProtoReflect.Descriptor instead.
 func (*EnterFriendFarmRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{54}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *EnterFriendFarmRequest) GetOwnerPlayerId() uint64 {
@@ -4838,7 +5268,7 @@ type EnterFriendFarmResponse struct {
 
 func (x *EnterFriendFarmResponse) Reset() {
 	*x = EnterFriendFarmResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[55]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4850,7 +5280,7 @@ func (x *EnterFriendFarmResponse) String() string {
 func (*EnterFriendFarmResponse) ProtoMessage() {}
 
 func (x *EnterFriendFarmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[55]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4863,7 +5293,7 @@ func (x *EnterFriendFarmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnterFriendFarmResponse.ProtoReflect.Descriptor instead.
 func (*EnterFriendFarmResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{55}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *EnterFriendFarmResponse) GetVisitId() []byte {
@@ -4897,7 +5327,7 @@ type FarmHeartbeatRequest struct {
 
 func (x *FarmHeartbeatRequest) Reset() {
 	*x = FarmHeartbeatRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[56]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4909,7 +5339,7 @@ func (x *FarmHeartbeatRequest) String() string {
 func (*FarmHeartbeatRequest) ProtoMessage() {}
 
 func (x *FarmHeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[56]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4922,7 +5352,7 @@ func (x *FarmHeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FarmHeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*FarmHeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{56}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *FarmHeartbeatRequest) GetOwnerPlayerId() uint64 {
@@ -4948,7 +5378,7 @@ type FarmHeartbeatResponse struct {
 
 func (x *FarmHeartbeatResponse) Reset() {
 	*x = FarmHeartbeatResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[57]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4960,7 +5390,7 @@ func (x *FarmHeartbeatResponse) String() string {
 func (*FarmHeartbeatResponse) ProtoMessage() {}
 
 func (x *FarmHeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[57]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4973,7 +5403,7 @@ func (x *FarmHeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FarmHeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*FarmHeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{57}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *FarmHeartbeatResponse) GetExpiresAtMs() int64 {
@@ -4993,7 +5423,7 @@ type ExitFriendFarmRequest struct {
 
 func (x *ExitFriendFarmRequest) Reset() {
 	*x = ExitFriendFarmRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[58]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5005,7 +5435,7 @@ func (x *ExitFriendFarmRequest) String() string {
 func (*ExitFriendFarmRequest) ProtoMessage() {}
 
 func (x *ExitFriendFarmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[58]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5018,7 +5448,7 @@ func (x *ExitFriendFarmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExitFriendFarmRequest.ProtoReflect.Descriptor instead.
 func (*ExitFriendFarmRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{58}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ExitFriendFarmRequest) GetOwnerPlayerId() uint64 {
@@ -5043,7 +5473,7 @@ type ExitFriendFarmResponse struct {
 
 func (x *ExitFriendFarmResponse) Reset() {
 	*x = ExitFriendFarmResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[59]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5055,7 +5485,7 @@ func (x *ExitFriendFarmResponse) String() string {
 func (*ExitFriendFarmResponse) ProtoMessage() {}
 
 func (x *ExitFriendFarmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[59]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5068,7 +5498,7 @@ func (x *ExitFriendFarmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExitFriendFarmResponse.ProtoReflect.Descriptor instead.
 func (*ExitFriendFarmResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{59}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{60}
 }
 
 type ApplyPestToFriendRequest struct {
@@ -5083,7 +5513,7 @@ type ApplyPestToFriendRequest struct {
 
 func (x *ApplyPestToFriendRequest) Reset() {
 	*x = ApplyPestToFriendRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[60]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5095,7 +5525,7 @@ func (x *ApplyPestToFriendRequest) String() string {
 func (*ApplyPestToFriendRequest) ProtoMessage() {}
 
 func (x *ApplyPestToFriendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[60]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5108,7 +5538,7 @@ func (x *ApplyPestToFriendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyPestToFriendRequest.ProtoReflect.Descriptor instead.
 func (*ApplyPestToFriendRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{60}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ApplyPestToFriendRequest) GetOwnerPlayerId() uint64 {
@@ -5150,7 +5580,7 @@ type CatchPestForFriendRequest struct {
 
 func (x *CatchPestForFriendRequest) Reset() {
 	*x = CatchPestForFriendRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[61]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5162,7 +5592,7 @@ func (x *CatchPestForFriendRequest) String() string {
 func (*CatchPestForFriendRequest) ProtoMessage() {}
 
 func (x *CatchPestForFriendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[61]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5175,7 +5605,7 @@ func (x *CatchPestForFriendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CatchPestForFriendRequest.ProtoReflect.Descriptor instead.
 func (*CatchPestForFriendRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{61}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *CatchPestForFriendRequest) GetOwnerPlayerId() uint64 {
@@ -5210,7 +5640,7 @@ type HelpCleanFriendPlotRequest struct {
 
 func (x *HelpCleanFriendPlotRequest) Reset() {
 	*x = HelpCleanFriendPlotRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[62]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5222,7 +5652,7 @@ func (x *HelpCleanFriendPlotRequest) String() string {
 func (*HelpCleanFriendPlotRequest) ProtoMessage() {}
 
 func (x *HelpCleanFriendPlotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[62]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5235,7 +5665,7 @@ func (x *HelpCleanFriendPlotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HelpCleanFriendPlotRequest.ProtoReflect.Descriptor instead.
 func (*HelpCleanFriendPlotRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{62}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *HelpCleanFriendPlotRequest) GetOwnerPlayerId() uint64 {
@@ -5264,13 +5694,19 @@ type StealFriendCropRequest struct {
 	OwnerPlayerId uint64                 `protobuf:"varint,1,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
 	VisitId       []byte                 `protobuf:"bytes,2,opt,name=visit_id,json=visitId,proto3" json:"visit_id,omitempty"`
 	PlotId        uint32                 `protobuf:"varint,3,opt,name=plot_id,json=plotId,proto3" json:"plot_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// expected_crop_item_id comes from the visitor's public farm view and is
+	// used only to reserve inventory / reject obviously stale requests. The
+	// owner Actor remains authoritative.
+	ExpectedCropItemId uint32 `protobuf:"varint,4,opt,name=expected_crop_item_id,json=expectedCropItemId,proto3" json:"expected_crop_item_id,omitempty"`
+	FarmViewEpoch      []byte `protobuf:"bytes,5,opt,name=farm_view_epoch,json=farmViewEpoch,proto3" json:"farm_view_epoch,omitempty"`
+	FarmViewSeq        uint64 `protobuf:"varint,6,opt,name=farm_view_seq,json=farmViewSeq,proto3" json:"farm_view_seq,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *StealFriendCropRequest) Reset() {
 	*x = StealFriendCropRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[63]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5282,7 +5718,7 @@ func (x *StealFriendCropRequest) String() string {
 func (*StealFriendCropRequest) ProtoMessage() {}
 
 func (x *StealFriendCropRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[63]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5295,7 +5731,7 @@ func (x *StealFriendCropRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StealFriendCropRequest.ProtoReflect.Descriptor instead.
 func (*StealFriendCropRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{63}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *StealFriendCropRequest) GetOwnerPlayerId() uint64 {
@@ -5319,6 +5755,27 @@ func (x *StealFriendCropRequest) GetPlotId() uint32 {
 	return 0
 }
 
+func (x *StealFriendCropRequest) GetExpectedCropItemId() uint32 {
+	if x != nil {
+		return x.ExpectedCropItemId
+	}
+	return 0
+}
+
+func (x *StealFriendCropRequest) GetFarmViewEpoch() []byte {
+	if x != nil {
+		return x.FarmViewEpoch
+	}
+	return nil
+}
+
+func (x *StealFriendCropRequest) GetFarmViewSeq() uint64 {
+	if x != nil {
+		return x.FarmViewSeq
+	}
+	return 0
+}
+
 type FriendActionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	InteractionId []byte                 `protobuf:"bytes,1,opt,name=interaction_id,json=interactionId,proto3" json:"interaction_id,omitempty"`
@@ -5332,7 +5789,7 @@ type FriendActionResponse struct {
 
 func (x *FriendActionResponse) Reset() {
 	*x = FriendActionResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[64]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5344,7 +5801,7 @@ func (x *FriendActionResponse) String() string {
 func (*FriendActionResponse) ProtoMessage() {}
 
 func (x *FriendActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[64]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5357,7 +5814,7 @@ func (x *FriendActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendActionResponse.ProtoReflect.Descriptor instead.
 func (*FriendActionResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{64}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *FriendActionResponse) GetInteractionId() []byte {
@@ -5404,7 +5861,7 @@ type StealGuardOutcome struct {
 
 func (x *StealGuardOutcome) Reset() {
 	*x = StealGuardOutcome{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[65]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5416,7 +5873,7 @@ func (x *StealGuardOutcome) String() string {
 func (*StealGuardOutcome) ProtoMessage() {}
 
 func (x *StealGuardOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[65]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5429,7 +5886,7 @@ func (x *StealGuardOutcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StealGuardOutcome.ProtoReflect.Descriptor instead.
 func (*StealGuardOutcome) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{65}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *StealGuardOutcome) GetPetId() uint32 {
@@ -5497,7 +5954,7 @@ type PetShopEntryView struct {
 
 func (x *PetShopEntryView) Reset() {
 	*x = PetShopEntryView{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[66]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5509,7 +5966,7 @@ func (x *PetShopEntryView) String() string {
 func (*PetShopEntryView) ProtoMessage() {}
 
 func (x *PetShopEntryView) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[66]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5522,7 +5979,7 @@ func (x *PetShopEntryView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetShopEntryView.ProtoReflect.Descriptor instead.
 func (*PetShopEntryView) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{66}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *PetShopEntryView) GetPetId() uint32 {
@@ -5595,7 +6052,7 @@ type PetFoodShopView struct {
 
 func (x *PetFoodShopView) Reset() {
 	*x = PetFoodShopView{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[67]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5607,7 +6064,7 @@ func (x *PetFoodShopView) String() string {
 func (*PetFoodShopView) ProtoMessage() {}
 
 func (x *PetFoodShopView) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[67]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5620,7 +6077,7 @@ func (x *PetFoodShopView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetFoodShopView.ProtoReflect.Descriptor instead.
 func (*PetFoodShopView) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{67}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *PetFoodShopView) GetShopEntryId() uint32 {
@@ -5680,7 +6137,7 @@ type PetPanelView struct {
 
 func (x *PetPanelView) Reset() {
 	*x = PetPanelView{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[68]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5692,7 +6149,7 @@ func (x *PetPanelView) String() string {
 func (*PetPanelView) ProtoMessage() {}
 
 func (x *PetPanelView) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[68]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5705,7 +6162,7 @@ func (x *PetPanelView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetPanelView.ProtoReflect.Descriptor instead.
 func (*PetPanelView) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{68}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *PetPanelView) GetPets() []*PetShopEntryView {
@@ -5765,7 +6222,7 @@ type GetPetPanelRequest struct {
 
 func (x *GetPetPanelRequest) Reset() {
 	*x = GetPetPanelRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[69]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5777,7 +6234,7 @@ func (x *GetPetPanelRequest) String() string {
 func (*GetPetPanelRequest) ProtoMessage() {}
 
 func (x *GetPetPanelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[69]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5790,7 +6247,7 @@ func (x *GetPetPanelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetPanelRequest.ProtoReflect.Descriptor instead.
 func (*GetPetPanelRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{69}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{70}
 }
 
 type GetPetPanelResponse struct {
@@ -5802,7 +6259,7 @@ type GetPetPanelResponse struct {
 
 func (x *GetPetPanelResponse) Reset() {
 	*x = GetPetPanelResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[70]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5814,7 +6271,7 @@ func (x *GetPetPanelResponse) String() string {
 func (*GetPetPanelResponse) ProtoMessage() {}
 
 func (x *GetPetPanelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[70]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5827,7 +6284,7 @@ func (x *GetPetPanelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetPanelResponse.ProtoReflect.Descriptor instead.
 func (*GetPetPanelResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{70}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetPetPanelResponse) GetPanel() *PetPanelView {
@@ -5847,7 +6304,7 @@ type BuyPetRequest struct {
 
 func (x *BuyPetRequest) Reset() {
 	*x = BuyPetRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[71]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5859,7 +6316,7 @@ func (x *BuyPetRequest) String() string {
 func (*BuyPetRequest) ProtoMessage() {}
 
 func (x *BuyPetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[71]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5872,7 +6329,7 @@ func (x *BuyPetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyPetRequest.ProtoReflect.Descriptor instead.
 func (*BuyPetRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{71}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *BuyPetRequest) GetPetId() uint32 {
@@ -5901,7 +6358,7 @@ type BuyPetResponse struct {
 
 func (x *BuyPetResponse) Reset() {
 	*x = BuyPetResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[72]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5913,7 +6370,7 @@ func (x *BuyPetResponse) String() string {
 func (*BuyPetResponse) ProtoMessage() {}
 
 func (x *BuyPetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[72]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5926,7 +6383,7 @@ func (x *BuyPetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyPetResponse.ProtoReflect.Descriptor instead.
 func (*BuyPetResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{72}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *BuyPetResponse) GetPetId() uint32 {
@@ -5966,7 +6423,7 @@ type DeployPetRequest struct {
 
 func (x *DeployPetRequest) Reset() {
 	*x = DeployPetRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[73]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5978,7 +6435,7 @@ func (x *DeployPetRequest) String() string {
 func (*DeployPetRequest) ProtoMessage() {}
 
 func (x *DeployPetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[73]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5991,7 +6448,7 @@ func (x *DeployPetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployPetRequest.ProtoReflect.Descriptor instead.
 func (*DeployPetRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{73}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *DeployPetRequest) GetPetId() uint32 {
@@ -6012,7 +6469,7 @@ type DeployPetResponse struct {
 
 func (x *DeployPetResponse) Reset() {
 	*x = DeployPetResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[74]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6024,7 +6481,7 @@ func (x *DeployPetResponse) String() string {
 func (*DeployPetResponse) ProtoMessage() {}
 
 func (x *DeployPetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[74]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6037,7 +6494,7 @@ func (x *DeployPetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployPetResponse.ProtoReflect.Descriptor instead.
 func (*DeployPetResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{74}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *DeployPetResponse) GetActivePetId() uint32 {
@@ -6072,7 +6529,7 @@ type BuyPetFoodRequest struct {
 
 func (x *BuyPetFoodRequest) Reset() {
 	*x = BuyPetFoodRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[75]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6084,7 +6541,7 @@ func (x *BuyPetFoodRequest) String() string {
 func (*BuyPetFoodRequest) ProtoMessage() {}
 
 func (x *BuyPetFoodRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[75]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6097,7 +6554,7 @@ func (x *BuyPetFoodRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyPetFoodRequest.ProtoReflect.Descriptor instead.
 func (*BuyPetFoodRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{75}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *BuyPetFoodRequest) GetShopEntryId() uint32 {
@@ -6136,7 +6593,7 @@ type BuyPetFoodResponse struct {
 
 func (x *BuyPetFoodResponse) Reset() {
 	*x = BuyPetFoodResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[76]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6148,7 +6605,7 @@ func (x *BuyPetFoodResponse) String() string {
 func (*BuyPetFoodResponse) ProtoMessage() {}
 
 func (x *BuyPetFoodResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[76]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6161,7 +6618,7 @@ func (x *BuyPetFoodResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyPetFoodResponse.ProtoReflect.Descriptor instead.
 func (*BuyPetFoodResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{76}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *BuyPetFoodResponse) GetShopEntryId() uint32 {
@@ -6221,7 +6678,7 @@ type FeedPetRequest struct {
 
 func (x *FeedPetRequest) Reset() {
 	*x = FeedPetRequest{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[77]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6233,7 +6690,7 @@ func (x *FeedPetRequest) String() string {
 func (*FeedPetRequest) ProtoMessage() {}
 
 func (x *FeedPetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[77]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6246,7 +6703,7 @@ func (x *FeedPetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedPetRequest.ProtoReflect.Descriptor instead.
 func (*FeedPetRequest) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{77}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{78}
 }
 
 type FeedPetResponse struct {
@@ -6260,7 +6717,7 @@ type FeedPetResponse struct {
 
 func (x *FeedPetResponse) Reset() {
 	*x = FeedPetResponse{}
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[78]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6272,7 +6729,7 @@ func (x *FeedPetResponse) String() string {
 func (*FeedPetResponse) ProtoMessage() {}
 
 func (x *FeedPetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[78]
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6285,7 +6742,7 @@ func (x *FeedPetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedPetResponse.ProtoReflect.Descriptor instead.
 func (*FeedPetResponse) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{78}
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *FeedPetResponse) GetFoodActiveUntilMs() int64 {
@@ -6309,11 +6766,702 @@ func (x *FeedPetResponse) GetPanel() *PetPanelView {
 	return nil
 }
 
+type SendFriendGiftRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	RecipientPlayerId uint64                 `protobuf:"varint,1,opt,name=recipient_player_id,json=recipientPlayerId,proto3" json:"recipient_player_id,omitempty"`
+	CropItemId        uint32                 `protobuf:"varint,2,opt,name=crop_item_id,json=cropItemId,proto3" json:"crop_item_id,omitempty"`
+	Quantity          uint32                 `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *SendFriendGiftRequest) Reset() {
+	*x = SendFriendGiftRequest{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendFriendGiftRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendFriendGiftRequest) ProtoMessage() {}
+
+func (x *SendFriendGiftRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendFriendGiftRequest.ProtoReflect.Descriptor instead.
+func (*SendFriendGiftRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *SendFriendGiftRequest) GetRecipientPlayerId() uint64 {
+	if x != nil {
+		return x.RecipientPlayerId
+	}
+	return 0
+}
+
+func (x *SendFriendGiftRequest) GetCropItemId() uint32 {
+	if x != nil {
+		return x.CropItemId
+	}
+	return 0
+}
+
+func (x *SendFriendGiftRequest) GetQuantity() uint32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+type SendFriendGiftResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OutboxEventId []byte                 `protobuf:"bytes,1,opt,name=outbox_event_id,json=outboxEventId,proto3" json:"outbox_event_id,omitempty"`
+	CropItemId    uint32                 `protobuf:"varint,2,opt,name=crop_item_id,json=cropItemId,proto3" json:"crop_item_id,omitempty"`
+	Quantity      uint32                 `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	Patch         *PlayerStatePatch      `protobuf:"bytes,4,opt,name=patch,proto3" json:"patch,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendFriendGiftResponse) Reset() {
+	*x = SendFriendGiftResponse{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendFriendGiftResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendFriendGiftResponse) ProtoMessage() {}
+
+func (x *SendFriendGiftResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendFriendGiftResponse.ProtoReflect.Descriptor instead.
+func (*SendFriendGiftResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *SendFriendGiftResponse) GetOutboxEventId() []byte {
+	if x != nil {
+		return x.OutboxEventId
+	}
+	return nil
+}
+
+func (x *SendFriendGiftResponse) GetCropItemId() uint32 {
+	if x != nil {
+		return x.CropItemId
+	}
+	return 0
+}
+
+func (x *SendFriendGiftResponse) GetQuantity() uint32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *SendFriendGiftResponse) GetPatch() *PlayerStatePatch {
+	if x != nil {
+		return x.Patch
+	}
+	return nil
+}
+
+type ClaimMailRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MailId        string                 `protobuf:"bytes,1,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimMailRequest) Reset() {
+	*x = ClaimMailRequest{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimMailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimMailRequest) ProtoMessage() {}
+
+func (x *ClaimMailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimMailRequest.ProtoReflect.Descriptor instead.
+func (*ClaimMailRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *ClaimMailRequest) GetMailId() string {
+	if x != nil {
+		return x.MailId
+	}
+	return ""
+}
+
+type ClaimMailResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MailId        string                 `protobuf:"bytes,1,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	ItemsAdded    []*ItemStackView       `protobuf:"bytes,2,rep,name=items_added,json=itemsAdded,proto3" json:"items_added,omitempty"`
+	Patch         *PlayerStatePatch      `protobuf:"bytes,3,opt,name=patch,proto3" json:"patch,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimMailResponse) Reset() {
+	*x = ClaimMailResponse{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimMailResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimMailResponse) ProtoMessage() {}
+
+func (x *ClaimMailResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimMailResponse.ProtoReflect.Descriptor instead.
+func (*ClaimMailResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *ClaimMailResponse) GetMailId() string {
+	if x != nil {
+		return x.MailId
+	}
+	return ""
+}
+
+func (x *ClaimMailResponse) GetItemsAdded() []*ItemStackView {
+	if x != nil {
+		return x.ItemsAdded
+	}
+	return nil
+}
+
+func (x *ClaimMailResponse) GetPatch() *PlayerStatePatch {
+	if x != nil {
+		return x.Patch
+	}
+	return nil
+}
+
+type MailAttachmentView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Quantity      uint32                 `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MailAttachmentView) Reset() {
+	*x = MailAttachmentView{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MailAttachmentView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MailAttachmentView) ProtoMessage() {}
+
+func (x *MailAttachmentView) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MailAttachmentView.ProtoReflect.Descriptor instead.
+func (*MailAttachmentView) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *MailAttachmentView) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *MailAttachmentView) GetQuantity() uint32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+type MailView struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	MailId            string                 `protobuf:"bytes,1,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	Kind              MailKind               `protobuf:"varint,2,opt,name=kind,proto3,enum=classicfarm.ws.v1.MailKind" json:"kind,omitempty"`
+	CreatedAtMs       int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	PublishedAtMs     int64                  `protobuf:"varint,4,opt,name=published_at_ms,json=publishedAtMs,proto3" json:"published_at_ms,omitempty"`
+	SenderDisplayName string                 `protobuf:"bytes,5,opt,name=sender_display_name,json=senderDisplayName,proto3" json:"sender_display_name,omitempty"`
+	SenderPlayerId    uint64                 `protobuf:"varint,6,opt,name=sender_player_id,json=senderPlayerId,proto3" json:"sender_player_id,omitempty"`
+	RecipientPlayerId uint64                 `protobuf:"varint,7,opt,name=recipient_player_id,json=recipientPlayerId,proto3" json:"recipient_player_id,omitempty"`
+	Title             string                 `protobuf:"bytes,8,opt,name=title,proto3" json:"title,omitempty"`
+	Content           string                 `protobuf:"bytes,9,opt,name=content,proto3" json:"content,omitempty"`
+	Attachments       []*MailAttachmentView  `protobuf:"bytes,10,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	Read              bool                   `protobuf:"varint,11,opt,name=read,proto3" json:"read,omitempty"`
+	Claimed           bool                   `protobuf:"varint,12,opt,name=claimed,proto3" json:"claimed,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *MailView) Reset() {
+	*x = MailView{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MailView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MailView) ProtoMessage() {}
+
+func (x *MailView) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MailView.ProtoReflect.Descriptor instead.
+func (*MailView) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *MailView) GetMailId() string {
+	if x != nil {
+		return x.MailId
+	}
+	return ""
+}
+
+func (x *MailView) GetKind() MailKind {
+	if x != nil {
+		return x.Kind
+	}
+	return MailKind_MAIL_KIND_UNSPECIFIED
+}
+
+func (x *MailView) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+func (x *MailView) GetPublishedAtMs() int64 {
+	if x != nil {
+		return x.PublishedAtMs
+	}
+	return 0
+}
+
+func (x *MailView) GetSenderDisplayName() string {
+	if x != nil {
+		return x.SenderDisplayName
+	}
+	return ""
+}
+
+func (x *MailView) GetSenderPlayerId() uint64 {
+	if x != nil {
+		return x.SenderPlayerId
+	}
+	return 0
+}
+
+func (x *MailView) GetRecipientPlayerId() uint64 {
+	if x != nil {
+		return x.RecipientPlayerId
+	}
+	return 0
+}
+
+func (x *MailView) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *MailView) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *MailView) GetAttachments() []*MailAttachmentView {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
+func (x *MailView) GetRead() bool {
+	if x != nil {
+		return x.Read
+	}
+	return false
+}
+
+func (x *MailView) GetClaimed() bool {
+	if x != nil {
+		return x.Claimed
+	}
+	return false
+}
+
+type OpenMailboxRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageSize      uint32                 `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenMailboxRequest) Reset() {
+	*x = OpenMailboxRequest{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenMailboxRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenMailboxRequest) ProtoMessage() {}
+
+func (x *OpenMailboxRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenMailboxRequest.ProtoReflect.Descriptor instead.
+func (*OpenMailboxRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *OpenMailboxRequest) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *OpenMailboxRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type OpenMailboxResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Mails                 []*MailView            `protobuf:"bytes,1,rep,name=mails,proto3" json:"mails,omitempty"`
+	NextPageToken         string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	LastMailboxOpenedAtMs int64                  `protobuf:"varint,3,opt,name=last_mailbox_opened_at_ms,json=lastMailboxOpenedAtMs,proto3" json:"last_mailbox_opened_at_ms,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *OpenMailboxResponse) Reset() {
+	*x = OpenMailboxResponse{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenMailboxResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenMailboxResponse) ProtoMessage() {}
+
+func (x *OpenMailboxResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenMailboxResponse.ProtoReflect.Descriptor instead.
+func (*OpenMailboxResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *OpenMailboxResponse) GetMails() []*MailView {
+	if x != nil {
+		return x.Mails
+	}
+	return nil
+}
+
+func (x *OpenMailboxResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+func (x *OpenMailboxResponse) GetLastMailboxOpenedAtMs() int64 {
+	if x != nil {
+		return x.LastMailboxOpenedAtMs
+	}
+	return 0
+}
+
+type MarkMailReadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MailId        string                 `protobuf:"bytes,1,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkMailReadRequest) Reset() {
+	*x = MarkMailReadRequest{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkMailReadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkMailReadRequest) ProtoMessage() {}
+
+func (x *MarkMailReadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkMailReadRequest.ProtoReflect.Descriptor instead.
+func (*MarkMailReadRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *MarkMailReadRequest) GetMailId() string {
+	if x != nil {
+		return x.MailId
+	}
+	return ""
+}
+
+type MarkMailReadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkMailReadResponse) Reset() {
+	*x = MarkMailReadResponse{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkMailReadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkMailReadResponse) ProtoMessage() {}
+
+func (x *MarkMailReadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkMailReadResponse.ProtoReflect.Descriptor instead.
+func (*MarkMailReadResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{89}
+}
+
+type CheckMailboxIndicatorRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckMailboxIndicatorRequest) Reset() {
+	*x = CheckMailboxIndicatorRequest{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckMailboxIndicatorRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckMailboxIndicatorRequest) ProtoMessage() {}
+
+func (x *CheckMailboxIndicatorRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckMailboxIndicatorRequest.ProtoReflect.Descriptor instead.
+func (*CheckMailboxIndicatorRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{90}
+}
+
+// CheckMailboxIndicatorResponse lets H5 recover the mailbox red dot after a
+// reconnect: RED_DOT_CHANGED Push only reaches players who were online when
+// the mail arrived, and public mail never pushes at all.
+type CheckMailboxIndicatorResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HasNewMail    bool                   `protobuf:"varint,1,opt,name=has_new_mail,json=hasNewMail,proto3" json:"has_new_mail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckMailboxIndicatorResponse) Reset() {
+	*x = CheckMailboxIndicatorResponse{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckMailboxIndicatorResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckMailboxIndicatorResponse) ProtoMessage() {}
+
+func (x *CheckMailboxIndicatorResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckMailboxIndicatorResponse.ProtoReflect.Descriptor instead.
+func (*CheckMailboxIndicatorResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *CheckMailboxIndicatorResponse) GetHasNewMail() bool {
+	if x != nil {
+		return x.HasNewMail
+	}
+	return false
+}
+
 var File_classicfarm_v1_ws_ws_proto protoreflect.FileDescriptor
 
 const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\n" +
-	"\x1aclassicfarm/v1/ws/ws.proto\x12\x11classicfarm.ws.v1\x1a.classicfarm/v1/ws/chapter/chapter_status.proto\x1a'classicfarm/v1/ws/plot/plot_state.proto\x1a2classicfarm/v1/ws/reason/state_change_reason.proto\"\xef.\n" +
+	"\x1aclassicfarm/v1/ws/ws.proto\x12\x11classicfarm.ws.v1\x1a.classicfarm/v1/ws/chapter/chapter_status.proto\x1a'classicfarm/v1/ws/plot/plot_state.proto\x1a2classicfarm/v1/ws/reason/state_change_reason.proto\"\xb37\n" +
 	"\n" +
 	"WsEnvelope\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12A\n" +
@@ -6385,8 +7533,19 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x14buy_pet_food_request\x18A \x01(\v2$.classicfarm.ws.v1.BuyPetFoodRequestH\x00R\x11buyPetFoodRequest\x12Z\n" +
 	"\x15buy_pet_food_response\x18B \x01(\v2%.classicfarm.ws.v1.BuyPetFoodResponseH\x00R\x12buyPetFoodResponse\x12M\n" +
 	"\x10feed_pet_request\x18C \x01(\v2!.classicfarm.ws.v1.FeedPetRequestH\x00R\x0efeedPetRequest\x12P\n" +
-	"\x11feed_pet_response\x18D \x01(\v2\".classicfarm.ws.v1.FeedPetResponseH\x00R\x0ffeedPetResponseB\t\n" +
-	"\apayloadJ\x04\bE\x10d\"N\n" +
+	"\x11feed_pet_response\x18D \x01(\v2\".classicfarm.ws.v1.FeedPetResponseH\x00R\x0ffeedPetResponse\x12W\n" +
+	"\x14red_dot_changed_push\x18E \x01(\v2$.classicfarm.ws.v1.RedDotChangedPushH\x00R\x11redDotChangedPush\x12c\n" +
+	"\x18send_friend_gift_request\x18F \x01(\v2(.classicfarm.ws.v1.SendFriendGiftRequestH\x00R\x15sendFriendGiftRequest\x12f\n" +
+	"\x19send_friend_gift_response\x18G \x01(\v2).classicfarm.ws.v1.SendFriendGiftResponseH\x00R\x16sendFriendGiftResponse\x12S\n" +
+	"\x12claim_mail_request\x18H \x01(\v2#.classicfarm.ws.v1.ClaimMailRequestH\x00R\x10claimMailRequest\x12V\n" +
+	"\x13claim_mail_response\x18I \x01(\v2$.classicfarm.ws.v1.ClaimMailResponseH\x00R\x11claimMailResponse\x12Y\n" +
+	"\x14open_mailbox_request\x18J \x01(\v2%.classicfarm.ws.v1.OpenMailboxRequestH\x00R\x12openMailboxRequest\x12\\\n" +
+	"\x15open_mailbox_response\x18K \x01(\v2&.classicfarm.ws.v1.OpenMailboxResponseH\x00R\x13openMailboxResponse\x12]\n" +
+	"\x16mark_mail_read_request\x18L \x01(\v2&.classicfarm.ws.v1.MarkMailReadRequestH\x00R\x13markMailReadRequest\x12`\n" +
+	"\x17mark_mail_read_response\x18M \x01(\v2'.classicfarm.ws.v1.MarkMailReadResponseH\x00R\x14markMailReadResponse\x12x\n" +
+	"\x1fcheck_mailbox_indicator_request\x18N \x01(\v2/.classicfarm.ws.v1.CheckMailboxIndicatorRequestH\x00R\x1ccheckMailboxIndicatorRequest\x12{\n" +
+	" check_mailbox_indicator_response\x18O \x01(\v20.classicfarm.ws.v1.CheckMailboxIndicatorResponseH\x00R\x1dcheckMailboxIndicatorResponseB\t\n" +
+	"\apayloadJ\x04\bP\x10d\"N\n" +
 	"\fStateVersion\x12\x1f\n" +
 	"\vowner_epoch\x18\x01 \x01(\x04R\n" +
 	"ownerEpoch\x12\x1d\n" +
@@ -6621,7 +7780,7 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs\"]\n" +
 	"\x0fFarmViewVersion\x12&\n" +
 	"\x0ffarm_view_epoch\x18\x01 \x01(\fR\rfarmViewEpoch\x12\"\n" +
-	"\rfarm_view_seq\x18\x02 \x01(\x04R\vfarmViewSeq\"\xaa\x02\n" +
+	"\rfarm_view_seq\x18\x02 \x01(\x04R\vfarmViewSeq\"\xed\x02\n" +
 	"\x0ePublicPlotView\x12\x17\n" +
 	"\aplot_id\x18\x01 \x01(\rR\x06plotId\x12@\n" +
 	"\n" +
@@ -6631,7 +7790,11 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x14harvestable_quantity\x18\x05 \x01(\rR\x13harvestableQuantity\x12\x1f\n" +
 	"\vpest_active\x18\x06 \x01(\bR\n" +
 	"pestActive\x12\x1b\n" +
-	"\tcan_steal\x18\a \x01(\bR\bcanSteal\"\xef\x01\n" +
+	"\tcan_steal\x18\a \x01(\bR\bcanSteal\x12 \n" +
+	"\fcrop_item_id\x18\b \x01(\rR\n" +
+	"cropItemId\x12\x1f\n" +
+	"\vsteal_count\x18\t \x01(\rR\n" +
+	"stealCount\"\xef\x01\n" +
 	"\x11FarmVisitSnapshot\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x12<\n" +
 	"\aversion\x18\x02 \x01(\v2\".classicfarm.ws.v1.FarmViewVersionR\aversion\x127\n" +
@@ -6645,7 +7808,13 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x127\n" +
 	"\x04kind\x18\x02 \x01(\x0e2#.classicfarm.ws.v1.FarmPresenceKindR\x04kind\x125\n" +
 	"\x14visitor_account_name\x18\x03 \x01(\tH\x00R\x12visitorAccountName\x88\x01\x01B\x17\n" +
-	"\x15_visitor_account_name\"@\n" +
+	"\x15_visitor_account_name\"\x81\x02\n" +
+	"\x11RedDotChangedPush\x12'\n" +
+	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12=\n" +
+	"\bcategory\x18\x02 \x01(\x0e2!.classicfarm.ws.v1.RedDotCategoryR\bcategory\x12@\n" +
+	"\toperation\x18\x03 \x01(\x0e2\".classicfarm.ws.v1.RedDotOperationR\toperation\x12-\n" +
+	"\x10source_player_id\x18\x04 \x01(\x04H\x00R\x0esourcePlayerId\x88\x01\x01B\x13\n" +
+	"\x11_source_player_id\"@\n" +
 	"\x16EnterFriendFarmRequest\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\"\x9a\x01\n" +
 	"\x17EnterFriendFarmResponse\x12\x19\n" +
@@ -6673,11 +7842,14 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x1aHelpCleanFriendPlotRequest\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x12\x19\n" +
 	"\bvisit_id\x18\x02 \x01(\fR\avisitId\x12\x17\n" +
-	"\aplot_id\x18\x03 \x01(\rR\x06plotId\"t\n" +
+	"\aplot_id\x18\x03 \x01(\rR\x06plotId\"\xf3\x01\n" +
 	"\x16StealFriendCropRequest\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x12\x19\n" +
 	"\bvisit_id\x18\x02 \x01(\fR\avisitId\x12\x17\n" +
-	"\aplot_id\x18\x03 \x01(\rR\x06plotId\"\x8f\x02\n" +
+	"\aplot_id\x18\x03 \x01(\rR\x06plotId\x121\n" +
+	"\x15expected_crop_item_id\x18\x04 \x01(\rR\x12expectedCropItemId\x12&\n" +
+	"\x0ffarm_view_epoch\x18\x05 \x01(\fR\rfarmViewEpoch\x12\"\n" +
+	"\rfarm_view_seq\x18\x06 \x01(\x04R\vfarmViewSeq\"\x8f\x02\n" +
 	"\x14FriendActionResponse\x12%\n" +
 	"\x0einteraction_id\x18\x01 \x01(\fR\rinteractionId\x12H\n" +
 	"\rvisitor_patch\x18\x02 \x01(\v2#.classicfarm.ws.v1.PlayerStatePatchR\fvisitorPatch\x12?\n" +
@@ -6756,12 +7928,62 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x0fFeedPetResponse\x12/\n" +
 	"\x14food_active_until_ms\x18\x01 \x01(\x03R\x11foodActiveUntilMs\x129\n" +
 	"\x05patch\x18\x02 \x01(\v2#.classicfarm.ws.v1.PlayerStatePatchR\x05patch\x125\n" +
-	"\x05panel\x18\x03 \x01(\v2\x1f.classicfarm.ws.v1.PetPanelViewR\x05panel*P\n" +
+	"\x05panel\x18\x03 \x01(\v2\x1f.classicfarm.ws.v1.PetPanelViewR\x05panel\"\x85\x01\n" +
+	"\x15SendFriendGiftRequest\x12.\n" +
+	"\x13recipient_player_id\x18\x01 \x01(\x04R\x11recipientPlayerId\x12 \n" +
+	"\fcrop_item_id\x18\x02 \x01(\rR\n" +
+	"cropItemId\x12\x1a\n" +
+	"\bquantity\x18\x03 \x01(\rR\bquantity\"\xb9\x01\n" +
+	"\x16SendFriendGiftResponse\x12&\n" +
+	"\x0foutbox_event_id\x18\x01 \x01(\fR\routboxEventId\x12 \n" +
+	"\fcrop_item_id\x18\x02 \x01(\rR\n" +
+	"cropItemId\x12\x1a\n" +
+	"\bquantity\x18\x03 \x01(\rR\bquantity\x129\n" +
+	"\x05patch\x18\x04 \x01(\v2#.classicfarm.ws.v1.PlayerStatePatchR\x05patch\"+\n" +
+	"\x10ClaimMailRequest\x12\x17\n" +
+	"\amail_id\x18\x01 \x01(\tR\x06mailId\"\xaa\x01\n" +
+	"\x11ClaimMailResponse\x12\x17\n" +
+	"\amail_id\x18\x01 \x01(\tR\x06mailId\x12A\n" +
+	"\vitems_added\x18\x02 \x03(\v2 .classicfarm.ws.v1.ItemStackViewR\n" +
+	"itemsAdded\x129\n" +
+	"\x05patch\x18\x03 \x01(\v2#.classicfarm.ws.v1.PlayerStatePatchR\x05patch\"I\n" +
+	"\x12MailAttachmentView\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
+	"\bquantity\x18\x02 \x01(\rR\bquantity\"\xd1\x03\n" +
+	"\bMailView\x12\x17\n" +
+	"\amail_id\x18\x01 \x01(\tR\x06mailId\x12/\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x1b.classicfarm.ws.v1.MailKindR\x04kind\x12\"\n" +
+	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs\x12&\n" +
+	"\x0fpublished_at_ms\x18\x04 \x01(\x03R\rpublishedAtMs\x12.\n" +
+	"\x13sender_display_name\x18\x05 \x01(\tR\x11senderDisplayName\x12(\n" +
+	"\x10sender_player_id\x18\x06 \x01(\x04R\x0esenderPlayerId\x12.\n" +
+	"\x13recipient_player_id\x18\a \x01(\x04R\x11recipientPlayerId\x12\x14\n" +
+	"\x05title\x18\b \x01(\tR\x05title\x12\x18\n" +
+	"\acontent\x18\t \x01(\tR\acontent\x12G\n" +
+	"\vattachments\x18\n" +
+	" \x03(\v2%.classicfarm.ws.v1.MailAttachmentViewR\vattachments\x12\x12\n" +
+	"\x04read\x18\v \x01(\bR\x04read\x12\x18\n" +
+	"\aclaimed\x18\f \x01(\bR\aclaimed\"P\n" +
+	"\x12OpenMailboxRequest\x12\x1b\n" +
+	"\tpage_size\x18\x01 \x01(\rR\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\"\xaa\x01\n" +
+	"\x13OpenMailboxResponse\x121\n" +
+	"\x05mails\x18\x01 \x03(\v2\x1b.classicfarm.ws.v1.MailViewR\x05mails\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x128\n" +
+	"\x19last_mailbox_opened_at_ms\x18\x03 \x01(\x03R\x15lastMailboxOpenedAtMs\".\n" +
+	"\x13MarkMailReadRequest\x12\x17\n" +
+	"\amail_id\x18\x01 \x01(\tR\x06mailId\"\x16\n" +
+	"\x14MarkMailReadResponse\"\x1e\n" +
+	"\x1cCheckMailboxIndicatorRequest\"A\n" +
+	"\x1dCheckMailboxIndicatorResponse\x12 \n" +
+	"\fhas_new_mail\x18\x01 \x01(\bR\n" +
+	"hasNewMail*P\n" +
 	"\vMessageKind\x12\x1c\n" +
 	"\x18MESSAGE_KIND_UNSPECIFIED\x10\x00\x12\v\n" +
 	"\aREQUEST\x10\x01\x12\f\n" +
 	"\bRESPONSE\x10\x02\x12\b\n" +
-	"\x04PUSH\x10\x03*\xd3\x05\n" +
+	"\x04PUSH\x10\x03*\xd7\x06\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04AUTH\x10\x01\x12\b\n" +
@@ -6795,10 +8017,17 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x14APPLY_PEST_TO_FRIEND\x10\xc0\x02\x12\x1a\n" +
 	"\x15CATCH_PEST_FOR_FRIEND\x10\xc1\x02\x12\x1b\n" +
 	"\x16HELP_CLEAN_FRIEND_PLOT\x10\xc2\x02\x12\x16\n" +
-	"\x11STEAL_FRIEND_CROP\x10\xc3\x02\x12\x19\n" +
+	"\x11STEAL_FRIEND_CROP\x10\xc3\x02\x12\x15\n" +
+	"\x10SEND_FRIEND_GIFT\x10\xc4\x02\x12\x0f\n" +
+	"\n" +
+	"CLAIM_MAIL\x10\xc5\x02\x12\x11\n" +
+	"\fOPEN_MAILBOX\x10\xc6\x02\x12\x13\n" +
+	"\x0eMARK_MAIL_READ\x10\xc7\x02\x12\x1c\n" +
+	"\x17CHECK_MAILBOX_INDICATOR\x10\xc8\x02\x12\x19\n" +
 	"\x14PLAYER_STATE_CHANGED\x10\xe8\a\x12\x16\n" +
 	"\x11FARM_VIEW_CHANGED\x10\xcc\b\x12\x1a\n" +
-	"\x15FARM_PRESENCE_CHANGED\x10\xcd\b\"\x04\b\x03\x10c\"\x05\bg\x10\xc7\x01\"\x06\b\xd5\x01\x10\xab\x02\"\x06\b\xaf\x02\x10\xb5\x02\"\x06\b\xb9\x02\x10\xbf\x02\"\x06\b\xc4\x02\x10\xe7\a\"\x06\b\xe9\a\x10\xcb\b\"\x06\b\xce\b\x10\xcf\x0f*\xae\t\n" +
+	"\x15FARM_PRESENCE_CHANGED\x10\xcd\b\x12\x14\n" +
+	"\x0fRED_DOT_CHANGED\x10\xce\b\"\x04\b\x03\x10c\"\x05\bg\x10\xc7\x01\"\x06\b\xd5\x01\x10\xab\x02\"\x06\b\xaf\x02\x10\xb5\x02\"\x06\b\xb9\x02\x10\xbf\x02\"\x06\b\xc9\x02\x10\xe7\a\"\x06\b\xe9\a\x10\xcb\b\"\x06\b\xcf\b\x10\xcf\x0f*\xae\t\n" +
 	"\tErrorCode\x12\x15\n" +
 	"\x11ERROR_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10INVALID_ARGUMENT\x10d\x12\x12\n" +
@@ -6850,7 +8079,20 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x10FarmPresenceKind\x12\"\n" +
 	"\x1eFARM_PRESENCE_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14FARM_VISITOR_ENTERED\x10\x01\x12\x15\n" +
-	"\x11FARM_VISITOR_LEFT\x10\x02BNZLgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws;wsv1b\x06proto3"
+	"\x11FARM_VISITOR_LEFT\x10\x02*o\n" +
+	"\x0eRedDotCategory\x12 \n" +
+	"\x1cRED_DOT_CATEGORY_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15RED_DOT_CATEGORY_MAIL\x10\x01\x12 \n" +
+	"\x1cRED_DOT_CATEGORY_FRIEND_FARM\x10\x02*l\n" +
+	"\x0fRedDotOperation\x12!\n" +
+	"\x1dRED_DOT_OPERATION_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15RED_DOT_OPERATION_SET\x10\x01\x12\x1b\n" +
+	"\x17RED_DOT_OPERATION_CLEAR\x10\x02*f\n" +
+	"\bMailKind\x12\x19\n" +
+	"\x15MAIL_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10MAIL_KIND_PUBLIC\x10\x01\x12\x15\n" +
+	"\x11MAIL_KIND_PRIVATE\x10\x02\x12\x12\n" +
+	"\x0eMAIL_KIND_GIFT\x10\x03BNZLgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws;wsv1b\x06proto3"
 
 var (
 	file_classicfarm_v1_ws_ws_proto_rawDescOnce sync.Once
@@ -6864,224 +8106,259 @@ func file_classicfarm_v1_ws_ws_proto_rawDescGZIP() []byte {
 	return file_classicfarm_v1_ws_ws_proto_rawDescData
 }
 
-var file_classicfarm_v1_ws_ws_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_classicfarm_v1_ws_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 79)
+var file_classicfarm_v1_ws_ws_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
+var file_classicfarm_v1_ws_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
 var file_classicfarm_v1_ws_ws_proto_goTypes = []any{
-	(MessageKind)(0),                   // 0: classicfarm.ws.v1.MessageKind
-	(Action)(0),                        // 1: classicfarm.ws.v1.Action
-	(ErrorCode)(0),                     // 2: classicfarm.ws.v1.ErrorCode
-	(FarmPresenceKind)(0),              // 3: classicfarm.ws.v1.FarmPresenceKind
-	(*WsEnvelope)(nil),                 // 4: classicfarm.ws.v1.WsEnvelope
-	(*StateVersion)(nil),               // 5: classicfarm.ws.v1.StateVersion
-	(*ErrorParam)(nil),                 // 6: classicfarm.ws.v1.ErrorParam
-	(*Error)(nil),                      // 7: classicfarm.ws.v1.Error
-	(*AuthRequest)(nil),                // 8: classicfarm.ws.v1.AuthRequest
-	(*AuthResponse)(nil),               // 9: classicfarm.ws.v1.AuthResponse
-	(*PingRequest)(nil),                // 10: classicfarm.ws.v1.PingRequest
-	(*PingResponse)(nil),               // 11: classicfarm.ws.v1.PingResponse
-	(*GetShopRequest)(nil),             // 12: classicfarm.ws.v1.GetShopRequest
-	(*GetShopResponse)(nil),            // 13: classicfarm.ws.v1.GetShopResponse
-	(*ShopEntryView)(nil),              // 14: classicfarm.ws.v1.ShopEntryView
-	(*GetPlayerSnapshotRequest)(nil),   // 15: classicfarm.ws.v1.GetPlayerSnapshotRequest
-	(*GetPlayerSnapshotResponse)(nil),  // 16: classicfarm.ws.v1.GetPlayerSnapshotResponse
-	(*PlayerSnapshot)(nil),             // 17: classicfarm.ws.v1.PlayerSnapshot
-	(*PlayerCareerView)(nil),           // 18: classicfarm.ws.v1.PlayerCareerView
-	(*CropCompendiumView)(nil),         // 19: classicfarm.ws.v1.CropCompendiumView
-	(*CropCatalogEntryView)(nil),       // 20: classicfarm.ws.v1.CropCatalogEntryView
-	(*ItemStackView)(nil),              // 21: classicfarm.ws.v1.ItemStackView
-	(*EffectView)(nil),                 // 22: classicfarm.ws.v1.EffectView
-	(*PlotView)(nil),                   // 23: classicfarm.ws.v1.PlotView
-	(*ChapterView)(nil),                // 24: classicfarm.ws.v1.ChapterView
-	(*TaskProgressView)(nil),           // 25: classicfarm.ws.v1.TaskProgressView
-	(*PlayerStatePatch)(nil),           // 26: classicfarm.ws.v1.PlayerStatePatch
-	(*BuySeedsRequest)(nil),            // 27: classicfarm.ws.v1.BuySeedsRequest
-	(*BuySeedsResponse)(nil),           // 28: classicfarm.ws.v1.BuySeedsResponse
-	(*BuyFertilizerRequest)(nil),       // 29: classicfarm.ws.v1.BuyFertilizerRequest
-	(*BuyFertilizerResponse)(nil),      // 30: classicfarm.ws.v1.BuyFertilizerResponse
-	(*PlantRequest)(nil),               // 31: classicfarm.ws.v1.PlantRequest
-	(*PlantResponse)(nil),              // 32: classicfarm.ws.v1.PlantResponse
-	(*ApplyFertilizerRequest)(nil),     // 33: classicfarm.ws.v1.ApplyFertilizerRequest
-	(*ApplyFertilizerResponse)(nil),    // 34: classicfarm.ws.v1.ApplyFertilizerResponse
-	(*HarvestRequest)(nil),             // 35: classicfarm.ws.v1.HarvestRequest
-	(*HarvestResponse)(nil),            // 36: classicfarm.ws.v1.HarvestResponse
-	(*CleanPlotRequest)(nil),           // 37: classicfarm.ws.v1.CleanPlotRequest
-	(*CleanPlotResponse)(nil),          // 38: classicfarm.ws.v1.CleanPlotResponse
-	(*CatchPestRequest)(nil),           // 39: classicfarm.ws.v1.CatchPestRequest
-	(*CatchPestResponse)(nil),          // 40: classicfarm.ws.v1.CatchPestResponse
-	(*SellCropRequest)(nil),            // 41: classicfarm.ws.v1.SellCropRequest
-	(*SellCropResponse)(nil),           // 42: classicfarm.ws.v1.SellCropResponse
-	(*ClaimChapterRewardRequest)(nil),  // 43: classicfarm.ws.v1.ClaimChapterRewardRequest
-	(*ClaimChapterRewardResponse)(nil), // 44: classicfarm.ws.v1.ClaimChapterRewardResponse
-	(*PlayerStateChangedPush)(nil),     // 45: classicfarm.ws.v1.PlayerStateChangedPush
-	(*CreateFriendCodeRequest)(nil),    // 46: classicfarm.ws.v1.CreateFriendCodeRequest
-	(*CreateFriendCodeResponse)(nil),   // 47: classicfarm.ws.v1.CreateFriendCodeResponse
-	(*RedeemFriendCodeRequest)(nil),    // 48: classicfarm.ws.v1.RedeemFriendCodeRequest
-	(*RedeemFriendCodeResponse)(nil),   // 49: classicfarm.ws.v1.RedeemFriendCodeResponse
-	(*ListFriendsRequest)(nil),         // 50: classicfarm.ws.v1.ListFriendsRequest
-	(*ListFriendsResponse)(nil),        // 51: classicfarm.ws.v1.ListFriendsResponse
-	(*FriendView)(nil),                 // 52: classicfarm.ws.v1.FriendView
-	(*FarmViewVersion)(nil),            // 53: classicfarm.ws.v1.FarmViewVersion
-	(*PublicPlotView)(nil),             // 54: classicfarm.ws.v1.PublicPlotView
-	(*FarmVisitSnapshot)(nil),          // 55: classicfarm.ws.v1.FarmVisitSnapshot
-	(*FarmViewPatch)(nil),              // 56: classicfarm.ws.v1.FarmViewPatch
-	(*FarmPresencePush)(nil),           // 57: classicfarm.ws.v1.FarmPresencePush
-	(*EnterFriendFarmRequest)(nil),     // 58: classicfarm.ws.v1.EnterFriendFarmRequest
-	(*EnterFriendFarmResponse)(nil),    // 59: classicfarm.ws.v1.EnterFriendFarmResponse
-	(*FarmHeartbeatRequest)(nil),       // 60: classicfarm.ws.v1.FarmHeartbeatRequest
-	(*FarmHeartbeatResponse)(nil),      // 61: classicfarm.ws.v1.FarmHeartbeatResponse
-	(*ExitFriendFarmRequest)(nil),      // 62: classicfarm.ws.v1.ExitFriendFarmRequest
-	(*ExitFriendFarmResponse)(nil),     // 63: classicfarm.ws.v1.ExitFriendFarmResponse
-	(*ApplyPestToFriendRequest)(nil),   // 64: classicfarm.ws.v1.ApplyPestToFriendRequest
-	(*CatchPestForFriendRequest)(nil),  // 65: classicfarm.ws.v1.CatchPestForFriendRequest
-	(*HelpCleanFriendPlotRequest)(nil), // 66: classicfarm.ws.v1.HelpCleanFriendPlotRequest
-	(*StealFriendCropRequest)(nil),     // 67: classicfarm.ws.v1.StealFriendCropRequest
-	(*FriendActionResponse)(nil),       // 68: classicfarm.ws.v1.FriendActionResponse
-	(*StealGuardOutcome)(nil),          // 69: classicfarm.ws.v1.StealGuardOutcome
-	(*PetShopEntryView)(nil),           // 70: classicfarm.ws.v1.PetShopEntryView
-	(*PetFoodShopView)(nil),            // 71: classicfarm.ws.v1.PetFoodShopView
-	(*PetPanelView)(nil),               // 72: classicfarm.ws.v1.PetPanelView
-	(*GetPetPanelRequest)(nil),         // 73: classicfarm.ws.v1.GetPetPanelRequest
-	(*GetPetPanelResponse)(nil),        // 74: classicfarm.ws.v1.GetPetPanelResponse
-	(*BuyPetRequest)(nil),              // 75: classicfarm.ws.v1.BuyPetRequest
-	(*BuyPetResponse)(nil),             // 76: classicfarm.ws.v1.BuyPetResponse
-	(*DeployPetRequest)(nil),           // 77: classicfarm.ws.v1.DeployPetRequest
-	(*DeployPetResponse)(nil),          // 78: classicfarm.ws.v1.DeployPetResponse
-	(*BuyPetFoodRequest)(nil),          // 79: classicfarm.ws.v1.BuyPetFoodRequest
-	(*BuyPetFoodResponse)(nil),         // 80: classicfarm.ws.v1.BuyPetFoodResponse
-	(*FeedPetRequest)(nil),             // 81: classicfarm.ws.v1.FeedPetRequest
-	(*FeedPetResponse)(nil),            // 82: classicfarm.ws.v1.FeedPetResponse
-	(plot.PlotState)(0),                // 83: classicfarm.ws.v1.plot.PlotState
-	(chapter.ChapterStatus)(0),         // 84: classicfarm.ws.v1.chapter.ChapterStatus
-	(reason.StateChangeReason)(0),      // 85: classicfarm.ws.v1.reason.StateChangeReason
+	(MessageKind)(0),                      // 0: classicfarm.ws.v1.MessageKind
+	(Action)(0),                           // 1: classicfarm.ws.v1.Action
+	(ErrorCode)(0),                        // 2: classicfarm.ws.v1.ErrorCode
+	(FarmPresenceKind)(0),                 // 3: classicfarm.ws.v1.FarmPresenceKind
+	(RedDotCategory)(0),                   // 4: classicfarm.ws.v1.RedDotCategory
+	(RedDotOperation)(0),                  // 5: classicfarm.ws.v1.RedDotOperation
+	(MailKind)(0),                         // 6: classicfarm.ws.v1.MailKind
+	(*WsEnvelope)(nil),                    // 7: classicfarm.ws.v1.WsEnvelope
+	(*StateVersion)(nil),                  // 8: classicfarm.ws.v1.StateVersion
+	(*ErrorParam)(nil),                    // 9: classicfarm.ws.v1.ErrorParam
+	(*Error)(nil),                         // 10: classicfarm.ws.v1.Error
+	(*AuthRequest)(nil),                   // 11: classicfarm.ws.v1.AuthRequest
+	(*AuthResponse)(nil),                  // 12: classicfarm.ws.v1.AuthResponse
+	(*PingRequest)(nil),                   // 13: classicfarm.ws.v1.PingRequest
+	(*PingResponse)(nil),                  // 14: classicfarm.ws.v1.PingResponse
+	(*GetShopRequest)(nil),                // 15: classicfarm.ws.v1.GetShopRequest
+	(*GetShopResponse)(nil),               // 16: classicfarm.ws.v1.GetShopResponse
+	(*ShopEntryView)(nil),                 // 17: classicfarm.ws.v1.ShopEntryView
+	(*GetPlayerSnapshotRequest)(nil),      // 18: classicfarm.ws.v1.GetPlayerSnapshotRequest
+	(*GetPlayerSnapshotResponse)(nil),     // 19: classicfarm.ws.v1.GetPlayerSnapshotResponse
+	(*PlayerSnapshot)(nil),                // 20: classicfarm.ws.v1.PlayerSnapshot
+	(*PlayerCareerView)(nil),              // 21: classicfarm.ws.v1.PlayerCareerView
+	(*CropCompendiumView)(nil),            // 22: classicfarm.ws.v1.CropCompendiumView
+	(*CropCatalogEntryView)(nil),          // 23: classicfarm.ws.v1.CropCatalogEntryView
+	(*ItemStackView)(nil),                 // 24: classicfarm.ws.v1.ItemStackView
+	(*EffectView)(nil),                    // 25: classicfarm.ws.v1.EffectView
+	(*PlotView)(nil),                      // 26: classicfarm.ws.v1.PlotView
+	(*ChapterView)(nil),                   // 27: classicfarm.ws.v1.ChapterView
+	(*TaskProgressView)(nil),              // 28: classicfarm.ws.v1.TaskProgressView
+	(*PlayerStatePatch)(nil),              // 29: classicfarm.ws.v1.PlayerStatePatch
+	(*BuySeedsRequest)(nil),               // 30: classicfarm.ws.v1.BuySeedsRequest
+	(*BuySeedsResponse)(nil),              // 31: classicfarm.ws.v1.BuySeedsResponse
+	(*BuyFertilizerRequest)(nil),          // 32: classicfarm.ws.v1.BuyFertilizerRequest
+	(*BuyFertilizerResponse)(nil),         // 33: classicfarm.ws.v1.BuyFertilizerResponse
+	(*PlantRequest)(nil),                  // 34: classicfarm.ws.v1.PlantRequest
+	(*PlantResponse)(nil),                 // 35: classicfarm.ws.v1.PlantResponse
+	(*ApplyFertilizerRequest)(nil),        // 36: classicfarm.ws.v1.ApplyFertilizerRequest
+	(*ApplyFertilizerResponse)(nil),       // 37: classicfarm.ws.v1.ApplyFertilizerResponse
+	(*HarvestRequest)(nil),                // 38: classicfarm.ws.v1.HarvestRequest
+	(*HarvestResponse)(nil),               // 39: classicfarm.ws.v1.HarvestResponse
+	(*CleanPlotRequest)(nil),              // 40: classicfarm.ws.v1.CleanPlotRequest
+	(*CleanPlotResponse)(nil),             // 41: classicfarm.ws.v1.CleanPlotResponse
+	(*CatchPestRequest)(nil),              // 42: classicfarm.ws.v1.CatchPestRequest
+	(*CatchPestResponse)(nil),             // 43: classicfarm.ws.v1.CatchPestResponse
+	(*SellCropRequest)(nil),               // 44: classicfarm.ws.v1.SellCropRequest
+	(*SellCropResponse)(nil),              // 45: classicfarm.ws.v1.SellCropResponse
+	(*ClaimChapterRewardRequest)(nil),     // 46: classicfarm.ws.v1.ClaimChapterRewardRequest
+	(*ClaimChapterRewardResponse)(nil),    // 47: classicfarm.ws.v1.ClaimChapterRewardResponse
+	(*PlayerStateChangedPush)(nil),        // 48: classicfarm.ws.v1.PlayerStateChangedPush
+	(*CreateFriendCodeRequest)(nil),       // 49: classicfarm.ws.v1.CreateFriendCodeRequest
+	(*CreateFriendCodeResponse)(nil),      // 50: classicfarm.ws.v1.CreateFriendCodeResponse
+	(*RedeemFriendCodeRequest)(nil),       // 51: classicfarm.ws.v1.RedeemFriendCodeRequest
+	(*RedeemFriendCodeResponse)(nil),      // 52: classicfarm.ws.v1.RedeemFriendCodeResponse
+	(*ListFriendsRequest)(nil),            // 53: classicfarm.ws.v1.ListFriendsRequest
+	(*ListFriendsResponse)(nil),           // 54: classicfarm.ws.v1.ListFriendsResponse
+	(*FriendView)(nil),                    // 55: classicfarm.ws.v1.FriendView
+	(*FarmViewVersion)(nil),               // 56: classicfarm.ws.v1.FarmViewVersion
+	(*PublicPlotView)(nil),                // 57: classicfarm.ws.v1.PublicPlotView
+	(*FarmVisitSnapshot)(nil),             // 58: classicfarm.ws.v1.FarmVisitSnapshot
+	(*FarmViewPatch)(nil),                 // 59: classicfarm.ws.v1.FarmViewPatch
+	(*FarmPresencePush)(nil),              // 60: classicfarm.ws.v1.FarmPresencePush
+	(*RedDotChangedPush)(nil),             // 61: classicfarm.ws.v1.RedDotChangedPush
+	(*EnterFriendFarmRequest)(nil),        // 62: classicfarm.ws.v1.EnterFriendFarmRequest
+	(*EnterFriendFarmResponse)(nil),       // 63: classicfarm.ws.v1.EnterFriendFarmResponse
+	(*FarmHeartbeatRequest)(nil),          // 64: classicfarm.ws.v1.FarmHeartbeatRequest
+	(*FarmHeartbeatResponse)(nil),         // 65: classicfarm.ws.v1.FarmHeartbeatResponse
+	(*ExitFriendFarmRequest)(nil),         // 66: classicfarm.ws.v1.ExitFriendFarmRequest
+	(*ExitFriendFarmResponse)(nil),        // 67: classicfarm.ws.v1.ExitFriendFarmResponse
+	(*ApplyPestToFriendRequest)(nil),      // 68: classicfarm.ws.v1.ApplyPestToFriendRequest
+	(*CatchPestForFriendRequest)(nil),     // 69: classicfarm.ws.v1.CatchPestForFriendRequest
+	(*HelpCleanFriendPlotRequest)(nil),    // 70: classicfarm.ws.v1.HelpCleanFriendPlotRequest
+	(*StealFriendCropRequest)(nil),        // 71: classicfarm.ws.v1.StealFriendCropRequest
+	(*FriendActionResponse)(nil),          // 72: classicfarm.ws.v1.FriendActionResponse
+	(*StealGuardOutcome)(nil),             // 73: classicfarm.ws.v1.StealGuardOutcome
+	(*PetShopEntryView)(nil),              // 74: classicfarm.ws.v1.PetShopEntryView
+	(*PetFoodShopView)(nil),               // 75: classicfarm.ws.v1.PetFoodShopView
+	(*PetPanelView)(nil),                  // 76: classicfarm.ws.v1.PetPanelView
+	(*GetPetPanelRequest)(nil),            // 77: classicfarm.ws.v1.GetPetPanelRequest
+	(*GetPetPanelResponse)(nil),           // 78: classicfarm.ws.v1.GetPetPanelResponse
+	(*BuyPetRequest)(nil),                 // 79: classicfarm.ws.v1.BuyPetRequest
+	(*BuyPetResponse)(nil),                // 80: classicfarm.ws.v1.BuyPetResponse
+	(*DeployPetRequest)(nil),              // 81: classicfarm.ws.v1.DeployPetRequest
+	(*DeployPetResponse)(nil),             // 82: classicfarm.ws.v1.DeployPetResponse
+	(*BuyPetFoodRequest)(nil),             // 83: classicfarm.ws.v1.BuyPetFoodRequest
+	(*BuyPetFoodResponse)(nil),            // 84: classicfarm.ws.v1.BuyPetFoodResponse
+	(*FeedPetRequest)(nil),                // 85: classicfarm.ws.v1.FeedPetRequest
+	(*FeedPetResponse)(nil),               // 86: classicfarm.ws.v1.FeedPetResponse
+	(*SendFriendGiftRequest)(nil),         // 87: classicfarm.ws.v1.SendFriendGiftRequest
+	(*SendFriendGiftResponse)(nil),        // 88: classicfarm.ws.v1.SendFriendGiftResponse
+	(*ClaimMailRequest)(nil),              // 89: classicfarm.ws.v1.ClaimMailRequest
+	(*ClaimMailResponse)(nil),             // 90: classicfarm.ws.v1.ClaimMailResponse
+	(*MailAttachmentView)(nil),            // 91: classicfarm.ws.v1.MailAttachmentView
+	(*MailView)(nil),                      // 92: classicfarm.ws.v1.MailView
+	(*OpenMailboxRequest)(nil),            // 93: classicfarm.ws.v1.OpenMailboxRequest
+	(*OpenMailboxResponse)(nil),           // 94: classicfarm.ws.v1.OpenMailboxResponse
+	(*MarkMailReadRequest)(nil),           // 95: classicfarm.ws.v1.MarkMailReadRequest
+	(*MarkMailReadResponse)(nil),          // 96: classicfarm.ws.v1.MarkMailReadResponse
+	(*CheckMailboxIndicatorRequest)(nil),  // 97: classicfarm.ws.v1.CheckMailboxIndicatorRequest
+	(*CheckMailboxIndicatorResponse)(nil), // 98: classicfarm.ws.v1.CheckMailboxIndicatorResponse
+	(plot.PlotState)(0),                   // 99: classicfarm.ws.v1.plot.PlotState
+	(chapter.ChapterStatus)(0),            // 100: classicfarm.ws.v1.chapter.ChapterStatus
+	(reason.StateChangeReason)(0),         // 101: classicfarm.ws.v1.reason.StateChangeReason
 }
 var file_classicfarm_v1_ws_ws_proto_depIdxs = []int32{
 	0,   // 0: classicfarm.ws.v1.WsEnvelope.message_kind:type_name -> classicfarm.ws.v1.MessageKind
 	1,   // 1: classicfarm.ws.v1.WsEnvelope.action:type_name -> classicfarm.ws.v1.Action
-	5,   // 2: classicfarm.ws.v1.WsEnvelope.state_version:type_name -> classicfarm.ws.v1.StateVersion
-	7,   // 3: classicfarm.ws.v1.WsEnvelope.error:type_name -> classicfarm.ws.v1.Error
-	8,   // 4: classicfarm.ws.v1.WsEnvelope.auth_request:type_name -> classicfarm.ws.v1.AuthRequest
-	9,   // 5: classicfarm.ws.v1.WsEnvelope.auth_response:type_name -> classicfarm.ws.v1.AuthResponse
-	10,  // 6: classicfarm.ws.v1.WsEnvelope.ping_request:type_name -> classicfarm.ws.v1.PingRequest
-	11,  // 7: classicfarm.ws.v1.WsEnvelope.ping_response:type_name -> classicfarm.ws.v1.PingResponse
-	15,  // 8: classicfarm.ws.v1.WsEnvelope.get_player_snapshot_request:type_name -> classicfarm.ws.v1.GetPlayerSnapshotRequest
-	16,  // 9: classicfarm.ws.v1.WsEnvelope.get_player_snapshot_response:type_name -> classicfarm.ws.v1.GetPlayerSnapshotResponse
-	12,  // 10: classicfarm.ws.v1.WsEnvelope.get_shop_request:type_name -> classicfarm.ws.v1.GetShopRequest
-	13,  // 11: classicfarm.ws.v1.WsEnvelope.get_shop_response:type_name -> classicfarm.ws.v1.GetShopResponse
-	27,  // 12: classicfarm.ws.v1.WsEnvelope.buy_seeds_request:type_name -> classicfarm.ws.v1.BuySeedsRequest
-	28,  // 13: classicfarm.ws.v1.WsEnvelope.buy_seeds_response:type_name -> classicfarm.ws.v1.BuySeedsResponse
-	31,  // 14: classicfarm.ws.v1.WsEnvelope.plant_request:type_name -> classicfarm.ws.v1.PlantRequest
-	32,  // 15: classicfarm.ws.v1.WsEnvelope.plant_response:type_name -> classicfarm.ws.v1.PlantResponse
-	33,  // 16: classicfarm.ws.v1.WsEnvelope.apply_fertilizer_request:type_name -> classicfarm.ws.v1.ApplyFertilizerRequest
-	34,  // 17: classicfarm.ws.v1.WsEnvelope.apply_fertilizer_response:type_name -> classicfarm.ws.v1.ApplyFertilizerResponse
-	35,  // 18: classicfarm.ws.v1.WsEnvelope.harvest_request:type_name -> classicfarm.ws.v1.HarvestRequest
-	36,  // 19: classicfarm.ws.v1.WsEnvelope.harvest_response:type_name -> classicfarm.ws.v1.HarvestResponse
-	37,  // 20: classicfarm.ws.v1.WsEnvelope.clean_plot_request:type_name -> classicfarm.ws.v1.CleanPlotRequest
-	38,  // 21: classicfarm.ws.v1.WsEnvelope.clean_plot_response:type_name -> classicfarm.ws.v1.CleanPlotResponse
-	41,  // 22: classicfarm.ws.v1.WsEnvelope.sell_crop_request:type_name -> classicfarm.ws.v1.SellCropRequest
-	42,  // 23: classicfarm.ws.v1.WsEnvelope.sell_crop_response:type_name -> classicfarm.ws.v1.SellCropResponse
-	43,  // 24: classicfarm.ws.v1.WsEnvelope.claim_chapter_reward_request:type_name -> classicfarm.ws.v1.ClaimChapterRewardRequest
-	44,  // 25: classicfarm.ws.v1.WsEnvelope.claim_chapter_reward_response:type_name -> classicfarm.ws.v1.ClaimChapterRewardResponse
-	45,  // 26: classicfarm.ws.v1.WsEnvelope.player_state_changed_push:type_name -> classicfarm.ws.v1.PlayerStateChangedPush
-	29,  // 27: classicfarm.ws.v1.WsEnvelope.buy_fertilizer_request:type_name -> classicfarm.ws.v1.BuyFertilizerRequest
-	30,  // 28: classicfarm.ws.v1.WsEnvelope.buy_fertilizer_response:type_name -> classicfarm.ws.v1.BuyFertilizerResponse
-	46,  // 29: classicfarm.ws.v1.WsEnvelope.create_friend_code_request:type_name -> classicfarm.ws.v1.CreateFriendCodeRequest
-	47,  // 30: classicfarm.ws.v1.WsEnvelope.create_friend_code_response:type_name -> classicfarm.ws.v1.CreateFriendCodeResponse
-	48,  // 31: classicfarm.ws.v1.WsEnvelope.redeem_friend_code_request:type_name -> classicfarm.ws.v1.RedeemFriendCodeRequest
-	49,  // 32: classicfarm.ws.v1.WsEnvelope.redeem_friend_code_response:type_name -> classicfarm.ws.v1.RedeemFriendCodeResponse
-	50,  // 33: classicfarm.ws.v1.WsEnvelope.list_friends_request:type_name -> classicfarm.ws.v1.ListFriendsRequest
-	51,  // 34: classicfarm.ws.v1.WsEnvelope.list_friends_response:type_name -> classicfarm.ws.v1.ListFriendsResponse
-	58,  // 35: classicfarm.ws.v1.WsEnvelope.enter_friend_farm_request:type_name -> classicfarm.ws.v1.EnterFriendFarmRequest
-	59,  // 36: classicfarm.ws.v1.WsEnvelope.enter_friend_farm_response:type_name -> classicfarm.ws.v1.EnterFriendFarmResponse
-	60,  // 37: classicfarm.ws.v1.WsEnvelope.farm_heartbeat_request:type_name -> classicfarm.ws.v1.FarmHeartbeatRequest
-	61,  // 38: classicfarm.ws.v1.WsEnvelope.farm_heartbeat_response:type_name -> classicfarm.ws.v1.FarmHeartbeatResponse
-	62,  // 39: classicfarm.ws.v1.WsEnvelope.exit_friend_farm_request:type_name -> classicfarm.ws.v1.ExitFriendFarmRequest
-	63,  // 40: classicfarm.ws.v1.WsEnvelope.exit_friend_farm_response:type_name -> classicfarm.ws.v1.ExitFriendFarmResponse
-	64,  // 41: classicfarm.ws.v1.WsEnvelope.apply_pest_to_friend_request:type_name -> classicfarm.ws.v1.ApplyPestToFriendRequest
-	68,  // 42: classicfarm.ws.v1.WsEnvelope.apply_pest_to_friend_response:type_name -> classicfarm.ws.v1.FriendActionResponse
-	65,  // 43: classicfarm.ws.v1.WsEnvelope.catch_pest_for_friend_request:type_name -> classicfarm.ws.v1.CatchPestForFriendRequest
-	68,  // 44: classicfarm.ws.v1.WsEnvelope.catch_pest_for_friend_response:type_name -> classicfarm.ws.v1.FriendActionResponse
-	66,  // 45: classicfarm.ws.v1.WsEnvelope.help_clean_friend_plot_request:type_name -> classicfarm.ws.v1.HelpCleanFriendPlotRequest
-	68,  // 46: classicfarm.ws.v1.WsEnvelope.help_clean_friend_plot_response:type_name -> classicfarm.ws.v1.FriendActionResponse
-	67,  // 47: classicfarm.ws.v1.WsEnvelope.steal_friend_crop_request:type_name -> classicfarm.ws.v1.StealFriendCropRequest
-	68,  // 48: classicfarm.ws.v1.WsEnvelope.steal_friend_crop_response:type_name -> classicfarm.ws.v1.FriendActionResponse
-	56,  // 49: classicfarm.ws.v1.WsEnvelope.farm_view_changed_push:type_name -> classicfarm.ws.v1.FarmViewPatch
-	57,  // 50: classicfarm.ws.v1.WsEnvelope.farm_presence_changed_push:type_name -> classicfarm.ws.v1.FarmPresencePush
-	39,  // 51: classicfarm.ws.v1.WsEnvelope.catch_pest_request:type_name -> classicfarm.ws.v1.CatchPestRequest
-	40,  // 52: classicfarm.ws.v1.WsEnvelope.catch_pest_response:type_name -> classicfarm.ws.v1.CatchPestResponse
-	73,  // 53: classicfarm.ws.v1.WsEnvelope.get_pet_panel_request:type_name -> classicfarm.ws.v1.GetPetPanelRequest
-	74,  // 54: classicfarm.ws.v1.WsEnvelope.get_pet_panel_response:type_name -> classicfarm.ws.v1.GetPetPanelResponse
-	75,  // 55: classicfarm.ws.v1.WsEnvelope.buy_pet_request:type_name -> classicfarm.ws.v1.BuyPetRequest
-	76,  // 56: classicfarm.ws.v1.WsEnvelope.buy_pet_response:type_name -> classicfarm.ws.v1.BuyPetResponse
-	77,  // 57: classicfarm.ws.v1.WsEnvelope.deploy_pet_request:type_name -> classicfarm.ws.v1.DeployPetRequest
-	78,  // 58: classicfarm.ws.v1.WsEnvelope.deploy_pet_response:type_name -> classicfarm.ws.v1.DeployPetResponse
-	79,  // 59: classicfarm.ws.v1.WsEnvelope.buy_pet_food_request:type_name -> classicfarm.ws.v1.BuyPetFoodRequest
-	80,  // 60: classicfarm.ws.v1.WsEnvelope.buy_pet_food_response:type_name -> classicfarm.ws.v1.BuyPetFoodResponse
-	81,  // 61: classicfarm.ws.v1.WsEnvelope.feed_pet_request:type_name -> classicfarm.ws.v1.FeedPetRequest
-	82,  // 62: classicfarm.ws.v1.WsEnvelope.feed_pet_response:type_name -> classicfarm.ws.v1.FeedPetResponse
-	2,   // 63: classicfarm.ws.v1.Error.code:type_name -> classicfarm.ws.v1.ErrorCode
-	6,   // 64: classicfarm.ws.v1.Error.params:type_name -> classicfarm.ws.v1.ErrorParam
-	14,  // 65: classicfarm.ws.v1.Error.latest_shop_entry:type_name -> classicfarm.ws.v1.ShopEntryView
-	23,  // 66: classicfarm.ws.v1.Error.current_plot:type_name -> classicfarm.ws.v1.PlotView
-	14,  // 67: classicfarm.ws.v1.GetShopResponse.entries:type_name -> classicfarm.ws.v1.ShopEntryView
-	20,  // 68: classicfarm.ws.v1.GetShopResponse.crops:type_name -> classicfarm.ws.v1.CropCatalogEntryView
-	17,  // 69: classicfarm.ws.v1.GetPlayerSnapshotResponse.snapshot:type_name -> classicfarm.ws.v1.PlayerSnapshot
-	21,  // 70: classicfarm.ws.v1.PlayerSnapshot.inventory:type_name -> classicfarm.ws.v1.ItemStackView
-	23,  // 71: classicfarm.ws.v1.PlayerSnapshot.plots:type_name -> classicfarm.ws.v1.PlotView
-	24,  // 72: classicfarm.ws.v1.PlayerSnapshot.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
-	18,  // 73: classicfarm.ws.v1.PlayerSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
-	19,  // 74: classicfarm.ws.v1.PlayerSnapshot.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
-	83,  // 75: classicfarm.ws.v1.PlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
-	22,  // 76: classicfarm.ws.v1.PlotView.fertilizer_effect:type_name -> classicfarm.ws.v1.EffectView
-	22,  // 77: classicfarm.ws.v1.PlotView.pest_effect:type_name -> classicfarm.ws.v1.EffectView
-	84,  // 78: classicfarm.ws.v1.ChapterView.status:type_name -> classicfarm.ws.v1.chapter.ChapterStatus
-	25,  // 79: classicfarm.ws.v1.ChapterView.tasks:type_name -> classicfarm.ws.v1.TaskProgressView
-	21,  // 80: classicfarm.ws.v1.PlayerStatePatch.inventory_upserts:type_name -> classicfarm.ws.v1.ItemStackView
-	23,  // 81: classicfarm.ws.v1.PlayerStatePatch.plot_upserts:type_name -> classicfarm.ws.v1.PlotView
-	24,  // 82: classicfarm.ws.v1.PlayerStatePatch.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
-	18,  // 83: classicfarm.ws.v1.PlayerStatePatch.career:type_name -> classicfarm.ws.v1.PlayerCareerView
-	19,  // 84: classicfarm.ws.v1.PlayerStatePatch.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
-	26,  // 85: classicfarm.ws.v1.BuySeedsResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	26,  // 86: classicfarm.ws.v1.BuyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	26,  // 87: classicfarm.ws.v1.PlantResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	26,  // 88: classicfarm.ws.v1.ApplyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	26,  // 89: classicfarm.ws.v1.HarvestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	26,  // 90: classicfarm.ws.v1.CleanPlotResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	26,  // 91: classicfarm.ws.v1.CatchPestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	26,  // 92: classicfarm.ws.v1.SellCropResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	21,  // 93: classicfarm.ws.v1.ClaimChapterRewardResponse.items_added_to_inventory:type_name -> classicfarm.ws.v1.ItemStackView
-	21,  // 94: classicfarm.ws.v1.ClaimChapterRewardResponse.items_pending_mail:type_name -> classicfarm.ws.v1.ItemStackView
-	26,  // 95: classicfarm.ws.v1.ClaimChapterRewardResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	85,  // 96: classicfarm.ws.v1.PlayerStateChangedPush.reason:type_name -> classicfarm.ws.v1.reason.StateChangeReason
-	26,  // 97: classicfarm.ws.v1.PlayerStateChangedPush.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	52,  // 98: classicfarm.ws.v1.RedeemFriendCodeResponse.friend:type_name -> classicfarm.ws.v1.FriendView
-	52,  // 99: classicfarm.ws.v1.ListFriendsResponse.friends:type_name -> classicfarm.ws.v1.FriendView
-	83,  // 100: classicfarm.ws.v1.PublicPlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
-	53,  // 101: classicfarm.ws.v1.FarmVisitSnapshot.version:type_name -> classicfarm.ws.v1.FarmViewVersion
-	54,  // 102: classicfarm.ws.v1.FarmVisitSnapshot.plots:type_name -> classicfarm.ws.v1.PublicPlotView
-	18,  // 103: classicfarm.ws.v1.FarmVisitSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
-	53,  // 104: classicfarm.ws.v1.FarmViewPatch.version:type_name -> classicfarm.ws.v1.FarmViewVersion
-	54,  // 105: classicfarm.ws.v1.FarmViewPatch.plot_upserts:type_name -> classicfarm.ws.v1.PublicPlotView
-	3,   // 106: classicfarm.ws.v1.FarmPresencePush.kind:type_name -> classicfarm.ws.v1.FarmPresenceKind
-	55,  // 107: classicfarm.ws.v1.EnterFriendFarmResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
-	26,  // 108: classicfarm.ws.v1.FriendActionResponse.visitor_patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	56,  // 109: classicfarm.ws.v1.FriendActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
-	69,  // 110: classicfarm.ws.v1.FriendActionResponse.steal_guard:type_name -> classicfarm.ws.v1.StealGuardOutcome
-	70,  // 111: classicfarm.ws.v1.PetPanelView.pets:type_name -> classicfarm.ws.v1.PetShopEntryView
-	71,  // 112: classicfarm.ws.v1.PetPanelView.pet_food:type_name -> classicfarm.ws.v1.PetFoodShopView
-	72,  // 113: classicfarm.ws.v1.GetPetPanelResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	26,  // 114: classicfarm.ws.v1.BuyPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	72,  // 115: classicfarm.ws.v1.BuyPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	26,  // 116: classicfarm.ws.v1.DeployPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	72,  // 117: classicfarm.ws.v1.DeployPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	26,  // 118: classicfarm.ws.v1.BuyPetFoodResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	72,  // 119: classicfarm.ws.v1.BuyPetFoodResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	26,  // 120: classicfarm.ws.v1.FeedPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	72,  // 121: classicfarm.ws.v1.FeedPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	122, // [122:122] is the sub-list for method output_type
-	122, // [122:122] is the sub-list for method input_type
-	122, // [122:122] is the sub-list for extension type_name
-	122, // [122:122] is the sub-list for extension extendee
-	0,   // [0:122] is the sub-list for field type_name
+	8,   // 2: classicfarm.ws.v1.WsEnvelope.state_version:type_name -> classicfarm.ws.v1.StateVersion
+	10,  // 3: classicfarm.ws.v1.WsEnvelope.error:type_name -> classicfarm.ws.v1.Error
+	11,  // 4: classicfarm.ws.v1.WsEnvelope.auth_request:type_name -> classicfarm.ws.v1.AuthRequest
+	12,  // 5: classicfarm.ws.v1.WsEnvelope.auth_response:type_name -> classicfarm.ws.v1.AuthResponse
+	13,  // 6: classicfarm.ws.v1.WsEnvelope.ping_request:type_name -> classicfarm.ws.v1.PingRequest
+	14,  // 7: classicfarm.ws.v1.WsEnvelope.ping_response:type_name -> classicfarm.ws.v1.PingResponse
+	18,  // 8: classicfarm.ws.v1.WsEnvelope.get_player_snapshot_request:type_name -> classicfarm.ws.v1.GetPlayerSnapshotRequest
+	19,  // 9: classicfarm.ws.v1.WsEnvelope.get_player_snapshot_response:type_name -> classicfarm.ws.v1.GetPlayerSnapshotResponse
+	15,  // 10: classicfarm.ws.v1.WsEnvelope.get_shop_request:type_name -> classicfarm.ws.v1.GetShopRequest
+	16,  // 11: classicfarm.ws.v1.WsEnvelope.get_shop_response:type_name -> classicfarm.ws.v1.GetShopResponse
+	30,  // 12: classicfarm.ws.v1.WsEnvelope.buy_seeds_request:type_name -> classicfarm.ws.v1.BuySeedsRequest
+	31,  // 13: classicfarm.ws.v1.WsEnvelope.buy_seeds_response:type_name -> classicfarm.ws.v1.BuySeedsResponse
+	34,  // 14: classicfarm.ws.v1.WsEnvelope.plant_request:type_name -> classicfarm.ws.v1.PlantRequest
+	35,  // 15: classicfarm.ws.v1.WsEnvelope.plant_response:type_name -> classicfarm.ws.v1.PlantResponse
+	36,  // 16: classicfarm.ws.v1.WsEnvelope.apply_fertilizer_request:type_name -> classicfarm.ws.v1.ApplyFertilizerRequest
+	37,  // 17: classicfarm.ws.v1.WsEnvelope.apply_fertilizer_response:type_name -> classicfarm.ws.v1.ApplyFertilizerResponse
+	38,  // 18: classicfarm.ws.v1.WsEnvelope.harvest_request:type_name -> classicfarm.ws.v1.HarvestRequest
+	39,  // 19: classicfarm.ws.v1.WsEnvelope.harvest_response:type_name -> classicfarm.ws.v1.HarvestResponse
+	40,  // 20: classicfarm.ws.v1.WsEnvelope.clean_plot_request:type_name -> classicfarm.ws.v1.CleanPlotRequest
+	41,  // 21: classicfarm.ws.v1.WsEnvelope.clean_plot_response:type_name -> classicfarm.ws.v1.CleanPlotResponse
+	44,  // 22: classicfarm.ws.v1.WsEnvelope.sell_crop_request:type_name -> classicfarm.ws.v1.SellCropRequest
+	45,  // 23: classicfarm.ws.v1.WsEnvelope.sell_crop_response:type_name -> classicfarm.ws.v1.SellCropResponse
+	46,  // 24: classicfarm.ws.v1.WsEnvelope.claim_chapter_reward_request:type_name -> classicfarm.ws.v1.ClaimChapterRewardRequest
+	47,  // 25: classicfarm.ws.v1.WsEnvelope.claim_chapter_reward_response:type_name -> classicfarm.ws.v1.ClaimChapterRewardResponse
+	48,  // 26: classicfarm.ws.v1.WsEnvelope.player_state_changed_push:type_name -> classicfarm.ws.v1.PlayerStateChangedPush
+	32,  // 27: classicfarm.ws.v1.WsEnvelope.buy_fertilizer_request:type_name -> classicfarm.ws.v1.BuyFertilizerRequest
+	33,  // 28: classicfarm.ws.v1.WsEnvelope.buy_fertilizer_response:type_name -> classicfarm.ws.v1.BuyFertilizerResponse
+	49,  // 29: classicfarm.ws.v1.WsEnvelope.create_friend_code_request:type_name -> classicfarm.ws.v1.CreateFriendCodeRequest
+	50,  // 30: classicfarm.ws.v1.WsEnvelope.create_friend_code_response:type_name -> classicfarm.ws.v1.CreateFriendCodeResponse
+	51,  // 31: classicfarm.ws.v1.WsEnvelope.redeem_friend_code_request:type_name -> classicfarm.ws.v1.RedeemFriendCodeRequest
+	52,  // 32: classicfarm.ws.v1.WsEnvelope.redeem_friend_code_response:type_name -> classicfarm.ws.v1.RedeemFriendCodeResponse
+	53,  // 33: classicfarm.ws.v1.WsEnvelope.list_friends_request:type_name -> classicfarm.ws.v1.ListFriendsRequest
+	54,  // 34: classicfarm.ws.v1.WsEnvelope.list_friends_response:type_name -> classicfarm.ws.v1.ListFriendsResponse
+	62,  // 35: classicfarm.ws.v1.WsEnvelope.enter_friend_farm_request:type_name -> classicfarm.ws.v1.EnterFriendFarmRequest
+	63,  // 36: classicfarm.ws.v1.WsEnvelope.enter_friend_farm_response:type_name -> classicfarm.ws.v1.EnterFriendFarmResponse
+	64,  // 37: classicfarm.ws.v1.WsEnvelope.farm_heartbeat_request:type_name -> classicfarm.ws.v1.FarmHeartbeatRequest
+	65,  // 38: classicfarm.ws.v1.WsEnvelope.farm_heartbeat_response:type_name -> classicfarm.ws.v1.FarmHeartbeatResponse
+	66,  // 39: classicfarm.ws.v1.WsEnvelope.exit_friend_farm_request:type_name -> classicfarm.ws.v1.ExitFriendFarmRequest
+	67,  // 40: classicfarm.ws.v1.WsEnvelope.exit_friend_farm_response:type_name -> classicfarm.ws.v1.ExitFriendFarmResponse
+	68,  // 41: classicfarm.ws.v1.WsEnvelope.apply_pest_to_friend_request:type_name -> classicfarm.ws.v1.ApplyPestToFriendRequest
+	72,  // 42: classicfarm.ws.v1.WsEnvelope.apply_pest_to_friend_response:type_name -> classicfarm.ws.v1.FriendActionResponse
+	69,  // 43: classicfarm.ws.v1.WsEnvelope.catch_pest_for_friend_request:type_name -> classicfarm.ws.v1.CatchPestForFriendRequest
+	72,  // 44: classicfarm.ws.v1.WsEnvelope.catch_pest_for_friend_response:type_name -> classicfarm.ws.v1.FriendActionResponse
+	70,  // 45: classicfarm.ws.v1.WsEnvelope.help_clean_friend_plot_request:type_name -> classicfarm.ws.v1.HelpCleanFriendPlotRequest
+	72,  // 46: classicfarm.ws.v1.WsEnvelope.help_clean_friend_plot_response:type_name -> classicfarm.ws.v1.FriendActionResponse
+	71,  // 47: classicfarm.ws.v1.WsEnvelope.steal_friend_crop_request:type_name -> classicfarm.ws.v1.StealFriendCropRequest
+	72,  // 48: classicfarm.ws.v1.WsEnvelope.steal_friend_crop_response:type_name -> classicfarm.ws.v1.FriendActionResponse
+	59,  // 49: classicfarm.ws.v1.WsEnvelope.farm_view_changed_push:type_name -> classicfarm.ws.v1.FarmViewPatch
+	60,  // 50: classicfarm.ws.v1.WsEnvelope.farm_presence_changed_push:type_name -> classicfarm.ws.v1.FarmPresencePush
+	42,  // 51: classicfarm.ws.v1.WsEnvelope.catch_pest_request:type_name -> classicfarm.ws.v1.CatchPestRequest
+	43,  // 52: classicfarm.ws.v1.WsEnvelope.catch_pest_response:type_name -> classicfarm.ws.v1.CatchPestResponse
+	77,  // 53: classicfarm.ws.v1.WsEnvelope.get_pet_panel_request:type_name -> classicfarm.ws.v1.GetPetPanelRequest
+	78,  // 54: classicfarm.ws.v1.WsEnvelope.get_pet_panel_response:type_name -> classicfarm.ws.v1.GetPetPanelResponse
+	79,  // 55: classicfarm.ws.v1.WsEnvelope.buy_pet_request:type_name -> classicfarm.ws.v1.BuyPetRequest
+	80,  // 56: classicfarm.ws.v1.WsEnvelope.buy_pet_response:type_name -> classicfarm.ws.v1.BuyPetResponse
+	81,  // 57: classicfarm.ws.v1.WsEnvelope.deploy_pet_request:type_name -> classicfarm.ws.v1.DeployPetRequest
+	82,  // 58: classicfarm.ws.v1.WsEnvelope.deploy_pet_response:type_name -> classicfarm.ws.v1.DeployPetResponse
+	83,  // 59: classicfarm.ws.v1.WsEnvelope.buy_pet_food_request:type_name -> classicfarm.ws.v1.BuyPetFoodRequest
+	84,  // 60: classicfarm.ws.v1.WsEnvelope.buy_pet_food_response:type_name -> classicfarm.ws.v1.BuyPetFoodResponse
+	85,  // 61: classicfarm.ws.v1.WsEnvelope.feed_pet_request:type_name -> classicfarm.ws.v1.FeedPetRequest
+	86,  // 62: classicfarm.ws.v1.WsEnvelope.feed_pet_response:type_name -> classicfarm.ws.v1.FeedPetResponse
+	61,  // 63: classicfarm.ws.v1.WsEnvelope.red_dot_changed_push:type_name -> classicfarm.ws.v1.RedDotChangedPush
+	87,  // 64: classicfarm.ws.v1.WsEnvelope.send_friend_gift_request:type_name -> classicfarm.ws.v1.SendFriendGiftRequest
+	88,  // 65: classicfarm.ws.v1.WsEnvelope.send_friend_gift_response:type_name -> classicfarm.ws.v1.SendFriendGiftResponse
+	89,  // 66: classicfarm.ws.v1.WsEnvelope.claim_mail_request:type_name -> classicfarm.ws.v1.ClaimMailRequest
+	90,  // 67: classicfarm.ws.v1.WsEnvelope.claim_mail_response:type_name -> classicfarm.ws.v1.ClaimMailResponse
+	93,  // 68: classicfarm.ws.v1.WsEnvelope.open_mailbox_request:type_name -> classicfarm.ws.v1.OpenMailboxRequest
+	94,  // 69: classicfarm.ws.v1.WsEnvelope.open_mailbox_response:type_name -> classicfarm.ws.v1.OpenMailboxResponse
+	95,  // 70: classicfarm.ws.v1.WsEnvelope.mark_mail_read_request:type_name -> classicfarm.ws.v1.MarkMailReadRequest
+	96,  // 71: classicfarm.ws.v1.WsEnvelope.mark_mail_read_response:type_name -> classicfarm.ws.v1.MarkMailReadResponse
+	97,  // 72: classicfarm.ws.v1.WsEnvelope.check_mailbox_indicator_request:type_name -> classicfarm.ws.v1.CheckMailboxIndicatorRequest
+	98,  // 73: classicfarm.ws.v1.WsEnvelope.check_mailbox_indicator_response:type_name -> classicfarm.ws.v1.CheckMailboxIndicatorResponse
+	2,   // 74: classicfarm.ws.v1.Error.code:type_name -> classicfarm.ws.v1.ErrorCode
+	9,   // 75: classicfarm.ws.v1.Error.params:type_name -> classicfarm.ws.v1.ErrorParam
+	17,  // 76: classicfarm.ws.v1.Error.latest_shop_entry:type_name -> classicfarm.ws.v1.ShopEntryView
+	26,  // 77: classicfarm.ws.v1.Error.current_plot:type_name -> classicfarm.ws.v1.PlotView
+	17,  // 78: classicfarm.ws.v1.GetShopResponse.entries:type_name -> classicfarm.ws.v1.ShopEntryView
+	23,  // 79: classicfarm.ws.v1.GetShopResponse.crops:type_name -> classicfarm.ws.v1.CropCatalogEntryView
+	20,  // 80: classicfarm.ws.v1.GetPlayerSnapshotResponse.snapshot:type_name -> classicfarm.ws.v1.PlayerSnapshot
+	24,  // 81: classicfarm.ws.v1.PlayerSnapshot.inventory:type_name -> classicfarm.ws.v1.ItemStackView
+	26,  // 82: classicfarm.ws.v1.PlayerSnapshot.plots:type_name -> classicfarm.ws.v1.PlotView
+	27,  // 83: classicfarm.ws.v1.PlayerSnapshot.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
+	21,  // 84: classicfarm.ws.v1.PlayerSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
+	22,  // 85: classicfarm.ws.v1.PlayerSnapshot.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
+	99,  // 86: classicfarm.ws.v1.PlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
+	25,  // 87: classicfarm.ws.v1.PlotView.fertilizer_effect:type_name -> classicfarm.ws.v1.EffectView
+	25,  // 88: classicfarm.ws.v1.PlotView.pest_effect:type_name -> classicfarm.ws.v1.EffectView
+	100, // 89: classicfarm.ws.v1.ChapterView.status:type_name -> classicfarm.ws.v1.chapter.ChapterStatus
+	28,  // 90: classicfarm.ws.v1.ChapterView.tasks:type_name -> classicfarm.ws.v1.TaskProgressView
+	24,  // 91: classicfarm.ws.v1.PlayerStatePatch.inventory_upserts:type_name -> classicfarm.ws.v1.ItemStackView
+	26,  // 92: classicfarm.ws.v1.PlayerStatePatch.plot_upserts:type_name -> classicfarm.ws.v1.PlotView
+	27,  // 93: classicfarm.ws.v1.PlayerStatePatch.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
+	21,  // 94: classicfarm.ws.v1.PlayerStatePatch.career:type_name -> classicfarm.ws.v1.PlayerCareerView
+	22,  // 95: classicfarm.ws.v1.PlayerStatePatch.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
+	29,  // 96: classicfarm.ws.v1.BuySeedsResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 97: classicfarm.ws.v1.BuyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 98: classicfarm.ws.v1.PlantResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 99: classicfarm.ws.v1.ApplyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 100: classicfarm.ws.v1.HarvestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 101: classicfarm.ws.v1.CleanPlotResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 102: classicfarm.ws.v1.CatchPestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 103: classicfarm.ws.v1.SellCropResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	24,  // 104: classicfarm.ws.v1.ClaimChapterRewardResponse.items_added_to_inventory:type_name -> classicfarm.ws.v1.ItemStackView
+	24,  // 105: classicfarm.ws.v1.ClaimChapterRewardResponse.items_pending_mail:type_name -> classicfarm.ws.v1.ItemStackView
+	29,  // 106: classicfarm.ws.v1.ClaimChapterRewardResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	101, // 107: classicfarm.ws.v1.PlayerStateChangedPush.reason:type_name -> classicfarm.ws.v1.reason.StateChangeReason
+	29,  // 108: classicfarm.ws.v1.PlayerStateChangedPush.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	55,  // 109: classicfarm.ws.v1.RedeemFriendCodeResponse.friend:type_name -> classicfarm.ws.v1.FriendView
+	55,  // 110: classicfarm.ws.v1.ListFriendsResponse.friends:type_name -> classicfarm.ws.v1.FriendView
+	99,  // 111: classicfarm.ws.v1.PublicPlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
+	56,  // 112: classicfarm.ws.v1.FarmVisitSnapshot.version:type_name -> classicfarm.ws.v1.FarmViewVersion
+	57,  // 113: classicfarm.ws.v1.FarmVisitSnapshot.plots:type_name -> classicfarm.ws.v1.PublicPlotView
+	21,  // 114: classicfarm.ws.v1.FarmVisitSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
+	56,  // 115: classicfarm.ws.v1.FarmViewPatch.version:type_name -> classicfarm.ws.v1.FarmViewVersion
+	57,  // 116: classicfarm.ws.v1.FarmViewPatch.plot_upserts:type_name -> classicfarm.ws.v1.PublicPlotView
+	3,   // 117: classicfarm.ws.v1.FarmPresencePush.kind:type_name -> classicfarm.ws.v1.FarmPresenceKind
+	4,   // 118: classicfarm.ws.v1.RedDotChangedPush.category:type_name -> classicfarm.ws.v1.RedDotCategory
+	5,   // 119: classicfarm.ws.v1.RedDotChangedPush.operation:type_name -> classicfarm.ws.v1.RedDotOperation
+	58,  // 120: classicfarm.ws.v1.EnterFriendFarmResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
+	29,  // 121: classicfarm.ws.v1.FriendActionResponse.visitor_patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	59,  // 122: classicfarm.ws.v1.FriendActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
+	73,  // 123: classicfarm.ws.v1.FriendActionResponse.steal_guard:type_name -> classicfarm.ws.v1.StealGuardOutcome
+	74,  // 124: classicfarm.ws.v1.PetPanelView.pets:type_name -> classicfarm.ws.v1.PetShopEntryView
+	75,  // 125: classicfarm.ws.v1.PetPanelView.pet_food:type_name -> classicfarm.ws.v1.PetFoodShopView
+	76,  // 126: classicfarm.ws.v1.GetPetPanelResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 127: classicfarm.ws.v1.BuyPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	76,  // 128: classicfarm.ws.v1.BuyPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 129: classicfarm.ws.v1.DeployPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	76,  // 130: classicfarm.ws.v1.DeployPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 131: classicfarm.ws.v1.BuyPetFoodResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	76,  // 132: classicfarm.ws.v1.BuyPetFoodResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 133: classicfarm.ws.v1.FeedPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	76,  // 134: classicfarm.ws.v1.FeedPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 135: classicfarm.ws.v1.SendFriendGiftResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	24,  // 136: classicfarm.ws.v1.ClaimMailResponse.items_added:type_name -> classicfarm.ws.v1.ItemStackView
+	29,  // 137: classicfarm.ws.v1.ClaimMailResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	6,   // 138: classicfarm.ws.v1.MailView.kind:type_name -> classicfarm.ws.v1.MailKind
+	91,  // 139: classicfarm.ws.v1.MailView.attachments:type_name -> classicfarm.ws.v1.MailAttachmentView
+	92,  // 140: classicfarm.ws.v1.OpenMailboxResponse.mails:type_name -> classicfarm.ws.v1.MailView
+	141, // [141:141] is the sub-list for method output_type
+	141, // [141:141] is the sub-list for method input_type
+	141, // [141:141] is the sub-list for extension type_name
+	141, // [141:141] is the sub-list for extension extendee
+	0,   // [0:141] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_ws_ws_proto_init() }
@@ -7149,6 +8426,17 @@ func file_classicfarm_v1_ws_ws_proto_init() {
 		(*WsEnvelope_BuyPetFoodResponse)(nil),
 		(*WsEnvelope_FeedPetRequest)(nil),
 		(*WsEnvelope_FeedPetResponse)(nil),
+		(*WsEnvelope_RedDotChangedPush)(nil),
+		(*WsEnvelope_SendFriendGiftRequest)(nil),
+		(*WsEnvelope_SendFriendGiftResponse)(nil),
+		(*WsEnvelope_ClaimMailRequest)(nil),
+		(*WsEnvelope_ClaimMailResponse)(nil),
+		(*WsEnvelope_OpenMailboxRequest)(nil),
+		(*WsEnvelope_OpenMailboxResponse)(nil),
+		(*WsEnvelope_MarkMailReadRequest)(nil),
+		(*WsEnvelope_MarkMailReadResponse)(nil),
+		(*WsEnvelope_CheckMailboxIndicatorRequest)(nil),
+		(*WsEnvelope_CheckMailboxIndicatorResponse)(nil),
 	}
 	file_classicfarm_v1_ws_ws_proto_msgTypes[3].OneofWrappers = []any{}
 	file_classicfarm_v1_ws_ws_proto_msgTypes[18].OneofWrappers = []any{}
@@ -7159,13 +8447,14 @@ func file_classicfarm_v1_ws_ws_proto_init() {
 	}
 	file_classicfarm_v1_ws_ws_proto_msgTypes[41].OneofWrappers = []any{}
 	file_classicfarm_v1_ws_ws_proto_msgTypes[53].OneofWrappers = []any{}
+	file_classicfarm_v1_ws_ws_proto_msgTypes[54].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_ws_ws_proto_rawDesc), len(file_classicfarm_v1_ws_ws_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   79,
+			NumEnums:      7,
+			NumMessages:   92,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

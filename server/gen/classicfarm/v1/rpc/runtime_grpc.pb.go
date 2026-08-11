@@ -614,6 +614,7 @@ const (
 	GatePushService_PublishPlayerStateChanged_FullMethodName = "/classicfarm.rpc.v1.GatePushService/PublishPlayerStateChanged"
 	GatePushService_PublishFarmViewPatch_FullMethodName      = "/classicfarm.rpc.v1.GatePushService/PublishFarmViewPatch"
 	GatePushService_PublishFarmPresence_FullMethodName       = "/classicfarm.rpc.v1.GatePushService/PublishFarmPresence"
+	GatePushService_PublishRedDotChanged_FullMethodName      = "/classicfarm.rpc.v1.GatePushService/PublishRedDotChanged"
 )
 
 // GatePushServiceClient is the client API for GatePushService service.
@@ -625,6 +626,7 @@ type GatePushServiceClient interface {
 	PublishPlayerStateChanged(ctx context.Context, in *PublishPlayerStateChangedRequest, opts ...grpc.CallOption) (*PublishPlayerStateChangedResponse, error)
 	PublishFarmViewPatch(ctx context.Context, in *PublishFarmViewPatchRequest, opts ...grpc.CallOption) (*PublishFarmViewPatchResponse, error)
 	PublishFarmPresence(ctx context.Context, in *PublishFarmPresenceRequest, opts ...grpc.CallOption) (*PublishFarmPresenceResponse, error)
+	PublishRedDotChanged(ctx context.Context, in *PublishRedDotChangedRequest, opts ...grpc.CallOption) (*PublishRedDotChangedResponse, error)
 }
 
 type gatePushServiceClient struct {
@@ -665,6 +667,16 @@ func (c *gatePushServiceClient) PublishFarmPresence(ctx context.Context, in *Pub
 	return out, nil
 }
 
+func (c *gatePushServiceClient) PublishRedDotChanged(ctx context.Context, in *PublishRedDotChangedRequest, opts ...grpc.CallOption) (*PublishRedDotChangedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishRedDotChangedResponse)
+	err := c.cc.Invoke(ctx, GatePushService_PublishRedDotChanged_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GatePushServiceServer is the server API for GatePushService service.
 // All implementations must embed UnimplementedGatePushServiceServer
 // for forward compatibility.
@@ -674,6 +686,7 @@ type GatePushServiceServer interface {
 	PublishPlayerStateChanged(context.Context, *PublishPlayerStateChangedRequest) (*PublishPlayerStateChangedResponse, error)
 	PublishFarmViewPatch(context.Context, *PublishFarmViewPatchRequest) (*PublishFarmViewPatchResponse, error)
 	PublishFarmPresence(context.Context, *PublishFarmPresenceRequest) (*PublishFarmPresenceResponse, error)
+	PublishRedDotChanged(context.Context, *PublishRedDotChangedRequest) (*PublishRedDotChangedResponse, error)
 	mustEmbedUnimplementedGatePushServiceServer()
 }
 
@@ -692,6 +705,9 @@ func (UnimplementedGatePushServiceServer) PublishFarmViewPatch(context.Context, 
 }
 func (UnimplementedGatePushServiceServer) PublishFarmPresence(context.Context, *PublishFarmPresenceRequest) (*PublishFarmPresenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PublishFarmPresence not implemented")
+}
+func (UnimplementedGatePushServiceServer) PublishRedDotChanged(context.Context, *PublishRedDotChangedRequest) (*PublishRedDotChangedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishRedDotChanged not implemented")
 }
 func (UnimplementedGatePushServiceServer) mustEmbedUnimplementedGatePushServiceServer() {}
 func (UnimplementedGatePushServiceServer) testEmbeddedByValue()                         {}
@@ -768,6 +784,24 @@ func _GatePushService_PublishFarmPresence_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatePushService_PublishRedDotChanged_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRedDotChangedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatePushServiceServer).PublishRedDotChanged(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatePushService_PublishRedDotChanged_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatePushServiceServer).PublishRedDotChanged(ctx, req.(*PublishRedDotChangedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GatePushService_ServiceDesc is the grpc.ServiceDesc for GatePushService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -787,6 +821,304 @@ var GatePushService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "PublishFarmPresence",
 			Handler:    _GatePushService_PublishFarmPresence_Handler,
 		},
+		{
+			MethodName: "PublishRedDotChanged",
+			Handler:    _GatePushService_PublishRedDotChanged_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "classicfarm/v1/rpc/runtime.proto",
+}
+
+const (
+	PlayerConnectionService_RegisterPlayerConnection_FullMethodName   = "/classicfarm.rpc.v1.PlayerConnectionService/RegisterPlayerConnection"
+	PlayerConnectionService_RefreshPlayerConnection_FullMethodName    = "/classicfarm.rpc.v1.PlayerConnectionService/RefreshPlayerConnection"
+	PlayerConnectionService_UnregisterPlayerConnection_FullMethodName = "/classicfarm.rpc.v1.PlayerConnectionService/UnregisterPlayerConnection"
+)
+
+// PlayerConnectionServiceClient is the client API for PlayerConnectionService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Player connection registration uses a two-second client deadline. Gate AUTH
+// registers, refreshes every 30s (Zone lease 90s), and unregisters on disconnect.
+type PlayerConnectionServiceClient interface {
+	RegisterPlayerConnection(ctx context.Context, in *RegisterPlayerConnectionRequest, opts ...grpc.CallOption) (*RegisterPlayerConnectionResponse, error)
+	RefreshPlayerConnection(ctx context.Context, in *RefreshPlayerConnectionRequest, opts ...grpc.CallOption) (*RefreshPlayerConnectionResponse, error)
+	UnregisterPlayerConnection(ctx context.Context, in *UnregisterPlayerConnectionRequest, opts ...grpc.CallOption) (*UnregisterPlayerConnectionResponse, error)
+}
+
+type playerConnectionServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewPlayerConnectionServiceClient(cc grpc.ClientConnInterface) PlayerConnectionServiceClient {
+	return &playerConnectionServiceClient{cc}
+}
+
+func (c *playerConnectionServiceClient) RegisterPlayerConnection(ctx context.Context, in *RegisterPlayerConnectionRequest, opts ...grpc.CallOption) (*RegisterPlayerConnectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterPlayerConnectionResponse)
+	err := c.cc.Invoke(ctx, PlayerConnectionService_RegisterPlayerConnection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerConnectionServiceClient) RefreshPlayerConnection(ctx context.Context, in *RefreshPlayerConnectionRequest, opts ...grpc.CallOption) (*RefreshPlayerConnectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshPlayerConnectionResponse)
+	err := c.cc.Invoke(ctx, PlayerConnectionService_RefreshPlayerConnection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerConnectionServiceClient) UnregisterPlayerConnection(ctx context.Context, in *UnregisterPlayerConnectionRequest, opts ...grpc.CallOption) (*UnregisterPlayerConnectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnregisterPlayerConnectionResponse)
+	err := c.cc.Invoke(ctx, PlayerConnectionService_UnregisterPlayerConnection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PlayerConnectionServiceServer is the server API for PlayerConnectionService service.
+// All implementations must embed UnimplementedPlayerConnectionServiceServer
+// for forward compatibility.
+//
+// Player connection registration uses a two-second client deadline. Gate AUTH
+// registers, refreshes every 30s (Zone lease 90s), and unregisters on disconnect.
+type PlayerConnectionServiceServer interface {
+	RegisterPlayerConnection(context.Context, *RegisterPlayerConnectionRequest) (*RegisterPlayerConnectionResponse, error)
+	RefreshPlayerConnection(context.Context, *RefreshPlayerConnectionRequest) (*RefreshPlayerConnectionResponse, error)
+	UnregisterPlayerConnection(context.Context, *UnregisterPlayerConnectionRequest) (*UnregisterPlayerConnectionResponse, error)
+	mustEmbedUnimplementedPlayerConnectionServiceServer()
+}
+
+// UnimplementedPlayerConnectionServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedPlayerConnectionServiceServer struct{}
+
+func (UnimplementedPlayerConnectionServiceServer) RegisterPlayerConnection(context.Context, *RegisterPlayerConnectionRequest) (*RegisterPlayerConnectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterPlayerConnection not implemented")
+}
+func (UnimplementedPlayerConnectionServiceServer) RefreshPlayerConnection(context.Context, *RefreshPlayerConnectionRequest) (*RefreshPlayerConnectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshPlayerConnection not implemented")
+}
+func (UnimplementedPlayerConnectionServiceServer) UnregisterPlayerConnection(context.Context, *UnregisterPlayerConnectionRequest) (*UnregisterPlayerConnectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnregisterPlayerConnection not implemented")
+}
+func (UnimplementedPlayerConnectionServiceServer) mustEmbedUnimplementedPlayerConnectionServiceServer() {
+}
+func (UnimplementedPlayerConnectionServiceServer) testEmbeddedByValue() {}
+
+// UnsafePlayerConnectionServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PlayerConnectionServiceServer will
+// result in compilation errors.
+type UnsafePlayerConnectionServiceServer interface {
+	mustEmbedUnimplementedPlayerConnectionServiceServer()
+}
+
+func RegisterPlayerConnectionServiceServer(s grpc.ServiceRegistrar, srv PlayerConnectionServiceServer) {
+	// If the following call panics, it indicates UnimplementedPlayerConnectionServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&PlayerConnectionService_ServiceDesc, srv)
+}
+
+func _PlayerConnectionService_RegisterPlayerConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterPlayerConnectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerConnectionServiceServer).RegisterPlayerConnection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerConnectionService_RegisterPlayerConnection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerConnectionServiceServer).RegisterPlayerConnection(ctx, req.(*RegisterPlayerConnectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerConnectionService_RefreshPlayerConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshPlayerConnectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerConnectionServiceServer).RefreshPlayerConnection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerConnectionService_RefreshPlayerConnection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerConnectionServiceServer).RefreshPlayerConnection(ctx, req.(*RefreshPlayerConnectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerConnectionService_UnregisterPlayerConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnregisterPlayerConnectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerConnectionServiceServer).UnregisterPlayerConnection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerConnectionService_UnregisterPlayerConnection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerConnectionServiceServer).UnregisterPlayerConnection(ctx, req.(*UnregisterPlayerConnectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// PlayerConnectionService_ServiceDesc is the grpc.ServiceDesc for PlayerConnectionService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var PlayerConnectionService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "classicfarm.rpc.v1.PlayerConnectionService",
+	HandlerType: (*PlayerConnectionServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "RegisterPlayerConnection",
+			Handler:    _PlayerConnectionService_RegisterPlayerConnection_Handler,
+		},
+		{
+			MethodName: "RefreshPlayerConnection",
+			Handler:    _PlayerConnectionService_RefreshPlayerConnection_Handler,
+		},
+		{
+			MethodName: "UnregisterPlayerConnection",
+			Handler:    _PlayerConnectionService_UnregisterPlayerConnection_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "classicfarm/v1/rpc/runtime.proto",
+}
+
+const (
+	ZoneNotificationService_DispatchRedDot_FullMethodName = "/classicfarm.rpc.v1.ZoneNotificationService/DispatchRedDot"
+)
+
+// ZoneNotificationServiceClient is the client API for ZoneNotificationService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Zone notification fan-out uses a two-second client deadline. InfoSvr routes
+// red-dot events here; the Zone Dispatcher looks up Gate connections.
+type ZoneNotificationServiceClient interface {
+	DispatchRedDot(ctx context.Context, in *DispatchRedDotRequest, opts ...grpc.CallOption) (*DispatchRedDotResponse, error)
+}
+
+type zoneNotificationServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewZoneNotificationServiceClient(cc grpc.ClientConnInterface) ZoneNotificationServiceClient {
+	return &zoneNotificationServiceClient{cc}
+}
+
+func (c *zoneNotificationServiceClient) DispatchRedDot(ctx context.Context, in *DispatchRedDotRequest, opts ...grpc.CallOption) (*DispatchRedDotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DispatchRedDotResponse)
+	err := c.cc.Invoke(ctx, ZoneNotificationService_DispatchRedDot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ZoneNotificationServiceServer is the server API for ZoneNotificationService service.
+// All implementations must embed UnimplementedZoneNotificationServiceServer
+// for forward compatibility.
+//
+// Zone notification fan-out uses a two-second client deadline. InfoSvr routes
+// red-dot events here; the Zone Dispatcher looks up Gate connections.
+type ZoneNotificationServiceServer interface {
+	DispatchRedDot(context.Context, *DispatchRedDotRequest) (*DispatchRedDotResponse, error)
+	mustEmbedUnimplementedZoneNotificationServiceServer()
+}
+
+// UnimplementedZoneNotificationServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedZoneNotificationServiceServer struct{}
+
+func (UnimplementedZoneNotificationServiceServer) DispatchRedDot(context.Context, *DispatchRedDotRequest) (*DispatchRedDotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DispatchRedDot not implemented")
+}
+func (UnimplementedZoneNotificationServiceServer) mustEmbedUnimplementedZoneNotificationServiceServer() {
+}
+func (UnimplementedZoneNotificationServiceServer) testEmbeddedByValue() {}
+
+// UnsafeZoneNotificationServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ZoneNotificationServiceServer will
+// result in compilation errors.
+type UnsafeZoneNotificationServiceServer interface {
+	mustEmbedUnimplementedZoneNotificationServiceServer()
+}
+
+func RegisterZoneNotificationServiceServer(s grpc.ServiceRegistrar, srv ZoneNotificationServiceServer) {
+	// If the following call panics, it indicates UnimplementedZoneNotificationServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ZoneNotificationService_ServiceDesc, srv)
+}
+
+func _ZoneNotificationService_DispatchRedDot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DispatchRedDotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZoneNotificationServiceServer).DispatchRedDot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ZoneNotificationService_DispatchRedDot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZoneNotificationServiceServer).DispatchRedDot(ctx, req.(*DispatchRedDotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ZoneNotificationService_ServiceDesc is the grpc.ServiceDesc for ZoneNotificationService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ZoneNotificationService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "classicfarm.rpc.v1.ZoneNotificationService",
+	HandlerType: (*ZoneNotificationServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "DispatchRedDot",
+			Handler:    _ZoneNotificationService_DispatchRedDot_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "classicfarm/v1/rpc/runtime.proto",
@@ -794,6 +1126,7 @@ var GatePushService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	PlayerSocialService_ApplyFriendTaskCredit_FullMethodName = "/classicfarm.rpc.v1.PlayerSocialService/ApplyFriendTaskCredit"
+	PlayerSocialService_ApplyMailReward_FullMethodName       = "/classicfarm.rpc.v1.PlayerSocialService/ApplyMailReward"
 )
 
 // PlayerSocialServiceClient is the client API for PlayerSocialService service.
@@ -803,6 +1136,7 @@ const (
 // Task-credit calls use a five-second client deadline.
 type PlayerSocialServiceClient interface {
 	ApplyFriendTaskCredit(ctx context.Context, in *ApplyFriendTaskCreditRequest, opts ...grpc.CallOption) (*ApplyFriendTaskCreditResponse, error)
+	ApplyMailReward(ctx context.Context, in *ApplyMailRewardRequest, opts ...grpc.CallOption) (*ApplyMailRewardResponse, error)
 }
 
 type playerSocialServiceClient struct {
@@ -823,6 +1157,16 @@ func (c *playerSocialServiceClient) ApplyFriendTaskCredit(ctx context.Context, i
 	return out, nil
 }
 
+func (c *playerSocialServiceClient) ApplyMailReward(ctx context.Context, in *ApplyMailRewardRequest, opts ...grpc.CallOption) (*ApplyMailRewardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplyMailRewardResponse)
+	err := c.cc.Invoke(ctx, PlayerSocialService_ApplyMailReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerSocialServiceServer is the server API for PlayerSocialService service.
 // All implementations must embed UnimplementedPlayerSocialServiceServer
 // for forward compatibility.
@@ -830,6 +1174,7 @@ func (c *playerSocialServiceClient) ApplyFriendTaskCredit(ctx context.Context, i
 // Task-credit calls use a five-second client deadline.
 type PlayerSocialServiceServer interface {
 	ApplyFriendTaskCredit(context.Context, *ApplyFriendTaskCreditRequest) (*ApplyFriendTaskCreditResponse, error)
+	ApplyMailReward(context.Context, *ApplyMailRewardRequest) (*ApplyMailRewardResponse, error)
 	mustEmbedUnimplementedPlayerSocialServiceServer()
 }
 
@@ -842,6 +1187,9 @@ type UnimplementedPlayerSocialServiceServer struct{}
 
 func (UnimplementedPlayerSocialServiceServer) ApplyFriendTaskCredit(context.Context, *ApplyFriendTaskCreditRequest) (*ApplyFriendTaskCreditResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApplyFriendTaskCredit not implemented")
+}
+func (UnimplementedPlayerSocialServiceServer) ApplyMailReward(context.Context, *ApplyMailRewardRequest) (*ApplyMailRewardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApplyMailReward not implemented")
 }
 func (UnimplementedPlayerSocialServiceServer) mustEmbedUnimplementedPlayerSocialServiceServer() {}
 func (UnimplementedPlayerSocialServiceServer) testEmbeddedByValue()                             {}
@@ -882,6 +1230,24 @@ func _PlayerSocialService_ApplyFriendTaskCredit_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerSocialService_ApplyMailReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyMailRewardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerSocialServiceServer).ApplyMailReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerSocialService_ApplyMailReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerSocialServiceServer).ApplyMailReward(ctx, req.(*ApplyMailRewardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerSocialService_ServiceDesc is the grpc.ServiceDesc for PlayerSocialService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -892,6 +1258,10 @@ var PlayerSocialService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyFriendTaskCredit",
 			Handler:    _PlayerSocialService_ApplyFriendTaskCredit_Handler,
+		},
+		{
+			MethodName: "ApplyMailReward",
+			Handler:    _PlayerSocialService_ApplyMailReward_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -6,6 +6,7 @@ import {
   type AuthResponse,
   type WsEnvelope,
 } from '../gen/classicfarm/v1/ws/ws_pb'
+import { randomUuid } from './uuid'
 
 const PROTOCOL_VERSION = 1
 const MAX_MESSAGE_BYTES = 64 * 1024
@@ -36,12 +37,24 @@ function errorMessage(envelope: WsEnvelope): string {
   return `WebSocket 错误 ${envelope.error.code}`
 }
 
+// Mirrors localConfigUrl in http.ts: the development profile only advertises
+// loopback URLs, which a browser on another host cannot dial, so the Vite proxy
+// forwards the same path to Gate.
+function localGatewayUrl(url: URL): string {
+  const isLoopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost'
+  if (!import.meta.env.DEV || !isLoopback || url.pathname !== '/ws') {
+    return url.href
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}${url.pathname}${url.search}`
+}
+
 function validateWebSocketUrl(urlText: string): string {
   const url = new URL(urlText)
   if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
     throw new Error(`Gateway URL 协议无效：${url.protocol}`)
   }
-  return url.href
+  return localGatewayUrl(url)
 }
 
 export class FarmWebSocket {
@@ -115,7 +128,7 @@ export class FarmWebSocket {
     })
 
     onSocketOpen?.()
-    const requestId = crypto.randomUUID()
+    const requestId = randomUuid()
     const envelope = await this.sendRequest(
       create(WsEnvelopeSchema, {
         protocolVersion: PROTOCOL_VERSION,
@@ -160,7 +173,7 @@ export class FarmWebSocket {
         protocolVersion: PROTOCOL_VERSION,
         messageKind: MessageKind.REQUEST,
         action: Action.GET_PLAYER_SNAPSHOT,
-        requestId: crypto.randomUUID(),
+        requestId: randomUuid(),
         targetPlayerId: playerId,
         payload: {
           case: 'getPlayerSnapshotRequest',
@@ -267,6 +280,13 @@ export class FarmWebSocket {
     return this.sendGameRequest(playerId, Action.CLAIM_MAIL, {
       case: 'claimMailRequest',
       value: { mailId },
+    })
+  }
+
+  async checkMailboxIndicator(playerId: bigint): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.CHECK_MAILBOX_INDICATOR, {
+      case: 'checkMailboxIndicatorRequest',
+      value: {},
     })
   }
 
@@ -414,10 +434,20 @@ export class FarmWebSocket {
     ownerPlayerId: bigint,
     visitId: Uint8Array,
     plotId: number,
+    expectedCropItemId: number,
+    farmViewEpoch: Uint8Array,
+    farmViewSeq: bigint,
   ): Promise<WsEnvelope> {
     return this.sendGameRequest(playerId, Action.STEAL_FRIEND_CROP, {
       case: 'stealFriendCropRequest',
-      value: { ownerPlayerId, visitId, plotId },
+      value: {
+        ownerPlayerId,
+        visitId,
+        plotId,
+        expectedCropItemId,
+        farmViewEpoch,
+        farmViewSeq,
+      },
     })
   }
 
@@ -484,7 +514,7 @@ export class FarmWebSocket {
         protocolVersion: PROTOCOL_VERSION,
         messageKind: MessageKind.REQUEST,
         action,
-        requestId: crypto.randomUUID(),
+        requestId: randomUuid(),
         targetPlayerId: playerId,
         payload,
       }),

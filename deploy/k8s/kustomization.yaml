@@ -9,3 +9,5 @@ resources:
   - gate.yaml
   - zone.yaml
   - friend.yaml
+  - info.yaml
+  - mail.yaml

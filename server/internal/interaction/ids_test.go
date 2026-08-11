@@ -30,18 +30,22 @@ func TestParseInteractionIDRejectsMalformed(t *testing.T) {
 }
 
 func TestRequestDigestIsDeterministicAndSensitiveToEveryField(t *testing.T) {
-	base := RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 0)
-	again := RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 0)
+	epoch := fixedVisitID(0x11)
+	base := RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 0, 4001, epoch, 7)
+	again := RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 0, 4001, epoch, 7)
 	if !bytes.Equal(base, again) {
 		t.Fatalf("expected identical inputs to produce identical digests")
 	}
 
 	variants := [][]byte{
-		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 9, 2, fixedVisitID(0xAA), 3, 0),
-		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 9, fixedVisitID(0xAA), 3, 0),
-		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xBB), 3, 0),
-		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 9, 0),
-		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 9),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 9, 2, fixedVisitID(0xAA), 3, 0, 4001, epoch, 7),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 9, fixedVisitID(0xAA), 3, 0, 4001, epoch, 7),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xBB), 3, 0, 4001, epoch, 7),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 9, 0, 4001, epoch, 7),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 9, 4001, epoch, 7),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 0, 4002, epoch, 7),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 0, 4001, fixedVisitID(0x22), 7),
+		RequestDigest(datav1.FriendInteractionAction_STEAL_FRIEND_CROP, 1, 2, fixedVisitID(0xAA), 3, 0, 4001, epoch, 8),
 	}
 	for i, variant := range variants {
 		if bytes.Equal(base, variant) {

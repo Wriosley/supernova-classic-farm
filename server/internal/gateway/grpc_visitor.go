@@ -152,12 +152,14 @@ func (z *GRPCVisitorZoneCommander) Steal(
 	ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope,
 ) ([]byte, error) {
 	body := request.GetStealFriendCropRequest()
-	if body == nil || body.OwnerPlayerId == 0 || len(body.VisitId) != 16 || body.PlotId == 0 {
+	if body == nil || body.OwnerPlayerId == 0 || len(body.VisitId) != 16 || body.PlotId == 0 ||
+		body.ExpectedCropItemId == 0 || len(body.FarmViewEpoch) != 16 {
 		return nil, &zoneCommandError{kind: "request", err: errors.New("invalid STEAL_FRIEND_CROP request")}
 	}
 	return z.executeFriendAction(
 		ctx, route, caller, request,
 		body.OwnerPlayerId, body.VisitId, body.PlotId, 0,
+		body.ExpectedCropItemId, body.FarmViewEpoch, body.FarmViewSeq,
 		datav1.FriendInteractionAction_STEAL_FRIEND_CROP,
 		func(envelope *wsv1.WsEnvelope, result *wsv1.FriendActionResponse) {
 			envelope.Payload = &wsv1.WsEnvelope_StealFriendCropResponse{StealFriendCropResponse: result}
@@ -177,6 +179,7 @@ func (z *GRPCVisitorZoneCommander) ApplyPest(
 	return z.executeFriendAction(
 		ctx, route, caller, request,
 		body.OwnerPlayerId, body.VisitId, body.PlotId, body.PestId,
+		0, nil, 0,
 		datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND,
 		func(envelope *wsv1.WsEnvelope, result *wsv1.FriendActionResponse) {
 			envelope.Payload = &wsv1.WsEnvelope_ApplyPestToFriendResponse{ApplyPestToFriendResponse: result}
@@ -195,6 +198,7 @@ func (z *GRPCVisitorZoneCommander) CatchPest(
 	return z.executeFriendAction(
 		ctx, route, caller, request,
 		body.OwnerPlayerId, body.VisitId, body.PlotId, 0,
+		0, nil, 0,
 		datav1.FriendInteractionAction_CATCH_PEST_FOR_FRIEND,
 		func(envelope *wsv1.WsEnvelope, result *wsv1.FriendActionResponse) {
 			envelope.Payload = &wsv1.WsEnvelope_CatchPestForFriendResponse{CatchPestForFriendResponse: result}
@@ -213,6 +217,7 @@ func (z *GRPCVisitorZoneCommander) HelpClean(
 	return z.executeFriendAction(
 		ctx, route, caller, request,
 		body.OwnerPlayerId, body.VisitId, body.PlotId, 0,
+		0, nil, 0,
 		datav1.FriendInteractionAction_HELP_CLEAN_FRIEND_PLOT,
 		func(envelope *wsv1.WsEnvelope, result *wsv1.FriendActionResponse) {
 			envelope.Payload = &wsv1.WsEnvelope_HelpCleanFriendPlotResponse{HelpCleanFriendPlotResponse: result}
@@ -223,6 +228,7 @@ func (z *GRPCVisitorZoneCommander) HelpClean(
 func (z *GRPCVisitorZoneCommander) executeFriendAction(
 	ctx context.Context, route Route, caller uint64, request *wsv1.WsEnvelope,
 	ownerPlayerID uint64, visitID []byte, plotID, pestID uint32,
+	expectedCropItemID uint32, farmViewEpoch []byte, farmViewSeq uint64,
 	action datav1.FriendInteractionAction,
 	setPayload func(*wsv1.WsEnvelope, *wsv1.FriendActionResponse),
 ) ([]byte, error) {
@@ -234,6 +240,9 @@ func (z *GRPCVisitorZoneCommander) executeFriendAction(
 		CallerPlayerId: caller, OwnerPlayerId: ownerPlayerID, VisitId: visitID,
 		GateId: z.gatewayID, RequestId: request.RequestId,
 		Action: action, PlotId: plotID,
+		ExpectedCropItemId: expectedCropItemID,
+		FarmViewEpoch:      farmViewEpoch,
+		FarmViewSeq:        farmViewSeq,
 	}
 	if pestID != 0 {
 		rpcRequest.PestId = &pestID

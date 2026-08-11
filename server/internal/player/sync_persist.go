@@ -29,6 +29,7 @@ const (
 	syncStepReleaseFriendAction
 	syncStepCatchPestOnOwner
 	syncStepHelpCleanOnOwner
+	syncStepApplyMailReward
 )
 
 // pendingSyncStep is the durable-pending marker a synchronous Saga step

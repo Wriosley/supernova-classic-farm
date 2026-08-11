@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: verified
 date: 2026-08-10
 parent:
   - ./04-3-邮件与通知阶段总计划.md
@@ -42,7 +42,7 @@ server/cmd/zone/
 
 ## Task 1：Connection Registry
 
-- [ ] 新增内存连接记录：
+- [x] 新增内存连接记录：
 
 ```go
 type PlayerConnection struct {
@@ -53,7 +53,7 @@ type PlayerConnection struct {
 }
 ```
 
-- [ ] 实现：
+- [x] 实现：
 
 ```go
 Register(PlayerConnection)
@@ -64,15 +64,15 @@ EvictExpired(now) []PlayerConnection
 RemoveShard(shardID)
 ```
 
-- [ ] 同一连接重复 Register/Refresh 必须幂等。
-- [ ] 旧 connection ID 的 Unregister 不得删除新连接。
-- [ ] 同一玩家允许多个 Gate/连接。
-- [ ] 返回结果按 `(gate_id, connection_id)` 稳定排序。
-- [ ] 编写并发和 race 测试。
+- [x] 同一连接重复 Register/Refresh 必须幂等。
+- [x] 旧 connection ID 的 Unregister 不得删除新连接。
+- [x] 同一玩家允许多个 Gate/连接。
+- [x] 返回结果按 `(gate_id, connection_id)` 稳定排序。
+- [x] 编写并发和 race 测试。
 
 ## Task 2：Gate 注册、心跳和注销
 
-- [ ] 增加内部 RPC：
+- [x] 增加内部 RPC：
 
 ```text
 RegisterPlayerConnection
@@ -80,13 +80,13 @@ RefreshPlayerConnection
 UnregisterPlayerConnection
 ```
 
-- [ ] Gate AUTH 后通过 RouteCache 找到 Owner Zone并注册。
-- [ ] 每 30 秒刷新连接，Zone 租约 90 秒。
-- [ ] 每次普通命令转发成功时可顺便刷新。
-- [ ] WebSocket 断开时使用完整三元组注销。
-- [ ] Zone 返回 `NOT_OWNER` 时 Gate 刷新 Route 并重试一次。
-- [ ] Zone 重启后心跳能够自动重新注册。
-- [ ] Shard 迁移后旧 Zone 清理记录，Gate 向新 Zone 注册。
+- [x] Gate AUTH 后通过 RouteCache 找到 Owner Zone并注册。
+- [x] 每 30 秒刷新连接，Zone 租约 90 秒。
+- [x] 每次普通命令转发成功时可顺便刷新。
+- [x] WebSocket 断开时使用完整三元组注销。
+- [x] Zone 返回 `NOT_OWNER` 时 Gate 刷新 Route 并重试一次。
+- [x] Zone 重启后心跳能够自动重新注册。
+- [x] Shard 迁移后旧 Zone 清理记录，Gate 向新 Zone 注册。
 
 ## Task 3：通用 Push Event
 
@@ -109,22 +109,22 @@ PlayerStateChanged
 FarmPresenceChanged
 ```
 
-- [ ] Dispatcher 根据 recipient 查询 Connection Registry。
-- [ ] 按 `gate_id` 分组。
-- [ ] 同一 Gate/玩家/连接去重。
-- [ ] 当前单 Gate 继续复用现有 `GRPCPushForwarder`。
-- [ ] 抽象 `GateClientResolver`，不在业务接口中写死唯一 Gate。
-- [ ] 队列满、玩家离线或 Push 失败时记录 dropped/failed，不阻塞业务。
-- [ ] Close 时停止接收并有界排空。
+- [x] Dispatcher 根据 recipient 查询 Connection Registry。
+- [x] 按 `gate_id` 分组。
+- [x] 同一 Gate/玩家/连接去重。
+- [x] 当前单 Gate 继续复用现有 `GRPCPushForwarder`。
+- [x] 抽象 `GateClientResolver`，不在业务接口中写死唯一 Gate。
+- [x] 队列满、玩家离线或 Push 失败时记录 dropped/failed，不阻塞业务。
+- [x] Close 时停止接收并有界排空。
 
 ## Task 4：FarmView 迁移到通用 Dispatcher
 
-- [ ] Visit Registry 只负责返回 visitor player IDs。
-- [ ] owner + visitor IDs 交给通用 Dispatcher。
-- [ ] Dispatcher 使用 Connection Registry 查询 Gate。
-- [ ] 删除 FarmView 对固定 `ownerGateID` 的依赖。
-- [ ] 保留 FarmView sequence gap 和快照恢复。
-- [ ] 运行三客户端广播回归。
+- [x] Visit Registry 只负责返回 visitor player IDs。
+- [x] owner + visitor IDs 交给通用 Dispatcher。
+- [x] Dispatcher 使用 Connection Registry 查询 Gate。
+- [x] 删除 FarmView 对固定 `ownerGateID` 的依赖。
+- [x] 保留 FarmView sequence gap 和快照恢复。
+- [x] 运行三客户端广播回归。
 
 ## Task 5：验证
 
@@ -156,11 +156,11 @@ docs/evidence/2026-08-12-zone-connection-push.md
 
 ## 完成检查
 
-- [ ] 每 Zone 一个 Dispatcher；
-- [ ] 不为每 Actor 创建 Dispatcher；
-- [ ] 连接不进入 Checkpoint；
-- [ ] 心跳和超时清理通过；
-- [ ] 旧连接不能误删新连接；
-- [ ] FarmView 单 Gate 回归通过；
-- [ ] 接口支持未来多 Gate；
-- [ ] Evidence 和 `CURRENT.md` 更新。
+- [x] 每 Zone 一个 Dispatcher；
+- [x] 不为每 Actor 创建 Dispatcher；
+- [x] 连接不进入 Checkpoint；
+- [x] 心跳和超时清理通过；
+- [x] 旧连接不能误删新连接；
+- [x] FarmView 单 Gate 回归通过；
+- [x] 接口支持未来多 Gate；
+- [x] Evidence 和 `CURRENT.md` 更新。

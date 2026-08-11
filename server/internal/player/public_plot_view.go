@@ -31,6 +31,19 @@ func CanSteal(plot *Plot) bool {
 	return uint64(plot.BaseYield) >= required
 }
 
+// visitorAlreadyStole reports whether visitorID already stole from this crop round.
+func visitorAlreadyStole(plot *Plot, visitorID uint64) bool {
+	if plot == nil || visitorID == 0 {
+		return false
+	}
+	for _, id := range plot.StealVisitorPlayerIDs {
+		if id == visitorID {
+			return true
+		}
+	}
+	return false
+}
+
 func CanApplyPest(plot *Plot) bool {
 	return plot != nil && plot.State == plotv1.PlotState_GROWING && plot.PestEffect == nil
 }

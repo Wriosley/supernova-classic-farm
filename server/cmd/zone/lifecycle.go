@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wriosley/supernova-classic-farm/server/internal/connection"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
@@ -27,6 +28,7 @@ type lifecycleHandler struct {
 	runtime        *player.Runtime
 	authorization  *routing.AuthorizationTable
 	gates          *shardExecutionGates
+	connections    interface{ RemoveShard(shardID uint32) []connection.PlayerConnection }
 	refresh        func() error
 	now            func() time.Time
 	drainCompleted [routing.ShardCount]bool
@@ -73,6 +75,9 @@ func (h *lifecycleHandler) drain(w http.ResponseWriter, r *http.Request) {
 		h.authorization.Resume(shardID)
 		writeError(w, http.StatusConflict, "SHARD_HAS_ACTIVE_ACTORS")
 		return
+	}
+	if h.connections != nil {
+		_ = h.connections.RemoveShard(shardID)
 	}
 	writeLifecycleRoute(w, entry)
 }

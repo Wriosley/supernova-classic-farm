@@ -21,6 +21,7 @@ type FriendClient interface {
 	CreateCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
 	RedeemCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
 	List(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
+	CheckMutualFriend(ctx context.Context, playerAID, playerBID uint64) (mutual bool, err error)
 }
 
 // GRPCFriendCommander dials FriendSvr's FriendService using the internal
@@ -119,6 +120,24 @@ func (c *GRPCFriendCommander) List(
 			Friends: views,
 		}}
 	})
+}
+
+func (c *GRPCFriendCommander) CheckMutualFriend(
+	ctx context.Context, playerAID, playerBID uint64,
+) (bool, error) {
+	if c == nil || c.client == nil {
+		return false, errors.New("FriendSvr gRPC client is not configured")
+	}
+	response, err := c.client.CheckMutualFriend(ctx, &friendv1.CheckMutualFriendRequest{
+		PlayerAId: playerAID, PlayerBId: playerBID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("FriendSvr CheckMutualFriend gRPC call: %w", err)
+	}
+	if response.GetError() != nil {
+		return false, fmt.Errorf("FriendSvr CheckMutualFriend: %s", response.GetError().GetCode().String())
+	}
+	return response.GetMutualFriend(), nil
 }
 
 func (c *GRPCFriendCommander) Close() error {

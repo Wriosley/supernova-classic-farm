@@ -151,4 +151,10 @@ message FriendInteraction {
   int64 updated_at_ms = 14;
   // Zero means the action carries no pest; only APPLY_PEST_TO_FRIEND sets it.
   uint32 pest_id = 15;
+  // STEAL_FRIEND_CROP: reserved crop and quantity frozen at Begin so Resume
+  // never re-derives crop from ConfigSnapshot.
+  uint32 crop_item_id = 16;
+  uint32 quantity = 17;
+  bytes farm_view_epoch = 18;
+  uint64 farm_view_seq = 19;
 }

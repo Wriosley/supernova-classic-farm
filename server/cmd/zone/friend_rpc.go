@@ -165,15 +165,15 @@ func (s *visitorZoneRPCServer) ExecuteFriendAction(
 	var response *wsv1.FriendActionResponse
 	var err error
 	if request.Action == datav1.FriendInteractionAction_STEAL_FRIEND_CROP {
-		cropItemID, quantity, ok := s.runtime.CurrentConfig().SoleStealableCrop()
-		if !ok {
-			return &rpcv1.ExecuteFriendActionResponse{Error: &wsv1.Error{Code: wsv1.ErrorCode_STEAL_NOT_AVAILABLE}}, nil
+		if request.GetExpectedCropItemId() == 0 || len(request.GetFarmViewEpoch()) != 16 {
+			return nil, status.Error(codes.InvalidArgument, "steal requires expected_crop_item_id and farm_view_epoch")
 		}
 		response, err = s.steal.Execute(ctx, interaction.StealRequest{
 			InteractionID: interactionID, VisitorPlayerID: request.CallerPlayerId,
 			VisitorOwnerEpoch: entry.OwnerEpoch, OwnerPlayerID: request.OwnerPlayerId,
 			VisitID: request.VisitId, PlotID: request.PlotId,
-			CropItemID: cropItemID, Quantity: quantity,
+			CropItemID: request.GetExpectedCropItemId(), Quantity: 1,
+			FarmViewEpoch: request.GetFarmViewEpoch(), FarmViewSeq: request.GetFarmViewSeq(),
 		}, time.Now())
 	} else {
 		if s.action == nil {
@@ -424,6 +424,7 @@ func (s *ownerFarmRPCServer) ApplyVisitorAction(
 		payload, digest, farmPatch, _, applyErr = s.runtime.ApplyStealOnOwner(
 			ctx, request.OwnerPlayerId, request.OwnerRoute.OwnerEpoch, request.VisitorPlayerId,
 			request.InteractionId, request.PlotId,
+			request.GetExpectedCropItemId(), request.GetFarmViewEpoch(), request.GetFarmViewSeq(),
 		)
 	case datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND:
 		payload, digest, farmPatch, _, applyErr = s.runtime.ApplyApplyPestOnOwner(

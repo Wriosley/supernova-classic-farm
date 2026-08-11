@@ -47,6 +47,19 @@ FriendLinkSaga
 FriendInteraction
 ```
 
+邮件与领取 Saga（04-3）还需使用 `mail_tables.proto` 创建以下 PB Generic
+表，否则 `./start-servers.sh --dual-zone --tcaplus` 会在启动 MailSvr 时因
+`table ... not exit` 失败：
+
+```text
+PublicMail
+PrivateMail
+PlayerMailboxCursor
+PlayerMailState
+MailSourceDedup
+MailClaimSaga
+```
+
 控制台的表描述文件校验拒绝 proto3 的显式 `optional` 字段。需要表达
 “缺省”时使用零值约定，并在 schema 注释中写明该零值的含义。
 

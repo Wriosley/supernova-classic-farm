@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
@@ -256,7 +257,6 @@ func validatePendingOutbox(
 	pending *datav1.PendingOutboxRecord,
 ) error {
 	if pending == nil || len(pending.EventId) != 16 || allZero(pending.EventId) ||
-		pending.EventType != datav1.OutboxEventType_CREATE_REWARD_MAIL ||
 		pending.EventContractVersion != 1 ||
 		pending.AggregatePlayerId != checkpoint.PlayerId ||
 		len(pending.CausedByRequestId) != 16 || allZero(pending.CausedByRequestId) ||
@@ -270,6 +270,20 @@ func validatePendingOutbox(
 	if !bytes.Equal(digest[:], pending.PayloadSha256) {
 		return errors.New("pending Outbox payload digest mismatch")
 	}
+	switch pending.EventType {
+	case datav1.OutboxEventType_CREATE_REWARD_MAIL:
+		return validateRewardMailOutbox(checkpoint, pending)
+	case datav1.OutboxEventType_CREATE_GIFT_MAIL:
+		return validateGiftMailOutbox(checkpoint, pending)
+	default:
+		return errors.New("checkpoint contains unsupported pending Outbox type")
+	}
+}
+
+func validateRewardMailOutbox(
+	checkpoint *datav1.PlayerCheckpointV1,
+	pending *datav1.PendingOutboxRecord,
+) error {
 	payload := &eventv1.CreateRewardMailV1{}
 	if proto.Unmarshal(pending.Payload, payload) != nil ||
 		payload.RecipientPlayerId != checkpoint.PlayerId ||
@@ -288,6 +302,25 @@ func validatePendingOutbox(
 			return errors.New("pending reward-mail attachments are invalid")
 		}
 		previousItemID = attachment.ItemId
+	}
+	return nil
+}
+
+func validateGiftMailOutbox(
+	checkpoint *datav1.PlayerCheckpointV1,
+	pending *datav1.PendingOutboxRecord,
+) error {
+	payload := &eventv1.CreateGiftMailV1{}
+	if proto.Unmarshal(pending.Payload, payload) != nil ||
+		payload.SenderPlayerId != checkpoint.PlayerId ||
+		payload.RecipientPlayerId == 0 ||
+		payload.RecipientPlayerId == payload.SenderPlayerId ||
+		payload.CropItemId == 0 ||
+		payload.Quantity < minFriendGiftQuantity ||
+		payload.Quantity > maxFriendGiftQuantity ||
+		payload.CreatedAtMs <= 0 ||
+		strings.TrimSpace(payload.SenderDisplayName) == "" {
+		return errors.New("pending gift-mail payload is invalid")
 	}
 	return nil
 }
@@ -472,6 +505,12 @@ func StateFromCheckpoint(checkpoint *datav1.PlayerCheckpointV1) (*State, error) 
 			proto.Clone(receipt).(*datav1.FriendTaskCreditReceipt),
 		)
 	}
+	for _, receipt := range checkpoint.MailClaimReceipts {
+		state.MailClaimReceipts = append(
+			state.MailClaimReceipts,
+			proto.Clone(receipt).(*datav1.MailClaimReceipt),
+		)
+	}
 	if checkpoint.PetState != nil {
 		state.PetState = proto.Clone(checkpoint.PetState).(*datav1.PetStateRecord)
 	}
@@ -602,6 +641,19 @@ func (s *State) Checkpoint() (*datav1.PlayerCheckpointV1, error) {
 			checkpoint.FriendTaskCreditReceipts[j].RelationId,
 		) < 0
 	})
+	for _, receipt := range s.MailClaimReceipts {
+		checkpoint.MailClaimReceipts = append(
+			checkpoint.MailClaimReceipts,
+			proto.Clone(receipt).(*datav1.MailClaimReceipt),
+		)
+	}
+	sort.Slice(checkpoint.MailClaimReceipts, func(i, j int) bool {
+		left, right := checkpoint.MailClaimReceipts[i], checkpoint.MailClaimReceipts[j]
+		if left.MailId != right.MailId {
+			return left.MailId < right.MailId
+		}
+		return bytes.Compare(left.ClaimId, right.ClaimId) < 0
+	})
 	if s.PetState != nil {
 		checkpoint.PetState = normalizePetState(s.PetState)
 	}
@@ -652,6 +704,7 @@ func plotFromRecord(record *datav1.PlotStateRecord) *Plot {
 		LastSettledAtMS: record.LastSettledAtMs,
 		StealCount:      record.StealCount, StealQuantity: record.StealQuantity,
 		MaxStealTimes: record.MaxStealTimes, ProtectedOwnerYield: record.ProtectedOwnerYield,
+		StealVisitorPlayerIDs: append([]uint64(nil), record.StealVisitorPlayerIds...),
 	}
 	if record.MaturityValue != nil {
 		plot.MaturityValueScaled9 = record.MaturityValue.ScaledValue
@@ -687,6 +740,7 @@ func (p *Plot) Record() (*datav1.PlotStateRecord, error) {
 		LastSettledAtMs: p.LastSettledAtMS,
 		StealCount:      p.StealCount, StealQuantity: p.StealQuantity,
 		MaxStealTimes: p.MaxStealTimes, ProtectedOwnerYield: p.ProtectedOwnerYield,
+		StealVisitorPlayerIds: append([]uint64(nil), p.StealVisitorPlayerIDs...),
 	}
 	if p.State == plotv1.PlotState_GROWING || p.State == plotv1.PlotState_MATURE {
 		record.MaturityValue = &datav1.GrowthDecimal9{ScaledValue: p.MaturityValueScaled9}

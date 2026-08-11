@@ -45,6 +45,12 @@ type FarmViewDispatcher interface {
 	Close()
 }
 
+// StealableNotifier best-effort notifies InfoSvr when a plot becomes stealable.
+// Failures must not roll back Actor authority.
+type StealableNotifier interface {
+	NotifyOwnerPlotStealable(ctx context.Context, ownerPlayerID uint64, plotID uint32, notificationID string) error
+}
+
 type runtimeActor struct {
 	mailbox           *actor.Mailbox
 	state             *State
@@ -85,6 +91,8 @@ type Runtime struct {
 	store         CheckpointStore
 	pushForwarder PushForwarder
 	farmView      FarmViewDispatcher
+	stealable     StealableNotifier
+	accountNamer  AccountNamer
 	config        atomic.Pointer[ConfigSnapshot]
 	now           func() time.Time
 	randBPS       func() uint32 // 可注入；返回值会对 10000 取模用于护主判定
@@ -222,6 +230,23 @@ func (r *Runtime) SetFarmViewDispatcher(dispatcher FarmViewDispatcher) error {
 	r.farmView = dispatcher
 	r.mu.Unlock()
 	return nil
+}
+
+func (r *Runtime) SetStealableNotifier(notifier StealableNotifier) {
+	r.mu.Lock()
+	r.stealable = notifier
+	r.mu.Unlock()
+}
+
+// AccountNamer resolves a trusted display name for gift Outbox payloads.
+type AccountNamer interface {
+	AccountName(ctx context.Context, playerID uint64) (string, bool, error)
+}
+
+func (r *Runtime) SetAccountNamer(namer AccountNamer) {
+	r.mu.Lock()
+	r.accountNamer = namer
+	r.mu.Unlock()
 }
 
 func (r *Runtime) markDirty(playerID, checkpointRevision uint64) {
@@ -468,8 +493,13 @@ func (r *Runtime) activateActor(a *runtimeActor, playerID, ownerEpoch uint64) {
 			state = loaded.State
 			persistedRevision = loaded.PersistedRevision
 			persistedToken = cloneStoreToken(loaded.Token)
-			if persistedRevision != state.CheckpointRevision {
-				fail(errors.New("loaded checkpoint revision does not match state"))
+			// A store may repair the loaded state — the Tcaplus durable store
+			// drops Outbox entries the Relay already delivered — and reports
+			// the repair as a revision ahead of the persisted row, which the
+			// dirty flush at the end of activation writes back. Only a state
+			// behind the row is incoherent and must not be served.
+			if state.CheckpointRevision < persistedRevision {
+				fail(errors.New("loaded checkpoint state is behind the persisted revision"))
 				return
 			}
 		case errors.Is(err, ErrCheckpointNotFound):
@@ -641,10 +671,12 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		request.GetBuyPetFoodRequest() != nil
 	isFeedPet := request.Action == wsv1.Action_FEED_PET &&
 		request.GetFeedPetRequest() != nil
+	isSendFriendGift := request.Action == wsv1.Action_SEND_FRIEND_GIFT &&
+		request.GetSendFriendGiftRequest() != nil
 	if !isSnapshot && !isGetShop && !isBuySeeds && !isBuyFertilizer && !isPlant &&
 		!isApplyFertilizer && !isHarvest && !isCleanPlot && !isCatchPest &&
 		!isSellCrop && !isClaimReward && !isGetPetPanel && !isBuyPet &&
-		!isDeployPet && !isBuyPetFood && !isFeedPet {
+		!isDeployPet && !isBuyPetFood && !isFeedPet && !isSendFriendGift {
 		return nil, ErrUnsupportedAction
 	}
 	if isGetShop {
@@ -668,6 +700,17 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	a, err := r.actorFor(ctx, callerPlayerID, ownerEpoch)
 	if err != nil {
 		return nil, err
+	}
+	giftSenderName := defaultGiftSenderName
+	if isSendFriendGift {
+		r.mu.Lock()
+		namer := r.accountNamer
+		r.mu.Unlock()
+		if namer != nil {
+			if name, ok, nameErr := namer.AccountName(ctx, callerPlayerID); nameErr == nil && ok && name != "" {
+				giftSenderName = name
+			}
+		}
 	}
 	var response *wsv1.WsEnvelope
 	var dirty bool
@@ -794,6 +837,15 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 		if isFeedPet {
 			var commandDirty bool
 			response, commandDirty = r.feedPet(a, callerPlayerID, request, config, serverNow)
+			dirty = dirty || commandDirty
+			dirtyRevision = a.state.CheckpointRevision
+			return
+		}
+		if isSendFriendGift {
+			var commandDirty bool
+			response, commandDirty = r.sendFriendGift(
+				a, callerPlayerID, request, config, giftSenderName, serverNow,
+			)
 			dirty = dirty || commandDirty
 			dirtyRevision = a.state.CheckpointRevision
 			return
@@ -1086,13 +1138,22 @@ func (r *Runtime) PrepareShardForMigration(
 func (r *Runtime) forwardMaturityEvents(ctx context.Context, events []MaturityEvent) error {
 	r.mu.Lock()
 	forwarder := r.pushForwarder
+	stealable := r.stealable
 	r.mu.Unlock()
-	if forwarder == nil {
-		return nil
+	if forwarder != nil {
+		for _, event := range events {
+			if err := forwarder.Forward(ctx, event.Envelope()); err != nil {
+				return fmt.Errorf("forward maturity push for player %d: %w", event.PlayerID, err)
+			}
+		}
 	}
-	for _, event := range events {
-		if err := forwarder.Forward(ctx, event.Envelope()); err != nil {
-			return fmt.Errorf("forward maturity push for player %d: %w", event.PlayerID, err)
+	if stealable != nil {
+		for _, event := range events {
+			if !event.Stealable || event.Plot == nil || event.Plot.PlotId == 0 {
+				continue
+			}
+			notificationID := fmt.Sprintf("stealable:%d:%d:%d", event.PlayerID, event.Plot.PlotId, event.PlayerSeq)
+			_ = stealable.NotifyOwnerPlotStealable(ctx, event.PlayerID, event.Plot.PlotId, notificationID)
 		}
 	}
 	return nil

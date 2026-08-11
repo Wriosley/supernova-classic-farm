@@ -107,3 +107,32 @@ func (s *GRPCPushServer) PublishFarmPresence(
 	}
 	return &rpcv1.PublishFarmPresenceResponse{}, nil
 }
+
+func (s *GRPCPushServer) PublishRedDotChanged(
+	_ context.Context,
+	request *rpcv1.PublishRedDotChangedRequest,
+) (*rpcv1.PublishRedDotChangedResponse, error) {
+	if request == nil || request.GateId != s.gatewayID ||
+		len(request.RecipientPlayerIds) == 0 || request.RedDot == nil ||
+		request.RedDot.NotificationId == "" ||
+		request.RedDot.Category == wsv1.RedDotCategory_RED_DOT_CATEGORY_UNSPECIFIED ||
+		request.RedDot.Operation == wsv1.RedDotOperation_RED_DOT_OPERATION_UNSPECIFIED {
+		return nil, status.Error(codes.InvalidArgument, "invalid red dot push")
+	}
+	now := time.Now().UnixMilli()
+	for _, recipientPlayerID := range request.RecipientPlayerIds {
+		if recipientPlayerID == 0 {
+			return nil, status.Error(codes.InvalidArgument, "invalid red dot push")
+		}
+		envelope := &wsv1.WsEnvelope{
+			ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_PUSH,
+			Action: wsv1.Action_RED_DOT_CHANGED, TargetPlayerId: recipientPlayerID,
+			ServerTimeMs: now,
+			Payload:      &wsv1.WsEnvelope_RedDotChangedPush{RedDotChangedPush: request.RedDot},
+		}
+		if err := s.hub.Publish(envelope); err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid red dot push")
+		}
+	}
+	return &rpcv1.PublishRedDotChangedResponse{}, nil
+}

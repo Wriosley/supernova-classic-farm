@@ -160,8 +160,10 @@ func publicPlotView(plot *Plot) *wsv1.PublicPlotView {
 		PlotId:     plot.ID,
 		PlotState:  plot.State,
 		CropId:     plot.CropID,
+		CropItemId: plot.CropItemID,
 		PestActive: plot.PestEffect != nil,
 		CanSteal:   CanSteal(plot),
+		StealCount: plot.StealCount,
 	}
 	if plot.EstimatedMatureAtMS != nil {
 		view.EstimatedMatureAtMs = *plot.EstimatedMatureAtMS

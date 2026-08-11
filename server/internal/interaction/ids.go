@@ -29,25 +29,30 @@ func ParseInteractionID(requestID string) ([]byte, error) {
 }
 
 // RequestDigest computes FriendInteraction.request_digest_sha256: a
-// deterministic SHA-256 over the action, visitor/owner player IDs, visit ID
-// and plot ID (docs/contracts/data-model.md §18). pestID is always 0 for
-// every action Phase 5 implements (STEAL_FRIEND_CROP carries no pest);
-// Phase 6's pest-carrying actions will pass their real pest_id. A retry
-// whose digest differs from the stored one is a REQUEST_ID_CONFLICT.
+// deterministic SHA-256 over the action identity fields. STEAL_FRIEND_CROP
+// includes expected crop and farm-view version so a conflict retry with a
+// different crop/view is REQUEST_ID_CONFLICT. Pest actions pass crop=0 and
+// empty farm_view_epoch.
 func RequestDigest(
 	action datav1.FriendInteractionAction,
 	visitorPlayerID, ownerPlayerID uint64,
 	visitID []byte,
 	plotID uint32,
 	pestID uint32,
+	cropItemID uint32,
+	farmViewEpoch []byte,
+	farmViewSeq uint64,
 ) []byte {
-	body := make([]byte, 0, 4+8+8+len(visitID)+4+4)
+	body := make([]byte, 0, 4+8+8+len(visitID)+4+4+4+len(farmViewEpoch)+8)
 	body = binary.BigEndian.AppendUint32(body, uint32(action))
 	body = binary.BigEndian.AppendUint64(body, visitorPlayerID)
 	body = binary.BigEndian.AppendUint64(body, ownerPlayerID)
 	body = append(body, visitID...)
 	body = binary.BigEndian.AppendUint32(body, plotID)
 	body = binary.BigEndian.AppendUint32(body, pestID)
+	body = binary.BigEndian.AppendUint32(body, cropItemID)
+	body = append(body, farmViewEpoch...)
+	body = binary.BigEndian.AppendUint64(body, farmViewSeq)
 	digest := sha256.Sum256(body)
 	return digest[:]
 }

@@ -53,6 +53,32 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: info
+  namespace: classic-farm
+spec:
+  selector:
+    app.kubernetes.io/name: info
+  ports:
+    - name: http
+      port: 8086
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mail
+  namespace: classic-farm
+spec:
+  selector:
+    app.kubernetes.io/name: mail
+  ports:
+    - name: http
+      port: 8087
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: zone-a
   namespace: classic-farm
 spec:

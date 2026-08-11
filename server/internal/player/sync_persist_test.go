@@ -175,9 +175,7 @@ func TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce(t *testing.T) {
 	}
 
 	interactionID := interactionIDFixture(0x80)
-	_, _, patch, alreadyApplied, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionID, plotID,
-	)
+	_, _, patch, alreadyApplied, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if !errors.Is(err, ErrCheckpointConflict) {
 		t.Fatalf("first ApplyStealOnOwner error = %v, want ErrCheckpointConflict", err)
 	}
@@ -191,9 +189,7 @@ func TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce(t *testing.T) {
 		t.Fatalf("farm_view_seq after a failed apply = %d, want 0", seq)
 	}
 
-	payload, digest, patch, alreadyApplied, err := runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionID, plotID,
-	)
+	payload, digest, patch, alreadyApplied, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatalf("retried ApplyStealOnOwner: %v", err)
 	}
@@ -226,9 +222,7 @@ func TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce(t *testing.T) {
 		}
 	}
 
-	_, _, patch, alreadyApplied, err = runtime.ApplyStealOnOwner(
-		context.Background(), ownerID, LocalOwnerEpoch, 99, interactionID, plotID,
-	)
+	_, _, patch, alreadyApplied, err = applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if err != nil || !alreadyApplied {
 		t.Fatalf("durable replay: already=%v err=%v", alreadyApplied, err)
 	}

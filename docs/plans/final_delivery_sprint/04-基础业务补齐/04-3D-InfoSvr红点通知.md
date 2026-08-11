@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: verified
 date: 2026-08-10
 parent:
   - ./04-3-邮件与通知阶段总计划.md
@@ -71,31 +71,31 @@ deploy/k8s/
 
 ## Task 1：InfoSvr 骨架和 RouteCache
 
-- [ ] 建立 InfoSvr 启动、健康检查、配置和日志。
-- [ ] 复用 Gate RouteCache 的 Route Source、Snapshot 和 miss collapse 语义。
-- [ ] 根据 recipient player ID 计算 Shard。
-- [ ] 路由到 committed ACTIVE Owner Zone。
-- [ ] 禁止普通命中路径每次查询 Coordinator。
+- [x] 建立 InfoSvr 启动、健康检查、配置和日志。
+- [x] 复用 Gate RouteCache 的 Route Source、Snapshot 和 miss collapse 语义。
+- [x] 根据 recipient player ID 计算 Shard。
+- [x] 路由到 committed ACTIVE Owner Zone。
+- [x] 禁止普通命中路径每次查询 Coordinator。
 
 ## Task 2：红点投递
 
-- [ ] 接收 Mail red dot 和 Friend Farm red dot。
-- [ ] 构造不可变 `RedDotChanged`。
-- [ ] 调用 Recipient Owner Zone 的通用 Push RPC。
-- [ ] Zone `NOT_OWNER` 时：
+- [x] 接收 Mail red dot 和 Friend Farm red dot。
+- [x] 构造不可变 `RedDotChanged`。
+- [x] 调用 Recipient Owner Zone 的通用 Push RPC。
+- [x] Zone `NOT_OWNER` 时：
   - 失效该 Shard；
   - 刷新 Route；
   - 使用相同 `notification_id` 重试一次。
-- [ ] 第二次失败记录并丢弃。
-- [ ] 对 recipient 列表去重和稳定排序。
-- [ ] 请求数量设置上限，避免单次无限 fan-out。
+- [x] 第二次失败记录并丢弃。
+- [x] 对 recipient 列表去重和稳定排序。
+- [x] 请求数量设置上限，避免单次无限 fan-out。
 
 ## Task 3：好友成熟红点
 
-- [ ] Owner 地块每次 `GROWING -> MATURE` 只产生一次可偷事件。
-- [ ] 只有符合可偷配置的地块产生事件。
-- [ ] 查询 FriendSvr 获取好友 IDs。
-- [ ] 为好友生成：
+- [x] Owner 地块每次 `GROWING -> MATURE` 只产生一次可偷事件。
+- [x] 只有符合可偷配置的地块产生事件。
+- [x] 查询 FriendSvr 获取好友 IDs。
+- [x] 为好友生成：
 
 ```text
 category = FRIEND_FARM
@@ -103,9 +103,9 @@ source_player_id = ownerID
 operation = SET
 ```
 
-- [ ] 同一次成熟转换使用稳定 notification ID。
-- [ ] 不发送 CLEAR；点击好友按钮后 H5 本地清除。
-- [ ] 真实是否可偷继续由 Owner Actor 判断。
+- [x] 同一次成熟转换使用稳定 notification ID。
+- [x] 不发送 CLEAR；点击好友按钮后 H5 本地清除。
+- [x] 真实是否可偷继续由 Owner Actor 判断。
 
 ## Task 4：部署和验证
 
@@ -139,11 +139,11 @@ docs/evidence/2026-08-12-infosvr-red-dot.md
 
 ## 完成检查
 
-- [ ] InfoSvr 独立运行；
-- [ ] 不保存红点；
-- [ ] 不维护 Gate 映射；
-- [ ] RouteCache 不逐请求回源；
-- [ ] `NOT_OWNER` 只重试一次；
-- [ ] 邮件和好友红点可推送；
-- [ ] 离线或失败不影响业务；
-- [ ] Evidence 和 `CURRENT.md` 更新。
+- [x] InfoSvr 独立运行；
+- [x] 不保存红点；
+- [x] 不维护 Gate 映射；
+- [x] RouteCache 不逐请求回源；
+- [x] `NOT_OWNER` 只重试一次；
+- [x] 邮件和好友红点可推送；
+- [x] 离线或失败不影响业务；
+- [x] Evidence 和 `CURRENT.md` 更新。

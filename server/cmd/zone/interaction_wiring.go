@@ -11,12 +11,9 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
 
-// zoneStealResolver rebuilds a StealRequest's ephemeral fields
-// (VisitorOwnerEpoch, CropItemID, Quantity) from live Runtime/authorization
-// state for interaction.Reconciler, exactly the same way ExecuteFriendAction
-// resolves them for a fresh request: see
-// player.ConfigSnapshot.SoleStealableCrop's doc comment for why crop
-// resolution is a documented Phase 5 simplification.
+// zoneStealResolver rebuilds StealRequest ephemeral VisitorOwnerEpoch from
+// live authorization. Crop/quantity/farm-view identity are taken from the
+// durable FriendInteraction row so Resume never re-derives crop from config.
 type zoneStealResolver struct {
 	runtime       *player.Runtime
 	authorization ownerAuthorization
@@ -33,9 +30,8 @@ func (r *zoneStealResolver) ResolveSteal(
 	if !ok {
 		return interaction.StealRequest{}, errors.New("visitor shard ownership is unavailable")
 	}
-	cropItemID, quantity, ok := r.runtime.CurrentConfig().SoleStealableCrop()
-	if !ok {
-		return interaction.StealRequest{}, errors.New("no stealable crop is configured")
+	if record.GetCropItemId() == 0 || record.GetQuantity() == 0 || len(record.GetFarmViewEpoch()) != 16 {
+		return interaction.StealRequest{}, errors.New("friend interaction is missing frozen steal crop fields")
 	}
 	return interaction.StealRequest{
 		InteractionID:     record.InteractionId,
@@ -44,8 +40,10 @@ func (r *zoneStealResolver) ResolveSteal(
 		OwnerPlayerID:     record.OwnerPlayerId,
 		VisitID:           record.VisitId,
 		PlotID:            record.PlotId,
-		CropItemID:        cropItemID,
-		Quantity:          quantity,
+		CropItemID:        record.GetCropItemId(),
+		Quantity:          record.GetQuantity(),
+		FarmViewEpoch:     append([]byte(nil), record.GetFarmViewEpoch()...),
+		FarmViewSeq:       record.GetFarmViewSeq(),
 	}, nil
 }
 

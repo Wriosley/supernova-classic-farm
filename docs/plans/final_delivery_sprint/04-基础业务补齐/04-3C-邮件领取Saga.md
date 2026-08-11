@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: verified
 date: 2026-08-10
 parent:
   - ./04-3-邮件与通知阶段总计划.md
@@ -77,28 +77,28 @@ MailClaimReceipt {
 }
 ```
 
-- [ ] 收据按 mail ID/claim ID 去重。
-- [ ] 校验所有附件合法。
-- [ ] 预检查仓库类型数和堆叠上限。
-- [ ] 所有附件一次性入仓。
-- [ ] 入仓和收据同一次 Actor 提交。
-- [ ] 使用同步 SaveCAS。
-- [ ] 相同 claim 重试返回第一次结果。
-- [ ] 不同附件复用同 claim 返回冲突。
+- [x] 收据按 mail ID/claim ID 去重。
+- [x] 校验所有附件合法。
+- [x] 预检查仓库类型数和堆叠上限。
+- [x] 所有附件一次性入仓。
+- [x] 入仓和收据同一次 Actor 提交。
+- [x] 使用同步 SaveCAS。
+- [x] 相同 claim 重试返回第一次结果。
+- [x] 不同附件复用同 claim 返回冲突。
 
 ## Task 2：MailSvr Begin/Complete/Cancel
 
-- [ ] `BeginClaim` 校验：
+- [x] `BeginClaim` 校验：
   - 邮件可见；
   - recipient 正确；
   - 公开邮件晚于注册时间；
   - 尚未领取；
   - 没有其他有效领取。
-- [ ] 创建或幂等返回 `CLAIMING`。
-- [ ] `CompleteClaim` 仅在 Player Applied 后标记已领取。
-- [ ] 仓库不足时 `CancelClaim` 恢复 AVAILABLE。
-- [ ] 重复 Complete 幂等。
-- [ ] 已领取邮件拒绝新 claim。
+- [x] 创建或幂等返回 `CLAIMING`。
+- [x] `CompleteClaim` 仅在 Player Applied 后标记已领取。
+- [x] 仓库不足时 `CancelClaim` 恢复 AVAILABLE。
+- [x] 重复 Complete 幂等。
+- [x] 已领取邮件拒绝新 claim。
 
 ## Task 3：领取编排
 
@@ -109,20 +109,20 @@ BeginClaim
 -> CompleteClaim
 ```
 
-- [ ] Zone `NOT_OWNER` 时刷新 Route 并重试一次。
-- [ ] Player 返回仓库不足时取消领取。
-- [ ] Player 已应用但 Complete 失败时保留 Saga。
-- [ ] 不将网络超时当成仓库失败。
-- [ ] 使用稳定 claim ID。
+- [x] Zone `NOT_OWNER` 时刷新 Route 并重试一次。
+- [x] Player 返回仓库不足时取消领取。
+- [x] Player 已应用但 Complete 失败时保留 Saga。
+- [x] 不将网络超时当成仓库失败。
+- [x] 使用稳定 claim ID。
 
 ## Task 4：Reconciler
 
-- [ ] 周期扫描到期的非终态 Saga。
-- [ ] CLAIMING：调用 Player Apply。
-- [ ] PLAYER_APPLIED：调用 Complete。
-- [ ] 仓库不足：取消并恢复 AVAILABLE。
-- [ ] 临时错误：更新 retry time，使用有界退避。
-- [ ] 多实例 Reconciler 使用 CAS，不能同时推进同一 Saga。
+- [x] 周期扫描到期的非终态 Saga。
+- [x] CLAIMING：调用 Player Apply。
+- [x] PLAYER_APPLIED：调用 Complete。
+- [x] 仓库不足：取消并恢复 AVAILABLE。
+- [x] 临时错误：更新 retry time，使用有界退避。
+- [x] 多实例 Reconciler 使用 CAS，不能同时推进同一 Saga。
 
 ## Task 5：崩溃窗口测试
 
@@ -158,11 +158,11 @@ docs/evidence/2026-08-12-mail-claim-saga.md
 
 ## 完成检查
 
-- [ ] 仓库不足全部失败；
-- [ ] 公开邮件每玩家只领一次；
-- [ ] 私人邮件只有收件人可领；
-- [ ] Player 收据同步持久化；
-- [ ] 三个崩溃窗口恢复；
-- [ ] 重试不重复发奖；
-- [ ] MailSvr 多实例 CAS 安全；
-- [ ] Evidence 和 `CURRENT.md` 更新。
+- [x] 仓库不足全部失败；
+- [x] 公开邮件每玩家只领一次；
+- [x] 私人邮件只有收件人可领；
+- [x] Player 收据同步持久化；
+- [x] 三个崩溃窗口恢复；
+- [x] 重试不重复发奖；
+- [x] MailSvr 多实例 CAS 安全；
+- [x] Evidence 和 `CURRENT.md` 更新。

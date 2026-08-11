@@ -507,6 +507,26 @@ function friendHasFarmRedDot(ownerId: bigint): boolean {
   return friendFarmRedDots.value.has(ownerId.toString())
 }
 
+// refreshMailRedDot seeds the mailbox indicator at login. RED_DOT_CHANGED is
+// only pushed to players who were connected when the mail arrived, and public
+// mail is never pushed, so without this query the dot stays dark forever for
+// anything that landed while the player was away. A failure here must not
+// block a working session: the dot simply keeps its current state.
+async function refreshMailRedDot(playerId: bigint): Promise<void> {
+  try {
+    const response = await socket.checkMailboxIndicator(playerId)
+    setServerClock(response.serverTimeMs)
+    if (response.error || response.payload.case !== 'checkMailboxIndicatorResponse') {
+      return
+    }
+    if (response.payload.value.hasNewMail) {
+      mailRedDot.value = true
+    }
+  } catch (error) {
+    console.warn('邮箱红点查询失败', error)
+  }
+}
+
 async function openMailbox(): Promise<void> {
   mailRedDot.value = false
   mailboxOpen.value = true
@@ -592,7 +612,15 @@ async function claimMail(mail: MailView): Promise<void> {
     if (response.payload.case !== 'claimMailResponse') {
       throw new Error('领取邮件响应无效')
     }
-    await acceptMutationResponse(response)
+    // MailSvr omits state_version when an earlier attempt already applied the
+    // reward: the patch cannot be sequenced onto the local snapshot, so reload
+    // an authoritative one rather than rejecting a claim that did succeed.
+    if (response.stateVersion) {
+      await acceptMutationResponse(response)
+    } else {
+      setServerClock(response.serverTimeMs)
+      await recoverSnapshotGap()
+    }
     mailboxMails.value = mailboxMails.value.map((entry) =>
       entry.mailId === mail.mailId
         ? { ...entry, read: true, claimed: true }
@@ -972,11 +1000,28 @@ async function runFriendAction(
       | 'helpCleanFriendPlotResponse'
     let successMessage: string
     switch (action) {
-      case 'steal':
-        response = await socket.stealFriendCrop(playerId, ownerId, id, plotId)
+      case 'steal': {
+        const plot = visitSnapshot.value?.plots.find((entry) => entry.plotId === plotId)
+        const version = visitSnapshot.value?.version
+        if (!plot?.cropItemId || !version?.farmViewEpoch?.length) {
+          throw new Error('好友农场视图缺少作物或版本，请刷新后重试')
+        }
+        const cropName =
+          cropCatalog.value.find((entry) => entry.cropItemId === plot.cropItemId)?.name ||
+          `作物#${plot.cropItemId}`
+        response = await socket.stealFriendCrop(
+          playerId,
+          ownerId,
+          id,
+          plotId,
+          plot.cropItemId,
+          version.farmViewEpoch,
+          version.farmViewSeq,
+        )
         expectedCase = 'stealFriendCropResponse'
-        successMessage = '偷菜成功，作物已放入仓库。'
+        successMessage = `偷菜成功，获得 ${cropName} ×1。`
         break
+      }
       case 'pest':
         response = await socket.applyPestToFriend(
           playerId,
@@ -1001,6 +1046,13 @@ async function runFriendAction(
     }
     setServerClock(response.serverTimeMs)
     if (response.error) {
+      if (
+        action === 'steal' &&
+        (response.error.code === ErrorCode.STEAL_NOT_AVAILABLE ||
+          response.error.code === ErrorCode.REQUEST_ID_CONFLICT)
+      ) {
+        void enterFriendFarm(ownerId)
+      }
       throw new Error(describeWsError(response.error))
     }
     if (response.payload.case !== expectedCase) {
@@ -1017,8 +1069,8 @@ async function runFriendAction(
         const penalty = guard.guardPenaltyApplied
         successMessage =
           penalty > 0n
-            ? `偷菜成功，但你偷菜被狗咬了，被罚款 ${penalty} 金币。`
-            : '偷菜成功。'
+            ? `${successMessage} 但你偷菜被狗咬了，被罚款 ${penalty} 金币。`
+            : successMessage
       }
     }
     stealMessage.value = successMessage
@@ -1283,20 +1335,22 @@ function handleRedDotChanged(envelope: WsEnvelope): void {
     return
   }
   const push = envelope.payload.value
+  // protobuf-es strips the RED_DOT_CATEGORY_ / RED_DOT_OPERATION_ prefixes from
+  // TypeScript enum members (MAIL / SET), unlike the Go / proto identifiers.
   if (
-    push.category !== RedDotCategory.RED_DOT_CATEGORY_MAIL &&
-    push.category !== RedDotCategory.RED_DOT_CATEGORY_FRIEND_FARM
+    push.category !== RedDotCategory.MAIL &&
+    push.category !== RedDotCategory.FRIEND_FARM
   ) {
     console.warn('忽略未知红点 category', push.category)
     return
   }
-  const set = push.operation === RedDotOperation.RED_DOT_OPERATION_SET
-  const clear = push.operation === RedDotOperation.RED_DOT_OPERATION_CLEAR
+  const set = push.operation === RedDotOperation.SET
+  const clear = push.operation === RedDotOperation.CLEAR
   if (!set && !clear) {
     console.warn('忽略未知红点 operation', push.operation)
     return
   }
-  if (push.category === RedDotCategory.RED_DOT_CATEGORY_MAIL) {
+  if (push.category === RedDotCategory.MAIL) {
     mailRedDot.value = set
     return
   }
@@ -1528,6 +1582,7 @@ async function establishSnapshot(): Promise<void> {
   await refreshPetPanel()
   phase.value = 'ready'
   await loadFriends()
+  await refreshMailRedDot(connection.auth.playerId)
   // Reload restores only the Session cookie; visit leases die with the old
   // WebSocket. If this tab was mid-visit, re-ENTER the remembered owner so
   // the friend-farm dashboard comes back instead of the player's own farm.

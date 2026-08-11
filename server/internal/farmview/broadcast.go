@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/connection"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
 )
 
@@ -21,36 +22,39 @@ type PatchPublisher interface {
 
 // VisitorLister abstracts visit.OwnerService (backed by visit.Registry) so
 // Broadcaster can discover an owner's current visitors without importing the
-// Owner Zone's full OwnerService surface.
+// Owner Zone's full OwnerService surface. Visitor GateIDs still come from the
+// visit lease (cross-Zone visitors are not in this Zone's ConnectionRegistry).
 type VisitorLister interface {
 	ListVisitors(ownerPlayerID uint64) []visit.VisitRecord
 }
 
-// Broadcaster fans one FarmViewPatch out to the owner (always, on
-// ownerGateID) plus every currently registered visitor, grouped by GateID so
+// ConnectionLister resolves live owner WebSocket gates from the Zone-local
+// ConnectionRegistry. Offline owners simply receive no FarmView push.
+type ConnectionLister interface {
+	List(playerID uint64) []connection.PlayerConnection
+}
+
+// Broadcaster fans one FarmViewPatch out to the owner's registered Gate
+// connections plus every currently registered visitor, grouped by GateID so
 // each Gate receives exactly one PublishFarmViewPatch call per Broadcast.
 type Broadcaster struct {
 	publisher   PatchPublisher
 	visitors    VisitorLister
-	ownerGateID string
+	connections ConnectionLister
 }
 
 func NewBroadcaster(
-	publisher PatchPublisher, visitors VisitorLister, ownerGateID string,
+	publisher PatchPublisher, visitors VisitorLister, connections ConnectionLister,
 ) (*Broadcaster, error) {
-	if publisher == nil || visitors == nil {
-		return nil, errors.New("patch publisher and visitor lister are required")
+	if publisher == nil || visitors == nil || connections == nil {
+		return nil, errors.New("patch publisher, visitor lister, and connection lister are required")
 	}
-	if strings.TrimSpace(ownerGateID) == "" {
-		return nil, errors.New("owner gate id is required")
-	}
-	return &Broadcaster{publisher: publisher, visitors: visitors, ownerGateID: ownerGateID}, nil
+	return &Broadcaster{publisher: publisher, visitors: visitors, connections: connections}, nil
 }
 
-// Broadcast delivers patch to the owner (who is always a recipient, so
-// maturity while the owner is merely browsing their own farm still reaches
-// their WS connection) and to every visitor currently registered for
-// ownerPlayerID, one PublishFarmViewPatch call per distinct GateID.
+// Broadcast delivers patch to the owner (when online on this Zone) and to
+// every visitor currently registered for ownerPlayerID, one PublishFarmViewPatch
+// call per distinct GateID.
 func (b *Broadcaster) Broadcast(
 	ctx context.Context, ownerPlayerID uint64, patch *wsv1.FarmViewPatch,
 ) error {
@@ -60,16 +64,32 @@ func (b *Broadcaster) Broadcast(
 	if ownerPlayerID == 0 || patch == nil {
 		return errors.New("owner player id and patch are required")
 	}
-	groups := make(map[string][]uint64)
-	groups[b.ownerGateID] = append(groups[b.ownerGateID], ownerPlayerID)
-	for _, record := range b.visitors.ListVisitors(ownerPlayerID) {
-		if record.VisitorPlayerID == 0 || strings.TrimSpace(record.GateID) == "" {
-			continue
+	groups := make(map[string]map[uint64]struct{})
+	add := func(gateID string, playerID uint64) {
+		if playerID == 0 || strings.TrimSpace(gateID) == "" {
+			return
 		}
-		groups[record.GateID] = append(groups[record.GateID], record.VisitorPlayerID)
+		set := groups[gateID]
+		if set == nil {
+			set = make(map[uint64]struct{})
+			groups[gateID] = set
+		}
+		set[playerID] = struct{}{}
+	}
+	for _, conn := range b.connections.List(ownerPlayerID) {
+		if !conn.ExpiresAt.IsZero() {
+			add(conn.GateID, ownerPlayerID)
+		}
+	}
+	for _, record := range b.visitors.ListVisitors(ownerPlayerID) {
+		add(record.GateID, record.VisitorPlayerID)
 	}
 	var errs error
-	for gateID, recipientIDs := range groups {
+	for gateID, recipientSet := range groups {
+		recipientIDs := make([]uint64, 0, len(recipientSet))
+		for playerID := range recipientSet {
+			recipientIDs = append(recipientIDs, playerID)
+		}
 		if len(recipientIDs) == 0 {
 			continue
 		}

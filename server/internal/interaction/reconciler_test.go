@@ -21,11 +21,34 @@ type stubResolver struct {
 }
 
 func (r *stubResolver) ResolveSteal(_ context.Context, record *tcaplusv1.FriendInteraction) (StealRequest, error) {
+	cropItemID := record.GetCropItemId()
+	quantity := record.GetQuantity()
+	if cropItemID == 0 {
+		cropItemID = r.cropItemID
+	}
+	if quantity == 0 {
+		quantity = r.quantity
+	}
+	epoch := record.GetFarmViewEpoch()
+	if len(epoch) == 0 {
+		epoch = append([]byte(nil), testFarmViewEpoch...)
+	}
+	seq := record.GetFarmViewSeq()
+	if seq == 0 {
+		seq = testFarmViewSeq
+	}
 	return StealRequest{
-		VisitorPlayerID: record.VisitorPlayerId, VisitorOwnerEpoch: r.visitorOwnerEpoch,
-		OwnerPlayerID: record.OwnerPlayerId, OwnerRoute: dummyOwnerRoute(),
-		VisitID: record.VisitId, PlotID: record.PlotId,
-		CropItemID: r.cropItemID, Quantity: r.quantity,
+		InteractionID:     record.InteractionId,
+		VisitorPlayerID:   record.VisitorPlayerId,
+		VisitorOwnerEpoch: r.visitorOwnerEpoch,
+		OwnerPlayerID:     record.OwnerPlayerId,
+		OwnerRoute:        dummyOwnerRoute(),
+		VisitID:           record.VisitId,
+		PlotID:            record.PlotId,
+		CropItemID:        cropItemID,
+		Quantity:          quantity,
+		FarmViewEpoch:     append([]byte(nil), epoch...),
+		FarmViewSeq:       seq,
 	}, nil
 }
 
@@ -41,6 +64,13 @@ func TestReconcilerReconcilesCrashedInteractionToCompletion(t *testing.T) {
 	visitorRuntime, visitorStore := newVisitorRuntime(testVisitorID)
 	defer ownerRuntime.Close()
 	defer visitorRuntime.Close()
+
+	snap, err := ownerRuntime.BuildPublicFarmSnapshot(context.Background(), testOwnerID, player.LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("BuildPublicFarmSnapshot: %v", err)
+	}
+	testFarmViewEpoch = append([]byte(nil), snap.GetVersion().GetFarmViewEpoch()...)
+	testFarmViewSeq = snap.GetVersion().GetFarmViewSeq()
 
 	ownerClient := newInProcessOwnerClient(ownerRuntime, player.LocalOwnerEpoch)
 	saga, err := NewStealSaga(flaky, visitorRuntime, ownerClient)
@@ -105,6 +135,12 @@ func TestReconcilerSkipsRecordsNotYetDue(t *testing.T) {
 	visitorRuntime, _ := newVisitorRuntime(testVisitorID)
 	defer ownerRuntime.Close()
 	defer visitorRuntime.Close()
+	snap, err := ownerRuntime.BuildPublicFarmSnapshot(context.Background(), testOwnerID, player.LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("BuildPublicFarmSnapshot: %v", err)
+	}
+	testFarmViewEpoch = append([]byte(nil), snap.GetVersion().GetFarmViewEpoch()...)
+	testFarmViewSeq = snap.GetVersion().GetFarmViewSeq()
 	ownerClient := newInProcessOwnerClient(ownerRuntime, player.LocalOwnerEpoch)
 	saga, err := NewStealSaga(store, visitorRuntime, ownerClient)
 	if err != nil {

@@ -48,10 +48,11 @@ type Plot struct {
 	// before Phase 5 (or under a CropConfig with no steal configuration)
 	// decodes StealQuantity/MaxStealTimes/ProtectedOwnerYield as zero,
 	// which CanSteal always treats as "not stealable".
-	StealCount          uint32
-	StealQuantity       uint32
-	MaxStealTimes       uint32
-	ProtectedOwnerYield uint32
+	StealCount              uint32
+	StealQuantity           uint32
+	MaxStealTimes           uint32
+	ProtectedOwnerYield     uint32
+	StealVisitorPlayerIDs   []uint64
 }
 
 type State struct {
@@ -81,6 +82,7 @@ type State struct {
 	FriendReservations       []*datav1.FriendResourceReservation
 	FriendReceipts           []*datav1.FriendInteractionReceipt
 	FriendTaskCreditReceipts []*datav1.FriendTaskCreditReceipt
+	MailClaimReceipts        []*datav1.MailClaimReceipt
 
 	// PetState 新玩家为空：无宠物、未出战、从未喂食。
 	PetState *datav1.PetStateRecord

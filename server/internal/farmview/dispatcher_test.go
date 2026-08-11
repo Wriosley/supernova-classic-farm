@@ -51,7 +51,7 @@ func (p *blockingPatchPublisher) callCount() int {
 
 func testDispatcher(t *testing.T, publisher PatchPublisher, visitors []visit.VisitRecord) *Dispatcher {
 	t.Helper()
-	broadcaster, err := NewBroadcaster(publisher, &staticVisitorLister{visitors: visitors}, "owner-gate")
+	broadcaster, err := NewBroadcaster(publisher, &staticVisitorLister{visitors: visitors}, ownerConnections("owner-gate", 7))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestDispatcherEnqueueDeliversPatch(t *testing.T) {
 func TestDispatcherDropsWhenQueueFull(t *testing.T) {
 	block := make(chan struct{})
 	publisher := &blockingPatchPublisher{block: block}
-	broadcaster, err := NewBroadcaster(publisher, &staticVisitorLister{}, "owner-gate")
+	broadcaster, err := NewBroadcaster(publisher, &staticVisitorLister{}, ownerConnections("owner-gate", 7))
 	if err != nil {
 		t.Fatal(err)
 	}

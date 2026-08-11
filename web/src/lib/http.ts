@@ -21,6 +21,7 @@ import {
   type WsTicketResponse,
 } from '../gen/classicfarm/v1/http/http_pb'
 import { verifySha256 } from './hash'
+import { randomUuid } from './uuid'
 
 const PROTOBUF_MEDIA_TYPE = 'application/x-protobuf'
 const MAX_API_BYTES = 16 * 1024
@@ -229,7 +230,7 @@ export function selectGateway(gateways: GatewayEndpoint[]): GatewayEndpoint {
 export async function issueWsTicket(
   gatewayId: string,
   csrfToken: string,
-  ticketRequestId = crypto.randomUUID(),
+  ticketRequestId = randomUuid(),
 ): Promise<WsTicketResponse> {
   const body = toBinary(
     WsTicketRequestSchema,

@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repositoryRoot, '')
   const webPort = port(env.WEB_PORT, 5173)
   const loginPort = port(env.LOGIN_PORT, 8080)
+  const gatePort = port(env.GATE_PORT, 8081)
   const h5Origin = env.H5_ORIGIN || `http://localhost:${webPort}`
 
   return {
@@ -31,6 +32,16 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/v1': {
           target: `http://127.0.0.1:${loginPort}`,
+          changeOrigin: false,
+          headers: {
+            Origin: h5Origin,
+          },
+        },
+        // Gate binds and is advertised loopback-only, so a browser on another
+        // host reaches it through this proxy instead of dialing it directly.
+        '/ws': {
+          target: `ws://127.0.0.1:${gatePort}`,
+          ws: true,
           changeOrigin: false,
           headers: {
             Origin: h5Origin,

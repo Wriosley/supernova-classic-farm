@@ -42,7 +42,7 @@ func (s *State) materializeDueMaturities(now time.Time) ([]MaturityEvent, error)
 			s.UpdatedAtMS = maxInt64(now.UnixMilli(), s.UpdatedAtMS)
 			events = append(events, MaturityEvent{
 				PlayerID: s.PlayerID, OwnerEpoch: s.OwnerEpoch, PlayerSeq: s.PlayerSeq,
-				ServerTimeMS: now.UnixMilli(), Plot: plot.View(),
+				ServerTimeMS: now.UnixMilli(), Plot: plot.View(), Stealable: CanSteal(plot),
 			})
 		}
 	}

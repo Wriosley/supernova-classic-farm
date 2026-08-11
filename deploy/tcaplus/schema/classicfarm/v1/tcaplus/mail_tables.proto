@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package classicfarm.tcaplus.v1;
+
+import "tcaplusservice.optionv1.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus;tcaplusv1";
+
+enum MailType {
+  MAIL_TYPE_UNSPECIFIED = 0;
+  MAIL_TYPE_PUBLIC = 1;
+  MAIL_TYPE_PRIVATE = 2;
+  MAIL_TYPE_GIFT = 3;
+}
+
+enum MailSenderType {
+  MAIL_SENDER_TYPE_UNSPECIFIED = 0;
+  MAIL_SENDER_TYPE_SYSTEM = 1;
+  MAIL_SENDER_TYPE_PLAYER = 2;
+}
+
+enum MailRecipientType {
+  MAIL_RECIPIENT_TYPE_UNSPECIFIED = 0;
+  MAIL_RECIPIENT_TYPE_ALL = 1;
+  MAIL_RECIPIENT_TYPE_PLAYER = 2;
+}
+
+message MailAttachment {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+}
+
+// PublicMail is stored once for the whole server.
+message PublicMail {
+  option (tcaplusservice.tcaplus_primary_key) = "mail_id";
+
+  string mail_id = 1;
+  MailType mail_type = 2;
+  int64 created_at_ms = 3;
+  int64 published_at_ms = 4;
+  MailSenderType sender_type = 5;
+  uint64 sender_player_id = 6;
+  string sender_display_name = 7;
+  string title = 8;
+  string content = 9;
+  repeated MailAttachment attachments = 10;
+  string source_event_id = 11;
+}
+
+// PrivateMail is isolated per recipient (admin private + future gifts).
+message PrivateMail {
+  option (tcaplusservice.tcaplus_primary_key) = "recipient_player_id,mail_id";
+
+  uint64 recipient_player_id = 1;
+  string mail_id = 2;
+  MailType mail_type = 3;
+  int64 created_at_ms = 4;
+  int64 published_at_ms = 5;
+  MailSenderType sender_type = 6;
+  uint64 sender_player_id = 7;
+  string sender_display_name = 8;
+  string title = 9;
+  string content = 10;
+  repeated MailAttachment attachments = 11;
+  string source_event_id = 12;
+}
+
+message PlayerMailboxCursor {
+  option (tcaplusservice.tcaplus_primary_key) = "player_id";
+
+  uint64 player_id = 1;
+  int64 last_mailbox_opened_at_ms = 2;
+  int64 updated_at_ms = 3;
+}
+
+message PlayerMailState {
+  option (tcaplusservice.tcaplus_primary_key) = "player_id,mail_id";
+
+  uint64 player_id = 1;
+  string mail_id = 2;
+  bool read = 3;
+  bool claimed = 4;
+  int64 updated_at_ms = 5;
+}
+
+message MailSourceDedup {
+  option (tcaplusservice.tcaplus_primary_key) = "source_event_id";
+
+  string source_event_id = 1;
+  string mail_id = 2;
+  int64 created_at_ms = 3;
+}
+
+enum MailClaimSagaStatus {
+  MAIL_CLAIM_SAGA_STATUS_UNSPECIFIED = 0;
+  MAIL_CLAIM_SAGA_INIT = 1;
+  MAIL_CLAIM_SAGA_CLAIMING = 2;
+  MAIL_CLAIM_SAGA_PLAYER_APPLIED = 3;
+  MAIL_CLAIM_SAGA_COMPLETED = 4;
+  MAIL_CLAIM_SAGA_CANCELLING = 5;
+  MAIL_CLAIM_SAGA_AVAILABLE = 6;
+}
+
+message MailClaimAttachment {
+  uint32 item_id = 1;
+  uint32 quantity = 2;
+}
+
+// MailClaimSaga coordinates BeginClaim -> ApplyMailReward -> CompleteClaim.
+message MailClaimSaga {
+  option (tcaplusservice.tcaplus_primary_key) = "claim_id";
+
+  bytes claim_id = 1;
+  string mail_id = 2;
+  uint64 player_id = 3;
+  repeated MailClaimAttachment attachments = 4;
+  MailClaimSagaStatus state = 5;
+  int64 retry_at_ms = 6;
+  string last_error = 7;
+  int64 created_at_ms = 8;
+  int64 updated_at_ms = 9;
+  bytes attachments_digest_sha256 = 10;
+}
