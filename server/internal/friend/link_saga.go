@@ -38,17 +38,24 @@ type TaskCreditor interface {
 type FriendLinker struct {
 	store  Store
 	credit TaskCreditor
+	mailer RewardMailer
 	now    func() time.Time
 }
 
 func NewFriendLinker(store Store, credit TaskCreditor, now func() time.Time) (*FriendLinker, error) {
+	return NewFriendLinkerWithMailer(store, credit, nil, now)
+}
+
+func NewFriendLinkerWithMailer(
+	store Store, credit TaskCreditor, mailer RewardMailer, now func() time.Time,
+) (*FriendLinker, error) {
 	if store == nil || credit == nil {
 		return nil, errors.New("friend store and task creditor are required")
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &FriendLinker{store: store, credit: credit, now: now}, nil
+	return &FriendLinker{store: store, credit: credit, mailer: mailer, now: now}, nil
 }
 
 // EstablishFriendship drives (or resumes) the link Saga for one
@@ -201,6 +208,41 @@ func (l *FriendLinker) advance(
 				// caller: the friend relationship is already ACTIVE. The
 				// Saga stays at TASK_CREDITING with retry_at_ms/last_error
 				// for the Reconciler to retry later.
+				return saga, nil
+			}
+			if l.mailer == nil {
+				// Unit tests that only exercise friendship may omit the
+				// mailer; production FriendSvr always wires it.
+				saga.Status = tcaplusv1.FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_COMPLETED
+			} else {
+				saga.Status = tcaplusv1.FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_FIRST_REWARD_CHECKED
+			}
+
+		case tcaplusv1.FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_FIRST_REWARD_CHECKED:
+			if err := l.checkFirstFriendReward(ctx, saga, now); err != nil {
+				saga.LastErrorCode = "FIRST_REWARD_CHECK_FAILED"
+				saga.RetryAtMs = now.Add(30 * time.Second).UnixMilli()
+				saga.UpdatedAtMs = now.UnixMilli()
+				if _, updateErr := l.store.UpdateSaga(ctx, saga, version); updateErr != nil {
+					return nil, updateErr
+				}
+				// Relation stays ACTIVE; Reconciler retries the check.
+				return saga, nil
+			}
+			if saga.FirstRewardClaimed {
+				saga.InviterRewardMailStatus = tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_PENDING
+				saga.InviteeRewardMailStatus = tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_PENDING
+				saga.Status = tcaplusv1.FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_REWARD_MAILS_CREATED
+			} else {
+				saga.InviterRewardMailStatus = tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_SKIPPED
+				saga.InviteeRewardMailStatus = tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_SKIPPED
+				saga.Status = tcaplusv1.FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_COMPLETED
+			}
+
+		case tcaplusv1.FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_REWARD_MAILS_CREATED:
+			var mailErr error
+			saga, version, mailErr = l.createRewardMails(ctx, saga, version, now)
+			if mailErr != nil {
 				return saga, nil
 			}
 			saga.Status = tcaplusv1.FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_COMPLETED
@@ -471,4 +513,97 @@ func (l *FriendLinker) releaseReservation(
 		return nil
 	}
 	return errors.New("release friend slot conflicted too many times")
+}
+
+func (l *FriendLinker) checkFirstFriendReward(
+	ctx context.Context, saga *tcaplusv1.FriendLinkSaga, now time.Time,
+) error {
+	if saga.FirstRewardClaimed {
+		return nil
+	}
+	if saga.InviterRewardMailStatus == tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_SKIPPED &&
+		saga.InviteeRewardMailStatus == tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_SKIPPED {
+		return nil
+	}
+	claimed, err := l.store.TryClaimFirstFriendReward(
+		ctx,
+		saga.RedeemerPlayerId,
+		saga.CodeOwnerPlayerId,
+		saga.RelationId,
+		saga.Code,
+		now.UnixMilli(),
+	)
+	if err != nil {
+		return err
+	}
+	saga.FirstRewardClaimed = claimed
+	saga.LastErrorCode = ""
+	saga.RetryAtMs = 0
+	return nil
+}
+
+func (l *FriendLinker) createRewardMails(
+	ctx context.Context,
+	saga *tcaplusv1.FriendLinkSaga,
+	version int32,
+	now time.Time,
+) (*tcaplusv1.FriendLinkSaga, int32, error) {
+	if l.mailer == nil {
+		return saga, version, errors.New("reward mailer is required")
+	}
+	sides := []struct {
+		recipient uint64
+		sourceID  string
+		content   string
+		status    *tcaplusv1.FriendRewardMailStatus
+	}{
+		{
+			recipient: saga.CodeOwnerPlayerId,
+			sourceID:  firstFriendInviterSourceID(saga.RedeemerPlayerId),
+			content:   "你邀请了一位新玩家成为好友。",
+			status:    &saga.InviterRewardMailStatus,
+		},
+		{
+			recipient: saga.RedeemerPlayerId,
+			sourceID:  firstFriendInviteeSourceID(saga.RedeemerPlayerId),
+			content:   "你成功添加了第一位好友。",
+			status:    &saga.InviteeRewardMailStatus,
+		},
+	}
+	for _, side := range sides {
+		if *side.status == tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_APPLIED ||
+			*side.status == tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_SKIPPED {
+			continue
+		}
+		_, _, err := l.mailer.CreateSystemRewardMail(
+			ctx,
+			side.sourceID,
+			side.recipient,
+			firstFriendMailTitle,
+			side.content,
+			"系统",
+			firstFriendAttachments(),
+			firstFriendRewardCoins,
+		)
+		if err != nil {
+			saga.LastErrorCode = "REWARD_MAIL_FAILED"
+			saga.RetryAtMs = now.Add(30 * time.Second).UnixMilli()
+			saga.UpdatedAtMs = now.UnixMilli()
+			next, updateErr := l.store.UpdateSaga(ctx, saga, version)
+			if updateErr != nil {
+				return saga, version, updateErr
+			}
+			return saga, next, err
+		}
+		*side.status = tcaplusv1.FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_APPLIED
+		saga.LastErrorCode = ""
+		saga.RetryAtMs = 0
+		saga.UpdatedAtMs = now.UnixMilli()
+		next, err := l.store.UpdateSaga(ctx, saga, version)
+		if err != nil {
+			return saga, version, err
+		}
+		version = next
+	}
+	return saga, version, nil
 }

@@ -82,7 +82,8 @@ func (s *playerSocialRPCServer) ApplyMailReward(
 	request *rpcv1.ApplyMailRewardRequest,
 ) (*rpcv1.ApplyMailRewardResponse, error) {
 	if request == nil || request.PlayerId == 0 || len(request.ClaimId) != 16 ||
-		request.MailId == "" || len(request.Attachments) == 0 || request.PlayerRoute == nil {
+		request.MailId == "" || request.PlayerRoute == nil || request.GetCoinAmount() < 0 ||
+		(len(request.Attachments) == 0 && request.GetCoinAmount() <= 0) {
 		return nil, status.Error(codes.InvalidArgument, "invalid mail reward request")
 	}
 	route := request.PlayerRoute
@@ -107,7 +108,8 @@ func (s *playerSocialRPCServer) ApplyMailReward(
 		})
 	}
 	result, err := s.runtime.ApplyMailReward(
-		ctx, request.PlayerId, route.OwnerEpoch, request.ClaimId, request.MailId, attachments,
+		ctx, request.PlayerId, route.OwnerEpoch, request.ClaimId, request.MailId,
+		attachments, request.GetCoinAmount(),
 	)
 	switch {
 	case errors.Is(err, player.ErrNotOwner):
@@ -127,6 +129,7 @@ func (s *playerSocialRPCServer) ApplyMailReward(
 			NewlyApplied: result.NewlyApplied,
 			PlayerSeq:    result.PlayerSeq,
 			ItemsAdded:   result.ItemsAdded,
+			CoinsAdded:   result.CoinsAdded,
 			Patch:        result.Patch,
 			OwnerEpoch:   route.OwnerEpoch,
 		}, nil

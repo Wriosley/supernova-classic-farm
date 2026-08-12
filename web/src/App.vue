@@ -25,7 +25,9 @@ import {
   RedDotOperation,
 } from './gen/classicfarm/v1/ws/ws_pb'
 import { create } from '@bufbuild/protobuf'
+import { HttpErrorCode } from './gen/classicfarm/v1/http/http_pb'
 import {
+  ProtobufHttpError,
   authenticate,
   downloadClientConfig,
   fetchBootstrap,
@@ -39,15 +41,27 @@ import { bytesEqual } from './lib/hash'
 import { decideFarmViewPatch } from './lib/farm-view'
 import { mutationResponsePatch } from './lib/mutation-response'
 import { FarmWebSocket } from './lib/ws'
-import FarmDashboard, {
-  type FarmAction,
-  type FarmActionRequest,
-} from './components/FarmDashboard.vue'
+import type { FarmAction, FarmActionRequest } from './lib/farm-actions'
+import { panelKickers, panelTitles, type PanelId } from './lib/panels'
+import {
+  captureInviteFriendCodeFromLocation,
+  clearPendingFriendCode,
+  loadPendingFriendCode,
+} from './lib/friend-invite'
+import AccountPanel from './components/AccountPanel.vue'
+import FarmDashboard from './components/FarmDashboard.vue'
+import type { DeployedPet } from './lib/pet-art'
 import FriendFarmDashboard from './components/FriendFarmDashboard.vue'
 import FriendGiftPanel from './components/FriendGiftPanel.vue'
+import FriendsPanel from './components/FriendsPanel.vue'
+import GameDrawer from './components/GameDrawer.vue'
+import InventoryPanel from './components/InventoryPanel.vue'
 import MailboxPanel from './components/MailboxPanel.vue'
 import PetPanel from './components/PetPanel.vue'
 import PlayerProfileModal from './components/PlayerProfileModal.vue'
+import ShopPanel from './components/ShopPanel.vue'
+import TaskPanel from './components/TaskPanel.vue'
+import TopNav from './components/TopNav.vue'
 import type {
   CropCatalogEntryView,
   MailView,
@@ -96,7 +110,6 @@ const steps: Phase[] = [
   'ready',
 ]
 
-const mode = ref<'register' | 'login'>('login')
 const accountName = ref('')
 const password = ref('')
 const phase = ref<Phase>('idle')
@@ -113,6 +126,7 @@ const stateVersion = ref<StateVersion>()
 const serverTimeMs = ref<bigint>()
 const wsError = ref<WsError>()
 const socket = new FarmWebSocket()
+const connected = ref(false)
 const pushCount = ref(0)
 const gapRecoveryCount = ref(0)
 const lastPushReason = ref<number>()
@@ -145,7 +159,8 @@ const friends = ref<FriendView[]>([])
 const friendsBusy = ref(false)
 const friendsError = ref('')
 const generatedFriendCode = ref<CreateFriendCodeResponse>()
-const redeemCodeInput = ref('')
+const inviteNotice = ref('')
+const autoRedeemBusy = ref(false)
 const redeemBusy = ref(false)
 const redeemMessage = ref('')
 const redeemError = ref('')
@@ -167,7 +182,7 @@ const petError = ref('')
 const petMessage = ref('')
 const mailRedDot = ref(false)
 const friendFarmRedDots = ref<Set<string>>(new Set())
-const mailboxOpen = ref(false)
+const activePanel = ref<PanelId | null>(null)
 const mailboxMails = ref<MailView[]>([])
 const mailboxNextPageToken = ref('')
 const mailboxFilter = ref<'all' | 'public' | 'private' | 'gift'>('all')
@@ -185,6 +200,9 @@ const giftMessage = ref('')
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let presenceNoticeTimer: ReturnType<typeof setTimeout> | undefined
 
+socket.setConnectionHandler((value) => {
+  connected.value = value
+})
 socket.setPlayerStateChangedHandler(handlePlayerStateChanged)
 socket.setFarmPresenceChangedHandler(handleFarmPresenceChanged)
 socket.setFarmViewChangedHandler(handleFarmViewChanged)
@@ -193,12 +211,95 @@ socket.setRedDotChangedHandler(handleRedDotChanged)
 const canConnect = computed(() => Boolean(session.value) && !busy.value)
 const phaseIndex = computed(() => steps.indexOf(phase.value))
 const visiting = computed(() => visitOwnerId.value !== undefined)
+// The game shell owns the screen as soon as an authoritative snapshot exists;
+// a dropped socket keeps the farm on screen and offers 重新连接 in 账号 instead
+// of throwing the player back to the login form.
+const signedIn = computed(() => Boolean(session.value && snapshot.value))
+const timelineSteps = computed(() =>
+  steps.map((step) => ({ label: phaseLabels[step], state: stepState(step) })),
+)
+const diagnosticFacts = computed(() => [
+  { label: 'Gateway', value: gateway.value?.gatewayId ?? '—' },
+  { label: 'AUTH request_id', value: authRequestId.value || '—' },
+  { label: 'Snapshot request_id', value: snapshotRequestId.value || '—' },
+  { label: 'Last action request_id', value: lastActionRequestId.value || '—' },
+  {
+    label: 'state_version',
+    value: stateVersion.value
+      ? `${stateVersion.value.ownerEpoch.toString()} / ${stateVersion.value.playerSeq.toString()}`
+      : '—',
+  },
+  { label: 'server_time_ms', value: serverTimeMs.value?.toString() ?? '—' },
+  { label: 'error', value: wsError.value ? String(wsError.value.code) : '—' },
+  {
+    label: 'config_version',
+    value: clientConfig.value?.clientConfigVersion.toString() ?? '—',
+  },
+  { label: 'Push 数量', value: String(pushCount.value) },
+  { label: '最后 Push 原因', value: lastPushReason.value?.toString() ?? '—' },
+  { label: '缺口快照恢复', value: String(gapRecoveryCount.value) },
+  { label: '库存项', value: String(snapshot.value?.inventory.length ?? 0) },
+  { label: '地块', value: String(snapshot.value?.plots.length ?? 0) },
+])
+const friendRedDot = computed(() => friendFarmRedDots.value.size > 0)
+// The farm stays on screen when the socket dies, so the shell must say so
+// itself; otherwise every panel just looks empty and every button dead.
+const shellNotice = computed(() => {
+  if (connected.value) {
+    return errorMessage.value
+  }
+  if (phase.value === 'failed') {
+    return errorMessage.value || '连接失败'
+  }
+  if (phase.value === 'ready' || phase.value === 'disconnected' || phase.value === 'idle') {
+    return '实时连接已断开，命令暂时无法发送。'
+  }
+  return `${phaseLabels[phase.value]}…`
+})
+
+function togglePanel(panel: PanelId): void {
+  if (activePanel.value === panel) {
+    activePanel.value = null
+    return
+  }
+  activePanel.value = panel
+  switch (panel) {
+    case 'mailbox':
+      void openMailbox()
+      break
+    case 'friends':
+      void loadFriends()
+      break
+    case 'pet':
+      if (!petPanel.value) {
+        void refreshPetPanel()
+      }
+      break
+    case 'shop':
+      void reloadCatalog()
+      break
+  }
+}
 const inventoryMap = computed(() => {
   const map = new Map<number, number>()
   for (const item of snapshot.value?.inventory ?? []) {
     map.set(item.itemId, item.quantity)
   }
   return map
+})
+// The deployed dog lives next to the farm, so the pet panel data has to be
+// loaded even when its drawer was never opened (see the post-snapshot loads).
+const activePet = computed<DeployedPet | undefined>(() => {
+  const panel = petPanel.value
+  const petId = panel?.activePetId ?? 0
+  if (!panel || petId === 0) {
+    return undefined
+  }
+  return {
+    petId,
+    name: panel.pets.find((pet) => pet.petId === petId)?.name ?? `宠物#${petId}`,
+    foodActiveUntilMs: panel.foodActiveUntilMs,
+  }
 })
 const visitOwnerLabel = computed(() => {
   const ownerId = visitOwnerId.value
@@ -240,7 +341,7 @@ function clearResult(): void {
   petMessage.value = ''
   mailRedDot.value = false
   friendFarmRedDots.value = new Set()
-  mailboxOpen.value = false
+  activePanel.value = null
   mailboxMails.value = []
   mailboxNextPageToken.value = ''
   mailboxFilter.value = 'all'
@@ -262,7 +363,6 @@ function clearResult(): void {
   friends.value = []
   friendsError.value = ''
   generatedFriendCode.value = undefined
-  redeemCodeInput.value = ''
   redeemMessage.value = ''
   redeemError.value = ''
   stopVisitHeartbeat()
@@ -324,8 +424,11 @@ function setServerClock(serverMs: bigint): void {
 
 async function refreshShop(): Promise<void> {
   const playerId = session.value?.playerId
-  if (!playerId || !socket.connected) {
+  if (!playerId) {
     return
+  }
+  if (!socket.connected) {
+    throw new Error('尚未连接 Gateway')
   }
   const response = await socket.requestShop(playerId)
   setServerClock(response.serverTimeMs)
@@ -337,6 +440,19 @@ async function refreshShop(): Promise<void> {
   }
   shopEntries.value = response.payload.value.entries
   cropCatalog.value = response.payload.value.crops
+}
+
+async function reloadCatalog(): Promise<void> {
+  try {
+    await refreshShop()
+    if (errorMessage.value.startsWith('商店目录')) {
+      errorMessage.value = ''
+    }
+  } catch (error) {
+    errorMessage.value = `商店目录加载失败：${
+      error instanceof Error ? error.message : String(error)
+    }`
+  }
 }
 
 async function refreshPetPanel(): Promise<void> {
@@ -529,7 +645,7 @@ async function refreshMailRedDot(playerId: bigint): Promise<void> {
 
 async function openMailbox(): Promise<void> {
   mailRedDot.value = false
-  mailboxOpen.value = true
+  activePanel.value = 'mailbox'
   mailboxFilter.value = 'all'
   mailboxError.value = ''
   mailboxMessage.value = ''
@@ -716,7 +832,11 @@ function describeWsError(error: WsError): string {
 
 async function loadFriends(): Promise<void> {
   const playerId = session.value?.playerId
-  if (!playerId || !socket.connected || friendsBusy.value) {
+  if (!playerId || friendsBusy.value) {
+    return
+  }
+  if (!socket.connected) {
+    friendsError.value = '尚未连接，无法刷新好友列表'
     return
   }
   friendsBusy.value = true
@@ -762,13 +882,18 @@ async function generateFriendCode(): Promise<void> {
   }
 }
 
-async function redeemFriendCode(): Promise<void> {
+async function redeemFriendCode(rawCode: string, options?: { fromInvite?: boolean }): Promise<void> {
   const playerId = session.value?.playerId
-  const code = redeemCodeInput.value.trim()
-  if (!playerId || !socket.connected || !code || redeemBusy.value) {
+  const code = rawCode.trim()
+  if (!playerId || !socket.connected || !code || redeemBusy.value || autoRedeemBusy.value) {
     return
   }
-  redeemBusy.value = true
+  const fromInvite = options?.fromInvite === true
+  if (fromInvite) {
+    autoRedeemBusy.value = true
+  } else {
+    redeemBusy.value = true
+  }
   redeemMessage.value = ''
   redeemError.value = ''
   try {
@@ -783,13 +908,45 @@ async function redeemFriendCode(): Promise<void> {
     redeemMessage.value = response.payload.value.newlyCreated
       ? `已添加好友：${response.payload.value.friend?.accountName ?? ''}`
       : '早已是好友。'
-    redeemCodeInput.value = ''
+    if (fromInvite) {
+      inviteNotice.value = redeemMessage.value
+      clearPendingFriendCode()
+      activePanel.value = 'friends'
+    }
     await loadFriends()
   } catch (error) {
-    redeemError.value = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error)
+    redeemError.value = message
+    if (fromInvite) {
+      inviteNotice.value = message
+      // Terminal invite failures clear the pending code so the player is not
+      // stuck retrying forever; transient network errors keep it for reconnect.
+      if (isTerminalFriendRedeemFailure(message)) {
+        clearPendingFriendCode()
+      }
+    }
   } finally {
     redeemBusy.value = false
+    autoRedeemBusy.value = false
   }
+}
+
+function isTerminalFriendRedeemFailure(message: string): boolean {
+  return (
+    message.includes('好友码不存在') ||
+    message.includes('好友码已过期') ||
+    message.includes('不能添加自己') ||
+    message.includes('好友数量已达上限') ||
+    message.includes('请求参数无效')
+  )
+}
+
+async function redeemPendingFriendInvite(): Promise<void> {
+  const code = loadPendingFriendCode()
+  if (!code || !socket.connected || autoRedeemBusy.value) {
+    return
+  }
+  await redeemFriendCode(code, { fromInvite: true })
 }
 
 function stopVisitHeartbeat(): void {
@@ -1578,17 +1735,63 @@ async function establishSnapshot(): Promise<void> {
     throw new Error('快照 player_id 与认证身份不一致')
   }
   snapshot.value = response.payload.value.snapshot
-  await refreshShop()
-  await refreshPetPanel()
   phase.value = 'ready'
+  // The snapshot alone is enough to show the farm, so a failing side load must
+  // not throw: that would drop the player into the shell with an empty seed bar
+  // and an error nobody can see.
+  await reloadCatalog()
+  await refreshPetPanel()
   await loadFriends()
   await refreshMailRedDot(connection.auth.playerId)
+  await redeemPendingFriendInvite()
   // Reload restores only the Session cookie; visit leases die with the old
   // WebSocket. If this tab was mid-visit, re-ENTER the remembered owner so
   // the friend-farm dashboard comes back instead of the player's own farm.
   const pendingOwnerId = loadPendingVisitOwner(connection.auth.playerId)
   if (pendingOwnerId !== undefined) {
     await enterFriendFarm(pendingOwnerId)
+  }
+}
+
+function httpErrorCode(error: unknown): HttpErrorCode | undefined {
+  return error instanceof ProtobufHttpError ? error.code : undefined
+}
+
+function describeAuthError(error: unknown): string {
+  switch (httpErrorCode(error)) {
+    case HttpErrorCode.INVALID_CREDENTIALS:
+      return '密码错误'
+    case HttpErrorCode.INVALID_ARGUMENT:
+      return '账号需为 3-32 位小写字母、数字或下划线，密码至少 12 位'
+    case HttpErrorCode.RATE_LIMITED:
+      return '尝试过于频繁，请稍后再试'
+    case HttpErrorCode.CSRF_REJECTED:
+      return '安全校验失败，请刷新页面后重试'
+    default:
+      return error instanceof Error ? error.message : String(error)
+  }
+}
+
+// One form, no mode switch: an unknown account is registered on the spot. The
+// server cannot tell us "account does not exist" (login answers
+// INVALID_CREDENTIALS for both a wrong password and a missing account), so a
+// failed login is retried as a register, and a taken account name proves the
+// account existed and the password was simply wrong.
+async function authenticateOrRegister(): Promise<SessionView> {
+  try {
+    return await authenticate('login', accountName.value, password.value, csrfToken.value)
+  } catch (error) {
+    if (httpErrorCode(error) !== HttpErrorCode.INVALID_CREDENTIALS) {
+      throw error
+    }
+    try {
+      return await authenticate('register', accountName.value, password.value, csrfToken.value)
+    } catch (registerError) {
+      if (httpErrorCode(registerError) === HttpErrorCode.ACCOUNT_NAME_UNAVAILABLE) {
+        throw new Error('密码错误')
+      }
+      throw new Error(describeAuthError(registerError))
+    }
   }
 }
 
@@ -1602,12 +1805,7 @@ async function submitCredentials(): Promise<void> {
     phase.value = 'csrf'
     csrfToken.value = (await fetchCsrf()).csrfToken
     phase.value = 'session'
-    session.value = await authenticate(
-      mode.value,
-      accountName.value,
-      password.value,
-      csrfToken.value,
-    )
+    session.value = await authenticateOrRegister()
     password.value = ''
 
     // Successful registration/login rotates the token; never reuse the pre-auth value.
@@ -1618,7 +1816,7 @@ async function submitCredentials(): Promise<void> {
     }
   } catch (error) {
     phase.value = 'failed'
-    errorMessage.value = error instanceof Error ? error.message : String(error)
+    errorMessage.value = describeAuthError(error)
   } finally {
     busy.value = false
   }
@@ -1639,7 +1837,18 @@ async function reconnect(): Promise<void> {
   }
 }
 
-async function disconnect(): Promise<void> {
+// dropConnection only closes the realtime link, keeping the HTTP Session so
+// 重新连接 can re-issue a Ticket without another password round trip.
+async function dropConnection(): Promise<void> {
+  stopVisitHeartbeat()
+  if (visitOwnerId.value !== undefined) {
+    await exitFriendFarm()
+  }
+  socket.disconnect()
+  phase.value = 'disconnected'
+}
+
+async function signOut(): Promise<void> {
   stopVisitHeartbeat()
   if (visitOwnerId.value !== undefined) {
     await exitFriendFarm()
@@ -1656,7 +1865,9 @@ async function disconnect(): Promise<void> {
   session.value = undefined
   snapshot.value = undefined
   stateVersion.value = undefined
-  phase.value = 'disconnected'
+  activePanel.value = null
+  password.value = ''
+  phase.value = 'idle'
 }
 
 // resumeAfterReload only runs when this tab already marked itself active in
@@ -1713,6 +1924,12 @@ function tearDownRealtime(): void {
 }
 
 onMounted(() => {
+  const inviteCode = captureInviteFriendCodeFromLocation()
+  if (inviteCode) {
+    inviteNotice.value = '登录或注册后将自动添加好友'
+  } else if (loadPendingFriendCode()) {
+    inviteNotice.value = '登录或注册后将自动添加好友'
+  }
   clockTimer = setInterval(() => {
     nowMs.value = BigInt(Date.now()) + serverClockOffsetMs
   }, 1000)
@@ -1736,115 +1953,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">V3 · PLAYER ACTOR FARM</p>
-        <h1>Classic Farm</h1>
-        <p class="summary">
-          注册或登录后，在同一个 Player Actor 中完成购买、种植、成长、收获、出售、领奖与清理。
-        </p>
-      </div>
-      <span class="phase-badge" :data-phase="phase">{{ phaseLabels[phase] }}</span>
-    </header>
+  <main v-if="!signedIn" class="login-shell">
+    <section class="login-card" aria-labelledby="login-title">
+      <h1 id="login-title" class="login-title">Grow!</h1>
 
-    <FriendFarmDashboard
-      v-if="visiting"
-      :snapshot="visitSnapshot"
-      :owner-label="visitOwnerLabel"
-      :crop-catalog="cropCatalog"
-      :connected="socket.connected"
-      :busy="visitBusy"
-      :steal-busy-plot-id="stealBusyPlotId"
-      :notice="visitNotice"
-      :error="visitError || stealError"
-      :now-ms="nowMs"
-      @steal="stealFriendCrop"
-      @pest="applyPestToFriend"
-      @catch="catchPestForFriend"
-      @clean="helpCleanFriendPlot"
-      @exit="exitFriendFarm"
-      @open-profile="profileOpen = true"
-    />
-    <FarmDashboard
-      v-else-if="snapshot"
-      :snapshot="snapshot"
-      :owner-label="session?.accountName || '我的农场'"
-      :shop-entries="shopEntries"
-      :crop-catalog="cropCatalog"
-      :connected="socket.connected"
-      :busy-action="busyAction"
-      :action-message="actionMessage"
-      :action-error="actionError"
-      :now-ms="nowMs"
-      @action="runFarmAction"
-      @open-profile="profileOpen = true"
-    />
-    <PlayerProfileModal
-      :open="profileOpen"
-      :title="visiting ? `${visitOwnerLabel} 的资料` : `${session?.accountName || '我'} 的资料`"
-      :career="visiting ? visitSnapshot?.career : snapshot?.career"
-      :catalog="cropCatalog"
-      :compendium="visiting ? null : snapshot?.cropCompendium"
-      :show-compendium="!visiting"
-      @close="profileOpen = false"
-    />
-    <MailboxPanel
-      :open="mailboxOpen"
-      :mails="mailboxMails"
-      :next-page-token="mailboxNextPageToken"
-      :filter="mailboxFilter"
-      :loading="mailboxLoading"
-      :loading-more="mailboxLoadingMore"
-      :claiming-mail-id="mailboxClaimingId"
-      :error="mailboxError"
-      :message="mailboxMessage"
-      :item-name="mailItemName"
-      @close="mailboxOpen = false"
-      @filter="mailboxFilter = $event"
-      @refresh="refreshMailbox()"
-      @load-more="refreshMailbox(mailboxNextPageToken)"
-      @open-mail="markMailRead"
-      @claim="claimMail"
-    />
-    <FriendGiftPanel
-      :open="giftOpen"
-      :recipient-name="giftRecipientName"
-      :recipient-player-id="giftRecipientId"
-      :crops="cropCatalog"
-      :inventory="inventoryMap"
-      :busy="giftBusy"
-      :error="giftError"
-      :message="giftMessage"
-      @close="giftOpen = false"
-      @send="sendFriendGift"
-    />
-
-    <section class="card auth-card" aria-labelledby="auth-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">01 · HTTP SESSION</p>
-          <h2 id="auth-title">账号认证</h2>
-        </div>
-        <div class="mode-switch" aria-label="认证方式">
-          <button
-            type="button"
-            :class="{ selected: mode === 'login' }"
-            @click="mode = 'login'"
-          >
-            登录
-          </button>
-          <button
-            type="button"
-            :class="{ selected: mode === 'register' }"
-            @click="mode = 'register'"
-          >
-            注册
-          </button>
-        </div>
-      </div>
-
-      <form @submit.prevent="submitCredentials">
+      <form class="login-form" @submit.prevent="submitCredentials">
         <label>
           账号
           <input
@@ -1861,7 +1974,7 @@ onBeforeUnmount(() => {
           密码
           <input
             v-model="password"
-            :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
+            autocomplete="current-password"
             type="password"
             minlength="12"
             maxlength="128"
@@ -1869,97 +1982,119 @@ onBeforeUnmount(() => {
             required
           />
         </label>
+        <p v-if="inviteNotice && !signedIn" class="login-invite-hint" role="status">
+          {{ inviteNotice }}
+        </p>
         <button class="primary" type="submit" :disabled="busy">
-          {{ busy ? '处理中…' : mode === 'register' ? '注册并连接' : '登录并连接' }}
+          {{ busy ? '处理中…' : '进入农场' }}
         </button>
       </form>
 
-      <dl v-if="session" class="facts compact">
-        <div><dt>player_id</dt><dd>{{ session.playerId.toString() }}</dd></div>
-        <div><dt>account</dt><dd>{{ session.accountName }}</dd></div>
-      </dl>
-    </section>
-
-    <section class="card" aria-labelledby="progress-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">02 · CONNECTION</p>
-          <h2 id="progress-title">连接阶段</h2>
-        </div>
-        <div class="connection-actions">
-          <button type="button" :disabled="!socket.connected" @click="disconnect">
-            断开
-          </button>
-          <button type="button" :disabled="!canConnect" @click="reconnect">
-            重新取 Ticket
-          </button>
-        </div>
-      </div>
-
-      <ol class="timeline">
-        <li v-for="step in steps" :key="step" :data-state="stepState(step)">
-          <span class="dot" aria-hidden="true"></span>
-          <span>{{ phaseLabels[step] }}</span>
-        </li>
-      </ol>
-
       <p v-if="errorMessage" class="error-banner" role="alert">{{ errorMessage }}</p>
     </section>
+  </main>
 
-    <section class="card snapshot-card" aria-labelledby="snapshot-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">03 · ACTOR DIAGNOSTICS</p>
-          <h2 id="snapshot-title">玩家快照</h2>
-        </div>
-        <span class="proof-label">live state</span>
-      </div>
+  <main v-else class="game-shell">
+    <TopNav
+      :account-name="session?.accountName ?? ''"
+      :coin-balance="snapshot?.coinBalance"
+      :active-panel="activePanel"
+      :mail-red-dot="mailRedDot"
+      :friend-red-dot="friendRedDot"
+      @select="togglePanel"
+      @open-profile="profileOpen = true"
+    />
 
-      <dl class="facts">
-        <div><dt>Gateway</dt><dd>{{ gateway?.gatewayId ?? '—' }}</dd></div>
-        <div><dt>AUTH request_id</dt><dd>{{ authRequestId || '—' }}</dd></div>
-        <div><dt>Snapshot request_id</dt><dd>{{ snapshotRequestId || '—' }}</dd></div>
-        <div><dt>Last action request_id</dt><dd>{{ lastActionRequestId || '—' }}</dd></div>
-        <div>
-          <dt>state_version</dt>
-          <dd>
-            {{
-              stateVersion
-                ? `${stateVersion.ownerEpoch.toString()} / ${stateVersion.playerSeq.toString()}`
-                : '—'
-            }}
-          </dd>
-        </div>
-        <div><dt>server_time_ms</dt><dd>{{ serverTimeMs?.toString() ?? '—' }}</dd></div>
-        <div><dt>error</dt><dd>{{ wsError ? wsError.code : '—' }}</dd></div>
-        <div><dt>config_version</dt><dd>{{ clientConfig?.clientConfigVersion.toString() ?? '—' }}</dd></div>
-        <div><dt>Push 数量</dt><dd>{{ pushCount }}</dd></div>
-        <div><dt>最后 Push 原因</dt><dd>{{ lastPushReason ?? '—' }}</dd></div>
-        <div><dt>缺口快照恢复</dt><dd>{{ gapRecoveryCount }}</dd></div>
-      </dl>
+    <p v-if="shellNotice" class="shell-notice" role="status">
+      <span>{{ shellNotice }}</span>
+      <button type="button" :disabled="!canConnect" @click="reconnect">
+        {{ busy ? '连接中…' : '重新连接' }}
+      </button>
+    </p>
 
-      <div v-if="snapshot" class="snapshot-grid">
-        <article>
-          <span>玩家</span>
-          <strong>{{ snapshot.playerId.toString() }}</strong>
-        </article>
-        <article>
-          <span>金币</span>
-          <strong>{{ snapshot.coinBalance.toString() }}</strong>
-        </article>
-        <article>
-          <span>库存项</span>
-          <strong>{{ snapshot.inventory.length }}</strong>
-        </article>
-        <article>
-          <span>地块</span>
-          <strong>{{ snapshot.plots.length }}</strong>
-        </article>
-      </div>
-      <p v-else class="empty-state">完成认证后，这里展示 Actor 返回的最小玩家投影。</p>
-    </section>
+    <p v-if="inviteNotice && signedIn" class="shell-notice" role="status">
+      <span>{{ inviteNotice }}</span>
+    </p>
 
-    <section v-if="snapshot" class="card pet-card" aria-labelledby="pet-title">
+    <FriendFarmDashboard
+      v-if="visiting"
+      :snapshot="visitSnapshot"
+      :owner-label="visitOwnerLabel"
+      :crop-catalog="cropCatalog"
+      :connected="connected"
+      :busy="visitBusy"
+      :steal-busy-plot-id="stealBusyPlotId"
+      :notice="visitNotice"
+      :error="visitError || stealError"
+      :now-ms="nowMs"
+      @steal="stealFriendCrop"
+      @pest="applyPestToFriend"
+      @catch="catchPestForFriend"
+      @clean="helpCleanFriendPlot"
+      @exit="exitFriendFarm"
+      @open-profile="profileOpen = true"
+    />
+    <FarmDashboard
+      v-else
+      :snapshot="snapshot"
+      :crop-catalog="cropCatalog"
+      :connected="connected"
+      :busy-action="busyAction"
+      :action-message="actionMessage"
+      :action-error="actionError"
+      :now-ms="nowMs"
+      :active-pet="activePet"
+      @action="runFarmAction"
+      @open-shop="togglePanel('shop')"
+      @open-pet="togglePanel('pet')"
+      @reload-catalog="reloadCatalog"
+    />
+
+    <GameDrawer
+      :open="activePanel === 'account'"
+      :title="panelTitles.account"
+      :kicker="panelKickers.account"
+      @close="activePanel = null"
+    >
+      <AccountPanel
+        :account-name="session?.accountName ?? ''"
+        :player-id="session?.playerId.toString() ?? ''"
+        :phase-label="phaseLabels[phase]"
+        :connected="connected"
+        :busy="busy"
+        :can-reconnect="canConnect"
+        :error-message="errorMessage"
+        :steps="timelineSteps"
+        :facts="diagnosticFacts"
+        @reconnect="reconnect"
+        @disconnect="dropConnection"
+        @logout="signOut"
+      />
+    </GameDrawer>
+
+    <GameDrawer
+      :open="activePanel === 'shop'"
+      :title="panelTitles.shop"
+      :kicker="panelKickers.shop"
+      @close="activePanel = null"
+    >
+      <ShopPanel
+        :shop-entries="shopEntries"
+        :crop-catalog="cropCatalog"
+        :inventory="inventoryMap"
+        :coin-balance="snapshot?.coinBalance"
+        :connected="connected"
+        :busy-action="busyAction"
+        @action="runFarmAction"
+      />
+    </GameDrawer>
+
+    <GameDrawer
+      :open="activePanel === 'pet'"
+      :title="panelTitles.pet"
+      :kicker="panelKickers.pet"
+      @close="activePanel = null"
+    >
       <PetPanel
         :panel="petPanel"
         :now-ms="nowMs"
@@ -1975,102 +2110,111 @@ onBeforeUnmount(() => {
         @feed="feedPet"
         @refresh="refreshPetPanel"
       />
-    </section>
+    </GameDrawer>
 
-    <section v-if="snapshot" class="card friends-card" aria-labelledby="friends-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">04 · FRIENDS</p>
-          <h2 id="friends-title">好友与串门</h2>
-        </div>
-        <div class="friends-heading-actions">
-          <button
-            type="button"
-            class="mailbox-entry"
-            :disabled="!socket.connected"
-            @click="openMailbox"
-          >
-            邮箱
-            <span v-if="mailRedDot" class="red-dot" aria-label="有新邮件" />
-          </button>
-          <button type="button" :disabled="!socket.connected || friendsBusy" @click="loadFriends">
-            刷新好友列表
-          </button>
-        </div>
-      </div>
-
+    <GameDrawer
+      :open="activePanel === 'friends'"
+      :title="panelTitles.friends"
+      :kicker="panelKickers.friends"
+      @close="activePanel = null"
+    >
       <p v-if="presenceNotice" class="success-banner">{{ presenceNotice }}</p>
+      <FriendsPanel
+        :friends="friends"
+        :connected="connected"
+        :busy="friendsBusy"
+        :error="friendsError"
+        :generated-code="generatedFriendCode?.code ?? ''"
+        :share-url="generatedFriendCode?.shareUrl ?? ''"
+        :redeem-busy="redeemBusy || autoRedeemBusy"
+        :redeem-message="redeemMessage"
+        :redeem-error="redeemError"
+        :visit-owner-id="visitOwnerId"
+        :visit-busy="visitBusy"
+        :has-farm-red-dot="friendHasFarmRedDot"
+        @refresh="loadFriends"
+        @generate="generateFriendCode"
+        @redeem="redeemFriendCode"
+        @enter="enterFriendFarm"
+        @gift="openGiftPanel"
+      />
+    </GameDrawer>
 
-      <div class="friends-grid">
-        <div class="friends-code-panel">
-          <h3>好友码</h3>
-          <button
-            type="button"
-            :disabled="!socket.connected || friendsBusy"
-            @click="generateFriendCode"
-          >
-            生成好友码
-          </button>
-          <p v-if="generatedFriendCode" class="generated-code">
-            {{ generatedFriendCode.code }}
-          </p>
+    <GameDrawer
+      :open="activePanel === 'mailbox'"
+      :title="panelTitles.mailbox"
+      :kicker="panelKickers.mailbox"
+      @close="activePanel = null"
+    >
+      <MailboxPanel
+        :open="activePanel === 'mailbox'"
+        :mails="mailboxMails"
+        :next-page-token="mailboxNextPageToken"
+        :filter="mailboxFilter"
+        :loading="mailboxLoading"
+        :loading-more="mailboxLoadingMore"
+        :claiming-mail-id="mailboxClaimingId"
+        :error="mailboxError"
+        :message="mailboxMessage"
+        :item-name="mailItemName"
+        @filter="mailboxFilter = $event"
+        @refresh="refreshMailbox()"
+        @load-more="refreshMailbox(mailboxNextPageToken)"
+        @open-mail="markMailRead"
+        @claim="claimMail"
+      />
+    </GameDrawer>
 
-          <form class="redeem-form" @submit.prevent="redeemFriendCode">
-            <input
-              v-model="redeemCodeInput"
-              placeholder="输入好友码兑换"
-              maxlength="32"
-              :disabled="!socket.connected"
-            />
-            <button type="submit" :disabled="!socket.connected || !redeemCodeInput || redeemBusy">
-              兑换
-            </button>
-          </form>
-          <p v-if="redeemMessage" class="success-banner">{{ redeemMessage }}</p>
-          <p v-if="redeemError" class="tool-feedback">{{ redeemError }}</p>
-          <p v-if="friendsError" class="tool-feedback">{{ friendsError }}</p>
-        </div>
+    <GameDrawer
+      :open="activePanel === 'tasks'"
+      :title="panelTitles.tasks"
+      :kicker="panelKickers.tasks"
+      @close="activePanel = null"
+    >
+      <TaskPanel
+        :chapter="snapshot?.currentChapter"
+        :connected="connected"
+        :busy-action="busyAction"
+        @action="runFarmAction"
+      />
+    </GameDrawer>
 
-        <div class="friends-list-panel">
-          <h3>好友列表（{{ friends.length }}）</h3>
-          <ul v-if="friends.length" class="friends-list">
-            <li v-for="friend in friends" :key="friend.playerId.toString()">
-              <span>{{ friend.accountName }}</span>
-              <div class="friend-actions">
-                <button
-                  type="button"
-                  class="friend-enter"
-                  :disabled="!socket.connected || visitBusy || visitOwnerId === friend.playerId"
-                  @click="enterFriendFarm(friend.playerId)"
-                >
-                  {{ visitOwnerId === friend.playerId ? '正在访问' : '进入农场' }}
-                  <span
-                    v-if="friendHasFarmRedDot(friend.playerId)"
-                    class="red-dot"
-                    aria-label="好友农场有成熟作物"
-                  />
-                </button>
-                <button
-                  type="button"
-                  :disabled="!socket.connected || giftBusy"
-                  @click="openGiftPanel(friend)"
-                >
-                  赠送礼物
-                </button>
-              </div>
-            </li>
-          </ul>
-          <p v-else class="empty-state">暂无好友，先生成好友码分享给朋友吧。</p>
-        </div>
-      </div>
+    <GameDrawer
+      :open="activePanel === 'inventory'"
+      :title="panelTitles.inventory"
+      :kicker="panelKickers.inventory"
+      @close="activePanel = null"
+    >
+      <InventoryPanel
+        :shop-entries="shopEntries"
+        :crop-catalog="cropCatalog"
+        :inventory="inventoryMap"
+        :connected="connected"
+        :busy-action="busyAction"
+        @action="runFarmAction"
+      />
+    </GameDrawer>
 
-      <div v-if="visiting" class="visit-panel">
-        <div class="section-heading">
-          <h3>正在访问 {{ visitOwnerLabel }} 的农场</h3>
-          <button type="button" :disabled="visitBusy" @click="exitFriendFarm">离开农场</button>
-        </div>
-        <p class="empty-state">好友农田已在上方渲染；离开后会回到自己的农场。</p>
-      </div>
-    </section>
+    <PlayerProfileModal
+      :open="profileOpen"
+      :title="visiting ? `${visitOwnerLabel} 的资料` : `${session?.accountName || '我'} 的资料`"
+      :career="visiting ? visitSnapshot?.career : snapshot?.career"
+      :catalog="cropCatalog"
+      :compendium="visiting ? null : snapshot?.cropCompendium"
+      :show-compendium="!visiting"
+      @close="profileOpen = false"
+    />
+    <FriendGiftPanel
+      :open="giftOpen"
+      :recipient-name="giftRecipientName"
+      :recipient-player-id="giftRecipientId"
+      :crops="cropCatalog"
+      :inventory="inventoryMap"
+      :busy="giftBusy"
+      :error="giftError"
+      :message="giftMessage"
+      @close="giftOpen = false"
+      @send="sendFriendGift"
+    />
   </main>
 </template>

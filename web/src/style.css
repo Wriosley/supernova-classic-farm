@@ -71,7 +71,6 @@ button:disabled {
 
 .farm-toolbar,
 .panel-heading,
-.wallet,
 .shop-item {
   display: flex;
   align-items: center;
@@ -93,35 +92,6 @@ button.owner-name {
   text-decoration: underline;
   text-underline-offset: 0.2em;
   cursor: pointer;
-}
-
-.crop-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-}
-
-.crop-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  border-radius: 0.45rem;
-  background: color-mix(in srgb, #fff 70%, transparent);
-  cursor: pointer;
-  font-size: 0.78rem;
-}
-
-.crop-chip.selected {
-  border-color: color-mix(in srgb, #2f6b3a 55%, transparent);
-  background: color-mix(in srgb, #d9f0dd 70%, #fff);
-  font-weight: 700;
-}
-
-.crop-chip small {
-  opacity: 0.7;
 }
 
 .sell-crop-picker {
@@ -186,40 +156,9 @@ button.owner-name {
   color: #24361f;
 }
 
-.wallet {
-  justify-content: flex-end;
-  min-width: 9rem;
-  padding: 0.55rem 0.85rem;
-  border: 2px solid #76542a;
-  border-radius: 0.8rem;
-  background: #fff4bd;
-  box-shadow: inset 0 -3px 0 rgb(111 73 29 / 15%);
-}
-
-.wallet img {
-  width: 1.8rem;
-  height: 1.8rem;
-}
-
-.wallet strong {
-  font-size: 1.25rem;
-}
-
-.wallet span {
-  color: #745a31;
-  font-size: 0.72rem;
-  font-weight: 750;
-}
-
 .farm-layout {
   display: grid;
   grid-template-columns: minmax(20rem, 1.15fr) minmax(19rem, 0.85fr);
-  gap: 1rem;
-}
-
-.farm-sidebar {
-  display: grid;
-  align-content: start;
   gap: 1rem;
 }
 
@@ -252,36 +191,65 @@ button.owner-name {
   font-weight: 800;
 }
 
+/* The plots sit straight on the grass: the grid paints the lawn and every tile
+   is frameless, so the only boxes on screen are the soil sprites themselves. */
 .plots-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.7rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  /* Tiles are square, so the lawn is as tall as it is wide: cap the width so
+     all four rows stay visible next to the top nav and the two bottom bars. */
+  width: min(100%, 44rem, calc(100vh - 18rem));
   margin-top: 0.8rem;
+  margin-inline: auto;
+  padding: 0.6rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(rgb(255 255 255 / 7%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 7%) 1px, transparent 1px),
+    #8eb86d;
+  background-size: 32px 32px;
 }
 
 .plot-tile {
   position: relative;
-  display: grid;
-  gap: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 1 / 1;
   min-width: 0;
-  padding: 0.55rem;
-  border: 2px solid #9a7a50;
-  background: #f5e7bd;
+  padding: 0.3rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: transparent;
+  box-shadow: none;
   text-align: left;
 }
 
-.plot-tile.valid {
-  border-color: #527b46;
-  box-shadow: 0 0 0 2px rgb(82 123 70 / 12%);
+.plot-tile::before {
+  position: absolute;
+  inset: 0.1rem;
+  z-index: 1;
+  border-radius: 0.6rem;
+  content: "";
+  pointer-events: none;
+  transition: box-shadow 120ms ease;
+}
+
+.plot-tile.valid::before {
+  box-shadow: inset 0 0 0 2px rgb(247 255 232 / 75%);
+}
+
+.plot-tile.valid:hover::before {
+  box-shadow: inset 0 0 0 3px #f7ffe8;
 }
 
 .plot-tile.invalid {
   filter: saturate(0.72);
 }
 
-.plot-tile.invalid:hover {
-  border-color: #b45f50;
-  box-shadow: 0 0 0 2px rgb(180 95 80 / 12%);
+.plot-tile.invalid:hover::before {
+  box-shadow: inset 0 0 0 2px rgb(180 95 80 / 60%);
 }
 
 .plots-grid[data-tool="seed"] .plot-tile {
@@ -305,10 +273,13 @@ button.owner-name {
 }
 
 .plot-number {
-  color: #6b7c54;
-  font-size: 0.62rem;
+  position: relative;
+  z-index: 2;
+  color: #f6ffe8;
+  font-size: 0.58rem;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 rgb(28 44 22 / 75%);
 }
 
 .pest-badge {
@@ -321,15 +292,27 @@ button.owner-name {
   font-size: 0.6rem;
 }
 
-.plot-tile > strong {
-  color: #33472e;
-  font-size: 0.78rem;
+.plot-caption {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 0.05rem;
+  text-shadow: 0 1px 0 rgb(28 44 22 / 80%);
 }
 
-.plot-tile > small {
-  min-height: 1.9rem;
-  color: #66705d;
-  font-size: 0.65rem;
+.plot-caption strong {
+  color: #fdfff5;
+  font-size: 0.7rem;
+}
+
+.plot-caption small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #e6f2cf;
+  font-size: 0.58rem;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .plot-busy {
@@ -345,45 +328,34 @@ button.owner-name {
 }
 
 .plot-stage {
-  position: relative;
-  display: grid;
-  min-height: 8.5rem;
-  place-items: center;
-  overflow: hidden;
-  border: 2px solid #755331;
-  border-radius: 0.8rem;
-  background:
-    linear-gradient(45deg, rgb(255 255 255 / 8%) 25%, transparent 25%) 0 0 / 20px 20px,
-    #80ad62;
-}
-
-.plot-stage::after {
   position: absolute;
-  inset: auto 0 0;
-  height: 24%;
-  background: #d7b56e;
-  content: "";
-  opacity: 0.35;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
 }
 
 .plot-base {
-  width: min(78%, 8rem);
-  z-index: 1;
+  width: 92%;
+  z-index: 0;
+  filter: drop-shadow(0 0.2rem 0 rgb(51 74 36 / 18%));
 }
 
 .plot-crop {
   position: absolute;
-  z-index: 2;
-  width: min(36%, 4rem);
-  filter: drop-shadow(0 0.45rem 0 rgb(51 74 36 / 20%));
+  z-index: 1;
+  width: 46%;
+  filter: drop-shadow(0 0.35rem 0 rgb(51 74 36 / 20%));
 }
 
 .plot-effect {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 3;
-  width: 1.8rem;
+  top: 0.3rem;
+  right: 0.3rem;
+  z-index: 2;
+  width: 1.3rem;
   animation: effect-pulse 1.6s ease-in-out infinite;
 }
 
@@ -391,13 +363,6 @@ button.owner-name {
   50% {
     transform: scale(1.12);
   }
-}
-
-.plot-meta {
-  min-height: 2.7rem;
-  padding: 0.8rem 0.1rem 0;
-  color: #53604f;
-  font-size: 0.82rem;
 }
 
 .inventory-panel button {
@@ -472,8 +437,7 @@ button.owner-name {
   gap: 0.45rem;
 }
 
-.shop-item small,
-.task-row small {
+.shop-item small {
   color: #6d755f;
   font-size: 0.68rem;
 }
@@ -481,13 +445,6 @@ button.owner-name {
 .item-icon {
   width: 3rem;
   height: 3rem;
-}
-
-.inventory-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
 }
 
 .inventory-slot {
@@ -520,63 +477,11 @@ button.owner-name {
   font-size: 0.82rem;
 }
 
-.chapter-panel {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.task-list {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.5rem;
-}
-
-.task-row {
-  display: grid;
-  grid-template-columns: 1.2rem 1fr;
-  gap: 0.35rem 0.5rem;
-  min-width: 0;
-  padding: 0.65rem;
-  border: 1px solid #c3b48e;
-  border-radius: 0.65rem;
-  background: #fffdf2;
-}
-
-.task-row img,
 .task-dot {
   width: 1.2rem;
   height: 1.2rem;
-}
-
-.task-dot {
   border: 2px solid #aeb79e;
   border-radius: 50%;
-}
-
-.task-row > div {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.task-row strong {
-  font-size: 0.7rem;
-}
-
-.task-row progress {
-  grid-column: 1 / -1;
-  width: 100%;
-  height: 0.4rem;
-  accent-color: #4e7c45;
-}
-
-.claim-button {
-  justify-self: start;
-}
-
-.chapter-placeholder {
-  margin: 0;
-  color: #67725f;
-  font-size: 0.82rem;
 }
 
 .action-notice {
@@ -599,14 +504,6 @@ button.owner-name {
   background: #fff5d8;
   color: #73501f;
   font-size: 0.85rem;
-}
-
-.hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
 }
 
 .card {
@@ -651,49 +548,6 @@ h2 {
   margin-bottom: 0;
   color: #596455;
   line-height: 1.6;
-}
-
-.phase-badge,
-.proof-label {
-  flex: none;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid #97a78a;
-  border-radius: 99rem;
-  background: #eef4df;
-  color: #36522f;
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-
-.phase-badge[data-phase="failed"] {
-  border-color: #c88277;
-  background: #fff0eb;
-  color: #8d3328;
-}
-
-.section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.mode-switch,
-.connection-actions {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.mode-switch button,
-.connection-actions button {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-.mode-switch button.selected {
-  border-color: #365b32;
-  background: #365b32;
-  color: #fff;
 }
 
 form {
@@ -822,32 +676,6 @@ input:focus {
   white-space: nowrap;
 }
 
-.snapshot-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.6rem;
-  margin-top: 0.7rem;
-}
-
-.snapshot-grid article {
-  display: grid;
-  gap: 0.25rem;
-  padding: 1rem;
-  border: 1px solid #ccd3c1;
-  border-radius: 0.7rem;
-}
-
-.snapshot-grid span {
-  color: #74806e;
-  font-size: 0.72rem;
-}
-
-.snapshot-grid strong {
-  overflow-wrap: anywhere;
-  color: #2f542b;
-  font-size: 1.1rem;
-}
-
 .empty-state {
   margin: 1rem 0 0;
   padding: 1.5rem;
@@ -855,27 +683,6 @@ input:focus {
   border-radius: 0.7rem;
   color: #6d7768;
   text-align: center;
-}
-
-.friends-grid {
-  display: grid;
-  grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.2fr);
-  gap: 1rem;
-  margin-top: 1.25rem;
-}
-
-.friends-code-panel,
-.friends-list-panel {
-  display: grid;
-  align-content: start;
-  gap: 0.6rem;
-}
-
-.friends-code-panel h3,
-.friends-list-panel h3,
-.visit-panel h3 {
-  margin: 0;
-  font-size: 0.95rem;
 }
 
 .generated-code {
@@ -915,13 +722,6 @@ input:focus {
   flex-wrap: wrap;
 }
 
-.friends-heading-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
 .friend-actions {
   display: flex;
   flex-wrap: wrap;
@@ -929,8 +729,7 @@ input:focus {
   align-items: center;
 }
 
-.friend-enter,
-.mailbox-entry {
+.friend-enter {
   position: relative;
 }
 
@@ -944,39 +743,85 @@ input:focus {
   vertical-align: middle;
 }
 
-.visit-panel {
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid #c3b48e;
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.login-card {
+  width: min(100%, 26rem);
+  padding: clamp(1.5rem, 5vw, 2.5rem);
+  border: 2px solid #71895e;
+  border-radius: 1.35rem;
+  background: rgb(255 253 244 / 94%);
+  box-shadow: 0 1.2rem 3rem rgb(42 61 35 / 18%);
+  text-align: center;
+}
+
+.login-title {
+  margin: 0;
+  color: #2f5b2c;
+  font-size: clamp(3rem, 12vw, 4.5rem);
+}
+
+.login-form {
+  grid-template-columns: 1fr;
+  text-align: left;
+}
+
+.login-invite-hint {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #c9b27a;
+  border-radius: 0.7rem;
+  background: #fff8e4;
+  color: #6a5224;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.login-form button {
+  margin-top: 0.35rem;
+}
+
+.shell-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border: 2px solid #d0a04b;
+  border-radius: 0.9rem;
+  background: #fff5d8;
+  color: #73501f;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.shell-notice button {
+  flex: none;
+  min-height: 2.3rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.game-shell {
+  display: grid;
+  gap: 0.8rem;
+  width: min(100% - 1.5rem, 78rem);
+  margin: 0 auto;
+  padding: 0.75rem 0 1.5rem;
 }
 
 @media (max-width: 720px) {
-  .friends-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
-  .hero,
-  .section-heading {
-    align-items: flex-start;
-  }
-
-  .hero {
-    flex-direction: column;
-  }
-
   form {
     grid-template-columns: 1fr;
   }
 
-  .timeline {
-    grid-template-columns: repeat(3, 1fr);
-    row-gap: 1rem;
-  }
-
-  .facts,
-  .snapshot-grid {
+  .facts {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -989,22 +834,14 @@ input:focus {
     flex-direction: column;
   }
 
-  .plot-stage {
-    min-height: 8rem;
-  }
-
-  .task-list {
-    grid-template-columns: 1fr 1fr;
+  .plots-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: min(100%, 32rem);
   }
 }
 
 @media (max-width: 440px) {
-  .section-heading {
-    flex-direction: column;
-  }
-
-  .facts,
-  .snapshot-grid {
+  .facts {
     grid-template-columns: 1fr;
   }
 
@@ -1015,18 +852,13 @@ input:focus {
     flex-wrap: wrap;
   }
 
-  .wallet {
-    width: 100%;
-  }
-
-  .tool-options,
-  .inventory-grid,
-  .task-list {
+  .tool-options {
     grid-template-columns: 1fr 1fr;
   }
 
-  .plot-stage {
-    min-height: 7rem;
+  .plots-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
   }
 
   .quantity-row,

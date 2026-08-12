@@ -134,7 +134,8 @@ func (c *GRPCMailCommander) ClaimMail(
 		// completed the claim; H5 then reloads a snapshot instead.
 		envelope.StateVersion = response.GetStateVersion()
 		envelope.Payload = &wsv1.WsEnvelope_ClaimMailResponse{ClaimMailResponse: &wsv1.ClaimMailResponse{
-			MailId: response.GetMailId(), ItemsAdded: response.GetItemsAdded(), Patch: response.GetPatch(),
+			MailId: response.GetMailId(), ItemsAdded: response.GetItemsAdded(),
+			CoinsAdded: response.GetCoinsAdded(), Patch: response.GetPatch(),
 		}}
 	})
 }
@@ -183,6 +184,7 @@ func toWSMailViews(in []*mailv1.MailView) []*wsv1.MailView {
 			}
 			atts = append(atts, &wsv1.MailAttachmentView{
 				ItemId: attachment.GetItemId(), Quantity: attachment.GetQuantity(),
+				CoinAmount: attachment.GetCoinAmount(),
 			})
 		}
 		out = append(out, &wsv1.MailView{
@@ -198,6 +200,7 @@ func toWSMailViews(in []*mailv1.MailView) []*wsv1.MailView {
 			Attachments:       atts,
 			Read:              mail.GetRead(),
 			Claimed:           mail.GetClaimed(),
+			CoinAmount:        mail.GetCoinAmount(),
 		})
 	}
 	return out

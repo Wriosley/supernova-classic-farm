@@ -606,7 +606,7 @@ func TestRuntimeCreatesInitialCheckpointOnFirstActivation(t *testing.T) {
 	if a.state.PlayerID != playerID ||
 		a.state.Coins != InitialCoinBalance ||
 		a.state.Inventory[BasicFertilizerID] != 1 ||
-		len(a.state.Plots) != 4 ||
+		len(a.state.Plots) != int(InitialPlotCount) ||
 		a.state.OwnerEpoch != LocalOwnerEpoch ||
 		a.persistedRevision != 1 ||
 		string(a.persistedToken) != "initial-token" {
@@ -829,6 +829,64 @@ func TestActivationRejectsStaleCheckpointState(t *testing.T) {
 	_, err = runtime.actorFor(context.Background(), playerID, LocalOwnerEpoch)
 	if err == nil || !strings.Contains(err.Error(), "behind the persisted revision") {
 		t.Fatalf("actorFor = %v, want behind-the-persisted-revision failure", err)
+	}
+}
+
+type legacyFarmStore struct {
+	state *State
+	saves atomic.Int64
+}
+
+func (s *legacyFarmStore) Load(_ context.Context, playerID uint64) (LoadedCheckpoint, error) {
+	if s.state == nil || s.state.PlayerID != playerID {
+		return LoadedCheckpoint{}, ErrCheckpointNotFound
+	}
+	return LoadedCheckpoint{State: s.state, PersistedRevision: s.state.CheckpointRevision}, nil
+}
+
+func (s *legacyFarmStore) SaveCAS(context.Context, CheckpointWrite) (CheckpointWriteResult, error) {
+	s.saves.Add(1)
+	return CheckpointWriteResult{Status: CheckpointWriteApplied}, nil
+}
+
+// TestActivationBackfillsPlotsAddedByLaterBuild covers accounts created when
+// the starting farm was smaller: they must gain the new plots as empty land,
+// keep the plots they already planted, and persist the result.
+func TestActivationBackfillsPlotsAddedByLaterBuild(t *testing.T) {
+	const playerID = uint64(9303)
+	const legacyPlotCount = uint32(4)
+	state := NewDevelopmentState(playerID)
+	for plotID := InitialPlotID + legacyPlotCount; plotID < InitialPlotID+InitialPlotCount; plotID++ {
+		delete(state.Plots, plotID)
+	}
+	keptPlot := state.Plots[InitialPlotID]
+	base := state.CheckpointRevision
+	store := &legacyFarmStore{state: state}
+	runtime, err := NewRuntimeWithStore(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+
+	a, err := runtime.actorFor(context.Background(), playerID, LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("actorFor = %v, want nil", err)
+	}
+	if len(a.state.Plots) != int(InitialPlotCount) {
+		t.Fatalf("plots = %d, want %d", len(a.state.Plots), InitialPlotCount)
+	}
+	if a.state.Plots[InitialPlotID] != keptPlot {
+		t.Fatal("existing plot was replaced by the backfill")
+	}
+	if a.state.CheckpointRevision != base+1 || a.persistedRevision != base {
+		t.Fatalf("revision = %d persisted = %d, want %d/%d",
+			a.state.CheckpointRevision, a.persistedRevision, base+1, base)
+	}
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatalf("flushDirty = %v, want nil", err)
+	}
+	if store.saves.Load() != 1 {
+		t.Fatalf("saves = %d, want 1", store.saves.Load())
 	}
 }
 

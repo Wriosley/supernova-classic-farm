@@ -19,7 +19,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  close: []
   filter: [value: 'all' | 'public' | 'private' | 'gift']
   refresh: []
   loadMore: []
@@ -30,11 +29,11 @@ const emit = defineEmits<{
 const filtered = computed(() => {
   switch (props.filter) {
     case 'public':
-      return props.mails.filter((mail) => mail.kind === MailKind.MAIL_KIND_PUBLIC)
+      return props.mails.filter((mail) => mail.kind === MailKind.PUBLIC)
     case 'private':
-      return props.mails.filter((mail) => mail.kind === MailKind.MAIL_KIND_PRIVATE)
+      return props.mails.filter((mail) => mail.kind === MailKind.PRIVATE)
     case 'gift':
-      return props.mails.filter((mail) => mail.kind === MailKind.MAIL_KIND_GIFT)
+      return props.mails.filter((mail) => mail.kind === MailKind.GIFT)
     default:
       return props.mails
   }
@@ -42,11 +41,11 @@ const filtered = computed(() => {
 
 function kindLabel(kind: MailKind): string {
   switch (kind) {
-    case MailKind.MAIL_KIND_PUBLIC:
+    case MailKind.PUBLIC:
       return '公开'
-    case MailKind.MAIL_KIND_PRIVATE:
+    case MailKind.PRIVATE:
       return '私人'
-    case MailKind.MAIL_KIND_GIFT:
+    case MailKind.GIFT:
       return '好友礼物'
     default:
       return '未知'
@@ -54,7 +53,7 @@ function kindLabel(kind: MailKind): string {
 }
 
 function statusLabel(mail: MailView): string {
-  if (mail.attachments.length > 0 && mail.claimed) {
+  if (hasReward(mail) && mail.claimed) {
     return '已领取'
   }
   if (mail.read) {
@@ -70,139 +69,110 @@ function formatTime(ms: bigint): string {
   return new Date(Number(ms)).toLocaleString()
 }
 
+function hasReward(mail: MailView): boolean {
+  return mail.attachments.length > 0 || mail.coinAmount > 0n
+}
+
 function canClaim(mail: MailView): boolean {
-  return mail.attachments.length > 0 && !mail.claimed
+  return hasReward(mail) && !mail.claimed
 }
 </script>
 
 <template>
-  <div v-if="open" class="mailbox-modal" role="dialog" aria-modal="true" @click.self="emit('close')">
-    <div class="mailbox-modal__card">
-      <header>
-        <h3>邮箱</h3>
-        <div class="mailbox-modal__header-actions">
-          <button type="button" class="ghost" :disabled="loading" @click="emit('refresh')">刷新</button>
-          <button type="button" class="ghost" @click="emit('close')">关闭</button>
-        </div>
-      </header>
+  <div v-if="open" class="mailbox-body">
+    <div class="mailbox-actions">
+      <button type="button" class="ghost" :disabled="loading" @click="emit('refresh')">刷新</button>
+    </div>
 
-      <div class="mailbox-tabs" role="tablist">
-        <button
-          type="button"
-          :class="{ selected: filter === 'all' }"
-          @click="emit('filter', 'all')"
-        >
-          全部
-        </button>
-        <button
-          type="button"
-          :class="{ selected: filter === 'public' }"
-          @click="emit('filter', 'public')"
-        >
-          公开
-        </button>
-        <button
-          type="button"
-          :class="{ selected: filter === 'private' }"
-          @click="emit('filter', 'private')"
-        >
-          私人
-        </button>
-        <button
-          type="button"
-          :class="{ selected: filter === 'gift' }"
-          @click="emit('filter', 'gift')"
-        >
-          好友礼物
-        </button>
-      </div>
-
-      <p v-if="error" class="mailbox-error">{{ error }}</p>
-      <p v-else-if="message" class="mailbox-message">{{ message }}</p>
-      <p v-if="loading" class="mailbox-hint">查询中…</p>
-
-      <ul v-else-if="filtered.length" class="mailbox-list">
-        <li v-for="mail in filtered" :key="mail.mailId" class="mailbox-item">
-          <button type="button" class="mailbox-item__open" @click="emit('openMail', mail)">
-            <strong class="mailbox-item__title">{{ mail.title || '(无标题)' }}</strong>
-            <span class="mailbox-item__meta">
-              {{ kindLabel(mail.kind) }} · {{ statusLabel(mail) }} · {{ formatTime(mail.createdAtMs) }}
-            </span>
-            <span class="mailbox-item__meta">
-              寄信人：{{ mail.senderDisplayName || (mail.senderPlayerId ? `#${mail.senderPlayerId}` : '系统') }}
-            </span>
-            <span class="mailbox-item__meta">
-              收信人：{{ mail.recipientPlayerId ? `#${mail.recipientPlayerId}` : '全体可见' }}
-            </span>
-            <p class="mailbox-item__content">{{ mail.content }}</p>
-            <ul v-if="mail.attachments.length" class="mailbox-attachments">
-              <li v-for="att in mail.attachments" :key="`${mail.mailId}-${att.itemId}`">
-                {{ itemName(att.itemId) }} ×{{ att.quantity }}
-              </li>
-            </ul>
-          </button>
-          <button
-            v-if="canClaim(mail)"
-            type="button"
-            class="mailbox-claim"
-            :disabled="claimingMailId !== null"
-            @click="emit('claim', mail)"
-          >
-            {{ claimingMailId === mail.mailId ? '领取中…' : '领取' }}
-          </button>
-        </li>
-      </ul>
-      <p v-else class="mailbox-hint">暂无邮件</p>
-
+    <div class="mailbox-tabs" role="tablist">
+      <button type="button" :class="{ selected: filter === 'all' }" @click="emit('filter', 'all')">
+        全部
+      </button>
       <button
-        v-if="nextPageToken"
         type="button"
-        class="mailbox-more"
-        :disabled="loadingMore || loading"
-        @click="emit('loadMore')"
+        :class="{ selected: filter === 'public' }"
+        @click="emit('filter', 'public')"
       >
-        {{ loadingMore ? '加载中…' : '加载更多' }}
+        公开
+      </button>
+      <button
+        type="button"
+        :class="{ selected: filter === 'private' }"
+        @click="emit('filter', 'private')"
+      >
+        私人
+      </button>
+      <button
+        type="button"
+        :class="{ selected: filter === 'gift' }"
+        @click="emit('filter', 'gift')"
+      >
+        好友礼物
       </button>
     </div>
+
+    <p v-if="error" class="mailbox-error">{{ error }}</p>
+    <p v-else-if="message" class="mailbox-message">{{ message }}</p>
+    <p v-if="loading" class="mailbox-hint">查询中…</p>
+
+    <ul v-else-if="filtered.length" class="mailbox-list">
+      <li v-for="mail in filtered" :key="mail.mailId" class="mailbox-item">
+        <button type="button" class="mailbox-item__open" @click="emit('openMail', mail)">
+          <strong class="mailbox-item__title">{{ mail.title || '(无标题)' }}</strong>
+          <span class="mailbox-item__meta">
+            {{ kindLabel(mail.kind) }} · {{ statusLabel(mail) }} · {{ formatTime(mail.createdAtMs) }}
+          </span>
+          <span class="mailbox-item__meta">
+            寄信人：{{ mail.senderDisplayName || (mail.senderPlayerId ? `#${mail.senderPlayerId}` : '系统') }}
+          </span>
+          <span class="mailbox-item__meta">
+            收信人：{{ mail.recipientPlayerId ? `#${mail.recipientPlayerId}` : '全体可见' }}
+          </span>
+          <p class="mailbox-item__content">{{ mail.content }}</p>
+          <ul v-if="hasReward(mail)" class="mailbox-attachments">
+            <li v-if="mail.coinAmount > 0n">金币 ×{{ mail.coinAmount.toString() }}</li>
+            <li v-for="att in mail.attachments" :key="`${mail.mailId}-${att.itemId}`">
+              {{ itemName(att.itemId) }} ×{{ att.quantity }}
+            </li>
+          </ul>
+        </button>
+        <button
+          v-if="canClaim(mail)"
+          type="button"
+          class="mailbox-claim"
+          :disabled="claimingMailId !== null"
+          @click="emit('claim', mail)"
+        >
+          {{ claimingMailId === mail.mailId ? '领取中…' : '领取' }}
+        </button>
+      </li>
+    </ul>
+    <p v-else class="mailbox-hint">暂无邮件</p>
+
+    <button
+      v-if="nextPageToken"
+      type="button"
+      class="mailbox-more"
+      :disabled="loadingMore || loading"
+      @click="emit('loadMore')"
+    >
+      {{ loadingMore ? '加载中…' : '加载更多' }}
+    </button>
   </div>
 </template>
 
 <style scoped>
-.mailbox-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
+.mailbox-body {
   display: grid;
-  place-items: center;
-  padding: 0.75rem;
-  background: color-mix(in srgb, #101828 45%, transparent);
-}
-
-.mailbox-modal__card {
-  width: min(100%, 28rem);
-  max-height: min(88vh, 40rem);
-  overflow: auto;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  background: #fffaf3;
+  gap: 0.75rem;
   color: #1f2937;
-  display: grid;
-  gap: 0.75rem;
 }
 
-header {
+.mailbox-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
+  justify-content: flex-end;
 }
 
-.mailbox-modal__header-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-h3,
 p {
   margin: 0;
 }

@@ -39,4 +39,16 @@ type Store interface {
 	GetSaga(ctx context.Context, linkID []byte) (*tcaplusv1.FriendLinkSaga, int32, error)
 	InsertSaga(ctx context.Context, record *tcaplusv1.FriendLinkSaga) (int32, error)
 	UpdateSaga(ctx context.Context, record *tcaplusv1.FriendLinkSaga, expectedVersion int32) (int32, error)
+
+	// TryClaimFirstFriendReward inserts the invitee's first-friend row.
+	// claimed=true means this relation won the race; claimed=false with
+	// err=nil means another relation already claimed. Store errors must not
+	// be collapsed into claimed=false.
+	TryClaimFirstFriendReward(
+		ctx context.Context,
+		inviteePlayerID, inviterPlayerID uint64,
+		relationID []byte,
+		friendCode string,
+		claimedAtMS int64,
+	) (claimed bool, err error)
 }

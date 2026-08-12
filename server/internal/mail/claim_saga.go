@@ -29,6 +29,7 @@ type ZoneRewardApplier interface {
 		claimID []byte,
 		mailID string,
 		attachments []*tcaplusv1.MailClaimAttachment,
+		coinAmount int64,
 	) (*rpcv1.ApplyMailRewardResponse, error)
 }
 
@@ -63,7 +64,7 @@ func (o *ClaimOrchestrator) ClaimMail(
 	if saga.GetState() == tcaplusv1.MailClaimSagaStatus_MAIL_CLAIM_SAGA_COMPLETED {
 		items := claimAttachmentsToViews(saga.GetAttachments())
 		return &mailv1.ClaimMailResponse{
-			MailId: saga.GetMailId(), ItemsAdded: items,
+			MailId: saga.GetMailId(), ItemsAdded: items, CoinsAdded: saga.GetCoinAmount(),
 			Patch: &wsv1.PlayerStatePatch{InventoryUpserts: items},
 		}, nil
 	}
@@ -79,11 +80,15 @@ func (o *ClaimOrchestrator) ClaimMail(
 		return mapClaimError(ErrClaimNotReady), nil
 	}
 	items := claimAttachmentsToViews(final.GetAttachments())
+	coinsAdded := final.GetCoinAmount()
 	patch := &wsv1.PlayerStatePatch{InventoryUpserts: items}
 	var version *wsv1.StateVersion
 	if applied != nil {
 		if len(applied.GetItemsAdded()) > 0 {
 			items = applied.GetItemsAdded()
+		}
+		if applied.GetCoinsAdded() > 0 {
+			coinsAdded = applied.GetCoinsAdded()
 		}
 		if applied.GetPatch() != nil {
 			patch = applied.GetPatch()
@@ -91,7 +96,8 @@ func (o *ClaimOrchestrator) ClaimMail(
 		version = appliedStateVersion(applied)
 	}
 	return &mailv1.ClaimMailResponse{
-		MailId: final.GetMailId(), ItemsAdded: items, Patch: patch, StateVersion: version,
+		MailId: final.GetMailId(), ItemsAdded: items, CoinsAdded: coinsAdded,
+		Patch: patch, StateVersion: version,
 	}, nil
 }
 
@@ -105,7 +111,7 @@ func (o *ClaimOrchestrator) BeginClaim(
 	if err != nil {
 		return nil, 0, err
 	}
-	attachments, err := o.loadClaimableAttachments(ctx, playerID, registeredAt, mailID)
+	attachments, coinAmount, err := o.loadClaimableAttachments(ctx, playerID, registeredAt, mailID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -115,7 +121,8 @@ func (o *ClaimOrchestrator) BeginClaim(
 		if existing.GetPlayerId() != playerID || existing.GetMailId() != mailID {
 			return nil, 0, ErrClaimConflict
 		}
-		if !bytes.Equal(existing.GetAttachmentsDigestSha256(), digest) {
+		if !bytes.Equal(existing.GetAttachmentsDigestSha256(), digest) ||
+			existing.GetCoinAmount() != coinAmount {
 			return nil, 0, ErrClaimConflict
 		}
 		return existing, version, nil
@@ -138,6 +145,7 @@ func (o *ClaimOrchestrator) BeginClaim(
 		ClaimId: append([]byte(nil), claimID...),
 		MailId:  mailID, PlayerId: playerID,
 		Attachments:             attachments,
+		CoinAmount:              coinAmount,
 		State:                   tcaplusv1.MailClaimSagaStatus_MAIL_CLAIM_SAGA_CLAIMING,
 		RetryAtMs:               nowMS,
 		CreatedAtMs:             nowMS,
@@ -171,7 +179,8 @@ func (o *ClaimOrchestrator) Advance(ctx context.Context, claimID []byte) (*rpcv1
 				return nil, errors.New("zone mail reward client is required")
 			}
 			response, applyErr := o.zone.ApplyMailReward(
-				ctx, saga.GetPlayerId(), saga.GetClaimId(), saga.GetMailId(), saga.GetAttachments(),
+				ctx, saga.GetPlayerId(), saga.GetClaimId(), saga.GetMailId(),
+				saga.GetAttachments(), saga.GetCoinAmount(),
 			)
 			if applyErr != nil {
 				return nil, applyErr
@@ -317,28 +326,34 @@ func (o *ClaimOrchestrator) ensureNoActiveClaim(
 
 func (o *ClaimOrchestrator) loadClaimableAttachments(
 	ctx context.Context, playerID uint64, registeredAtMS int64, mailID string,
-) ([]*tcaplusv1.MailClaimAttachment, error) {
+) ([]*tcaplusv1.MailClaimAttachment, int64, error) {
 	visible, err := o.mailVisible(ctx, playerID, registeredAtMS, mailID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if !visible {
-		return nil, fmt.Errorf("%w: mail not visible", ErrNotFound)
+		return nil, 0, fmt.Errorf("%w: mail not visible", ErrNotFound)
 	}
 	if public, err := o.store.GetPublicMail(ctx, mailID); err == nil {
-		return toClaimAttachments(public.GetAttachments()), nil
+		atts := toClaimAttachments(public.GetAttachments())
+		coins := public.GetCoinAmount()
+		if len(atts) == 0 && coins <= 0 {
+			return nil, 0, fmt.Errorf("%w: no claimable reward", ErrNotFound)
+		}
+		return atts, coins, nil
 	} else if !errors.Is(err, ErrNotFound) {
-		return nil, err
+		return nil, 0, err
 	}
 	private, err := o.store.GetPrivateMail(ctx, playerID, mailID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	atts := toClaimAttachments(private.GetAttachments())
-	if len(atts) == 0 {
-		return nil, fmt.Errorf("%w: no attachments", ErrNotFound)
+	coins := private.GetCoinAmount()
+	if len(atts) == 0 && coins <= 0 {
+		return nil, 0, fmt.Errorf("%w: no claimable reward", ErrNotFound)
 	}
-	return atts, nil
+	return atts, coins, nil
 }
 
 func (o *ClaimOrchestrator) mailVisible(

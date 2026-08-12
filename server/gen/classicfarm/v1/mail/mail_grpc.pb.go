@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MailService_OpenMailbox_FullMethodName           = "/classicfarm.mail.v1.MailService/OpenMailbox"
-	MailService_MarkMailRead_FullMethodName          = "/classicfarm.mail.v1.MailService/MarkMailRead"
-	MailService_CheckMailboxIndicator_FullMethodName = "/classicfarm.mail.v1.MailService/CheckMailboxIndicator"
-	MailService_CreateGiftMail_FullMethodName        = "/classicfarm.mail.v1.MailService/CreateGiftMail"
-	MailService_ClaimMail_FullMethodName             = "/classicfarm.mail.v1.MailService/ClaimMail"
+	MailService_OpenMailbox_FullMethodName            = "/classicfarm.mail.v1.MailService/OpenMailbox"
+	MailService_MarkMailRead_FullMethodName           = "/classicfarm.mail.v1.MailService/MarkMailRead"
+	MailService_CheckMailboxIndicator_FullMethodName  = "/classicfarm.mail.v1.MailService/CheckMailboxIndicator"
+	MailService_CreateGiftMail_FullMethodName         = "/classicfarm.mail.v1.MailService/CreateGiftMail"
+	MailService_CreateSystemRewardMail_FullMethodName = "/classicfarm.mail.v1.MailService/CreateSystemRewardMail"
+	MailService_ClaimMail_FullMethodName              = "/classicfarm.mail.v1.MailService/ClaimMail"
 )
 
 // MailServiceClient is the client API for MailService service.
@@ -39,6 +40,9 @@ type MailServiceClient interface {
 	CheckMailboxIndicator(ctx context.Context, in *CheckMailboxIndicatorRequest, opts ...grpc.CallOption) (*CheckMailboxIndicatorResponse, error)
 	// CreateGiftMail is internal (Zone Outbox relay). Dedupes on source_event_id.
 	CreateGiftMail(ctx context.Context, in *CreateGiftMailRequest, opts ...grpc.CallOption) (*CreateGiftMailResponse, error)
+	// CreateSystemRewardMail is internal (FriendSvr first-friend rewards).
+	// Dedupes on the string source_event_id the same way admin private mail does.
+	CreateSystemRewardMail(ctx context.Context, in *CreateSystemRewardMailRequest, opts ...grpc.CallOption) (*CreateSystemRewardMailResponse, error)
 	// ClaimMail orchestrates BeginClaim -> Zone ApplyMailReward -> CompleteClaim.
 	ClaimMail(ctx context.Context, in *ClaimMailRequest, opts ...grpc.CallOption) (*ClaimMailResponse, error)
 }
@@ -91,6 +95,16 @@ func (c *mailServiceClient) CreateGiftMail(ctx context.Context, in *CreateGiftMa
 	return out, nil
 }
 
+func (c *mailServiceClient) CreateSystemRewardMail(ctx context.Context, in *CreateSystemRewardMailRequest, opts ...grpc.CallOption) (*CreateSystemRewardMailResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateSystemRewardMailResponse)
+	err := c.cc.Invoke(ctx, MailService_CreateSystemRewardMail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mailServiceClient) ClaimMail(ctx context.Context, in *ClaimMailRequest, opts ...grpc.CallOption) (*ClaimMailResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimMailResponse)
@@ -114,6 +128,9 @@ type MailServiceServer interface {
 	CheckMailboxIndicator(context.Context, *CheckMailboxIndicatorRequest) (*CheckMailboxIndicatorResponse, error)
 	// CreateGiftMail is internal (Zone Outbox relay). Dedupes on source_event_id.
 	CreateGiftMail(context.Context, *CreateGiftMailRequest) (*CreateGiftMailResponse, error)
+	// CreateSystemRewardMail is internal (FriendSvr first-friend rewards).
+	// Dedupes on the string source_event_id the same way admin private mail does.
+	CreateSystemRewardMail(context.Context, *CreateSystemRewardMailRequest) (*CreateSystemRewardMailResponse, error)
 	// ClaimMail orchestrates BeginClaim -> Zone ApplyMailReward -> CompleteClaim.
 	ClaimMail(context.Context, *ClaimMailRequest) (*ClaimMailResponse, error)
 	mustEmbedUnimplementedMailServiceServer()
@@ -137,6 +154,9 @@ func (UnimplementedMailServiceServer) CheckMailboxIndicator(context.Context, *Ch
 }
 func (UnimplementedMailServiceServer) CreateGiftMail(context.Context, *CreateGiftMailRequest) (*CreateGiftMailResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateGiftMail not implemented")
+}
+func (UnimplementedMailServiceServer) CreateSystemRewardMail(context.Context, *CreateSystemRewardMailRequest) (*CreateSystemRewardMailResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSystemRewardMail not implemented")
 }
 func (UnimplementedMailServiceServer) ClaimMail(context.Context, *ClaimMailRequest) (*ClaimMailResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimMail not implemented")
@@ -234,6 +254,24 @@ func _MailService_CreateGiftMail_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MailService_CreateSystemRewardMail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSystemRewardMailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MailServiceServer).CreateSystemRewardMail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MailService_CreateSystemRewardMail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MailServiceServer).CreateSystemRewardMail(ctx, req.(*CreateSystemRewardMailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MailService_ClaimMail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimMailRequest)
 	if err := dec(in); err != nil {
@@ -274,6 +312,10 @@ var MailService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateGiftMail",
 			Handler:    _MailService_CreateGiftMail_Handler,
+		},
+		{
+			MethodName: "CreateSystemRewardMail",
+			Handler:    _MailService_CreateSystemRewardMail_Handler,
 		},
 		{
 			MethodName: "ClaimMail",

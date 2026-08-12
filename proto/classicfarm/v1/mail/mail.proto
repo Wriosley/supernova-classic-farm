@@ -15,6 +15,9 @@ service MailService {
   rpc CheckMailboxIndicator(CheckMailboxIndicatorRequest) returns (CheckMailboxIndicatorResponse);
   // CreateGiftMail is internal (Zone Outbox relay). Dedupes on source_event_id.
   rpc CreateGiftMail(CreateGiftMailRequest) returns (CreateGiftMailResponse);
+  // CreateSystemRewardMail is internal (FriendSvr first-friend rewards).
+  // Dedupes on the string source_event_id the same way admin private mail does.
+  rpc CreateSystemRewardMail(CreateSystemRewardMailRequest) returns (CreateSystemRewardMailResponse);
   // ClaimMail orchestrates BeginClaim -> Zone ApplyMailReward -> CompleteClaim.
   rpc ClaimMail(ClaimMailRequest) returns (ClaimMailResponse);
 }
@@ -29,6 +32,9 @@ enum MailKind {
 message MailAttachmentView {
   uint32 item_id = 1;
   uint32 quantity = 2;
+  // coin_amount is granted on claim alongside item attachments. Zero means no
+  // coin grant. item_id may be zero when the attachment is coins-only.
+  int64 coin_amount = 3;
 }
 
 message MailView {
@@ -44,6 +50,7 @@ message MailView {
   repeated MailAttachmentView attachments = 10;
   bool read = 11;
   bool claimed = 12;
+  int64 coin_amount = 13;
 }
 
 message OpenMailboxRequest {
@@ -96,6 +103,24 @@ message CreateGiftMailResponse {
   classicfarm.ws.v1.Error error = 15;
 }
 
+message CreateSystemRewardMailRequest {
+  // source_event_id is a stable string (e.g. first-friend:{invitee}:inviter).
+  string source_event_id = 1;
+  uint64 recipient_player_id = 2;
+  string title = 3;
+  string content = 4;
+  string sender_display_name = 5;
+  repeated MailAttachmentView attachments = 6;
+  int64 coin_amount = 7;
+  int64 created_at_ms = 8;
+}
+
+message CreateSystemRewardMailResponse {
+  string mail_id = 1;
+  bool already_applied = 2;
+  classicfarm.ws.v1.Error error = 15;
+}
+
 message ClaimMailRequest {
   uint64 player_id = 1;
   string mail_id = 2;
@@ -112,5 +137,6 @@ message ClaimMailResponse {
   // version that applied it is not replayable: callers must then reload an
   // authoritative snapshot instead of applying patch.
   classicfarm.ws.v1.StateVersion state_version = 4;
+  int64 coins_added = 5;
   classicfarm.ws.v1.Error error = 15;
 }

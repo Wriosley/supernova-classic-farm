@@ -1,101 +1,48 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type {
-  CropCatalogEntryView,
-  PlayerSnapshot,
-  PlotView,
-  ShopEntryView,
-} from '../gen/classicfarm/v1/ws/ws_pb'
-import { ChapterStatus } from '../gen/classicfarm/v1/ws/chapter/chapter_status_pb'
+import type { CropCatalogEntryView, PlayerSnapshot, PlotView } from '../gen/classicfarm/v1/ws/ws_pb'
 import { PlotState } from '../gen/classicfarm/v1/ws/plot/plot_state_pb'
+import type { FarmActionRequest } from '../lib/farm-actions'
+import { matureCropSprite } from '../lib/crop-art'
+import type { DeployedPet } from '../lib/pet-art'
+import FarmPetBadge from './FarmPetBadge.vue'
 
 import plotEmpty from '../../../frontend/src/assets/art/runtime/plots/empty.png'
 import plotGrowing from '../../../frontend/src/assets/art/runtime/plots/growing.png'
 import plotMature from '../../../frontend/src/assets/art/runtime/plots/mature.png'
 import plotCleanup from '../../../frontend/src/assets/art/runtime/plots/need-cleanup.png'
 import cropGrowing from '../../../frontend/src/assets/art/runtime/crops/demo-growing.png'
-import cropMature from '../../../frontend/src/assets/art/runtime/crops/demo-mature.png'
 import seedIcon from '../../../frontend/src/assets/art/runtime/items/demo-seed.png'
-import cropIcon from '../../../frontend/src/assets/art/runtime/items/demo-crop.png'
-import fertilizerIcon from '../../../frontend/src/assets/art/runtime/items/fertilizer-basic.png'
-import coinIcon from '../../../frontend/src/assets/art/runtime/items/coin.png'
 import effectIcon from '../../../frontend/src/assets/art/runtime/effects/fertilized.png'
-import checkIcon from '../../../frontend/src/assets/art/runtime/ui/check.png'
-import seedTool from '../../../frontend/src/assets/art/runtime/tools/seed.png'
 import fertilizerTool from '../../../frontend/src/assets/art/runtime/tools/fertilizer.png'
 import shovelTool from '../../../frontend/src/assets/art/runtime/tools/shovel.png'
 import handTool from '../../../frontend/src/assets/art/runtime/tools/hand.png'
-
-export type FarmAction =
-  | 'buy'
-  | 'buy-fertilizer'
-  | 'plant'
-  | 'fertilize'
-  | 'harvest'
-  | 'sell'
-  | 'claim'
-  | 'clean'
-  | 'catch'
-
-export type FarmActionRequest = {
-  action: FarmAction
-  plotId?: number
-  quantity?: number
-  sellAll?: boolean
-  seedItemId?: number
-  shopEntryId?: number
-  cropItemId?: number
-  priceVersion?: bigint
-}
 
 type FarmTool = 'seed' | 'fertilizer' | 'catch' | 'shovel' | 'hand'
 
 const props = defineProps<{
   snapshot?: PlayerSnapshot
-  ownerLabel: string
-  shopEntries: ShopEntryView[]
   cropCatalog: CropCatalogEntryView[]
   connected: boolean
   busyAction?: FarmActionRequest
   actionMessage: string
   actionError: string
   nowMs: bigint
+  activePet?: DeployedPet
 }>()
 
 const emit = defineEmits<{
   action: [request: FarmActionRequest]
-  openProfile: []
+  openShop: []
+  openPet: []
+  reloadCatalog: []
 }>()
 
-const selectedTool = ref<FarmTool>('seed')
-const selectedSeedCropId = ref<number>(0)
-const selectedSellCropItemId = ref<number>(0)
-const buyQuantity = ref(3)
-const fertilizerBuyQuantity = ref(1)
-const sellQuantity = ref(1)
+const selectedTool = ref<FarmTool>('hand')
+const selectedSeedCropId = ref(0)
 const localMessage = ref('')
-const chapter = computed(() => props.snapshot?.currentChapter)
+
 const plots = computed(() => [...(props.snapshot?.plots ?? [])].sort((a, b) => a.plotId - b.plotId))
-const seedCrops = computed(() => props.cropCatalog.filter((crop) => crop.seedShopEntryId > 0))
-const selectedSeed = computed(
-  () =>
-    seedCrops.value.find((crop) => crop.cropId === selectedSeedCropId.value) ??
-    seedCrops.value[0],
-)
-const seedQuote = computed(() => {
-  const seed = selectedSeed.value
-  if (!seed) {
-    return undefined
-  }
-  return props.shopEntries.find((entry) => entry.shopEntryId === seed.seedShopEntryId) ?? {
-    shopEntryId: seed.seedShopEntryId,
-    itemId: seed.seedItemId,
-    unitPrice: seed.seedUnitPrice,
-    priceVersion: seed.seedPriceVersion,
-    enabled: true,
-  }
-})
-const fertilizerQuote = computed(() => props.shopEntries.find((entry) => entry.itemId === 1))
 const inventory = computed(() => {
   const quantities = new Map<number, number>()
   for (const item of props.snapshot?.inventory ?? []) {
@@ -103,157 +50,61 @@ const inventory = computed(() => {
   }
   return quantities
 })
-const sellableCrops = computed(() =>
-  props.cropCatalog.filter((crop) => (inventory.value.get(crop.cropItemId) ?? 0) > 0),
+const fertilizerQuantity = computed(() => inventory.value.get(1) ?? 0)
+const shopSeedCrops = computed(() => props.cropCatalog.filter((crop) => crop.seedShopEntryId > 0))
+// The bar shows what the player can actually plant right now; seeds they do not
+// own belong in the shop drawer, not in an empty basket on the farm.
+const seedCrops = computed(() => shopSeedCrops.value.filter((crop) => seedQuantityOf(crop) > 0))
+const selectedSeed = computed(() =>
+  seedCrops.value.find((crop) => crop.cropId === selectedSeedCropId.value),
 )
-const selectedSellCrop = computed(
-  () =>
-    sellableCrops.value.find((crop) => crop.cropItemId === selectedSellCropItemId.value) ??
-    sellableCrops.value[0],
-)
-const cropQuote = computed(() => {
-  const crop = selectedSellCrop.value
-  if (!crop) {
-    return undefined
-  }
-  return props.shopEntries.find(
-    (entry) => entry.itemId === crop.cropItemId && entry.unitPrice === crop.sellUnitPrice,
-  ) ?? {
-    shopEntryId: 0,
-    itemId: crop.cropItemId,
-    unitPrice: crop.sellUnitPrice,
-    priceVersion: crop.sellPriceVersion,
-    enabled: true,
-  }
-})
 const seedQuantity = computed(() => {
   const seed = selectedSeed.value
   return seed ? inventory.value.get(seed.seedItemId) ?? 0 : 0
 })
-const cropQuantity = computed(() => {
-  const crop = selectedSellCrop.value
-  return crop ? inventory.value.get(crop.cropItemId) ?? 0 : 0
-})
-const fertilizerQuantity = computed(() => inventory.value.get(1) ?? 0)
-const nextSeedQuantity = computed(() => inventory.value.get(1003) ?? 0)
-const totalSeedQuantity = computed(() =>
-  seedCrops.value.reduce((sum, crop) => sum + (inventory.value.get(crop.seedItemId) ?? 0), 0),
-)
-const totalCropQuantity = computed(() =>
-  props.cropCatalog.reduce((sum, crop) => sum + (inventory.value.get(crop.cropItemId) ?? 0), 0),
-)
-function cropNameById(cropId: number): string {
-  return props.cropCatalog.find((crop) => crop.cropId === cropId)?.name ?? `作物#${cropId}`
-}
-
-const buyTotal = computed(() => (seedQuote.value?.unitPrice ?? 0n) * BigInt(buyQuantity.value))
-const fertilizerBuyTotal = computed(
-  () => (fertilizerQuote.value?.unitPrice ?? 0n) * BigInt(fertilizerBuyQuantity.value),
-)
-const sellTotal = computed(() => (cropQuote.value?.unitPrice ?? 0n) * BigInt(sellQuantity.value))
-const chapterStatusLabel = computed(() => {
-  switch (chapter.value?.status) {
-    case ChapterStatus.CLAIMABLE:
-      return '奖励可领取'
-    case ChapterStatus.CLAIMED:
-      return '已领取'
-    default:
-      return '进行中'
-  }
-})
-const canBuy = computed(() => Boolean(
-  props.connected &&
-  seedQuote.value?.enabled &&
-  selectedSeed.value &&
-  props.snapshot &&
-  buyQuantity.value >= 1 &&
-  buyQuantity.value <= 50 &&
-  seedQuantity.value + buyQuantity.value <= 300 &&
-  props.snapshot.coinBalance >= buyTotal.value,
-))
-const canBuyFertilizer = computed(() => Boolean(
-  props.connected &&
-  fertilizerQuote.value?.enabled &&
-  props.snapshot &&
-  fertilizerBuyQuantity.value >= 1 &&
-  fertilizerBuyQuantity.value <= 50 &&
-  fertilizerQuantity.value + fertilizerBuyQuantity.value <= 300 &&
-  props.snapshot.coinBalance >= fertilizerBuyTotal.value,
-))
-const canSell = computed(() => Boolean(
-  props.connected &&
-  selectedSellCrop.value &&
-  cropQuote.value &&
-  sellQuantity.value >= 1 &&
-  sellQuantity.value <= cropQuantity.value,
-))
-const canClaim = computed(
-  () => props.connected && chapter.value?.status === ChapterStatus.CLAIMABLE,
-)
-const toolOptions = computed<Array<{ id: FarmTool; label: string; icon: string; quantity?: number }>>(
+const tools = computed<Array<{ id: FarmTool; label: string; icon: string; quantity?: number }>>(
   () => [
-    { id: 'seed', label: '种子', icon: seedTool, quantity: seedQuantity.value },
-    { id: 'fertilizer', label: '肥料', icon: fertilizerTool, quantity: fertilizerQuantity.value },
-    { id: 'catch', label: '捉虫', icon: handTool },
-    { id: 'shovel', label: '铲子', icon: shovelTool },
     { id: 'hand', label: '手', icon: handTool },
+    { id: 'shovel', label: '铲子', icon: shovelTool },
+    { id: 'catch', label: '杀虫剂', icon: handTool },
+    { id: 'fertilizer', label: '肥料', icon: fertilizerTool, quantity: fertilizerQuantity.value },
   ],
 )
-const taskNames = new Map<number, string>([
-  [1, '购买 3 粒种子'],
-  [2, '完成 1 次种植'],
-  [3, '使用 1 次肥料'],
-  [4, '完成 1 次收获'],
-  [5, '出售至少 1 个作物'],
-])
+const currentToolLabel = computed(() => {
+  if (selectedTool.value === 'seed') {
+    return `${selectedSeed.value?.name ?? '作物'}种子`
+  }
+  return tools.value.find((tool) => tool.id === selectedTool.value)?.label ?? '手'
+})
 
 watch(
   seedCrops,
   (crops) => {
-    if (crops.length === 0) {
+    if (crops.length === 0 || crops.some((crop) => crop.cropId === selectedSeedCropId.value)) {
       return
     }
-    if (!crops.some((crop) => crop.cropId === selectedSeedCropId.value)) {
-      selectedSeedCropId.value = crops[0].cropId
-    }
+    selectedSeedCropId.value = crops[0].cropId
   },
   { immediate: true },
 )
 
-watch(
-  sellableCrops,
-  (crops) => {
-    if (crops.length === 0) {
-      selectedSellCropItemId.value = 0
-      return
-    }
-    if (!crops.some((crop) => crop.cropItemId === selectedSellCropItemId.value)) {
-      selectedSellCropItemId.value = crops[0].cropItemId
-    }
-  },
-  { immediate: true },
-)
-
-watch(cropQuantity, (quantity) => {
-  sellQuantity.value = quantity > 0 ? Math.min(Math.max(sellQuantity.value, 1), quantity) : 1
-})
-
-function clampBuy(): void {
-  buyQuantity.value = Math.min(50, Math.max(1, Math.trunc(Number(buyQuantity.value) || 1)))
+function cropNameById(cropId: number): string {
+  return props.cropCatalog.find((crop) => crop.cropId === cropId)?.name ?? `作物#${cropId}`
 }
 
-function clampFertilizerBuy(): void {
-  fertilizerBuyQuantity.value = Math.min(
-    50,
-    Math.max(1, Math.trunc(Number(fertilizerBuyQuantity.value) || 1)),
-  )
-}
-
-function clampSell(): void {
-  sellQuantity.value = Math.min(
-    Math.max(cropQuantity.value, 1),
-    Math.max(1, Math.trunc(Number(sellQuantity.value) || 1)),
-  )
+// maturity_seconds arrives as uint64, so it is a BigInt: mixing it into the
+// arithmetic below throws and takes the whole render down with it.
+function formatDuration(input: number | bigint): string {
+  const seconds = Number(input)
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '即时'
+  }
+  if (seconds < 60) {
+    return `${seconds} 秒`
+  }
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return secs > 0 ? `${mins} 分 ${secs} 秒` : `${mins} 分`
 }
 
 function formatCountdown(seconds: number): string {
@@ -261,6 +112,14 @@ function formatCountdown(seconds: number): string {
   const mins = Math.floor(safe / 60)
   const secs = safe % 60
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+function seedQuantityOf(crop: CropCatalogEntryView): number {
+  return inventory.value.get(crop.seedItemId) ?? 0
+}
+
+function seedTooltip(crop: CropCatalogEntryView): string {
+  return `${crop.name}的成熟时间是 ${formatDuration(crop.maturitySeconds)}`
 }
 
 function plotPresentation(plot: PlotView) {
@@ -273,7 +132,7 @@ function plotPresentation(plot: PlotView) {
         crop: cropGrowing,
       }
     case PlotState.MATURE:
-      return { label: `${name}已成熟`, base: plotMature, crop: cropMature }
+      return { label: `${name}已成熟`, base: plotMature, crop: matureCropSprite(plot.cropId) }
     case PlotState.NEED_CLEANUP:
       return { label: `${name || '作物'}待清理`, base: plotCleanup, crop: undefined }
     default:
@@ -297,7 +156,7 @@ function plotMeta(plot: PlotView): string {
     const seconds = estimatedSeconds(plot)
     parts.push(seconds > 0 ? `成熟倒计时：${formatCountdown(seconds)}` : '等待服务器确认成熟')
     if (selectedTool.value === 'catch' && plot.pestEffect) {
-      parts.push('点击捉虫')
+      parts.push('点击杀虫')
     }
     return parts.join(' · ')
   }
@@ -308,7 +167,7 @@ function plotMeta(plot: PlotView): string {
     return '收获完成，等待铲子清理'
   }
   const seed = selectedSeed.value
-  return seed ? `空地可种植（当前：${seed.name}）` : '空地可种植'
+  return selectedTool.value === 'seed' && seed ? `空地可种植（${seed.name}）` : '空地可种植'
 }
 
 function targetAction(plot: PlotView): FarmActionRequest | undefined {
@@ -347,7 +206,7 @@ function targetAction(plot: PlotView): FarmActionRequest | undefined {
       }
       localMessage.value =
         plot.plotState !== PlotState.GROWING
-          ? '只能在成长中的作物上捉虫。'
+          ? '只能对成长中的作物使用杀虫剂。'
           : '这块地没有害虫。'
       return undefined
     case 'hand':
@@ -401,322 +260,263 @@ function selectTool(tool: FarmTool): void {
   localMessage.value = ''
 }
 
-function run(request: FarmActionRequest): void {
-  if (!props.busyAction) {
-    localMessage.value = ''
-    emit('action', request)
-  }
+function selectSeed(crop: CropCatalogEntryView): void {
+  selectedSeedCropId.value = crop.cropId
+  selectedTool.value = 'seed'
+  localMessage.value = ''
 }
 </script>
 
 <template>
-  <section class="farm-dashboard" aria-label="经典农场">
-    <header class="farm-toolbar">
-      <div>
-        <p class="eyebrow">PLAYER FARM · FOUR AUTHORITATIVE PLOTS</p>
-        <h2>
-          <button type="button" class="owner-name" @click="emit('openProfile')">
-            {{ ownerLabel || '我的农场' }}
-          </button>
-        </h2>
-      </div>
-      <div class="wallet">
-        <img :src="coinIcon" alt="" />
-        <strong>{{ snapshot?.coinBalance.toString() ?? '—' }}</strong>
-        <span>金币</span>
-      </div>
-    </header>
-
+  <section class="farm-stage" aria-label="我的农场">
     <p v-if="actionError" class="action-notice error-banner" role="alert">{{ actionError }}</p>
-    <p v-else-if="localMessage" class="action-notice tool-feedback" role="status">{{ localMessage }}</p>
+    <p v-else-if="localMessage" class="action-notice tool-feedback" role="status">
+      {{ localMessage }}
+    </p>
     <p v-else-if="actionMessage" class="action-notice success-banner" role="status">
       {{ actionMessage }}
     </p>
 
-    <nav class="toolbelt game-panel" aria-label="农场工具栏">
-      <div>
-        <span class="panel-kicker">TOOLBELT</span>
-        <h3>选择工具，再点击地块</h3>
-      </div>
-      <div class="tool-options">
+    <div class="farm-yard">
+      <div class="plots-grid" :data-tool="selectedTool">
         <button
-          v-for="tool in toolOptions"
-          :key="tool.id"
+          v-for="plot in plots"
+          :key="plot.plotId"
           type="button"
-          class="tool-button"
-          :class="{ selected: selectedTool === tool.id }"
-          :aria-pressed="selectedTool === tool.id"
-          @click="selectTool(tool.id)"
+          class="plot-tile"
+          :class="{
+            busy: busyAction?.plotId === plot.plotId,
+            valid: !busyAction && connected && isValidTarget(plot),
+            invalid: !busyAction && connected && !isValidTarget(plot),
+          }"
+          :aria-label="`地块 ${plot.plotId}，${plotPresentation(plot).label}`"
+          @click="clickPlot(plot)"
         >
-          <img class="pixel-art" :src="tool.icon" alt="" />
-          <span>{{ tool.label }}</span>
-          <small v-if="tool.quantity !== undefined">×{{ tool.quantity }}</small>
-        </button>
-      </div>
-    </nav>
-
-    <div class="farm-layout">
-      <article class="game-panel plots-panel">
-        <div class="panel-heading">
-          <div>
-            <span class="panel-kicker">PLOTS 01–04</span>
-            <h3>农田</h3>
-          </div>
-          <span class="state-pill">当前工具：{{ toolOptions.find((tool) => tool.id === selectedTool)?.label }}</span>
-        </div>
-        <div class="plots-grid" :data-tool="selectedTool">
-          <button
-            v-for="plot in plots"
-            :key="plot.plotId"
-            type="button"
-            class="plot-tile"
-            :class="{
-              busy: busyAction?.plotId === plot.plotId,
-              valid: !busyAction && connected && isValidTarget(plot),
-              invalid: !busyAction && connected && !isValidTarget(plot),
-            }"
-            :aria-label="`地块 ${plot.plotId}，${plotPresentation(plot).label}`"
-            @click="clickPlot(plot)"
-          >
-            <span class="plot-number">
-              PLOT {{ String(plot.plotId).padStart(2, '0') }}
-              <em v-if="plot.pestEffect" class="pest-badge">有虫</em>
-            </span>
-            <span class="plot-stage" :data-state="plot.plotState">
-              <img class="plot-base pixel-art" :src="plotPresentation(plot).base" alt="" />
-              <img
-                v-if="plotPresentation(plot).crop"
-                class="plot-crop pixel-art"
-                :src="plotPresentation(plot).crop"
-                alt=""
-              />
-              <img
-                v-if="plot.fertilizerEffect"
-                class="plot-effect pixel-art"
-                :src="effectIcon"
-                alt="肥料效果"
-              />
-            </span>
+          <span class="plot-number">
+            PLOT {{ String(plot.plotId).padStart(2, '0') }}
+            <em v-if="plot.pestEffect" class="pest-badge">有虫</em>
+          </span>
+          <span class="plot-stage" :data-state="plot.plotState">
+            <img class="plot-base pixel-art" :src="plotPresentation(plot).base" alt="" />
+            <img
+              v-if="plotPresentation(plot).crop"
+              class="plot-crop pixel-art"
+              :src="plotPresentation(plot).crop"
+              alt=""
+            />
+            <img
+              v-if="plot.fertilizerEffect"
+              class="plot-effect pixel-art"
+              :src="effectIcon"
+              alt="肥料效果"
+            />
+          </span>
+          <span class="plot-caption">
             <strong>{{ plotPresentation(plot).label }}</strong>
             <small>{{ plotMeta(plot) }}</small>
-            <span v-if="busyAction?.plotId === plot.plotId" class="plot-busy">处理中…</span>
-          </button>
-        </div>
-      </article>
-
-      <div class="farm-sidebar">
-        <article class="game-panel shop-panel">
-          <div class="panel-heading">
-            <div>
-              <span class="panel-kicker">SHOP</span>
-              <h3>商店</h3>
-            </div>
-            <span v-if="seedQuote" class="price-tag">{{ seedQuote.unitPrice }} 金币 / 粒</span>
-          </div>
-          <div class="crop-picker" role="listbox" aria-label="选择种子">
-            <button
-              v-for="crop in seedCrops"
-              :key="crop.cropId"
-              type="button"
-              class="crop-chip"
-              :class="{ selected: selectedSeed?.cropId === crop.cropId }"
-              @click="selectedSeedCropId = crop.cropId"
-            >
-              {{ crop.name }}
-              <small>×{{ inventory.get(crop.seedItemId) ?? 0 }}</small>
-            </button>
-          </div>
-          <div class="shop-item">
-            <img class="item-icon pixel-art" :src="seedIcon" alt="作物种子" />
-            <div class="shop-copy">
-              <strong>{{ selectedSeed?.name ?? '作物' }}种子</strong>
-              <small>
-                {{ selectedSeed?.maturitySeconds ?? '—' }} 秒成熟 · 产量
-                {{ selectedSeed?.baseYield ?? '—' }} · 仓库上限 300
-              </small>
-            </div>
-          </div>
-          <div class="shop-item">
-            <img class="item-icon pixel-art" :src="fertilizerIcon" alt="基础肥料" />
-            <div class="shop-copy">
-              <strong>基础肥料</strong>
-              <small>每袋 {{ fertilizerQuote?.unitPrice ?? '—' }} 金币 · 仓库堆叠上限 300</small>
-            </div>
-          </div>
-          <div class="quantity-row">
-            <button type="button" aria-label="减少肥料购买数量" @click="fertilizerBuyQuantity--; clampFertilizerBuy()">−</button>
-            <input
-              v-model.number="fertilizerBuyQuantity"
-              type="number"
-              inputmode="numeric"
-              min="1"
-              max="50"
-              aria-label="肥料购买数量"
-              @change="clampFertilizerBuy"
-            />
-            <button type="button" aria-label="增加肥料购买数量" @click="fertilizerBuyQuantity++; clampFertilizerBuy()">＋</button>
-            <span>合计 {{ fertilizerBuyTotal }} 金币</span>
-            <button
-              class="primary"
-              type="button"
-              :disabled="!canBuyFertilizer || Boolean(busyAction)"
-              @click="run({ action: 'buy-fertilizer', quantity: fertilizerBuyQuantity })"
-            >
-              {{ busyAction?.action === 'buy-fertilizer' ? '购买中…' : `购买 ${fertilizerBuyQuantity} 袋` }}
-            </button>
-          </div>
-          <div class="quantity-row">
-            <button type="button" aria-label="减少购买数量" @click="buyQuantity--; clampBuy()">−</button>
-            <input
-              v-model.number="buyQuantity"
-              type="number"
-              inputmode="numeric"
-              min="1"
-              max="50"
-              aria-label="购买数量"
-              @change="clampBuy"
-            />
-            <button type="button" aria-label="增加购买数量" @click="buyQuantity++; clampBuy()">＋</button>
-            <span>合计 {{ buyTotal }} 金币</span>
-            <button
-              class="primary"
-              type="button"
-              :disabled="!canBuy || Boolean(busyAction) || !selectedSeed || !seedQuote"
-              @click="
-                run({
-                  action: 'buy',
-                  quantity: buyQuantity,
-                  shopEntryId: seedQuote?.shopEntryId,
-                  seedItemId: selectedSeed?.seedItemId,
-                  priceVersion: seedQuote?.priceVersion,
-                })
-              "
-            >
-              {{ busyAction?.action === 'buy' ? '购买中…' : `购买 ${buyQuantity} 粒` }}
-            </button>
-          </div>
-        </article>
-
-        <article class="game-panel inventory-panel">
-          <div class="panel-heading">
-            <div>
-              <span class="panel-kicker">BARN</span>
-              <h3>仓库</h3>
-            </div>
-          </div>
-          <div class="inventory-grid">
-            <div class="inventory-slot">
-              <img class="pixel-art" :src="seedIcon" alt="" />
-              <span>种子合计</span><strong>× {{ totalSeedQuantity }}</strong>
-            </div>
-            <div class="inventory-slot">
-              <img class="pixel-art" :src="fertilizerIcon" alt="" />
-              <span>肥料</span><strong>× {{ fertilizerQuantity }}</strong>
-            </div>
-            <div class="inventory-slot">
-              <img class="pixel-art" :src="cropIcon" alt="" />
-              <span>作物合计</span><strong>× {{ totalCropQuantity }}</strong>
-            </div>
-            <div class="inventory-slot">
-              <img class="pixel-art" :src="seedIcon" alt="" />
-              <span>下一章种子</span><strong>× {{ nextSeedQuantity }}</strong>
-            </div>
-          </div>
-          <div class="sell-controls">
-            <label class="sell-crop-picker">
-              出售作物
-              <select
-                v-model.number="selectedSellCropItemId"
-                :disabled="sellableCrops.length === 0"
-                aria-label="选择出售作物"
-              >
-                <option v-if="sellableCrops.length === 0" :value="0">暂无可售作物</option>
-                <option
-                  v-for="crop in sellableCrops"
-                  :key="crop.cropItemId"
-                  :value="crop.cropItemId"
-                >
-                  {{ crop.name }} ×{{ inventory.get(crop.cropItemId) ?? 0 }}
-                </option>
-              </select>
-            </label>
-            <div class="quantity-row">
-              <button type="button" aria-label="减少出售数量" @click="sellQuantity--; clampSell()">−</button>
-              <input
-                v-model.number="sellQuantity"
-                type="number"
-                inputmode="numeric"
-                min="1"
-                :max="Math.max(cropQuantity, 1)"
-                aria-label="出售数量"
-                @change="clampSell"
-              />
-              <button type="button" aria-label="增加出售数量" @click="sellQuantity++; clampSell()">＋</button>
-              <span>合计 {{ sellTotal }} 金币</span>
-              <button
-                class="primary"
-                type="button"
-                :disabled="!canSell || Boolean(busyAction)"
-                @click="
-                  run({
-                    action: 'sell',
-                    quantity: sellQuantity,
-                    cropItemId: selectedSellCrop?.cropItemId,
-                    priceVersion: cropQuote?.priceVersion,
-                  })
-                "
-              >
-                {{ busyAction?.action === 'sell' && !busyAction.sellAll ? '出售中…' : `出售 ${sellQuantity}` }}
-              </button>
-              <button
-                type="button"
-                :disabled="!canSell || Boolean(busyAction)"
-                @click="
-                  run({
-                    action: 'sell',
-                    sellAll: true,
-                    cropItemId: selectedSellCrop?.cropItemId,
-                    priceVersion: cropQuote?.priceVersion,
-                  })
-                "
-              >
-                {{ busyAction?.action === 'sell' && busyAction.sellAll ? '全部出售中…' : '全部出售' }}
-              </button>
-            </div>
-          </div>
-        </article>
+          </span>
+          <span v-if="busyAction?.plotId === plot.plotId" class="plot-busy">处理中…</span>
+        </button>
       </div>
+
+      <FarmPetBadge
+        :pet="activePet"
+        :now-ms="nowMs"
+        interactive
+        @click="emit('openPet')"
+      />
     </div>
 
-    <article class="game-panel chapter-panel">
-      <div class="panel-heading">
-        <div>
-          <span class="panel-kicker">CHAPTER {{ chapter?.chapterId ?? '—' }}</span>
-          <h3>章节任务</h3>
+    <div class="farm-bars">
+      <nav class="farm-bar" aria-label="工具栏">
+        <span class="farm-bar__label">工具</span>
+        <div class="farm-bar__items">
+          <button
+            v-for="tool in tools"
+            :key="tool.id"
+            type="button"
+            class="bar-chip"
+            :class="{ selected: selectedTool === tool.id }"
+            :aria-pressed="selectedTool === tool.id"
+            @click="selectTool(tool.id)"
+          >
+            <img class="pixel-art" :src="tool.icon" alt="" />
+            <span>{{ tool.label }}</span>
+            <small v-if="tool.quantity !== undefined">×{{ tool.quantity }}</small>
+          </button>
         </div>
-        <span class="state-pill">{{ chapterStatusLabel }}</span>
-      </div>
-      <div v-if="chapter?.tasks.length" class="task-list">
-        <div v-for="task in chapter.tasks" :key="task.taskId" class="task-row">
-          <img v-if="task.completed" class="pixel-art" :src="checkIcon" alt="完成" />
-          <span v-else class="task-dot" aria-hidden="true"></span>
-          <div>
-            <strong>{{ taskNames.get(task.taskId) ?? `任务 ${task.taskId}` }}</strong>
-            <small>{{ task.currentValue }} / {{ task.targetValue }}</small>
-          </div>
-          <progress :value="task.currentValue" :max="task.targetValue"></progress>
+        <span class="farm-bar__current">当前：{{ currentToolLabel }}</span>
+      </nav>
+
+      <nav class="farm-bar" aria-label="种子栏">
+        <span class="farm-bar__label">种子</span>
+        <div class="farm-bar__items">
+          <button
+            v-for="crop in seedCrops"
+            :key="crop.cropId"
+            type="button"
+            class="bar-chip seed-chip"
+            :class="{ selected: selectedTool === 'seed' && selectedSeedCropId === crop.cropId }"
+            :aria-pressed="selectedTool === 'seed' && selectedSeedCropId === crop.cropId"
+            :aria-label="seedTooltip(crop)"
+            @click="selectSeed(crop)"
+          >
+            <img class="pixel-art" :src="seedIcon" alt="" />
+            <span>{{ crop.name }}</span>
+            <small>×{{ seedQuantityOf(crop) }}</small>
+            <span class="seed-chip__tip" role="tooltip">{{ seedTooltip(crop) }}</span>
+          </button>
+          <button
+            v-if="shopSeedCrops.length === 0"
+            type="button"
+            class="bar-chip"
+            @click="emit('reloadCatalog')"
+          >
+            种子目录未加载，点此重试
+          </button>
+          <span v-else-if="seedCrops.length === 0" class="farm-bar__empty">
+            仓库里还没有种子
+          </span>
         </div>
-      </div>
-      <p v-else class="chapter-placeholder">第二章内容尚未配置，第一章奖励已经领取。</p>
-      <button
-        v-if="chapter?.status === ChapterStatus.CLAIMABLE"
-        class="primary claim-button"
-        type="button"
-        :disabled="!canClaim || Boolean(busyAction)"
-        @click="run({ action: 'claim' })"
-      >
-        {{ busyAction?.action === 'claim' ? '领取中…' : '领取奖励：10 金币、肥料和下一章种子' }}
-      </button>
-    </article>
+        <button type="button" class="farm-bar__shop" @click="emit('openShop')">去商店</button>
+      </nav>
+    </div>
   </section>
 </template>
+
+<style scoped>
+.farm-stage {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.action-notice {
+  margin: 0;
+}
+
+.farm-yard {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.plots-grid {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .farm-yard {
+    flex-wrap: wrap;
+  }
+}
+
+.farm-bars {
+  position: sticky;
+  bottom: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.farm-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border: 2px solid #8b6c42;
+  border-radius: 0.9rem;
+  background: #fff8dc;
+  box-shadow: 0 0.4rem 1rem rgb(44 58 34 / 16%);
+}
+
+.farm-bar__label {
+  flex: none;
+  color: #6b7c54;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.farm-bar__items {
+  display: flex;
+  flex: 1;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+}
+
+.farm-bar__current {
+  flex: none;
+  color: #5d694f;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.farm-bar__shop {
+  flex: none;
+  min-height: 2.2rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+.bar-chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.6rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bar-chip img {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.bar-chip small {
+  color: #6b745e;
+  font-size: 0.68rem;
+}
+
+.bar-chip.selected {
+  border-color: #31552d;
+  background: #dfecc2;
+  box-shadow: 0 0 0 3px rgb(49 85 45 / 15%);
+}
+
+.farm-bar__empty {
+  flex: none;
+  align-self: center;
+  color: #6b745e;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.seed-chip__tip {
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  z-index: 10;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.45rem;
+  background: rgb(36 54 31 / 92%);
+  color: #f7f6ec;
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+.seed-chip:hover .seed-chip__tip,
+.seed-chip:focus-visible .seed-chip__tip {
+  opacity: 1;
+}
+</style>

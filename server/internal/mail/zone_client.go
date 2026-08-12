@@ -68,18 +68,19 @@ func (c *ZoneClient) ApplyMailReward(
 	claimID []byte,
 	mailID string,
 	attachments []*tcaplusv1.MailClaimAttachment,
+	coinAmount int64,
 ) (*rpcv1.ApplyMailRewardResponse, error) {
 	route, err := c.resolveRoute(ctx, routing.ShardForPlayer(playerID))
 	if err != nil {
 		return nil, err
 	}
-	response, err := c.applyOnce(ctx, route, playerID, claimID, mailID, attachments)
+	response, err := c.applyOnce(ctx, route, playerID, claimID, mailID, attachments, coinAmount)
 	if status.Code(err) == codes.FailedPrecondition {
 		route, err = c.resolveRoute(ctx, routing.ShardForPlayer(playerID))
 		if err != nil {
 			return nil, err
 		}
-		return c.applyOnce(ctx, route, playerID, claimID, mailID, attachments)
+		return c.applyOnce(ctx, route, playerID, claimID, mailID, attachments, coinAmount)
 	}
 	return response, err
 }
@@ -91,6 +92,7 @@ func (c *ZoneClient) applyOnce(
 	claimID []byte,
 	mailID string,
 	attachments []*tcaplusv1.MailClaimAttachment,
+	coinAmount int64,
 ) (*rpcv1.ApplyMailRewardResponse, error) {
 	client, err := c.client(route.ownerEndpoint)
 	if err != nil {
@@ -113,7 +115,7 @@ func (c *ZoneClient) applyOnce(
 			OwnerEpoch: route.ownerEpoch, RouteVersion: route.routeVersion,
 		},
 		PlayerId: playerID, ClaimId: claimID, MailId: mailID,
-		Attachments: reqAttachments,
+		Attachments: reqAttachments, CoinAmount: coinAmount,
 	})
 }
 

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file classicfarm/v1/mail/mail.proto.
  */
 export const file_classicfarm_v1_mail_mail: GenFile = /*@__PURE__*/
-  fileDesc("Ch5jbGFzc2ljZmFybS92MS9tYWlsL21haWwucHJvdG8SE2NsYXNzaWNmYXJtLm1haWwudjEiNwoSTWFpbEF0dGFjaG1lbnRWaWV3Eg8KB2l0ZW1faWQYASABKA0SEAoIcXVhbnRpdHkYAiABKA0iyQIKCE1haWxWaWV3Eg8KB21haWxfaWQYASABKAkSKwoEa2luZBgCIAEoDjIdLmNsYXNzaWNmYXJtLm1haWwudjEuTWFpbEtpbmQSFQoNY3JlYXRlZF9hdF9tcxgDIAEoAxIXCg9wdWJsaXNoZWRfYXRfbXMYBCABKAMSGwoTc2VuZGVyX2Rpc3BsYXlfbmFtZRgFIAEoCRIYChBzZW5kZXJfcGxheWVyX2lkGAYgASgEEhsKE3JlY2lwaWVudF9wbGF5ZXJfaWQYByABKAQSDQoFdGl0bGUYCCABKAkSDwoHY29udGVudBgJIAEoCRI8CgthdHRhY2htZW50cxgKIAMoCzInLmNsYXNzaWNmYXJtLm1haWwudjEuTWFpbEF0dGFjaG1lbnRWaWV3EgwKBHJlYWQYCyABKAgSDwoHY2xhaW1lZBgMIAEoCCJoChJPcGVuTWFpbGJveFJlcXVlc3QSEQoJcGxheWVyX2lkGAEgASgEEhgKEHJlZ2lzdGVyZWRfYXRfbXMYAiABKAMSEQoJcGFnZV9zaXplGAMgASgNEhIKCnBhZ2VfdG9rZW4YBCABKAkiqAEKE09wZW5NYWlsYm94UmVzcG9uc2USLAoFbWFpbHMYASADKAsyHS5jbGFzc2ljZmFybS5tYWlsLnYxLk1haWxWaWV3EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCRIhChlsYXN0X21haWxib3hfb3BlbmVkX2F0X21zGAMgASgDEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiUwoTTWFya01haWxSZWFkUmVxdWVzdBIRCglwbGF5ZXJfaWQYASABKAQSDwoHbWFpbF9pZBgCIAEoCRIYChByZWdpc3RlcmVkX2F0X21zGAMgASgDIj8KFE1hcmtNYWlsUmVhZFJlc3BvbnNlEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiSwocQ2hlY2tNYWlsYm94SW5kaWNhdG9yUmVxdWVzdBIRCglwbGF5ZXJfaWQYASABKAQSGAoQcmVnaXN0ZXJlZF9hdF9tcxgCIAEoAyJeCh1DaGVja01haWxib3hJbmRpY2F0b3JSZXNwb25zZRIUCgxoYXNfbmV3X21haWwYASABKAgSJwoFZXJyb3IYDyABKAsyGC5jbGFzc2ljZmFybS53cy52MS5FcnJvciLDAQoVQ3JlYXRlR2lmdE1haWxSZXF1ZXN0EhcKD3NvdXJjZV9ldmVudF9pZBgBIAEoDBIYChBzZW5kZXJfcGxheWVyX2lkGAIgASgEEhsKE3NlbmRlcl9kaXNwbGF5X25hbWUYAyABKAkSGwoTcmVjaXBpZW50X3BsYXllcl9pZBgEIAEoBBIUCgxjcm9wX2l0ZW1faWQYBSABKA0SEAoIcXVhbnRpdHkYBiABKA0SFQoNY3JlYXRlZF9hdF9tcxgHIAEoAyJrChZDcmVhdGVHaWZ0TWFpbFJlc3BvbnNlEg8KB21haWxfaWQYASABKAkSFwoPYWxyZWFkeV9hcHBsaWVkGAIgASgIEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiYgoQQ2xhaW1NYWlsUmVxdWVzdBIRCglwbGF5ZXJfaWQYASABKAQSDwoHbWFpbF9pZBgCIAEoCRIQCghjbGFpbV9pZBgDIAEoDBIYChByZWdpc3RlcmVkX2F0X21zGAQgASgDIvABChFDbGFpbU1haWxSZXNwb25zZRIPCgdtYWlsX2lkGAEgASgJEjUKC2l0ZW1zX2FkZGVkGAIgAygLMiAuY2xhc3NpY2Zhcm0ud3MudjEuSXRlbVN0YWNrVmlldxIyCgVwYXRjaBgDIAEoCzIjLmNsYXNzaWNmYXJtLndzLnYxLlBsYXllclN0YXRlUGF0Y2gSNgoNc3RhdGVfdmVyc2lvbhgEIAEoCzIfLmNsYXNzaWNmYXJtLndzLnYxLlN0YXRlVmVyc2lvbhInCgVlcnJvchgPIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yKmYKCE1haWxLaW5kEhkKFU1BSUxfS0lORF9VTlNQRUNJRklFRBAAEhQKEE1BSUxfS0lORF9QVUJMSUMQARIVChFNQUlMX0tJTkRfUFJJVkFURRACEhIKDk1BSUxfS0lORF9HSUZUEAMymwQKC01haWxTZXJ2aWNlEmAKC09wZW5NYWlsYm94EicuY2xhc3NpY2Zhcm0ubWFpbC52MS5PcGVuTWFpbGJveFJlcXVlc3QaKC5jbGFzc2ljZmFybS5tYWlsLnYxLk9wZW5NYWlsYm94UmVzcG9uc2USYwoMTWFya01haWxSZWFkEiguY2xhc3NpY2Zhcm0ubWFpbC52MS5NYXJrTWFpbFJlYWRSZXF1ZXN0GikuY2xhc3NpY2Zhcm0ubWFpbC52MS5NYXJrTWFpbFJlYWRSZXNwb25zZRJ+ChVDaGVja01haWxib3hJbmRpY2F0b3ISMS5jbGFzc2ljZmFybS5tYWlsLnYxLkNoZWNrTWFpbGJveEluZGljYXRvclJlcXVlc3QaMi5jbGFzc2ljZmFybS5tYWlsLnYxLkNoZWNrTWFpbGJveEluZGljYXRvclJlc3BvbnNlEmkKDkNyZWF0ZUdpZnRNYWlsEiouY2xhc3NpY2Zhcm0ubWFpbC52MS5DcmVhdGVHaWZ0TWFpbFJlcXVlc3QaKy5jbGFzc2ljZmFybS5tYWlsLnYxLkNyZWF0ZUdpZnRNYWlsUmVzcG9uc2USWgoJQ2xhaW1NYWlsEiUuY2xhc3NpY2Zhcm0ubWFpbC52MS5DbGFpbU1haWxSZXF1ZXN0GiYuY2xhc3NpY2Zhcm0ubWFpbC52MS5DbGFpbU1haWxSZXNwb25zZUJSWlBnaXRodWIuY29tL1dyaW9zbGV5L3N1cGVybm92YS1jbGFzc2ljLWZhcm0vc2VydmVyL2dlbi9jbGFzc2ljZmFybS92MS9tYWlsO21haWx2MWIGcHJvdG8z", [file_classicfarm_v1_ws_ws]);
+  fileDesc("Ch5jbGFzc2ljZmFybS92MS9tYWlsL21haWwucHJvdG8SE2NsYXNzaWNmYXJtLm1haWwudjEiTAoSTWFpbEF0dGFjaG1lbnRWaWV3Eg8KB2l0ZW1faWQYASABKA0SEAoIcXVhbnRpdHkYAiABKA0SEwoLY29pbl9hbW91bnQYAyABKAMi3gIKCE1haWxWaWV3Eg8KB21haWxfaWQYASABKAkSKwoEa2luZBgCIAEoDjIdLmNsYXNzaWNmYXJtLm1haWwudjEuTWFpbEtpbmQSFQoNY3JlYXRlZF9hdF9tcxgDIAEoAxIXCg9wdWJsaXNoZWRfYXRfbXMYBCABKAMSGwoTc2VuZGVyX2Rpc3BsYXlfbmFtZRgFIAEoCRIYChBzZW5kZXJfcGxheWVyX2lkGAYgASgEEhsKE3JlY2lwaWVudF9wbGF5ZXJfaWQYByABKAQSDQoFdGl0bGUYCCABKAkSDwoHY29udGVudBgJIAEoCRI8CgthdHRhY2htZW50cxgKIAMoCzInLmNsYXNzaWNmYXJtLm1haWwudjEuTWFpbEF0dGFjaG1lbnRWaWV3EgwKBHJlYWQYCyABKAgSDwoHY2xhaW1lZBgMIAEoCBITCgtjb2luX2Ftb3VudBgNIAEoAyJoChJPcGVuTWFpbGJveFJlcXVlc3QSEQoJcGxheWVyX2lkGAEgASgEEhgKEHJlZ2lzdGVyZWRfYXRfbXMYAiABKAMSEQoJcGFnZV9zaXplGAMgASgNEhIKCnBhZ2VfdG9rZW4YBCABKAkiqAEKE09wZW5NYWlsYm94UmVzcG9uc2USLAoFbWFpbHMYASADKAsyHS5jbGFzc2ljZmFybS5tYWlsLnYxLk1haWxWaWV3EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCRIhChlsYXN0X21haWxib3hfb3BlbmVkX2F0X21zGAMgASgDEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiUwoTTWFya01haWxSZWFkUmVxdWVzdBIRCglwbGF5ZXJfaWQYASABKAQSDwoHbWFpbF9pZBgCIAEoCRIYChByZWdpc3RlcmVkX2F0X21zGAMgASgDIj8KFE1hcmtNYWlsUmVhZFJlc3BvbnNlEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiSwocQ2hlY2tNYWlsYm94SW5kaWNhdG9yUmVxdWVzdBIRCglwbGF5ZXJfaWQYASABKAQSGAoQcmVnaXN0ZXJlZF9hdF9tcxgCIAEoAyJeCh1DaGVja01haWxib3hJbmRpY2F0b3JSZXNwb25zZRIUCgxoYXNfbmV3X21haWwYASABKAgSJwoFZXJyb3IYDyABKAsyGC5jbGFzc2ljZmFybS53cy52MS5FcnJvciLDAQoVQ3JlYXRlR2lmdE1haWxSZXF1ZXN0EhcKD3NvdXJjZV9ldmVudF9pZBgBIAEoDBIYChBzZW5kZXJfcGxheWVyX2lkGAIgASgEEhsKE3NlbmRlcl9kaXNwbGF5X25hbWUYAyABKAkSGwoTcmVjaXBpZW50X3BsYXllcl9pZBgEIAEoBBIUCgxjcm9wX2l0ZW1faWQYBSABKA0SEAoIcXVhbnRpdHkYBiABKA0SFQoNY3JlYXRlZF9hdF9tcxgHIAEoAyJrChZDcmVhdGVHaWZ0TWFpbFJlc3BvbnNlEg8KB21haWxfaWQYASABKAkSFwoPYWxyZWFkeV9hcHBsaWVkGAIgASgIEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3Ii/AEKHUNyZWF0ZVN5c3RlbVJld2FyZE1haWxSZXF1ZXN0EhcKD3NvdXJjZV9ldmVudF9pZBgBIAEoCRIbChNyZWNpcGllbnRfcGxheWVyX2lkGAIgASgEEg0KBXRpdGxlGAMgASgJEg8KB2NvbnRlbnQYBCABKAkSGwoTc2VuZGVyX2Rpc3BsYXlfbmFtZRgFIAEoCRI8CgthdHRhY2htZW50cxgGIAMoCzInLmNsYXNzaWNmYXJtLm1haWwudjEuTWFpbEF0dGFjaG1lbnRWaWV3EhMKC2NvaW5fYW1vdW50GAcgASgDEhUKDWNyZWF0ZWRfYXRfbXMYCCABKAMicwoeQ3JlYXRlU3lzdGVtUmV3YXJkTWFpbFJlc3BvbnNlEg8KB21haWxfaWQYASABKAkSFwoPYWxyZWFkeV9hcHBsaWVkGAIgASgIEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiYgoQQ2xhaW1NYWlsUmVxdWVzdBIRCglwbGF5ZXJfaWQYASABKAQSDwoHbWFpbF9pZBgCIAEoCRIQCghjbGFpbV9pZBgDIAEoDBIYChByZWdpc3RlcmVkX2F0X21zGAQgASgDIoUCChFDbGFpbU1haWxSZXNwb25zZRIPCgdtYWlsX2lkGAEgASgJEjUKC2l0ZW1zX2FkZGVkGAIgAygLMiAuY2xhc3NpY2Zhcm0ud3MudjEuSXRlbVN0YWNrVmlldxIyCgVwYXRjaBgDIAEoCzIjLmNsYXNzaWNmYXJtLndzLnYxLlBsYXllclN0YXRlUGF0Y2gSNgoNc3RhdGVfdmVyc2lvbhgEIAEoCzIfLmNsYXNzaWNmYXJtLndzLnYxLlN0YXRlVmVyc2lvbhITCgtjb2luc19hZGRlZBgFIAEoAxInCgVlcnJvchgPIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yKmYKCE1haWxLaW5kEhkKFU1BSUxfS0lORF9VTlNQRUNJRklFRBAAEhQKEE1BSUxfS0lORF9QVUJMSUMQARIVChFNQUlMX0tJTkRfUFJJVkFURRACEhIKDk1BSUxfS0lORF9HSUZUEAMynwUKC01haWxTZXJ2aWNlEmAKC09wZW5NYWlsYm94EicuY2xhc3NpY2Zhcm0ubWFpbC52MS5PcGVuTWFpbGJveFJlcXVlc3QaKC5jbGFzc2ljZmFybS5tYWlsLnYxLk9wZW5NYWlsYm94UmVzcG9uc2USYwoMTWFya01haWxSZWFkEiguY2xhc3NpY2Zhcm0ubWFpbC52MS5NYXJrTWFpbFJlYWRSZXF1ZXN0GikuY2xhc3NpY2Zhcm0ubWFpbC52MS5NYXJrTWFpbFJlYWRSZXNwb25zZRJ+ChVDaGVja01haWxib3hJbmRpY2F0b3ISMS5jbGFzc2ljZmFybS5tYWlsLnYxLkNoZWNrTWFpbGJveEluZGljYXRvclJlcXVlc3QaMi5jbGFzc2ljZmFybS5tYWlsLnYxLkNoZWNrTWFpbGJveEluZGljYXRvclJlc3BvbnNlEmkKDkNyZWF0ZUdpZnRNYWlsEiouY2xhc3NpY2Zhcm0ubWFpbC52MS5DcmVhdGVHaWZ0TWFpbFJlcXVlc3QaKy5jbGFzc2ljZmFybS5tYWlsLnYxLkNyZWF0ZUdpZnRNYWlsUmVzcG9uc2USgQEKFkNyZWF0ZVN5c3RlbVJld2FyZE1haWwSMi5jbGFzc2ljZmFybS5tYWlsLnYxLkNyZWF0ZVN5c3RlbVJld2FyZE1haWxSZXF1ZXN0GjMuY2xhc3NpY2Zhcm0ubWFpbC52MS5DcmVhdGVTeXN0ZW1SZXdhcmRNYWlsUmVzcG9uc2USWgoJQ2xhaW1NYWlsEiUuY2xhc3NpY2Zhcm0ubWFpbC52MS5DbGFpbU1haWxSZXF1ZXN0GiYuY2xhc3NpY2Zhcm0ubWFpbC52MS5DbGFpbU1haWxSZXNwb25zZUJSWlBnaXRodWIuY29tL1dyaW9zbGV5L3N1cGVybm92YS1jbGFzc2ljLWZhcm0vc2VydmVyL2dlbi9jbGFzc2ljZmFybS92MS9tYWlsO21haWx2MWIGcHJvdG8z", [file_classicfarm_v1_ws_ws]);
 
 /**
  * @generated from message classicfarm.mail.v1.MailAttachmentView
@@ -27,6 +27,14 @@ export type MailAttachmentView = Message<"classicfarm.mail.v1.MailAttachmentView
    * @generated from field: uint32 quantity = 2;
    */
   quantity: number;
+
+  /**
+   * coin_amount is granted on claim alongside item attachments. Zero means no
+   * coin grant. item_id may be zero when the attachment is coins-only.
+   *
+   * @generated from field: int64 coin_amount = 3;
+   */
+  coinAmount: bigint;
 };
 
 /**
@@ -99,6 +107,11 @@ export type MailView = Message<"classicfarm.mail.v1.MailView"> & {
    * @generated from field: bool claimed = 12;
    */
   claimed: boolean;
+
+  /**
+   * @generated from field: int64 coin_amount = 13;
+   */
+  coinAmount: bigint;
 };
 
 /**
@@ -335,6 +348,87 @@ export const CreateGiftMailResponseSchema: GenMessage<CreateGiftMailResponse> = 
   messageDesc(file_classicfarm_v1_mail_mail, 9);
 
 /**
+ * @generated from message classicfarm.mail.v1.CreateSystemRewardMailRequest
+ */
+export type CreateSystemRewardMailRequest = Message<"classicfarm.mail.v1.CreateSystemRewardMailRequest"> & {
+  /**
+   * source_event_id is a stable string (e.g. first-friend:{invitee}:inviter).
+   *
+   * @generated from field: string source_event_id = 1;
+   */
+  sourceEventId: string;
+
+  /**
+   * @generated from field: uint64 recipient_player_id = 2;
+   */
+  recipientPlayerId: bigint;
+
+  /**
+   * @generated from field: string title = 3;
+   */
+  title: string;
+
+  /**
+   * @generated from field: string content = 4;
+   */
+  content: string;
+
+  /**
+   * @generated from field: string sender_display_name = 5;
+   */
+  senderDisplayName: string;
+
+  /**
+   * @generated from field: repeated classicfarm.mail.v1.MailAttachmentView attachments = 6;
+   */
+  attachments: MailAttachmentView[];
+
+  /**
+   * @generated from field: int64 coin_amount = 7;
+   */
+  coinAmount: bigint;
+
+  /**
+   * @generated from field: int64 created_at_ms = 8;
+   */
+  createdAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.mail.v1.CreateSystemRewardMailRequest.
+ * Use `create(CreateSystemRewardMailRequestSchema)` to create a new message.
+ */
+export const CreateSystemRewardMailRequestSchema: GenMessage<CreateSystemRewardMailRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_mail_mail, 10);
+
+/**
+ * @generated from message classicfarm.mail.v1.CreateSystemRewardMailResponse
+ */
+export type CreateSystemRewardMailResponse = Message<"classicfarm.mail.v1.CreateSystemRewardMailResponse"> & {
+  /**
+   * @generated from field: string mail_id = 1;
+   */
+  mailId: string;
+
+  /**
+   * @generated from field: bool already_applied = 2;
+   */
+  alreadyApplied: boolean;
+
+  /**
+   * @generated from field: classicfarm.ws.v1.Error error = 15;
+   */
+  error?: Error | undefined;
+};
+
+/**
+ * Describes the message classicfarm.mail.v1.CreateSystemRewardMailResponse.
+ * Use `create(CreateSystemRewardMailResponseSchema)` to create a new message.
+ */
+export const CreateSystemRewardMailResponseSchema: GenMessage<CreateSystemRewardMailResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_mail_mail, 11);
+
+/**
  * @generated from message classicfarm.mail.v1.ClaimMailRequest
  */
 export type ClaimMailRequest = Message<"classicfarm.mail.v1.ClaimMailRequest"> & {
@@ -364,7 +458,7 @@ export type ClaimMailRequest = Message<"classicfarm.mail.v1.ClaimMailRequest"> &
  * Use `create(ClaimMailRequestSchema)` to create a new message.
  */
 export const ClaimMailRequestSchema: GenMessage<ClaimMailRequest> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_mail_mail, 10);
+  messageDesc(file_classicfarm_v1_mail_mail, 12);
 
 /**
  * @generated from message classicfarm.mail.v1.ClaimMailResponse
@@ -396,6 +490,11 @@ export type ClaimMailResponse = Message<"classicfarm.mail.v1.ClaimMailResponse">
   stateVersion?: StateVersion | undefined;
 
   /**
+   * @generated from field: int64 coins_added = 5;
+   */
+  coinsAdded: bigint;
+
+  /**
    * @generated from field: classicfarm.ws.v1.Error error = 15;
    */
   error?: Error | undefined;
@@ -406,7 +505,7 @@ export type ClaimMailResponse = Message<"classicfarm.mail.v1.ClaimMailResponse">
  * Use `create(ClaimMailResponseSchema)` to create a new message.
  */
 export const ClaimMailResponseSchema: GenMessage<ClaimMailResponse> = /*@__PURE__*/
-  messageDesc(file_classicfarm_v1_mail_mail, 11);
+  messageDesc(file_classicfarm_v1_mail_mail, 13);
 
 /**
  * @generated from enum classicfarm.mail.v1.MailKind
@@ -480,6 +579,17 @@ export const MailService: GenService<{
     methodKind: "unary";
     input: typeof CreateGiftMailRequestSchema;
     output: typeof CreateGiftMailResponseSchema;
+  },
+  /**
+   * CreateSystemRewardMail is internal (FriendSvr first-friend rewards).
+   * Dedupes on the string source_event_id the same way admin private mail does.
+   *
+   * @generated from rpc classicfarm.mail.v1.MailService.CreateSystemRewardMail
+   */
+  createSystemRewardMail: {
+    methodKind: "unary";
+    input: typeof CreateSystemRewardMailRequestSchema;
+    output: typeof CreateSystemRewardMailResponseSchema;
   },
   /**
    * ClaimMail orchestrates BeginClaim -> Zone ApplyMailReward -> CompleteClaim.

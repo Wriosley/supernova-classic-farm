@@ -118,6 +118,7 @@ func run() error {
 			mailv1.MailService_CreateGiftMail_FullMethodName: {
 				"zone-local", "zone-a", "zone-b",
 			},
+			mailv1.MailService_CreateSystemRewardMail_FullMethodName: {"friend"},
 		},
 	})
 	if err != nil {

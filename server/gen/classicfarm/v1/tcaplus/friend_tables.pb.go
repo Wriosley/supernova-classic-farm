@@ -185,33 +185,42 @@ const (
 	FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_COMPLETED           FriendLinkSagaStatus = 7
 	FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_RELEASING           FriendLinkSagaStatus = 8
 	FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_ABORTED             FriendLinkSagaStatus = 9
+	// First-friend reward steps run after task credit and before COMPLETED.
+	// Existing COMPLETED rows stay valid; in-flight TASK_CREDITING rows advance
+	// through these new states on resume.
+	FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_FIRST_REWARD_CHECKED FriendLinkSagaStatus = 10
+	FriendLinkSagaStatus_FRIEND_LINK_SAGA_STATUS_REWARD_MAILS_CREATED FriendLinkSagaStatus = 11
 )
 
 // Enum value maps for FriendLinkSagaStatus.
 var (
 	FriendLinkSagaStatus_name = map[int32]string{
-		0: "FRIEND_LINK_SAGA_STATUS_UNSPECIFIED",
-		1: "FRIEND_LINK_SAGA_STATUS_INIT",
-		2: "FRIEND_LINK_SAGA_STATUS_LOW_RESERVED",
-		3: "FRIEND_LINK_SAGA_STATUS_BOTH_RESERVED",
-		4: "FRIEND_LINK_SAGA_STATUS_RELATION_ACTIVE",
-		5: "FRIEND_LINK_SAGA_STATUS_PROJECTIONS_APPLIED",
-		6: "FRIEND_LINK_SAGA_STATUS_TASK_CREDITING",
-		7: "FRIEND_LINK_SAGA_STATUS_COMPLETED",
-		8: "FRIEND_LINK_SAGA_STATUS_RELEASING",
-		9: "FRIEND_LINK_SAGA_STATUS_ABORTED",
+		0:  "FRIEND_LINK_SAGA_STATUS_UNSPECIFIED",
+		1:  "FRIEND_LINK_SAGA_STATUS_INIT",
+		2:  "FRIEND_LINK_SAGA_STATUS_LOW_RESERVED",
+		3:  "FRIEND_LINK_SAGA_STATUS_BOTH_RESERVED",
+		4:  "FRIEND_LINK_SAGA_STATUS_RELATION_ACTIVE",
+		5:  "FRIEND_LINK_SAGA_STATUS_PROJECTIONS_APPLIED",
+		6:  "FRIEND_LINK_SAGA_STATUS_TASK_CREDITING",
+		7:  "FRIEND_LINK_SAGA_STATUS_COMPLETED",
+		8:  "FRIEND_LINK_SAGA_STATUS_RELEASING",
+		9:  "FRIEND_LINK_SAGA_STATUS_ABORTED",
+		10: "FRIEND_LINK_SAGA_STATUS_FIRST_REWARD_CHECKED",
+		11: "FRIEND_LINK_SAGA_STATUS_REWARD_MAILS_CREATED",
 	}
 	FriendLinkSagaStatus_value = map[string]int32{
-		"FRIEND_LINK_SAGA_STATUS_UNSPECIFIED":         0,
-		"FRIEND_LINK_SAGA_STATUS_INIT":                1,
-		"FRIEND_LINK_SAGA_STATUS_LOW_RESERVED":        2,
-		"FRIEND_LINK_SAGA_STATUS_BOTH_RESERVED":       3,
-		"FRIEND_LINK_SAGA_STATUS_RELATION_ACTIVE":     4,
-		"FRIEND_LINK_SAGA_STATUS_PROJECTIONS_APPLIED": 5,
-		"FRIEND_LINK_SAGA_STATUS_TASK_CREDITING":      6,
-		"FRIEND_LINK_SAGA_STATUS_COMPLETED":           7,
-		"FRIEND_LINK_SAGA_STATUS_RELEASING":           8,
-		"FRIEND_LINK_SAGA_STATUS_ABORTED":             9,
+		"FRIEND_LINK_SAGA_STATUS_UNSPECIFIED":          0,
+		"FRIEND_LINK_SAGA_STATUS_INIT":                 1,
+		"FRIEND_LINK_SAGA_STATUS_LOW_RESERVED":         2,
+		"FRIEND_LINK_SAGA_STATUS_BOTH_RESERVED":        3,
+		"FRIEND_LINK_SAGA_STATUS_RELATION_ACTIVE":      4,
+		"FRIEND_LINK_SAGA_STATUS_PROJECTIONS_APPLIED":  5,
+		"FRIEND_LINK_SAGA_STATUS_TASK_CREDITING":       6,
+		"FRIEND_LINK_SAGA_STATUS_COMPLETED":            7,
+		"FRIEND_LINK_SAGA_STATUS_RELEASING":            8,
+		"FRIEND_LINK_SAGA_STATUS_ABORTED":              9,
+		"FRIEND_LINK_SAGA_STATUS_FIRST_REWARD_CHECKED": 10,
+		"FRIEND_LINK_SAGA_STATUS_REWARD_MAILS_CREATED": 11,
 	}
 )
 
@@ -291,6 +300,58 @@ func (FriendTaskCreditStatus) EnumDescriptor() ([]byte, []int) {
 	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP(), []int{4}
 }
 
+type FriendRewardMailStatus int32
+
+const (
+	FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_UNSPECIFIED FriendRewardMailStatus = 0
+	FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_PENDING     FriendRewardMailStatus = 1
+	FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_APPLIED     FriendRewardMailStatus = 2
+	FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_SKIPPED     FriendRewardMailStatus = 3
+)
+
+// Enum value maps for FriendRewardMailStatus.
+var (
+	FriendRewardMailStatus_name = map[int32]string{
+		0: "FRIEND_REWARD_MAIL_STATUS_UNSPECIFIED",
+		1: "FRIEND_REWARD_MAIL_STATUS_PENDING",
+		2: "FRIEND_REWARD_MAIL_STATUS_APPLIED",
+		3: "FRIEND_REWARD_MAIL_STATUS_SKIPPED",
+	}
+	FriendRewardMailStatus_value = map[string]int32{
+		"FRIEND_REWARD_MAIL_STATUS_UNSPECIFIED": 0,
+		"FRIEND_REWARD_MAIL_STATUS_PENDING":     1,
+		"FRIEND_REWARD_MAIL_STATUS_APPLIED":     2,
+		"FRIEND_REWARD_MAIL_STATUS_SKIPPED":     3,
+	}
+)
+
+func (x FriendRewardMailStatus) Enum() *FriendRewardMailStatus {
+	p := new(FriendRewardMailStatus)
+	*p = x
+	return p
+}
+
+func (x FriendRewardMailStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FriendRewardMailStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes[5].Descriptor()
+}
+
+func (FriendRewardMailStatus) Type() protoreflect.EnumType {
+	return &file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes[5]
+}
+
+func (x FriendRewardMailStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FriendRewardMailStatus.Descriptor instead.
+func (FriendRewardMailStatus) EnumDescriptor() ([]byte, []int) {
+	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP(), []int{5}
+}
+
 type FriendInteractionStatus int32
 
 const (
@@ -339,11 +400,11 @@ func (x FriendInteractionStatus) String() string {
 }
 
 func (FriendInteractionStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes[5].Descriptor()
+	return file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes[6].Descriptor()
 }
 
 func (FriendInteractionStatus) Type() protoreflect.EnumType {
-	return &file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes[5]
+	return &file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes[6]
 }
 
 func (x FriendInteractionStatus) Number() protoreflect.EnumNumber {
@@ -352,7 +413,7 @@ func (x FriendInteractionStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use FriendInteractionStatus.Descriptor instead.
 func (FriendInteractionStatus) EnumDescriptor() ([]byte, []int) {
-	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP(), []int{5}
+	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP(), []int{6}
 }
 
 type FriendCodeCurrent struct {
@@ -843,8 +904,13 @@ type FriendLinkSaga struct {
 	RetryAtMs            int64                  `protobuf:"varint,12,opt,name=retry_at_ms,json=retryAtMs,proto3" json:"retry_at_ms,omitempty"`
 	CreatedAtMs          int64                  `protobuf:"varint,13,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	UpdatedAtMs          int64                  `protobuf:"varint,14,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// first_reward_claimed is set after a successful InsertIfAbsent on
+	// FirstFriendReward. Zero means not yet checked or not eligible.
+	FirstRewardClaimed      bool                   `protobuf:"varint,15,opt,name=first_reward_claimed,json=firstRewardClaimed,proto3" json:"first_reward_claimed,omitempty"`
+	InviterRewardMailStatus FriendRewardMailStatus `protobuf:"varint,16,opt,name=inviter_reward_mail_status,json=inviterRewardMailStatus,proto3,enum=classicfarm.tcaplus.v1.FriendRewardMailStatus" json:"inviter_reward_mail_status,omitempty"`
+	InviteeRewardMailStatus FriendRewardMailStatus `protobuf:"varint,17,opt,name=invitee_reward_mail_status,json=inviteeRewardMailStatus,proto3,enum=classicfarm.tcaplus.v1.FriendRewardMailStatus" json:"invitee_reward_mail_status,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *FriendLinkSaga) Reset() {
@@ -975,6 +1041,106 @@ func (x *FriendLinkSaga) GetUpdatedAtMs() int64 {
 	return 0
 }
 
+func (x *FriendLinkSaga) GetFirstRewardClaimed() bool {
+	if x != nil {
+		return x.FirstRewardClaimed
+	}
+	return false
+}
+
+func (x *FriendLinkSaga) GetInviterRewardMailStatus() FriendRewardMailStatus {
+	if x != nil {
+		return x.InviterRewardMailStatus
+	}
+	return FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_UNSPECIFIED
+}
+
+func (x *FriendLinkSaga) GetInviteeRewardMailStatus() FriendRewardMailStatus {
+	if x != nil {
+		return x.InviteeRewardMailStatus
+	}
+	return FriendRewardMailStatus_FRIEND_REWARD_MAIL_STATUS_UNSPECIFIED
+}
+
+// FirstFriendReward records that invitee_player_id already received the one
+// first-friend reward. Primary key is the invitee so concurrent first links
+// race to a single InsertIfAbsent winner.
+type FirstFriendReward struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	InviteePlayerId uint64                 `protobuf:"varint,1,opt,name=invitee_player_id,json=inviteePlayerId,proto3" json:"invitee_player_id,omitempty"`
+	InviterPlayerId uint64                 `protobuf:"varint,2,opt,name=inviter_player_id,json=inviterPlayerId,proto3" json:"inviter_player_id,omitempty"`
+	RelationId      []byte                 `protobuf:"bytes,3,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
+	FriendCode      string                 `protobuf:"bytes,4,opt,name=friend_code,json=friendCode,proto3" json:"friend_code,omitempty"`
+	ClaimedAtMs     int64                  `protobuf:"varint,5,opt,name=claimed_at_ms,json=claimedAtMs,proto3" json:"claimed_at_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FirstFriendReward) Reset() {
+	*x = FirstFriendReward{}
+	mi := &file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FirstFriendReward) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FirstFriendReward) ProtoMessage() {}
+
+func (x *FirstFriendReward) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FirstFriendReward.ProtoReflect.Descriptor instead.
+func (*FirstFriendReward) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *FirstFriendReward) GetInviteePlayerId() uint64 {
+	if x != nil {
+		return x.InviteePlayerId
+	}
+	return 0
+}
+
+func (x *FirstFriendReward) GetInviterPlayerId() uint64 {
+	if x != nil {
+		return x.InviterPlayerId
+	}
+	return 0
+}
+
+func (x *FirstFriendReward) GetRelationId() []byte {
+	if x != nil {
+		return x.RelationId
+	}
+	return nil
+}
+
+func (x *FirstFriendReward) GetFriendCode() string {
+	if x != nil {
+		return x.FriendCode
+	}
+	return ""
+}
+
+func (x *FirstFriendReward) GetClaimedAtMs() int64 {
+	if x != nil {
+		return x.ClaimedAtMs
+	}
+	return 0
+}
+
 type FriendInteraction struct {
 	state               protoimpl.MessageState  `protogen:"open.v1"`
 	InteractionId       []byte                  `protobuf:"bytes,1,opt,name=interaction_id,json=interactionId,proto3" json:"interaction_id,omitempty"`
@@ -1005,7 +1171,7 @@ type FriendInteraction struct {
 
 func (x *FriendInteraction) Reset() {
 	*x = FriendInteraction{}
-	mi := &file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes[7]
+	mi := &file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1017,7 +1183,7 @@ func (x *FriendInteraction) String() string {
 func (*FriendInteraction) ProtoMessage() {}
 
 func (x *FriendInteraction) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes[7]
+	mi := &file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1030,7 +1196,7 @@ func (x *FriendInteraction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendInteraction.ProtoReflect.Descriptor instead.
 func (*FriendInteraction) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP(), []int{7}
+	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *FriendInteraction) GetInteractionId() []byte {
@@ -1211,7 +1377,7 @@ const file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc = "" +
 	"\freservations\x18\x03 \x03(\v2-.classicfarm.tcaplus.v1.FriendSlotReservationR\freservations\x12!\n" +
 	"\factive_count\x18\x04 \x01(\rR\vactiveCount\x12%\n" +
 	"\x0ereserved_count\x18\x05 \x01(\rR\rreservedCount\x12\"\n" +
-	"\rupdated_at_ms\x18\x06 \x01(\x03R\vupdatedAtMs:\r\x82\xa6\x1d\tplayer_id\"\xb6\x05\n" +
+	"\rupdated_at_ms\x18\x06 \x01(\x03R\vupdatedAtMs:\r\x82\xa6\x1d\tplayer_id\"\xc2\a\n" +
 	"\x0eFriendLinkSaga\x12\x17\n" +
 	"\alink_id\x18\x01 \x01(\fR\x06linkId\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12/\n" +
@@ -1228,7 +1394,18 @@ const file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc = "" +
 	"\x0flast_error_code\x18\v \x01(\tR\rlastErrorCode\x12\x1e\n" +
 	"\vretry_at_ms\x18\f \x01(\x03R\tretryAtMs\x12\"\n" +
 	"\rcreated_at_ms\x18\r \x01(\x03R\vcreatedAtMs\x12\"\n" +
-	"\rupdated_at_ms\x18\x0e \x01(\x03R\vupdatedAtMs:\v\x82\xa6\x1d\alink_id\"\xee\x05\n" +
+	"\rupdated_at_ms\x18\x0e \x01(\x03R\vupdatedAtMs\x120\n" +
+	"\x14first_reward_claimed\x18\x0f \x01(\bR\x12firstRewardClaimed\x12k\n" +
+	"\x1ainviter_reward_mail_status\x18\x10 \x01(\x0e2..classicfarm.tcaplus.v1.FriendRewardMailStatusR\x17inviterRewardMailStatus\x12k\n" +
+	"\x1ainvitee_reward_mail_status\x18\x11 \x01(\x0e2..classicfarm.tcaplus.v1.FriendRewardMailStatusR\x17inviteeRewardMailStatus:\v\x82\xa6\x1d\alink_id\"\xe8\x01\n" +
+	"\x11FirstFriendReward\x12*\n" +
+	"\x11invitee_player_id\x18\x01 \x01(\x04R\x0finviteePlayerId\x12*\n" +
+	"\x11inviter_player_id\x18\x02 \x01(\x04R\x0finviterPlayerId\x12\x1f\n" +
+	"\vrelation_id\x18\x03 \x01(\fR\n" +
+	"relationId\x12\x1f\n" +
+	"\vfriend_code\x18\x04 \x01(\tR\n" +
+	"friendCode\x12\"\n" +
+	"\rclaimed_at_ms\x18\x05 \x01(\x03R\vclaimedAtMs:\x15\x82\xa6\x1d\x11invitee_player_id\"\xee\x05\n" +
 	"\x11FriendInteraction\x12%\n" +
 	"\x0einteraction_id\x18\x01 \x01(\fR\rinteractionId\x12*\n" +
 	"\x11visitor_player_id\x18\x02 \x01(\x04R\x0fvisitorPlayerId\x12&\n" +
@@ -1264,7 +1441,7 @@ const file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc = "" +
 	"%FRIEND_RESERVATION_STATUS_UNSPECIFIED\x10\x00\x12$\n" +
 	" FRIEND_RESERVATION_STATUS_ACTIVE\x10\x01\x12&\n" +
 	"\"FRIEND_RESERVATION_STATUS_CONSUMED\x10\x02\x12&\n" +
-	"\"FRIEND_RESERVATION_STATUS_RELEASED\x10\x03*\xb3\x03\n" +
+	"\"FRIEND_RESERVATION_STATUS_RELEASED\x10\x03*\x97\x04\n" +
 	"\x14FriendLinkSagaStatus\x12'\n" +
 	"#FRIEND_LINK_SAGA_STATUS_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cFRIEND_LINK_SAGA_STATUS_INIT\x10\x01\x12(\n" +
@@ -1275,11 +1452,19 @@ const file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc = "" +
 	"&FRIEND_LINK_SAGA_STATUS_TASK_CREDITING\x10\x06\x12%\n" +
 	"!FRIEND_LINK_SAGA_STATUS_COMPLETED\x10\a\x12%\n" +
 	"!FRIEND_LINK_SAGA_STATUS_RELEASING\x10\b\x12#\n" +
-	"\x1fFRIEND_LINK_SAGA_STATUS_ABORTED\x10\t*\x91\x01\n" +
+	"\x1fFRIEND_LINK_SAGA_STATUS_ABORTED\x10\t\x120\n" +
+	",FRIEND_LINK_SAGA_STATUS_FIRST_REWARD_CHECKED\x10\n" +
+	"\x120\n" +
+	",FRIEND_LINK_SAGA_STATUS_REWARD_MAILS_CREATED\x10\v*\x91\x01\n" +
 	"\x16FriendTaskCreditStatus\x12)\n" +
 	"%FRIEND_TASK_CREDIT_STATUS_UNSPECIFIED\x10\x00\x12%\n" +
 	"!FRIEND_TASK_CREDIT_STATUS_PENDING\x10\x01\x12%\n" +
-	"!FRIEND_TASK_CREDIT_STATUS_APPLIED\x10\x02*\xef\x02\n" +
+	"!FRIEND_TASK_CREDIT_STATUS_APPLIED\x10\x02*\xb8\x01\n" +
+	"\x16FriendRewardMailStatus\x12)\n" +
+	"%FRIEND_REWARD_MAIL_STATUS_UNSPECIFIED\x10\x00\x12%\n" +
+	"!FRIEND_REWARD_MAIL_STATUS_PENDING\x10\x01\x12%\n" +
+	"!FRIEND_REWARD_MAIL_STATUS_APPLIED\x10\x02\x12%\n" +
+	"!FRIEND_REWARD_MAIL_STATUS_SKIPPED\x10\x03*\xef\x02\n" +
 	"\x17FriendInteractionStatus\x12)\n" +
 	"%FRIEND_INTERACTION_STATUS_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eFRIEND_INTERACTION_STATUS_INIT\x10\x01\x12.\n" +
@@ -1302,40 +1487,44 @@ func file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescGZIP() []byte {
 	return file_classicfarm_v1_tcaplus_friend_tables_proto_rawDescData
 }
 
-var file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_classicfarm_v1_tcaplus_friend_tables_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
+var file_classicfarm_v1_tcaplus_friend_tables_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_classicfarm_v1_tcaplus_friend_tables_proto_goTypes = []any{
 	(FriendCodeStatus)(0),         // 0: classicfarm.tcaplus.v1.FriendCodeStatus
 	(FriendRelationStatus)(0),     // 1: classicfarm.tcaplus.v1.FriendRelationStatus
 	(FriendReservationStatus)(0),  // 2: classicfarm.tcaplus.v1.FriendReservationStatus
 	(FriendLinkSagaStatus)(0),     // 3: classicfarm.tcaplus.v1.FriendLinkSagaStatus
 	(FriendTaskCreditStatus)(0),   // 4: classicfarm.tcaplus.v1.FriendTaskCreditStatus
-	(FriendInteractionStatus)(0),  // 5: classicfarm.tcaplus.v1.FriendInteractionStatus
-	(*FriendCodeCurrent)(nil),     // 6: classicfarm.tcaplus.v1.FriendCodeCurrent
-	(*FriendCodeLookup)(nil),      // 7: classicfarm.tcaplus.v1.FriendCodeLookup
-	(*FriendRelation)(nil),        // 8: classicfarm.tcaplus.v1.FriendRelation
-	(*FriendListEntry)(nil),       // 9: classicfarm.tcaplus.v1.FriendListEntry
-	(*FriendSlotReservation)(nil), // 10: classicfarm.tcaplus.v1.FriendSlotReservation
-	(*FriendList)(nil),            // 11: classicfarm.tcaplus.v1.FriendList
-	(*FriendLinkSaga)(nil),        // 12: classicfarm.tcaplus.v1.FriendLinkSaga
-	(*FriendInteraction)(nil),     // 13: classicfarm.tcaplus.v1.FriendInteraction
+	(FriendRewardMailStatus)(0),   // 5: classicfarm.tcaplus.v1.FriendRewardMailStatus
+	(FriendInteractionStatus)(0),  // 6: classicfarm.tcaplus.v1.FriendInteractionStatus
+	(*FriendCodeCurrent)(nil),     // 7: classicfarm.tcaplus.v1.FriendCodeCurrent
+	(*FriendCodeLookup)(nil),      // 8: classicfarm.tcaplus.v1.FriendCodeLookup
+	(*FriendRelation)(nil),        // 9: classicfarm.tcaplus.v1.FriendRelation
+	(*FriendListEntry)(nil),       // 10: classicfarm.tcaplus.v1.FriendListEntry
+	(*FriendSlotReservation)(nil), // 11: classicfarm.tcaplus.v1.FriendSlotReservation
+	(*FriendList)(nil),            // 12: classicfarm.tcaplus.v1.FriendList
+	(*FriendLinkSaga)(nil),        // 13: classicfarm.tcaplus.v1.FriendLinkSaga
+	(*FirstFriendReward)(nil),     // 14: classicfarm.tcaplus.v1.FirstFriendReward
+	(*FriendInteraction)(nil),     // 15: classicfarm.tcaplus.v1.FriendInteraction
 }
 var file_classicfarm_v1_tcaplus_friend_tables_proto_depIdxs = []int32{
 	0,  // 0: classicfarm.tcaplus.v1.FriendCodeCurrent.status:type_name -> classicfarm.tcaplus.v1.FriendCodeStatus
 	0,  // 1: classicfarm.tcaplus.v1.FriendCodeLookup.status:type_name -> classicfarm.tcaplus.v1.FriendCodeStatus
 	1,  // 2: classicfarm.tcaplus.v1.FriendRelation.status:type_name -> classicfarm.tcaplus.v1.FriendRelationStatus
 	2,  // 3: classicfarm.tcaplus.v1.FriendSlotReservation.status:type_name -> classicfarm.tcaplus.v1.FriendReservationStatus
-	9,  // 4: classicfarm.tcaplus.v1.FriendList.entries:type_name -> classicfarm.tcaplus.v1.FriendListEntry
-	10, // 5: classicfarm.tcaplus.v1.FriendList.reservations:type_name -> classicfarm.tcaplus.v1.FriendSlotReservation
+	10, // 4: classicfarm.tcaplus.v1.FriendList.entries:type_name -> classicfarm.tcaplus.v1.FriendListEntry
+	11, // 5: classicfarm.tcaplus.v1.FriendList.reservations:type_name -> classicfarm.tcaplus.v1.FriendSlotReservation
 	3,  // 6: classicfarm.tcaplus.v1.FriendLinkSaga.status:type_name -> classicfarm.tcaplus.v1.FriendLinkSagaStatus
 	4,  // 7: classicfarm.tcaplus.v1.FriendLinkSaga.low_task_credit_status:type_name -> classicfarm.tcaplus.v1.FriendTaskCreditStatus
 	4,  // 8: classicfarm.tcaplus.v1.FriendLinkSaga.high_task_credit_status:type_name -> classicfarm.tcaplus.v1.FriendTaskCreditStatus
-	5,  // 9: classicfarm.tcaplus.v1.FriendInteraction.status:type_name -> classicfarm.tcaplus.v1.FriendInteractionStatus
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 9: classicfarm.tcaplus.v1.FriendLinkSaga.inviter_reward_mail_status:type_name -> classicfarm.tcaplus.v1.FriendRewardMailStatus
+	5,  // 10: classicfarm.tcaplus.v1.FriendLinkSaga.invitee_reward_mail_status:type_name -> classicfarm.tcaplus.v1.FriendRewardMailStatus
+	6,  // 11: classicfarm.tcaplus.v1.FriendInteraction.status:type_name -> classicfarm.tcaplus.v1.FriendInteractionStatus
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_tcaplus_friend_tables_proto_init() }
@@ -1348,8 +1537,8 @@ func file_classicfarm_v1_tcaplus_friend_tables_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc), len(file_classicfarm_v1_tcaplus_friend_tables_proto_rawDesc)),
-			NumEnums:      6,
-			NumMessages:   8,
+			NumEnums:      7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

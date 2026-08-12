@@ -532,6 +532,14 @@ func (r *Runtime) activateActor(a *runtimeActor, playerID, ownerEpoch uint64) {
 		state.CheckpointRevision++
 		state.UpdatedAtMS = r.now().UTC().UnixMilli()
 	}
+	if state.ensureInitialPlots() {
+		if state.CheckpointRevision == math.MaxUint64 {
+			fail(errors.New("checkpoint revision exhausted during plot backfill"))
+			return
+		}
+		state.CheckpointRevision++
+		state.UpdatedAtMS = r.now().UTC().UnixMilli()
+	}
 	if _, err := state.materializeDueMaturities(r.now()); err != nil {
 		fail(fmt.Errorf("activate player maturity: %w", err))
 		return

@@ -127,6 +127,7 @@ message MailClaimReceipt {
   bytes claim_id = 2;
   int64 applied_at_ms = 3;
   repeated InventoryStack attachments = 4;
+  int64 coin_amount = 5;
 }
 
 // PetStateRecord 属于玩家私有状态：已购宠物、当前出战与狗粮有效截止时间。

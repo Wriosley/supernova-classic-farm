@@ -228,6 +228,33 @@ func (s *TcaplusStore) UpdateSaga(
 	return opt.Version, nil
 }
 
+func (s *TcaplusStore) TryClaimFirstFriendReward(
+	ctx context.Context,
+	inviteePlayerID, inviterPlayerID uint64,
+	relationID []byte,
+	friendCode string,
+	claimedAtMS int64,
+) (bool, error) {
+	if inviteePlayerID == 0 || inviterPlayerID == 0 || len(relationID) == 0 {
+		return false, errors.New("first friend reward keys are required")
+	}
+	record := &tcaplusv1.FirstFriendReward{
+		InviteePlayerId: inviteePlayerID,
+		InviterPlayerId: inviterPlayerID,
+		RelationId:      append([]byte(nil), relationID...),
+		FriendCode:      friendCode,
+		ClaimedAtMs:     claimedAtMS,
+	}
+	opt := insertOpt(ctx)
+	if err := s.client.DoInsert(record, opt, s.zoneID); err != nil {
+		if tcaplusdb.IsAlreadyExists(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("insert FirstFriendReward: %w", err)
+	}
+	return true, nil
+}
+
 func insertOpt(ctx context.Context) *option.PBOpt {
 	return &option.PBOpt{Ctx: ctx, ResultFlag: option.TcaplusResultFlagAllNewValue}
 }

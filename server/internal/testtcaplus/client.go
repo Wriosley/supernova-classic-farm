@@ -155,6 +155,8 @@ func recordKey(message proto.Message) string {
 		key = fmt.Sprintf("%x", record.LinkId)
 	case *tcaplusv1.FriendInteraction:
 		key = fmt.Sprintf("%x", record.InteractionId)
+	case *tcaplusv1.FirstFriendReward:
+		key = strconv.FormatUint(record.InviteePlayerId, 10)
 	case *tcaplusv1.PublicMail:
 		key = record.MailId
 	case *tcaplusv1.PrivateMail:

@@ -15,7 +15,7 @@ const (
 	InitialCoinBalance  int64  = 10
 	BasicFertilizerID   uint32 = 1
 	InitialPlotID       uint32 = 1
-	InitialPlotCount    uint32 = 4
+	InitialPlotCount    uint32 = 16
 	InitialChapterID    uint32 = 1
 	ServerConfigVersion uint64 = 1
 )
@@ -126,6 +126,21 @@ func newInitialPlots() map[uint32]*Plot {
 		plots[plotID] = &Plot{ID: plotID, State: plotv1.PlotState_EMPTY}
 	}
 	return plots
+}
+
+// ensureInitialPlots backfills plots that a later server build added to the
+// starting farm. Accounts created against a smaller farm keep every plot they
+// already own and gain the missing ones as empty land.
+func (s *State) ensureInitialPlots() bool {
+	backfilled := false
+	for plotID := InitialPlotID; plotID < InitialPlotID+InitialPlotCount; plotID++ {
+		if _, exists := s.Plots[plotID]; exists {
+			continue
+		}
+		s.Plots[plotID] = &Plot{ID: plotID, State: plotv1.PlotState_EMPTY}
+		backfilled = true
+	}
+	return backfilled
 }
 
 func (s *State) Snapshot() *wsv1.PlayerSnapshot {

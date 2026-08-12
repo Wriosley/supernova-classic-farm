@@ -12,9 +12,12 @@ the actual download and re-check that its terms match the recorded page.
   from geometric pixel primitives; no third-party image was supplied as input.
 - Files: all current files under `runtime/`.
 - License status: project-owned development placeholders.
-- AI record: generated 2026-07-30 and extended with four tool icons on
-  2026-07-31 using the deterministic local Python script;
-  no image-generation model and no third-party training-restricted source.
+- AI record: generated 2026-07-30, extended with four tool icons on
+  2026-07-31, extended with ten per-crop mature sprites plus a crop-free
+  mature plot bed on 2026-08-12, and extended with four guard-dog sprites
+  (two breeds, fed and hungry) on 2026-08-12, all from the deterministic local
+  Python script; no image-generation model and no third-party
+  training-restricted source.
 - Modification: replace freely when a final visual baseline is selected.
 
 ## Audited external candidates

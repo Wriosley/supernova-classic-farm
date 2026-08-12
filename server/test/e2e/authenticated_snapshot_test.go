@@ -21,6 +21,7 @@ import (
 	chapterv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/chapter"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
 	reasonv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/reason"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/coder/websocket"
 	"google.golang.org/protobuf/proto"
 )
@@ -281,7 +282,7 @@ func TestAuthenticatedSnapshot(t *testing.T) {
 		inventoryQuantity(snapshot, 1003) != expectedNextSeedQuantity {
 		t.Fatalf("inventory mismatch: %+v", snapshot.GetInventory())
 	}
-	if len(snapshot.GetPlots()) != 4 ||
+	if len(snapshot.GetPlots()) != int(player.InitialPlotCount) ||
 		snapshot.GetPlots()[0].GetPlotId() != 1 ||
 		snapshot.GetPlots()[0].GetPlotState() != expectedPlotState {
 		t.Fatalf("plot mismatch: %+v", snapshot.GetPlots())

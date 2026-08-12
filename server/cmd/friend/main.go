@@ -80,7 +80,14 @@ func run() error {
 	}
 	defer func() { _ = taskCreditor.Close() }()
 
-	linker, err := friend.NewFriendLinker(store, taskCreditor, time.Now)
+	mailURL := envOr("MAIL_RPC_URL", "http://127.0.0.1:8087")
+	mailer, err := friend.NewMailClient(rpcKey, mailURL)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = mailer.Close() }()
+
+	linker, err := friend.NewFriendLinkerWithMailer(store, taskCreditor, mailer, time.Now)
 	if err != nil {
 		return err
 	}
@@ -158,6 +165,7 @@ func friendTableNames() ([]string, error) {
 		{"TCAPLUS_FRIEND_LIST_TABLE", "FriendList"},
 		{"TCAPLUS_FRIEND_LINK_SAGA_TABLE", "FriendLinkSaga"},
 		{"TCAPLUS_FRIEND_INTERACTION_TABLE", "FriendInteraction"},
+		{"TCAPLUS_FIRST_FRIEND_REWARD_TABLE", "FirstFriendReward"},
 		{"TCAPLUS_ACCOUNT_BY_PLAYER_TABLE", "AccountByPlayer"},
 	}
 	tables := make([]string, 0, len(specs))

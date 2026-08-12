@@ -4,6 +4,26 @@
   "filter": "nearest",
   "assets": [
     {
+      "id": "crop.carrot-mature",
+      "file": "runtime/crops/carrot-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.corn-mature",
+      "file": "runtime/crops/corn-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
       "id": "crop.demo-growing",
       "file": "runtime/crops/demo-growing.png",
       "width": 16,
@@ -36,6 +56,86 @@
     {
       "id": "crop.demo-seedling",
       "file": "runtime/crops/demo-seedling.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.eggplant-mature",
+      "file": "runtime/crops/eggplant-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.grape-mature",
+      "file": "runtime/crops/grape-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.potato-mature",
+      "file": "runtime/crops/potato-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.pumpkin-mature",
+      "file": "runtime/crops/pumpkin-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.strawberry-mature",
+      "file": "runtime/crops/strawberry-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.tomato-mature",
+      "file": "runtime/crops/tomato-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.watermelon-mature",
+      "file": "runtime/crops/watermelon-mature.png",
+      "width": 16,
+      "height": 16,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "crop.white-radish-mature",
+      "file": "runtime/crops/white-radish-mature.png",
       "width": 16,
       "height": 16,
       "frames": 1,
@@ -92,6 +192,46 @@
       "height": 16,
       "frames": 1,
       "anchor": "center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "pet.shepherd-dog",
+      "file": "runtime/pets/shepherd-dog.png",
+      "width": 32,
+      "height": 32,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "pet.shepherd-dog-sad",
+      "file": "runtime/pets/shepherd-dog-sad.png",
+      "width": 32,
+      "height": 32,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "pet.village-dog",
+      "file": "runtime/pets/village-dog.png",
+      "width": 32,
+      "height": 32,
+      "frames": 1,
+      "anchor": "bottom-center",
+      "source": "local-mvp-placeholders",
+      "status": "placeholder"
+    },
+    {
+      "id": "pet.village-dog-sad",
+      "file": "runtime/pets/village-dog-sad.png",
+      "width": 32,
+      "height": 32,
+      "frames": 1,
+      "anchor": "bottom-center",
       "source": "local-mvp-placeholders",
       "status": "placeholder"
     },

@@ -19,7 +19,7 @@ type fakeZoneApplier struct {
 
 func (f *fakeZoneApplier) ApplyMailReward(
 	_ context.Context, playerID uint64, claimID []byte, mailID string,
-	attachments []*tcaplusv1.MailClaimAttachment,
+	attachments []*tcaplusv1.MailClaimAttachment, coinAmount int64,
 ) (*rpcv1.ApplyMailRewardResponse, error) {
 	f.calls++
 	if f.fail != nil {
@@ -29,6 +29,7 @@ func (f *fakeZoneApplier) ApplyMailReward(
 	return &rpcv1.ApplyMailRewardResponse{
 		NewlyApplied: f.calls == 1,
 		ItemsAdded:   items,
+		CoinsAdded:   coinAmount,
 		Patch:        &wsv1.PlayerStatePatch{InventoryUpserts: items},
 		OwnerEpoch:   fakeOwnerEpoch,
 		PlayerSeq:    fakePlayerSeq,
@@ -278,7 +279,7 @@ func TestClaimMailCrashAfterApplyBeforePlayerApplied(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Pretend Zone already applied once while saga stayed CLAIMING.
-	if _, err := zone.ApplyMailReward(context.Background(), 10, claimID, mailID, nil); err != nil {
+	if _, err := zone.ApplyMailReward(context.Background(), 10, claimID, mailID, nil, 0); err != nil {
 		t.Fatal(err)
 	}
 	if zone.calls != 1 {

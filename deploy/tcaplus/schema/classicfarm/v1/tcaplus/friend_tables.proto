@@ -36,12 +36,24 @@ enum FriendLinkSagaStatus {
   FRIEND_LINK_SAGA_STATUS_COMPLETED = 7;
   FRIEND_LINK_SAGA_STATUS_RELEASING = 8;
   FRIEND_LINK_SAGA_STATUS_ABORTED = 9;
+  // First-friend reward steps run after task credit and before COMPLETED.
+  // Existing COMPLETED rows stay valid; in-flight TASK_CREDITING rows advance
+  // through these new states on resume.
+  FRIEND_LINK_SAGA_STATUS_FIRST_REWARD_CHECKED = 10;
+  FRIEND_LINK_SAGA_STATUS_REWARD_MAILS_CREATED = 11;
 }
 
 enum FriendTaskCreditStatus {
   FRIEND_TASK_CREDIT_STATUS_UNSPECIFIED = 0;
   FRIEND_TASK_CREDIT_STATUS_PENDING = 1;
   FRIEND_TASK_CREDIT_STATUS_APPLIED = 2;
+}
+
+enum FriendRewardMailStatus {
+  FRIEND_REWARD_MAIL_STATUS_UNSPECIFIED = 0;
+  FRIEND_REWARD_MAIL_STATUS_PENDING = 1;
+  FRIEND_REWARD_MAIL_STATUS_APPLIED = 2;
+  FRIEND_REWARD_MAIL_STATUS_SKIPPED = 3;
 }
 
 enum FriendInteractionStatus {
@@ -130,6 +142,24 @@ message FriendLinkSaga {
   int64 retry_at_ms = 12;
   int64 created_at_ms = 13;
   int64 updated_at_ms = 14;
+  // first_reward_claimed is set after a successful InsertIfAbsent on
+  // FirstFriendReward. Zero means not yet checked or not eligible.
+  bool first_reward_claimed = 15;
+  FriendRewardMailStatus inviter_reward_mail_status = 16;
+  FriendRewardMailStatus invitee_reward_mail_status = 17;
+}
+
+// FirstFriendReward records that invitee_player_id already received the one
+// first-friend reward. Primary key is the invitee so concurrent first links
+// race to a single InsertIfAbsent winner.
+message FirstFriendReward {
+  option (tcaplusservice.tcaplus_primary_key) = "invitee_player_id";
+
+  uint64 invitee_player_id = 1;
+  uint64 inviter_player_id = 2;
+  bytes relation_id = 3;
+  string friend_code = 4;
+  int64 claimed_at_ms = 5;
 }
 
 message FriendInteraction {

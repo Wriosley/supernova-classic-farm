@@ -268,6 +268,7 @@ type CreatePublicMailInput struct {
 	PublishedAtMS     int64
 	SourceEventID     string
 	Attachments       []*tcaplusv1.MailAttachment
+	CoinAmount        int64
 }
 
 // CreatePrivateMailInput is the admin payload for one recipient private mail.
@@ -278,10 +279,61 @@ type CreatePrivateMailInput struct {
 	SenderDisplayName string
 	SourceEventID     string
 	Attachments       []*tcaplusv1.MailAttachment
+	CoinAmount        int64
+}
+
+func (s *Service) CreateSystemRewardMail(
+	ctx context.Context, request *mailv1.CreateSystemRewardMailRequest,
+) (*mailv1.CreateSystemRewardMailResponse, error) {
+	sourceID := strings.TrimSpace(request.GetSourceEventId())
+	recipient := request.GetRecipientPlayerId()
+	title := strings.TrimSpace(request.GetTitle())
+	content := strings.TrimSpace(request.GetContent())
+	if sourceID == "" || recipient == 0 || title == "" || content == "" {
+		return &mailv1.CreateSystemRewardMailResponse{Error: invalidArg()}, nil
+	}
+	attachments := make([]*tcaplusv1.MailAttachment, 0, len(request.GetAttachments()))
+	for _, attachment := range request.GetAttachments() {
+		if attachment == nil {
+			continue
+		}
+		attachments = append(attachments, &tcaplusv1.MailAttachment{
+			ItemId: attachment.GetItemId(), Quantity: attachment.GetQuantity(),
+		})
+	}
+	coinAmount := request.GetCoinAmount()
+	if len(attachments) == 0 && coinAmount <= 0 {
+		return &mailv1.CreateSystemRewardMailResponse{Error: invalidArg()}, nil
+	}
+	mailID, err := s.CreatePrivateMail(ctx, CreatePrivateMailInput{
+		RecipientPlayerID: recipient,
+		Title:             title,
+		Content:           content,
+		SenderDisplayName: request.GetSenderDisplayName(),
+		SourceEventID:     sourceID,
+		Attachments:       attachments,
+		CoinAmount:        coinAmount,
+	})
+	if err != nil {
+		if errors.Is(err, ErrAlreadyExists) {
+			existing, getErr := s.store.GetSourceDedup(ctx, sourceID)
+			if getErr != nil {
+				return nil, getErr
+			}
+			return &mailv1.CreateSystemRewardMailResponse{
+				MailId: existing.GetMailId(), AlreadyApplied: true,
+			}, nil
+		}
+		if errors.Is(err, ErrNotFound) {
+			return &mailv1.CreateSystemRewardMailResponse{Error: invalidArg()}, nil
+		}
+		return nil, err
+	}
+	return &mailv1.CreateSystemRewardMailResponse{MailId: mailID}, nil
 }
 
 func (s *Service) CreatePublicMail(ctx context.Context, in CreatePublicMailInput) (string, error) {
-	if err := validateMailBody(in.Title, in.Content, in.Attachments); err != nil {
+	if err := validateMailBody(in.Title, in.Content, in.Attachments, in.CoinAmount); err != nil {
 		return "", err
 	}
 	now := s.now()
@@ -315,6 +367,7 @@ func (s *Service) CreatePublicMail(ctx context.Context, in CreatePublicMailInput
 		Content:           strings.TrimSpace(in.Content),
 		Attachments:       cloneAttachments(in.Attachments),
 		SourceEventId:     strings.TrimSpace(in.SourceEventID),
+		CoinAmount:        in.CoinAmount,
 	}
 	if record.SenderDisplayName == "" {
 		record.SenderDisplayName = "系统"
@@ -329,7 +382,7 @@ func (s *Service) CreatePrivateMail(ctx context.Context, in CreatePrivateMailInp
 	if in.RecipientPlayerID == 0 {
 		return "", fmt.Errorf("%w: recipient required", ErrNotFound)
 	}
-	if err := validateMailBody(in.Title, in.Content, in.Attachments); err != nil {
+	if err := validateMailBody(in.Title, in.Content, in.Attachments, in.CoinAmount); err != nil {
 		return "", err
 	}
 	now := s.now()
@@ -360,6 +413,7 @@ func (s *Service) CreatePrivateMail(ctx context.Context, in CreatePrivateMailInp
 		Content:           strings.TrimSpace(in.Content),
 		Attachments:       cloneAttachments(in.Attachments),
 		SourceEventId:     strings.TrimSpace(in.SourceEventID),
+		CoinAmount:        in.CoinAmount,
 	}
 	if record.SenderDisplayName == "" {
 		record.SenderDisplayName = "系统"
@@ -466,6 +520,7 @@ func (s *Service) toPublicView(
 		Attachments:       toAttachmentViews(record.GetAttachments()),
 		Read:              read,
 		Claimed:           claimed,
+		CoinAmount:        record.GetCoinAmount(),
 	}, nil
 }
 
@@ -493,6 +548,7 @@ func (s *Service) toPrivateView(
 		Attachments:       toAttachmentViews(record.GetAttachments()),
 		Read:              read,
 		Claimed:           claimed,
+		CoinAmount:        record.GetCoinAmount(),
 	}, nil
 }
 
@@ -568,7 +624,9 @@ func (s *Service) saveCursor(ctx context.Context, playerID uint64, openedAtMS in
 	return ErrConflict
 }
 
-func validateMailBody(title, content string, attachments []*tcaplusv1.MailAttachment) error {
+func validateMailBody(
+	title, content string, attachments []*tcaplusv1.MailAttachment, coinAmount int64,
+) error {
 	title = strings.TrimSpace(title)
 	content = strings.TrimSpace(content)
 	if title == "" || utf8.RuneCountInString(title) > MaxTitleRunes {
@@ -576,6 +634,9 @@ func validateMailBody(title, content string, attachments []*tcaplusv1.MailAttach
 	}
 	if content == "" || utf8.RuneCountInString(content) > MaxContentRunes {
 		return fmt.Errorf("%w: content", ErrNotFound)
+	}
+	if coinAmount < 0 {
+		return fmt.Errorf("%w: coin_amount", ErrNotFound)
 	}
 	if len(attachments) > MaxAttachments {
 		return fmt.Errorf("%w: too many attachments", ErrNotFound)

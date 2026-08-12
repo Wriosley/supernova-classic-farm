@@ -299,8 +299,10 @@ type PublicMail struct {
 	Content           string                 `protobuf:"bytes,9,opt,name=content,proto3" json:"content,omitempty"`
 	Attachments       []*MailAttachment      `protobuf:"bytes,10,rep,name=attachments,proto3" json:"attachments,omitempty"`
 	SourceEventId     string                 `protobuf:"bytes,11,opt,name=source_event_id,json=sourceEventId,proto3" json:"source_event_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// coin_amount is granted on claim. Zero means no coin attachment.
+	CoinAmount    int64 `protobuf:"varint,12,opt,name=coin_amount,json=coinAmount,proto3" json:"coin_amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PublicMail) Reset() {
@@ -410,7 +412,14 @@ func (x *PublicMail) GetSourceEventId() string {
 	return ""
 }
 
-// PrivateMail is isolated per recipient (admin private + future gifts).
+func (x *PublicMail) GetCoinAmount() int64 {
+	if x != nil {
+		return x.CoinAmount
+	}
+	return 0
+}
+
+// PrivateMail is isolated per recipient (admin private + gifts + system rewards).
 type PrivateMail struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	RecipientPlayerId uint64                 `protobuf:"varint,1,opt,name=recipient_player_id,json=recipientPlayerId,proto3" json:"recipient_player_id,omitempty"`
@@ -425,6 +434,7 @@ type PrivateMail struct {
 	Content           string                 `protobuf:"bytes,10,opt,name=content,proto3" json:"content,omitempty"`
 	Attachments       []*MailAttachment      `protobuf:"bytes,11,rep,name=attachments,proto3" json:"attachments,omitempty"`
 	SourceEventId     string                 `protobuf:"bytes,12,opt,name=source_event_id,json=sourceEventId,proto3" json:"source_event_id,omitempty"`
+	CoinAmount        int64                  `protobuf:"varint,13,opt,name=coin_amount,json=coinAmount,proto3" json:"coin_amount,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -541,6 +551,13 @@ func (x *PrivateMail) GetSourceEventId() string {
 		return x.SourceEventId
 	}
 	return ""
+}
+
+func (x *PrivateMail) GetCoinAmount() int64 {
+	if x != nil {
+		return x.CoinAmount
+	}
+	return 0
 }
 
 type PlayerMailboxCursor struct {
@@ -804,6 +821,7 @@ type MailClaimSaga struct {
 	CreatedAtMs             int64                  `protobuf:"varint,8,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	UpdatedAtMs             int64                  `protobuf:"varint,9,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
 	AttachmentsDigestSha256 []byte                 `protobuf:"bytes,10,opt,name=attachments_digest_sha256,json=attachmentsDigestSha256,proto3" json:"attachments_digest_sha256,omitempty"`
+	CoinAmount              int64                  `protobuf:"varint,11,opt,name=coin_amount,json=coinAmount,proto3" json:"coin_amount,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -908,6 +926,13 @@ func (x *MailClaimSaga) GetAttachmentsDigestSha256() []byte {
 	return nil
 }
 
+func (x *MailClaimSaga) GetCoinAmount() int64 {
+	if x != nil {
+		return x.CoinAmount
+	}
+	return 0
+}
+
 var File_classicfarm_v1_tcaplus_mail_tables_proto protoreflect.FileDescriptor
 
 const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
@@ -915,7 +940,7 @@ const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
 	"(classicfarm/v1/tcaplus/mail_tables.proto\x12\x16classicfarm.tcaplus.v1\x1a\x1dtcaplusservice.optionv1.proto\"E\n" +
 	"\x0eMailAttachment\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\rR\bquantity\"\x82\x04\n" +
+	"\bquantity\x18\x02 \x01(\rR\bquantity\"\xa3\x04\n" +
 	"\n" +
 	"PublicMail\x12\x17\n" +
 	"\amail_id\x18\x01 \x01(\tR\x06mailId\x12=\n" +
@@ -930,7 +955,9 @@ const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
 	"\acontent\x18\t \x01(\tR\acontent\x12H\n" +
 	"\vattachments\x18\n" +
 	" \x03(\v2&.classicfarm.tcaplus.v1.MailAttachmentR\vattachments\x12&\n" +
-	"\x0fsource_event_id\x18\v \x01(\tR\rsourceEventId:\v\x82\xa6\x1d\amail_id\"\xc7\x04\n" +
+	"\x0fsource_event_id\x18\v \x01(\tR\rsourceEventId\x12\x1f\n" +
+	"\vcoin_amount\x18\f \x01(\x03R\n" +
+	"coinAmount:\v\x82\xa6\x1d\amail_id\"\xe8\x04\n" +
 	"\vPrivateMail\x12.\n" +
 	"\x13recipient_player_id\x18\x01 \x01(\x04R\x11recipientPlayerId\x12\x17\n" +
 	"\amail_id\x18\x02 \x01(\tR\x06mailId\x12=\n" +
@@ -945,7 +972,9 @@ const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
 	"\acontent\x18\n" +
 	" \x01(\tR\acontent\x12H\n" +
 	"\vattachments\x18\v \x03(\v2&.classicfarm.tcaplus.v1.MailAttachmentR\vattachments\x12&\n" +
-	"\x0fsource_event_id\x18\f \x01(\tR\rsourceEventId:\x1f\x82\xa6\x1d\x1brecipient_player_id,mail_id\"\x9f\x01\n" +
+	"\x0fsource_event_id\x18\f \x01(\tR\rsourceEventId\x12\x1f\n" +
+	"\vcoin_amount\x18\r \x01(\x03R\n" +
+	"coinAmount:\x1f\x82\xa6\x1d\x1brecipient_player_id,mail_id\"\x9f\x01\n" +
 	"\x13PlayerMailboxCursor\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x128\n" +
 	"\x19last_mailbox_opened_at_ms\x18\x02 \x01(\x03R\x15lastMailboxOpenedAtMs\x12\"\n" +
@@ -962,7 +991,7 @@ const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
 	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs:\x13\x82\xa6\x1d\x0fsource_event_id\"J\n" +
 	"\x13MailClaimAttachment\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\rR\bquantity\"\xc3\x03\n" +
+	"\bquantity\x18\x02 \x01(\rR\bquantity\"\xe4\x03\n" +
 	"\rMailClaimSaga\x12\x19\n" +
 	"\bclaim_id\x18\x01 \x01(\fR\aclaimId\x12\x17\n" +
 	"\amail_id\x18\x02 \x01(\tR\x06mailId\x12\x1b\n" +
@@ -975,7 +1004,9 @@ const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
 	"\rcreated_at_ms\x18\b \x01(\x03R\vcreatedAtMs\x12\"\n" +
 	"\rupdated_at_ms\x18\t \x01(\x03R\vupdatedAtMs\x12:\n" +
 	"\x19attachments_digest_sha256\x18\n" +
-	" \x01(\fR\x17attachmentsDigestSha256:\f\x82\xa6\x1d\bclaim_id*f\n" +
+	" \x01(\fR\x17attachmentsDigestSha256\x12\x1f\n" +
+	"\vcoin_amount\x18\v \x01(\x03R\n" +
+	"coinAmount:\f\x82\xa6\x1d\bclaim_id*f\n" +
 	"\bMailType\x12\x19\n" +
 	"\x15MAIL_TYPE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10MAIL_TYPE_PUBLIC\x10\x01\x12\x15\n" +

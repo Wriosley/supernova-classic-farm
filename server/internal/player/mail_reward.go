@@ -29,12 +29,13 @@ type ApplyMailRewardResult struct {
 	NewlyApplied bool
 	PlayerSeq    uint64
 	ItemsAdded   []*wsv1.ItemStackView
+	CoinsAdded   int64
 	Patch        *wsv1.PlayerStatePatch
 }
 
-// ApplyMailReward idempotently grants mail attachments, keyed by
-// (mail_id, claim_id). Inventory is checked all-or-nothing; success requires
-// a synchronous SaveCAS before returning.
+// ApplyMailReward idempotently grants mail attachments and optional coins,
+// keyed by (mail_id, claim_id). Inventory is checked all-or-nothing; success
+// requires a synchronous SaveCAS before returning.
 func (r *Runtime) ApplyMailReward(
 	ctx context.Context,
 	playerID uint64,
@@ -42,12 +43,14 @@ func (r *Runtime) ApplyMailReward(
 	claimID []byte,
 	mailID string,
 	attachments []MailRewardAttachment,
+	coinAmount int64,
 ) (ApplyMailRewardResult, error) {
 	var empty ApplyMailRewardResult
 	if ownerEpoch == 0 {
 		return empty, ErrNotOwner
 	}
-	if len(claimID) != 16 || mailID == "" || len(attachments) == 0 {
+	if len(claimID) != 16 || mailID == "" || coinAmount < 0 ||
+		(len(attachments) == 0 && coinAmount <= 0) {
 		return empty, errors.New("invalid mail reward request")
 	}
 	shardID := routing.ShardForPlayer(playerID)
@@ -64,7 +67,7 @@ func (r *Runtime) ApplyMailReward(
 	var mailboxErr error
 	if err := a.mailbox.Do(ctx, func() {
 		beforeRevision := a.state.CheckpointRevision
-		result, mailboxErr = applyMailReward(a.state, claimID, mailID, attachments, now)
+		result, mailboxErr = applyMailReward(a.state, claimID, mailID, attachments, coinAmount, now)
 		if mailboxErr == nil && a.state.CheckpointRevision != beforeRevision {
 			a.markSyncPending(stepKey, pendingSyncStep{revision: a.state.CheckpointRevision})
 		}
@@ -85,13 +88,17 @@ func applyMailReward(
 	claimID []byte,
 	mailID string,
 	attachments []MailRewardAttachment,
+	coinAmount int64,
 	now time.Time,
 ) (ApplyMailRewardResult, error) {
 	var empty ApplyMailRewardResult
 	if state == nil {
 		return empty, errors.New("player state is required")
 	}
-	normalized, digest, err := normalizeMailAttachments(attachments)
+	if coinAmount < 0 {
+		return empty, errors.New("invalid mail coin amount")
+	}
+	normalized, digest, err := normalizeMailAttachments(attachments, coinAmount)
 	if err != nil {
 		return empty, err
 	}
@@ -99,7 +106,8 @@ func applyMailReward(
 		if receipt.GetMailId() != mailID || !bytes.Equal(receipt.GetClaimId(), claimID) {
 			continue
 		}
-		if !sameMailAttachmentStacks(receipt.GetAttachments(), normalized) {
+		if !sameMailAttachmentStacks(receipt.GetAttachments(), normalized) ||
+			receipt.GetCoinAmount() != coinAmount {
 			return empty, ErrMailClaimConflict
 		}
 		return replayMailReward(state, receipt), nil
@@ -117,7 +125,6 @@ func applyMailReward(
 	itemsAdded := make([]*wsv1.ItemStackView, 0, len(normalized))
 	upserts := make([]*wsv1.ItemStackView, 0, len(normalized))
 	for _, attachment := range normalized {
-		before := state.Inventory[attachment.ItemId]
 		after := projected[attachment.ItemId]
 		state.Inventory[attachment.ItemId] = after
 		itemsAdded = append(itemsAdded, &wsv1.ItemStackView{
@@ -126,22 +133,30 @@ func applyMailReward(
 		upserts = append(upserts, &wsv1.ItemStackView{
 			ItemId: attachment.ItemId, Quantity: after,
 		})
-		_ = before
+	}
+	if coinAmount > 0 {
+		state.Coins += coinAmount
 	}
 	receipt := &datav1.MailClaimReceipt{
 		MailId: mailID, ClaimId: append([]byte(nil), claimID...),
-		AppliedAtMs: now.UnixMilli(), Attachments: normalized,
+		AppliedAtMs: now.UnixMilli(), Attachments: normalized, CoinAmount: coinAmount,
 	}
 	_ = digest
 	state.MailClaimReceipts = append(state.MailClaimReceipts, receipt)
 	state.PlayerSeq++
 	state.CheckpointRevision++
 	state.UpdatedAtMS = now.UnixMilli()
+	coinBalance := state.Coins
+	patch := &wsv1.PlayerStatePatch{InventoryUpserts: upserts}
+	if coinAmount > 0 {
+		patch.CoinBalance = &coinBalance
+	}
 	return ApplyMailRewardResult{
 		NewlyApplied: true,
 		PlayerSeq:    state.PlayerSeq,
 		ItemsAdded:   itemsAdded,
-		Patch:        &wsv1.PlayerStatePatch{InventoryUpserts: upserts},
+		CoinsAdded:   coinAmount,
+		Patch:        patch,
 	}, nil
 }
 
@@ -156,16 +171,33 @@ func replayMailReward(state *State, receipt *datav1.MailClaimReceipt) ApplyMailR
 			ItemId: attachment.ItemId, Quantity: state.Inventory[attachment.ItemId],
 		})
 	}
+	coinBalance := state.Coins
+	patch := &wsv1.PlayerStatePatch{InventoryUpserts: upserts}
+	if receipt.GetCoinAmount() > 0 {
+		patch.CoinBalance = &coinBalance
+	}
 	return ApplyMailRewardResult{
 		NewlyApplied: false,
 		PlayerSeq:    state.PlayerSeq,
 		ItemsAdded:   items,
-		Patch:        &wsv1.PlayerStatePatch{InventoryUpserts: upserts},
+		CoinsAdded:   receipt.GetCoinAmount(),
+		Patch:        patch,
 	}
 }
 
-func normalizeMailAttachments(in []MailRewardAttachment) ([]*datav1.InventoryStack, []byte, error) {
-	if len(in) == 0 || len(in) > 8 {
+func normalizeMailAttachments(
+	in []MailRewardAttachment, coinAmount int64,
+) ([]*datav1.InventoryStack, []byte, error) {
+	if coinAmount < 0 {
+		return nil, nil, errors.New("invalid mail coin amount")
+	}
+	if len(in) == 0 {
+		if coinAmount <= 0 {
+			return nil, nil, errors.New("invalid mail attachment count")
+		}
+		return nil, sha256.New().Sum(nil), nil
+	}
+	if len(in) > 8 {
 		return nil, nil, errors.New("invalid mail attachment count")
 	}
 	merged := make(map[uint32]uint32, len(in))

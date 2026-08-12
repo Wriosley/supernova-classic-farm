@@ -31,7 +31,7 @@ related:
 | ---------- | ------------------------------------------------------------ | ------------------------------------------ |
 | 注册、登录与游戏连接 | HTTP Session、CSRF、一次性 WebSocket Ticket、Protobuf WebSocket 鉴权 | 可复现协议 E2E；H5 手工登录验证                        |
 | 单玩家农场闭环    | 买种子/肥料、种植、施肥、成长、成熟 Push、收获、出售、领奖、清理                          | 完整链路到 `player_seq=8`；命令具备幂等结果              |
-| 玩家状态       | 一个 Player Actor 维护金币、仓库、四块地、章节任务、近期请求结果、Outbox 和版本           | 同一玩家 Mailbox 串行；不同玩家可并行                    |
+| 玩家状态       | 一个 Player Actor 维护金币、仓库、十六块地、章节任务、近期请求结果、Outbox 和版本          | 同一玩家 Mailbox 串行；不同玩家可并行                    |
 | MySQL 恢复   | 注册、Session、玩家检查点；Dirty 异步写回、CAS 与 Fence 校验                   | 多进程停启后恢复完整单玩家状态                            |
 | 双 Zone     | 4096 逻辑 Shard、Rendezvous 初始安置、Gate 路由缓存、错误 Owner 拒绝          | 两个 Zone 路由隔离、`NOT_OWNER` 刷新重试              |
 | Shard 迁移   | 空闲/活跃 Shard 的 PREPARING、排空、最终刷盘、Fence epoch 切换、目标 Zone 准备    | 活跃迁移后旧 Zone 拒绝写；Coordinator 重启可恢复迁移进度      |
@@ -124,7 +124,7 @@ flowchart TD
 
 ## 5. 玩家农场业务闭环
 
-当前 H5 已提供商店、四块地、仓库、金币、章节任务和工具操作。服务端实现的主人闭环如下：
+当前 H5 已提供商店、十六块地、仓库、金币、章节任务和工具操作。服务端实现的主人闭环如下：
 
 ```mermaid
 flowchart LR

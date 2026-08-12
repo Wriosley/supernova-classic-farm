@@ -24,7 +24,7 @@ func TestApplyMailRewardAllOrNothingAndReplay(t *testing.T) {
 		claimID[i] = byte(i + 1)
 	}
 	first, err := runtime.ApplyMailReward(context.Background(), playerID, LocalOwnerEpoch, claimID, "m1",
-		[]MailRewardAttachment{{ItemID: 1002, Quantity: 2}},
+		[]MailRewardAttachment{{ItemID: 1002, Quantity: 2}}, 0,
 	)
 	if err != nil || !first.NewlyApplied || first.ItemsAdded[0].Quantity != 2 {
 		t.Fatalf("first=%+v err=%v", first, err)
@@ -37,7 +37,7 @@ func TestApplyMailRewardAllOrNothingAndReplay(t *testing.T) {
 	}
 
 	second, err := runtime.ApplyMailReward(context.Background(), playerID, LocalOwnerEpoch, claimID, "m1",
-		[]MailRewardAttachment{{ItemID: 1002, Quantity: 2}},
+		[]MailRewardAttachment{{ItemID: 1002, Quantity: 2}}, 0,
 	)
 	if err != nil || second.NewlyApplied {
 		t.Fatalf("replay=%+v err=%v", second, err)
@@ -47,7 +47,7 @@ func TestApplyMailRewardAllOrNothingAndReplay(t *testing.T) {
 	}
 
 	_, err = runtime.ApplyMailReward(context.Background(), playerID, LocalOwnerEpoch, claimID, "m1",
-		[]MailRewardAttachment{{ItemID: 1002, Quantity: 1}},
+		[]MailRewardAttachment{{ItemID: 1002, Quantity: 1}}, 0,
 	)
 	if err != ErrMailClaimConflict {
 		t.Fatalf("conflict err=%v", err)
@@ -68,7 +68,7 @@ func TestApplyMailRewardCapacity(t *testing.T) {
 	claimID := make([]byte, 16)
 	claimID[0] = 9
 	_, err := runtime.ApplyMailReward(context.Background(), playerID, LocalOwnerEpoch, claimID, "m2",
-		[]MailRewardAttachment{{ItemID: 1002, Quantity: 1}},
+		[]MailRewardAttachment{{ItemID: 1002, Quantity: 1}}, 0,
 	)
 	if err != ErrMailInventoryCapacity {
 		t.Fatalf("err=%v", err)

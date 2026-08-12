@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
 )
 
@@ -93,5 +94,55 @@ func TestBuildPublicFarmSnapshotRejectsZeroOwnerEpoch(t *testing.T) {
 	defer runtime.Close()
 	if _, err := runtime.BuildPublicFarmSnapshot(context.Background(), 13, 0); err != ErrNotOwner {
 		t.Fatalf("BuildPublicFarmSnapshot(ownerEpoch=0) = %v, want ErrNotOwner", err)
+	}
+}
+
+func TestBuildPublicFarmSnapshotExposesDeployedPetOnly(t *testing.T) {
+	const ownerID = uint64(17)
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	runtime := NewRuntime()
+	runtime.now = func() time.Time { return now }
+	defer runtime.Close()
+
+	empty, err := runtime.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("BuildPublicFarmSnapshot: %v", err)
+	}
+	if empty.GetPet() == nil {
+		t.Fatal("expected an empty PublicPetView, got nil")
+	}
+	if empty.GetPet().GetActivePetId() != 0 || empty.GetPet().GetPetName() != "" {
+		t.Fatalf("fresh pet = %+v, want empty", empty.GetPet())
+	}
+
+	a, err := runtime.actorFor(context.Background(), ownerID, LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("actorFor: %v", err)
+	}
+	foodUntil := now.Add(90 * time.Minute).UnixMilli()
+	err = a.mailbox.Do(context.Background(), func() {
+		a.state.PetState = &datav1.PetStateRecord{
+			OwnedPetIds:       []uint32{developmentShepherdDogPetID},
+			ActivePetId:       developmentShepherdDogPetID,
+			FoodActiveUntilMs: foodUntil,
+		}
+	})
+	if err != nil {
+		t.Fatalf("set pet state: %v", err)
+	}
+
+	withPet, err := runtime.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch)
+	if err != nil {
+		t.Fatalf("BuildPublicFarmSnapshot with pet: %v", err)
+	}
+	pet := withPet.GetPet()
+	if pet.GetActivePetId() != developmentShepherdDogPetID {
+		t.Fatalf("active_pet_id = %d, want %d", pet.GetActivePetId(), developmentShepherdDogPetID)
+	}
+	if pet.GetPetName() != "牧羊犬" {
+		t.Fatalf("pet_name = %q, want 牧羊犬", pet.GetPetName())
+	}
+	if pet.GetFoodActiveUntilMs() != foodUntil {
+		t.Fatalf("food_active_until_ms = %d, want %d", pet.GetFoodActiveUntilMs(), foodUntil)
 	}
 }

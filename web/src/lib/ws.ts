@@ -1,4 +1,4 @@
-import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
+import { create, fromBinary, toBinary, type MessageInitShape } from '@bufbuild/protobuf'
 import {
   Action,
   MessageKind,
@@ -12,6 +12,8 @@ const PROTOCOL_VERSION = 1
 const MAX_MESSAGE_BYTES = 64 * 1024
 const REQUEST_TIMEOUT_MS = 10_000
 
+type WsPayloadInit = MessageInitShape<typeof WsEnvelopeSchema>['payload']
+
 type PendingRequest = {
   action: Action
   resolve: (envelope: WsEnvelope) => void
@@ -23,6 +25,7 @@ export type PlayerStateChangedHandler = (envelope: WsEnvelope) => void
 export type FarmPresenceChangedHandler = (envelope: WsEnvelope) => void
 export type FarmViewChangedHandler = (envelope: WsEnvelope) => void
 export type RedDotChangedHandler = (envelope: WsEnvelope) => void
+export type ConnectionHandler = (connected: boolean) => void
 
 export type AuthenticatedConnection = {
   auth: AuthResponse
@@ -64,9 +67,17 @@ export class FarmWebSocket {
   private farmPresenceChangedHandler?: FarmPresenceChangedHandler
   private farmViewChangedHandler?: FarmViewChangedHandler
   private redDotChangedHandler?: RedDotChangedHandler
+  private connectionHandler?: ConnectionHandler
 
   get connected(): boolean {
     return this.socket?.readyState === WebSocket.OPEN
+  }
+
+  // The UI cannot watch `connected` directly: this class is deliberately not
+  // reactive, so a socket that dies between renders would leave the shell
+  // looking healthy while every command is refused.
+  setConnectionHandler(handler?: ConnectionHandler): void {
+    this.connectionHandler = handler
   }
 
   setPlayerStateChangedHandler(handler?: PlayerStateChangedHandler): void {
@@ -99,6 +110,7 @@ export class FarmWebSocket {
     socket.addEventListener('close', () => {
       if (this.socket === socket) {
         this.rejectAll(new Error('WebSocket 已断开'))
+        this.connectionHandler?.(false)
       }
     })
     socket.addEventListener('error', () => {
@@ -127,6 +139,7 @@ export class FarmWebSocket {
       )
     })
 
+    this.connectionHandler?.(true)
     onSocketOpen?.()
     const requestId = randomUuid()
     const envelope = await this.sendRequest(
@@ -491,6 +504,9 @@ export class FarmWebSocket {
   disconnect(): void {
     const socket = this.socket
     this.socket = undefined
+    if (socket) {
+      this.connectionHandler?.(false)
+    }
     this.rejectAll(new Error('WebSocket 已主动断开'))
     if (
       socket &&
@@ -501,10 +517,12 @@ export class FarmWebSocket {
     }
   }
 
+  // Callers pass plain init objects, not constructed messages, so the parameter
+  // has to be the init shape rather than WsEnvelope['payload'].
   private sendGameRequest(
     playerId: bigint,
     action: Action,
-    payload: WsEnvelope['payload'],
+    payload: WsPayloadInit,
   ): Promise<WsEnvelope> {
     if (playerId === 0n) {
       return Promise.reject(new Error('authenticated player_id 不能为 0'))

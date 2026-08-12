@@ -466,6 +466,7 @@ message CreateFriendCodeResponse {
   string code = 1;
   int64 created_at_ms = 2;
   int64 expires_at_ms = 3;
+  string share_url = 4;
 }
 
 message RedeemFriendCodeRequest {
@@ -506,12 +507,21 @@ message PublicPlotView {
   uint32 steal_count = 9;
 }
 
+// PublicPetView 是访客在农田旁看到的护卫宠物。active_pet_id=0 表示尚未派出
+// （客户端显示「尚未获得宠物」）；不含狗粮库存等私有字段。
+message PublicPetView {
+  uint32 active_pet_id = 1;
+  string pet_name = 2;
+  int64 food_active_until_ms = 3;
+}
+
 message FarmVisitSnapshot {
   uint64 owner_player_id = 1;
   FarmViewVersion version = 2;
   repeated PublicPlotView plots = 3;
   // 访客可见的公开生涯；不含私有图鉴。
   PlayerCareerView career = 4;
+  PublicPetView pet = 5;
 }
 
 message FarmViewPatch {
@@ -731,6 +741,7 @@ message ClaimMailResponse {
   string mail_id = 1;
   repeated ItemStackView items_added = 2;
   PlayerStatePatch patch = 3;
+  int64 coins_added = 4;
 }
 
 // MailKind mirrors classicfarm.mail.v1.MailKind for H5 without circular imports.
@@ -744,6 +755,7 @@ enum MailKind {
 message MailAttachmentView {
   uint32 item_id = 1;
   uint32 quantity = 2;
+  int64 coin_amount = 3;
 }
 
 message MailView {
@@ -759,6 +771,7 @@ message MailView {
   repeated MailAttachmentView attachments = 10;
   bool read = 11;
   bool claimed = 12;
+  int64 coin_amount = 13;
 }
 
 message OpenMailboxRequest {

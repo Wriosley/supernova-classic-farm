@@ -19,19 +19,36 @@ const shareCodeTTL = 10 * time.Minute
 type Service struct {
 	friendv1.UnimplementedFriendServiceServer
 
-	store  Store
-	linker *FriendLinker
-	now    func() time.Time
+	store             Store
+	linker            *FriendLinker
+	now               func() time.Time
+	publicWebBaseURL  string
 }
 
 func NewService(store Store, linker *FriendLinker, now func() time.Time) (*Service, error) {
+	baseURL, err := LoadPublicWebBaseURL()
+	if err != nil {
+		return nil, err
+	}
+	return NewServiceWithBaseURL(store, linker, now, baseURL)
+}
+
+func NewServiceWithBaseURL(
+	store Store, linker *FriendLinker, now func() time.Time, publicWebBaseURL string,
+) (*Service, error) {
 	if store == nil || linker == nil {
 		return nil, errors.New("friend store and linker are required")
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{store: store, linker: linker, now: now}, nil
+	normalized, err := normalizePublicWebBaseURL(publicWebBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	return &Service{
+		store: store, linker: linker, now: now, publicWebBaseURL: normalized,
+	}, nil
 }
 
 func (s *Service) CreateShareCode(
@@ -47,8 +64,13 @@ func (s *Service) CreateShareCode(
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	shareURL, err := FriendShareURL(s.publicWebBaseURL, current.Code)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 	return &friendv1.CreateShareCodeResponse{
 		Code: current.Code, CreatedAtMs: current.CreatedAtMs, ExpiresAtMs: current.ExpiresAtMs,
+		ShareUrl: shareURL,
 	}, nil
 }
 

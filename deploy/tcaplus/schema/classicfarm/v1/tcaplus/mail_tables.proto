@@ -45,9 +45,11 @@ message PublicMail {
   string content = 9;
   repeated MailAttachment attachments = 10;
   string source_event_id = 11;
+  // coin_amount is granted on claim. Zero means no coin attachment.
+  int64 coin_amount = 12;
 }
 
-// PrivateMail is isolated per recipient (admin private + future gifts).
+// PrivateMail is isolated per recipient (admin private + gifts + system rewards).
 message PrivateMail {
   option (tcaplusservice.tcaplus_primary_key) = "recipient_player_id,mail_id";
 
@@ -63,6 +65,7 @@ message PrivateMail {
   string content = 10;
   repeated MailAttachment attachments = 11;
   string source_event_id = 12;
+  int64 coin_amount = 13;
 }
 
 message PlayerMailboxCursor {
@@ -120,4 +123,5 @@ message MailClaimSaga {
   int64 created_at_ms = 8;
   int64 updated_at_ms = 9;
   bytes attachments_digest_sha256 = 10;
+  int64 coin_amount = 11;
 }

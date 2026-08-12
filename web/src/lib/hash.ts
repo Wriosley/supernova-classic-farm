@@ -102,7 +102,9 @@ export async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
     return sha256Software(bytes)
   }
 
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  // slice() hands WebCrypto a view backed by a plain ArrayBuffer, which is what
+  // BufferSource requires; a Uint8Array over a SharedArrayBuffer is not allowed.
+  const digest = await crypto.subtle.digest('SHA-256', bytes.slice())
   return new Uint8Array(digest)
 }
 

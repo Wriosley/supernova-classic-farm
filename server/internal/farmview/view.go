@@ -62,5 +62,8 @@ func Snapshot(
 			FarmViewSeq:   seq,
 		},
 		Plots: views,
+		// Pet stays empty here: this helper only projects plots. The live
+		// visitor path fills PublicPetView in player.publicFarmSnapshot.
+		Pet: &wsv1.PublicPetView{},
 	}
 }

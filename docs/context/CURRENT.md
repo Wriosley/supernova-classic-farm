@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-10
+updated: 2026-08-11
 ---
 
 # Current Handoff
@@ -23,9 +23,12 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 - The single-player owner loop is complete through `player_seq=8`.
 - Pure Tcaplus is green for auth, checkpoint, Fence, migration, Outbox and
   complete process restart.
-- The fixed dual-Zone kind cluster has **six** Ready Deployments (Login,
-  Gate, Coordinator, zone-a, zone-b, FriendSvr) and passing friend
-  interaction / restart-recovery E2Es (`2026-08-07-friend-interaction-e2e`).
+- The fixed dual-Zone kind cluster now runs **eight** Ready Deployments
+  (Login, Gate, Coordinator, zone-a, zone-b, FriendSvr, InfoSvr, MailSvr)
+  after the 2026-08-11 rebuild/load/`kubectl apply -k` + rollout. Evidence:
+  `../evidence/2026-08-11-k8s-redeploy-mail-info.md`. Earlier friend
+  interaction / restart-recovery E2Es remain
+  `../evidence/2026-08-07-friend-interaction-e2e.md`.
 - Dynamic Zone discovery and automatic scaling are outside the prototype.
 - Friend plan phases 0–7 are complete: contracts, gRPC+HMAC, FriendSvr,
   visit sessions, FarmViewPatch/Presence, steal Saga, pest/catch/help,
@@ -90,6 +93,59 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   mail never pushes at all, so H5 queries the indicator once after
   authentication. A failure there leaves the dot untouched and never blocks
   login. Evidence: `../evidence/2026-08-12-h5-mail-red-dot.md`.
+- H5 is now a game shell instead of a stack of diagnostic cards: the login page
+  is only `Grow!` + account/password (one button that logs in, or registers when
+  the account is unknown), and after login a top nav (username/coins/账号·商店·
+  宠物·好友·邮箱·任务·仓库) opens backdrop-less right drawers over a permanently
+  visible farm, with a sticky tool bar (手/铲子/杀虫剂/肥料) and seed bar
+  (all catalog seeds, unowned ones greyed, hover shows maturity time) below it.
+  Connection timeline and Actor diagnostics moved into 账号 → 诊断. No server
+  change. Evidence: `../evidence/2026-08-11-h5-shell-redesign.md`.
+- H5 shell follow-ups after first live use: reactive `connected` + shell
+  reconnect banner (dead sockets no longer look like "buttons do nothing");
+  seed-bar `maturity_seconds` formatted via `Number(bigint)` (uint64 was
+  crashing the whole render with "Cannot mix BigInt and other types");
+  `MailKind.PUBLIC/PRIVATE/GIFT` enum names (same protobuf-es prefix trap as
+  earlier red-dot bug); Vue `errorHandler` fatal banner outside the app;
+  `npm run typecheck` now points at `tsconfig.app.json` (the root config was
+  checking **zero** files). Evidence updated in the same redesign note.
+- The starting farm is now **16 plots** (`InitialPlotCount`), and accounts
+  created against the 4-plot build are backfilled lazily: `activateActor` calls
+  `State.ensureInitialPlots()`, bumps `CheckpointRevision`, and lets the dirty
+  flusher persist the new empty plots. H5 renders the plots frameless on one
+  green lawn (`.plots-grid` paints the grass, `.plot-caption` overlays the text
+  on the soil sprite) and the seed bar now lists only seeds the player owns.
+  A fresh account on the restarted local stack returns `plots=16`. Evidence:
+  `../evidence/2026-08-11-farm-16-plots-grass-ui.md` (backfill of pre-existing
+  accounts and the visual pass remain owner checks).
+- Mature plots now show the crop that actually grew there: ten new 16×16
+  sprites (crops 2002–2011) come from the existing deterministic pixel script,
+  `plot.mature` lost its baked-in generic crop, and `web/src/lib/crop-art.ts`
+  maps `crop_id` to a sprite with a demo fallback. Evidence:
+  `../evidence/2026-08-12-per-crop-mature-sprites.md`.
+- The shop lists **every** seed as its own expandable row (per-crop quantity,
+  total, and buy button) instead of a name picker that drove one shared buy
+  form, and the deployed pet now sits beside the lawn: four new 32×32 dog
+  sprites (田园犬/牧羊犬 × fed/hungry), breed above the head, and
+  "xx护卫中（时间：hh:mm:ss）" / "xx现在很饿" driven by
+  `food_active_until_ms`. Evidence:
+  `../evidence/2026-08-12-shop-seed-rows-and-guard-dog.md`.
+- Friend-farm visits now carry a public `FarmVisitSnapshot.pet` so visitors see
+  the owner's deployed dog (or an empty "尚未获得宠物" slot). Evidence:
+  `../evidence/2026-08-12-friend-farm-pet-badge.md`.
+- Actor activation no longer treats "checkpoint revision ahead of persisted
+  after Outbox prune" as corruption: `activateActor` only fails when
+  `CheckpointRevision < persistedRevision`. That unblocked accounts that had
+  sent friend gifts and then could not reload snapshots
+  (`SERVICE_UNAVAILABLE`). Postmortem:
+  `../bugs/2026-08-11-gift-outbox-activation-revision-mismatch.md`.
+- Final delivery sprint **04-4 share-link auto friend** is implemented:
+  FriendSvr returns `share_url` from `PUBLIC_WEB_BASE_URL`; H5 stores pending
+  invite codes and auto-redeems after AUTH; `FirstFriendReward` + Saga steps
+  grant both players a system mail (10 coins + 4 grape seeds) only on the
+  invitee's first successful friendship. Evidence:
+  `../evidence/2026-08-12-local-friend-invite-link.md` (unit-tested; dual-
+  browser E2E and Tcaplus `FirstFriendReward` table creation remain owner).
 - Final delivery sprint **04-5 multi-crop steal** is complete: all 11 crops
   freeze steal limits from `ceil(base_yield/2)`; steal requests carry
   `expected_crop_item_id` + farm-view version; FriendInteraction persists
@@ -552,22 +608,35 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
 
 ## Next actions
 
-Final delivery sprint **01**–**03**, **04-1**, **04-2**, and all **04-3A–F**
-mail/notification subplans are done. Finish **04-3 邮件与通知** with:
+Final delivery sprint **01**–**03**, **04-1**, **04-2**, **04-3A–F**, and
+**04-4** (code + unit tests) are done. Remaining:
 
-1. Stage E2E → `docs/evidence/2026-08-12-mail-notification-e2e.md`
-
-Read `../plans/final_delivery_sprint/04-基础业务补齐/04-3-邮件与通知总阶段.md`
-before coding the E2E harness.
+1. Create Tcaplus table `FirstFriendReward`, redeploy Friend/Mail, then run
+   the dual-browser invite E2E checklist in
+   `../plans/final_delivery_sprint/04-基础业务补齐/04-4-分享链接自动加好友.md`
+   Task 5;
+2. Stage E2E for mail/notification → `docs/evidence/2026-08-12-mail-notification-e2e.md`
+   (read `../plans/final_delivery_sprint/04-基础业务补齐/04-3-邮件与通知总阶段.md`).
 
 Friend prototype vertical (phases 0–7) remains complete for the frozen
 scope in `../plans/friend_design_plan/06-分阶段实施方案.md`.
 
-1. Next sprint task: **04-3 stage E2E** (mail + gift + claim + red-dot);
-2. Keep `go test ./...` green when touching Gate/Zone/Friend/Info/Mail paths.
+1. Owner: Tcaplus `FirstFriendReward` + dual-browser invite E2E;
+2. Next sprint coding task: **04-3 stage E2E** (mail + gift + claim + red-dot)
+   unless invite E2E surfaces bugs first;
+3. Keep `go test ./...` green when touching Gate/Zone/Friend/Info/Mail paths;
+4. Keep `cd web && npm run typecheck && npm test` green when touching H5
+   (typecheck must use `tsconfig.app.json`).
 
 Evidence:
 
+- `../evidence/2026-08-12-friend-farm-pet-badge.md`
+- `../evidence/2026-08-12-shop-seed-rows-and-guard-dog.md`
+- `../evidence/2026-08-12-per-crop-mature-sprites.md`
+- `../evidence/2026-08-11-farm-16-plots-grass-ui.md`
+- `../evidence/2026-08-12-local-friend-invite-link.md`
+- `../evidence/2026-08-11-k8s-redeploy-mail-info.md`
+- `../bugs/2026-08-11-gift-outbox-activation-revision-mismatch.md`
 - `../evidence/2026-08-12-multi-crop-steal.md`
 - `../evidence/2026-08-12-h5-mail-red-dot.md`
 - `../evidence/2026-08-12-mail-claim-saga.md`
@@ -575,6 +644,7 @@ Evidence:
 - `../evidence/2026-08-12-mailsvr-query.md`
 - `../evidence/2026-08-12-infosvr-red-dot.md`
 - `../evidence/2026-08-12-zone-connection-push.md`
+- `../evidence/2026-08-11-h5-shell-redesign.md`
 - `../evidence/2026-08-11-career-compendium-multi-crop.md`
 - `../evidence/2026-08-11-pet-guard-e2e.md`
 - `../evidence/2026-08-10-farm-broadcast-separation.md`
@@ -584,8 +654,11 @@ Evidence:
 
 Manual owner checkpoints:
 
-- rebuild/redeploy images into kind when exercising cluster demos
-  (`CLIENT_CONFIG_PUBLIC_URL` must stay aligned with Login's browser URL);
+- rebuild/redeploy **all eight** images into kind when exercising cluster
+  demos (`login` `gate` `coordinator` `zone` `friend` `info` `mail`;
+  `CLIENT_CONFIG_PUBLIC_URL` must stay aligned with Login's browser URL);
+- ensure `classic-farm-internal-rpc` includes `MAIL_ADMIN_TOKEN` before Mail
+  pods become Ready;
 - run `./tests/e2e/run-friend-interaction.sh` after friend/Gate/Zone changes.
 
 ## AI memory and handoff rule

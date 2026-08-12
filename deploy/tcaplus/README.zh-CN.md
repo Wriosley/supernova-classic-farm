@@ -45,6 +45,7 @@ FriendRelation
 FriendList
 FriendLinkSaga
 FriendInteraction
+FirstFriendReward
 ```
 
 邮件与领取 Saga（04-3）还需使用 `mail_tables.proto` 创建以下 PB Generic

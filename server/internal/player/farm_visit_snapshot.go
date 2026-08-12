@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
@@ -62,6 +63,7 @@ func (r *Runtime) BuildPublicFarmSnapshot(
 		}
 		snapshot = publicFarmSnapshot(
 			ownerPlayerID, a.farmViewEpoch, a.farmViewSeq, a.state.Plots, careerView(a.state),
+			a.state.PetState, r.config.Load(),
 		)
 	})
 	if err != nil {
@@ -90,6 +92,8 @@ func publicFarmSnapshot(
 	farmViewSeq uint64,
 	plots map[uint32]*Plot,
 	career *wsv1.PlayerCareerView,
+	pet *datav1.PetStateRecord,
+	config *ConfigSnapshot,
 ) *wsv1.FarmVisitSnapshot {
 	plotIDs := make([]uint32, 0, len(plots))
 	for plotID := range plots {
@@ -111,7 +115,29 @@ func publicFarmSnapshot(
 		},
 		Plots:  views,
 		Career: career,
+		Pet:    publicPetView(pet, config),
 	}
+}
+
+// publicPetView projects only what a visitor needs to render the dog beside
+// the lawn. Inventory and owned-but-undeployed pets stay private: no active
+// pet means the client shows the empty "尚未获得宠物" slot.
+func publicPetView(pet *datav1.PetStateRecord, config *ConfigSnapshot) *wsv1.PublicPetView {
+	view := &wsv1.PublicPetView{}
+	if pet == nil || pet.ActivePetId == 0 {
+		return view
+	}
+	view.ActivePetId = pet.ActivePetId
+	view.FoodActiveUntilMs = pet.FoodActiveUntilMs
+	if config != nil {
+		if cfg, ok := config.Pet(pet.ActivePetId); ok {
+			view.PetName = cfg.Name
+		}
+	}
+	if view.PetName == "" {
+		view.PetName = fmt.Sprintf("宠物#%d", pet.ActivePetId)
+	}
+	return view
 }
 
 // buildFarmViewPatch projects only plotIDs (deduplicated and sorted, mirroring

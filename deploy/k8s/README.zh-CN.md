@@ -1,18 +1,21 @@
 # 固定双 Zone Kubernetes 最小集群
 
-该清单只部署一个 Coordinator、Login、Gate、`zone-a`、`zone-b` 和 FriendSvr。
-它不包含动态 Zone 发现、HPA、自动再均衡或生产入口。
+该清单部署 Coordinator、Login、Gate、`zone-a`、`zone-b`、FriendSvr、InfoSvr
+和 MailSvr。它不包含动态 Zone 发现、HPA、自动再均衡或生产入口。
 
 ## 构建并加载镜像
 
 ```bash
-for service in login gate coordinator zone friend; do
+for service in login gate coordinator zone friend info mail; do
   docker build --build-arg SERVICE="${service}" \
     -t "classic-farm/${service}:dev" .
   kind load docker-image "classic-farm/${service}:dev" \
     --name classic-farm
 done
 ```
+
+标签始终是 `:dev` 且 `imagePullPolicy: IfNotPresent`，因此加载新镜像后必须
+滚动重启已有 Deployment，否则 Pod 会继续用节点上的旧层。
 
 ## 创建 Secret
 
@@ -27,23 +30,38 @@ kubectl -n classic-farm create secret generic classic-farm-tcaplus \
   --from-literal=TCAPLUS_SIGNATURE='...'
 
 kubectl -n classic-farm create secret generic classic-farm-internal-rpc \
-  --from-literal=INTERNAL_GRPC_HMAC_KEY="$(openssl rand -hex 32)"
+  --from-literal=INTERNAL_GRPC_HMAC_KEY="$(openssl rand -hex 32)" \
+  --from-literal=MAIL_ADMIN_TOKEN="$(openssl rand -hex 32)"
+```
+
+若 Secret 已存在但缺 `MAIL_ADMIN_TOKEN`，可合并补上（不会覆盖 HMAC key）：
+
+```bash
+kubectl -n classic-farm patch secret classic-farm-internal-rpc \
+  --type merge \
+  -p "{\"stringData\":{\"MAIL_ADMIN_TOKEN\":\"$(openssl rand -hex 32)\"}}"
 ```
 
 Gate、两个 Zone 和 FriendSvr 使用同一个最小原型 HMAC key 认证内部
 gRPC（FriendSvr 同时作为 gRPC 服务端接受 Gate/Zone 调用，也作为客户端
-向 Owner Zone 发起好友任务积分调用）。不要把真实 key 写入或提交到清单。
+向 Owner Zone 发起好友任务积分调用）。MailSvr 用 `MAIL_ADMIN_TOKEN` 保护
+内网 Admin API。不要把真实 key 写入或提交到清单。
 
 ## 部署
 
 ```bash
 kubectl apply -k deploy/k8s
+kubectl -n classic-farm rollout restart \
+  deploy/coordinator deploy/login deploy/zone-a deploy/zone-b \
+  deploy/gate deploy/friend deploy/info deploy/mail
 kubectl -n classic-farm rollout status deploy/coordinator
 kubectl -n classic-farm rollout status deploy/login
 kubectl -n classic-farm rollout status deploy/zone-a
 kubectl -n classic-farm rollout status deploy/zone-b
 kubectl -n classic-farm rollout status deploy/gate
 kubectl -n classic-farm rollout status deploy/friend
+kubectl -n classic-farm rollout status deploy/info
+kubectl -n classic-farm rollout status deploy/mail
 ```
 
 本地验收使用端口转发：

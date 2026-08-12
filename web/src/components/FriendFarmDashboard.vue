@@ -6,13 +6,15 @@ import type {
   PublicPlotView,
 } from '../gen/classicfarm/v1/ws/ws_pb'
 import { PlotState } from '../gen/classicfarm/v1/ws/plot/plot_state_pb'
+import { matureCropSprite } from '../lib/crop-art'
+import { deployedPetFromPublic } from '../lib/pet-art'
+import FarmPetBadge from './FarmPetBadge.vue'
 
 import plotEmpty from '../../../frontend/src/assets/art/runtime/plots/empty.png'
 import plotGrowing from '../../../frontend/src/assets/art/runtime/plots/growing.png'
 import plotMature from '../../../frontend/src/assets/art/runtime/plots/mature.png'
 import plotCleanup from '../../../frontend/src/assets/art/runtime/plots/need-cleanup.png'
 import cropGrowing from '../../../frontend/src/assets/art/runtime/crops/demo-growing.png'
-import cropMature from '../../../frontend/src/assets/art/runtime/crops/demo-mature.png'
 import handTool from '../../../frontend/src/assets/art/runtime/tools/hand.png'
 import shovelTool from '../../../frontend/src/assets/art/runtime/tools/shovel.png'
 import fertilizerTool from '../../../frontend/src/assets/art/runtime/tools/fertilizer.png'
@@ -46,6 +48,7 @@ const selectedTool = ref<VisitTool>('steal')
 const plots = computed(() =>
   [...(props.snapshot?.plots ?? [])].sort((left, right) => left.plotId - right.plotId),
 )
+const ownerPet = computed(() => deployedPetFromPublic(props.snapshot?.pet))
 
 const toolOptions: Array<{ id: VisitTool; label: string; icon: string; hint: string }> = [
   { id: 'pest', label: '投虫', icon: seedTool, hint: '成长中且无虫' },
@@ -103,7 +106,7 @@ function plotPresentation(plot: PublicPlotView) {
       return {
         label: plot.canSteal ? `${name}可偷` : `${name}已成熟`,
         base: plotMature,
-        crop: cropMature,
+        crop: matureCropSprite(plot.cropId),
       }
     case PlotState.NEED_CLEANUP:
       return { label: `${name || '作物'}待清理`, base: plotCleanup, crop: undefined }
@@ -235,41 +238,50 @@ function clickPlot(plot: PublicPlotView): void {
             当前：{{ toolOptions.find((tool) => tool.id === selectedTool)?.label }}
           </span>
         </div>
-        <div v-if="plots.length" class="plots-grid" :data-tool="selectedTool === 'steal' ? 'hand' : selectedTool === 'clean' ? 'shovel' : 'seed'">
-          <button
-            v-for="plot in plots"
-            :key="plot.plotId"
-            type="button"
-            class="plot-tile"
-            :class="{
-              busy: stealBusyPlotId === plot.plotId,
-              valid: connected && !busy && stealBusyPlotId === undefined && isValidTarget(plot),
-              invalid: connected && !isValidTarget(plot),
-            }"
-            :disabled="!isValidTarget(plot) || busy || stealBusyPlotId !== undefined"
-            :aria-label="`好友地块 ${plot.plotId}，${plotPresentation(plot).label}`"
-            @click="clickPlot(plot)"
+        <div class="farm-yard">
+          <div
+            v-if="plots.length"
+            class="plots-grid"
+            :data-tool="selectedTool === 'steal' ? 'hand' : selectedTool === 'clean' ? 'shovel' : 'seed'"
           >
-            <span class="plot-number">
-              PLOT {{ String(plot.plotId).padStart(2, '0') }}
-              <em v-if="plot.canSteal" class="steal-badge">可偷</em>
-              <em v-else-if="plot.pestActive" class="steal-badge pest-badge">有虫</em>
-            </span>
-            <span class="plot-stage" :data-state="plot.plotState">
-              <img class="plot-base pixel-art" :src="plotPresentation(plot).base" alt="" />
-              <img
-                v-if="plotPresentation(plot).crop"
-                class="plot-crop pixel-art"
-                :src="plotPresentation(plot).crop"
-                alt=""
-              />
-            </span>
-            <strong>{{ plotPresentation(plot).label }}</strong>
-            <small>{{ plotMeta(plot) }}</small>
-            <span v-if="stealBusyPlotId === plot.plotId" class="plot-busy">处理中…</span>
-          </button>
+            <button
+              v-for="plot in plots"
+              :key="plot.plotId"
+              type="button"
+              class="plot-tile"
+              :class="{
+                busy: stealBusyPlotId === plot.plotId,
+                valid: connected && !busy && stealBusyPlotId === undefined && isValidTarget(plot),
+                invalid: connected && !isValidTarget(plot),
+              }"
+              :disabled="!isValidTarget(plot) || busy || stealBusyPlotId !== undefined"
+              :aria-label="`好友地块 ${plot.plotId}，${plotPresentation(plot).label}`"
+              @click="clickPlot(plot)"
+            >
+              <span class="plot-number">
+                PLOT {{ String(plot.plotId).padStart(2, '0') }}
+                <em v-if="plot.canSteal" class="steal-badge">可偷</em>
+                <em v-else-if="plot.pestActive" class="steal-badge pest-badge">有虫</em>
+              </span>
+              <span class="plot-stage" :data-state="plot.plotState">
+                <img class="plot-base pixel-art" :src="plotPresentation(plot).base" alt="" />
+                <img
+                  v-if="plotPresentation(plot).crop"
+                  class="plot-crop pixel-art"
+                  :src="plotPresentation(plot).crop"
+                  alt=""
+                />
+              </span>
+              <span class="plot-caption">
+                <strong>{{ plotPresentation(plot).label }}</strong>
+                <small>{{ plotMeta(plot) }}</small>
+              </span>
+              <span v-if="stealBusyPlotId === plot.plotId" class="plot-busy">处理中…</span>
+            </button>
+          </div>
+          <p v-else class="empty-state">好友农场快照尚未加载。</p>
+          <FarmPetBadge :pet="ownerPet" :now-ms="nowMs" />
         </div>
-        <p v-else class="empty-state">好友农场快照尚未加载。</p>
       </article>
     </div>
   </section>
@@ -278,6 +290,19 @@ function clickPlot(plot: PublicPlotView): void {
 <style scoped>
 .friend-farm-dashboard .farm-layout {
   grid-template-columns: 1fr;
+}
+
+.farm-yard {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+@media (max-width: 720px) {
+  .farm-yard {
+    flex-wrap: wrap;
+  }
 }
 
 .steal-badge {

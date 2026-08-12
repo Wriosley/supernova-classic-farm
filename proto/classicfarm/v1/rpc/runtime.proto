@@ -311,6 +311,7 @@ message ApplyMailRewardRequest {
   bytes claim_id = 3;
   string mail_id = 4;
   repeated MailRewardAttachment attachments = 5;
+  int64 coin_amount = 6;
 }
 
 message ApplyMailRewardResponse {
@@ -321,5 +322,6 @@ message ApplyMailRewardResponse {
   // owner_epoch pairs with player_seq so callers can rebuild the StateVersion
   // that H5 needs to apply patch incrementally.
   uint64 owner_epoch = 5;
+  int64 coins_added = 6;
   classicfarm.ws.v1.Error error = 15;
 }

@@ -74,6 +74,7 @@ func (c *GRPCFriendCommander) CreateCode(
 	return buildDomainResponse(request, response.GetError(), func(envelope *wsv1.WsEnvelope) {
 		envelope.Payload = &wsv1.WsEnvelope_CreateFriendCodeResponse{CreateFriendCodeResponse: &wsv1.CreateFriendCodeResponse{
 			Code: response.GetCode(), CreatedAtMs: response.GetCreatedAtMs(), ExpiresAtMs: response.GetExpiresAtMs(),
+			ShareUrl: response.GetShareUrl(),
 		}}
 	})
 }
