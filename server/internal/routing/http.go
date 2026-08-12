@@ -14,6 +14,16 @@ type Clock func() time.Time
 
 // NewHTTPHandler exposes the loopback route lookup API.
 func NewHTTPHandler(routes *Map, clock Clock) http.Handler {
+	return newHTTPHandler(routes, nil, clock)
+}
+
+// NewHTTPHandlerWithRuntimeLeases exposes durable Current with process-local
+// effective expiry while preserving every durable route identity and version.
+func NewHTTPHandlerWithRuntimeLeases(routes *Map, leases *RuntimeLeaseOverlay, clock Clock) http.Handler {
+	return newHTTPHandler(routes, leases, clock)
+}
+
+func newHTTPHandler(routes *Map, leases *RuntimeLeaseOverlay, clock Clock) http.Handler {
 	if clock == nil {
 		clock = time.Now
 	}
@@ -35,6 +45,15 @@ func NewHTTPHandler(routes *Map, clock Clock) http.Handler {
 		}
 		for index, entry := range snapshot.Entries {
 			routable := entry.State == RouteStateActive && now.Before(entry.LeaseExpiresAt)
+			if leases != nil {
+				effective, err := leases.Effective(entry, now)
+				if err == nil {
+					entry = effective
+					routable = true
+				} else {
+					routable = false
+				}
+			}
 			response.Entries[index] = routeResponseFrom(entry, snapshot.MapVersion, routable)
 		}
 		writeJSON(w, http.StatusOK, response)
@@ -50,12 +69,30 @@ func NewHTTPHandler(routes *Map, clock Clock) http.Handler {
 			return
 		}
 		shardID := uint32(shardValue)
-		entry, mapVersion, err := routes.RouteWithMapVersion(shardID, clock())
+		now := clock().UTC()
+		entry, mapVersionErr := routes.Entry(shardID)
+		mapVersion := routes.Snapshot().MapVersion
+		err = mapVersionErr
+		if err == nil && leases != nil {
+			var effective RouteEntry
+			effective, err = leases.Effective(entry, now)
+			if err == nil {
+				entry = effective
+			}
+		} else if err == nil {
+			entry, mapVersion, err = routes.RouteWithMapVersion(shardID, now)
+		}
 		if err == nil {
 			writeJSON(w, http.StatusOK, routeResponseFrom(entry, mapVersion, true))
 			return
 		}
 
+		if errors.Is(err, ErrRuntimeLeaseUnavailable) {
+			response := routeResponseFrom(entry, mapVersion, false)
+			response.Error = &errorResponse{Code: "NOT_OWNER", Message: "runtime lease is unavailable"}
+			writeJSON(w, http.StatusConflict, response)
+			return
+		}
 		var notOwner *NotOwnerError
 		if errors.As(err, &notOwner) {
 			response := routeResponseFrom(notOwner.Current, mapVersion, false)

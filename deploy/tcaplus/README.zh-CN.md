@@ -32,8 +32,14 @@ AccountByPlayer
 Session
 ShardFence
 MigrationProgress
+ShardMapMeta
+ShardRoute
 PlayerOutbox
 ```
+
+已有环境在启用 `COORDINATOR_ROUTE_STORE=tcaplus` 前也必须从最新
+`runtime_tables.proto` 创建 `ShardMapMeta` 和 `ShardRoute`；缺少任一表时
+Coordinator 必须保持旧模式或启动失败，不能从 Fence 猜测 Current Route。
 
 好友功能从阶段 2 起还需使用 `friend_tables.proto` 创建以下 PB Generic
 表：
@@ -98,6 +104,8 @@ export TCAPLUS_ACCOUNT_BY_PLAYER_TABLE='AccountByPlayer'
 export TCAPLUS_SESSION_TABLE='Session'
 export TCAPLUS_FENCE_TABLE='ShardFence'
 export TCAPLUS_MIGRATION_TABLE='MigrationProgress'
+export TCAPLUS_SHARD_MAP_META_TABLE='ShardMapMeta'
+export TCAPLUS_SHARD_ROUTE_TABLE='ShardRoute'
 export TCAPLUS_OUTBOX_TABLE='PlayerOutbox'
 export TCAPLUS_POC_PLAYER_ID='<专用测试玩家 ID>'
 ```

@@ -125,6 +125,53 @@ func TestAuthorizationTableClearsOldDrainOnNewerRegrant(t *testing.T) {
 	}
 }
 
+func TestAuthorizationTableAcceptsSameVersionExpiryOnlyExtension(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	routes, _ := NewLocalMap(now, 30*time.Second)
+	table, _ := NewAuthorizationTable(DefaultZoneID)
+	initial := routes.Snapshot()
+	if err := table.Replace(initial); err != nil {
+		t.Fatal(err)
+	}
+	extended := initial
+	extended.Entries = append([]RouteEntry(nil), initial.Entries...)
+	for index := range extended.Entries {
+		extended.Entries[index].LeaseExpiresAt = now.Add(time.Minute)
+	}
+	if err := table.Replace(extended); err != nil {
+		t.Fatalf("expiry-only refresh rejected: %v", err)
+	}
+	got, _ := table.Entry(42)
+	if !got.LeaseExpiresAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("expiry-only refresh ignored: %v", got.LeaseExpiresAt)
+	}
+}
+
+func TestAuthorizationTableRejectsSameVersionOwnershipChanges(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	routes, _ := NewLocalMap(now, time.Minute)
+	initial := routes.Snapshot()
+	for name, mutate := range map[string]func(*RouteEntry){
+		"owner":         func(entry *RouteEntry) { entry.OwnerZoneID = "other" },
+		"epoch":         func(entry *RouteEntry) { entry.OwnerEpoch++ },
+		"state":         func(entry *RouteEntry) { entry.State = RouteStatePreparing },
+		"route version": func(entry *RouteEntry) { entry.RouteVersion++ },
+	} {
+		t.Run(name, func(t *testing.T) {
+			table, _ := NewAuthorizationTable(DefaultZoneID)
+			if err := table.Replace(initial); err != nil {
+				t.Fatal(err)
+			}
+			changed := initial
+			changed.Entries = append([]RouteEntry(nil), initial.Entries...)
+			mutate(&changed.Entries[42])
+			if err := table.Replace(changed); err == nil {
+				t.Fatal("same-version ownership change accepted")
+			}
+		})
+	}
+}
+
 func playerOwnedBy(t *testing.T, routes *Map, zoneID string) (uint64, uint32) {
 	t.Helper()
 	for playerID := uint64(1); playerID < 100_000; playerID++ {

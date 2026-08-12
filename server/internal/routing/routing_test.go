@@ -137,9 +137,99 @@ func TestStableHashAndShardAreVersionOneConstants(t *testing.T) {
 		if got := StableHash64(test.playerID); got != test.hash {
 			t.Errorf("StableHash64(%d) = %d, want %d", test.playerID, got, test.hash)
 		}
-		if got := ShardForPlayer(test.playerID); got != test.shard {
+		if got := ShardForPlayer(test.playerID); got >= ShardCount {
+			t.Errorf("ShardForPlayer(%d) = %d, want < %d", test.playerID, got, ShardCount)
+		} else if got != test.shard {
 			t.Errorf("ShardForPlayer(%d) = %d, want %d", test.playerID, got, test.shard)
 		}
+	}
+}
+
+func TestNewMapFromSnapshotRestoresExactCurrent(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	original, err := NewStaticMap(now, time.Minute, []ZoneCandidate{{
+		ZoneID: "zone-a", Endpoint: "http://zone-a:8082",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := original.Snapshot()
+	snapshot.MapVersion = 17
+	snapshot.CommittedIndex = 17
+	snapshot.Entries[42].OwnerEpoch = 9
+	snapshot.Entries[42].RouteVersion = 13
+	snapshot.Entries[42].LeaseID = "00112233-4455-6677-8899-aabbccddeeff"
+	restored, err := NewMapFromSnapshot(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := restored.Snapshot()
+	if got.MapVersion != 17 || got.Entries[42] != snapshot.Entries[42] {
+		t.Fatalf("restored snapshot changed current: %+v", got.Entries[42])
+	}
+}
+
+func TestNewMapFromSnapshotRejectsMalformedCurrent(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	original, err := NewLocalMap(now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*Snapshot){
+		"incomplete": func(snapshot *Snapshot) { snapshot.Entries = snapshot.Entries[:ShardCount-1] },
+		"unordered":  func(snapshot *Snapshot) { snapshot.Entries[42].ShardID = 43 },
+		"zero epoch": func(snapshot *Snapshot) { snapshot.Entries[42].OwnerEpoch = 0 },
+		"bad state":  func(snapshot *Snapshot) { snapshot.Entries[42].State = "BROKEN" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			snapshot := original.Snapshot()
+			mutate(&snapshot)
+			if _, err := NewMapFromSnapshot(snapshot); err == nil {
+				t.Fatal("malformed snapshot accepted")
+			}
+		})
+	}
+}
+
+func TestLegacyLeaseRenewalStillAdvancesVersions(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	routes, _ := NewLocalMap(now, 30*time.Second)
+	before := routes.Snapshot()
+	renewed, err := routes.RenewOwnedLeases(DefaultZoneID, now.Add(10*time.Second), 30*time.Second)
+	if err != nil || renewed != int(ShardCount) {
+		t.Fatalf("renewed=%d err=%v", renewed, err)
+	}
+	after := routes.Snapshot()
+	if after.MapVersion != before.MapVersion+1 ||
+		after.Entries[42].RouteVersion != before.Entries[42].RouteVersion+1 {
+		t.Fatalf("legacy renewal versions map=%d route=%d", after.MapVersion, after.Entries[42].RouteVersion)
+	}
+}
+
+func TestMapProposalsDoNotMutateUntilCommittedSnapshotApplied(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	routes, _ := NewLocalMap(now, time.Minute)
+	before := routes.Snapshot()
+	prepared, err := routes.ProposePrepare(42, "zone-next", "http://zone-next:8082", now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := routes.Snapshot(); got.MapVersion != before.MapVersion || got.Entries[42] != before.Entries[42] {
+		t.Fatal("ProposePrepare mutated Current")
+	}
+	committed := before
+	committed.MapVersion++
+	committed.CommittedIndex++
+	committed.Entries = append([]RouteEntry(nil), before.Entries...)
+	committed.Entries[42] = prepared
+	if err := routes.ApplyCommittedSnapshot(committed); err != nil {
+		t.Fatal(err)
+	}
+	if got := routes.Snapshot(); got.Entries[42] != prepared {
+		t.Fatalf("committed PREPARING not applied: %+v", got.Entries[42])
+	}
+	if err := routes.ApplyCommittedSnapshot(before); err == nil {
+		t.Fatal("map version rollback accepted")
 	}
 }
 

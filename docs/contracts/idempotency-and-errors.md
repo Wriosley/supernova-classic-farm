@@ -63,8 +63,18 @@ Malformed Protobuf, oversized frames and envelope combinations that cannot be co
 | 201 | `SERVER_BUSY` | Same-ID retry after `retry_after_ms` |
 | 202 | `REQUEST_OUTCOME_UNKNOWN` | Same-ID retry; never generate a new ID |
 | 203 | `CONFIG_UNAVAILABLE` | Same-ID retry with backoff |
+| 204 | `ZONE_MIGRATING` | Controlled Shard migration is in progress; retry the same request ID after delay |
+| 205 | `ZONE_UNAVAILABLE` | Route is temporarily paused due to `SUSPECT`/`DEAD` handling; retry the same request ID after delay |
+| 206 | `ZONE_WARMING_UP` | Actor activation admission queue is full or timed out; retry the same request ID after delay |
+| 207 | `STORAGE_UNAVAILABLE` | Zone is alive but its recovery-store operation failed; retry the same request ID and never report the Zone dead from this code |
 
 `REQUEST_OUTCOME_UNKNOWN` means GateSvr cannot prove whether the Actor executed the command. It is the strongest reason to preserve the original `request_id`.
+
+All four routing lifecycle errors, `ZONE_MIGRATING`, `ZONE_UNAVAILABLE`,
+`ZONE_WARMING_UP` and `STORAGE_UNAVAILABLE`, are retryable. When
+`retry_after_ms` is present, the client MUST wait at least that long before
+retrying. If command execution might have started, the retry MUST preserve the
+original `request_id` and semantic payload.
 
 ### 3.3 Shop and configuration
 
@@ -290,9 +300,15 @@ Allowed only for:
 - `SERVER_BUSY`;
 - `REQUEST_OUTCOME_UNKNOWN`;
 - `CONFIG_UNAVAILABLE`;
+- `ZONE_MIGRATING`;
+- `ZONE_UNAVAILABLE`;
+- `ZONE_WARMING_UP`;
+- `STORAGE_UNAVAILABLE`;
 - `RATE_LIMITED` when the response states the request was not admitted.
 
-Use bounded exponential backoff with jitter. Stop when the HTTP Session expires or the intent is older than 24 hours.
+Honor `retry_after_ms` when supplied; otherwise use bounded exponential backoff
+with jitter. Stop when the HTTP Session expires or the intent is older than 24
+hours.
 
 ### Refresh and create a new ID
 

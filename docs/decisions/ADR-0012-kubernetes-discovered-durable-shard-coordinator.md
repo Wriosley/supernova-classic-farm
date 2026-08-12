@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-08-12
 decision-makers:
   - project-owner
@@ -323,7 +323,7 @@ server/internal/player/activation/        Actor Load限流
 - `docs/decisions/ADR-0008-v3-quorum-shard-coordinator.md`
 - `docs/plans/2026-08-03-static-dual-zone-routing-plan.md`
 - `docs/plans/2026-08-03-coordinator-preparing-recovery-plan.md`
-- Future plan: `docs/plans/final_delivery_sprint/07-1-Coordinator动态路由控制面.md`
+- Roadmap: `docs/plans/final_delivery_sprint/07-Coordinator动态路由控制面/00-总路线图.md`
 
 ## Owner review checklist
 
@@ -336,4 +336,3 @@ server/internal/player/activation/        Actor Load限流
 5. 正常迁移与 Failover 各保证什么、损失什么？
 6. Kubernetes Lease、Tcaplus CAS、owner epoch 各防哪类错误？
 7. 为什么本方案不能表述为自研三节点 Raft？
-

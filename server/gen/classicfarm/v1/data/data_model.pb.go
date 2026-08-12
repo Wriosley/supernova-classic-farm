@@ -2390,15 +2390,16 @@ func (x *OutboxRow) GetPayloadSha256() []byte {
 }
 
 type ShardMapSnapshot struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	ShardCount           uint32                 `protobuf:"varint,1,opt,name=shard_count,json=shardCount,proto3" json:"shard_count,omitempty"`
-	HashAlgorithmVersion uint32                 `protobuf:"varint,2,opt,name=hash_algorithm_version,json=hashAlgorithmVersion,proto3" json:"hash_algorithm_version,omitempty"`
-	MapVersion           uint64                 `protobuf:"varint,3,opt,name=map_version,json=mapVersion,proto3" json:"map_version,omitempty"`
-	CommittedTerm        uint64                 `protobuf:"varint,4,opt,name=committed_term,json=committedTerm,proto3" json:"committed_term,omitempty"`
-	CommittedIndex       uint64                 `protobuf:"varint,5,opt,name=committed_index,json=committedIndex,proto3" json:"committed_index,omitempty"`
-	Entries              []*ShardRouteEntry     `protobuf:"bytes,6,rep,name=entries,proto3" json:"entries,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	ShardCount                 uint32                 `protobuf:"varint,1,opt,name=shard_count,json=shardCount,proto3" json:"shard_count,omitempty"`
+	HashAlgorithmVersion       uint32                 `protobuf:"varint,2,opt,name=hash_algorithm_version,json=hashAlgorithmVersion,proto3" json:"hash_algorithm_version,omitempty"`
+	MapVersion                 uint64                 `protobuf:"varint,3,opt,name=map_version,json=mapVersion,proto3" json:"map_version,omitempty"`
+	CommittedTerm              uint64                 `protobuf:"varint,4,opt,name=committed_term,json=committedTerm,proto3" json:"committed_term,omitempty"`
+	CommittedIndex             uint64                 `protobuf:"varint,5,opt,name=committed_index,json=committedIndex,proto3" json:"committed_index,omitempty"`
+	Entries                    []*ShardRouteEntry     `protobuf:"bytes,6,rep,name=entries,proto3" json:"entries,omitempty"`
+	AssignmentAlgorithmVersion uint32                 `protobuf:"varint,7,opt,name=assignment_algorithm_version,json=assignmentAlgorithmVersion,proto3" json:"assignment_algorithm_version,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *ShardMapSnapshot) Reset() {
@@ -2473,6 +2474,13 @@ func (x *ShardMapSnapshot) GetEntries() []*ShardRouteEntry {
 	return nil
 }
 
+func (x *ShardMapSnapshot) GetAssignmentAlgorithmVersion() uint32 {
+	if x != nil {
+		return x.AssignmentAlgorithmVersion
+	}
+	return 0
+}
+
 type ShardRouteEntry struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	ShardId             uint32                 `protobuf:"varint,1,opt,name=shard_id,json=shardId,proto3" json:"shard_id,omitempty"`
@@ -2486,6 +2494,7 @@ type ShardRouteEntry struct {
 	PreviousOwnerZoneId *string                `protobuf:"bytes,9,opt,name=previous_owner_zone_id,json=previousOwnerZoneId,proto3,oneof" json:"previous_owner_zone_id,omitempty"`
 	TransitionId        []byte                 `protobuf:"bytes,10,opt,name=transition_id,json=transitionId,proto3,oneof" json:"transition_id,omitempty"`
 	UpdatedAtMs         int64                  `protobuf:"varint,11,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
+	OwnerEndpoint       string                 `protobuf:"bytes,12,opt,name=owner_endpoint,json=ownerEndpoint,proto3" json:"owner_endpoint,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -2595,6 +2604,13 @@ func (x *ShardRouteEntry) GetUpdatedAtMs() int64 {
 		return x.UpdatedAtMs
 	}
 	return 0
+}
+
+func (x *ShardRouteEntry) GetOwnerEndpoint() string {
+	if x != nil {
+		return x.OwnerEndpoint
+	}
+	return ""
 }
 
 type ShardFence struct {
@@ -3276,7 +3292,7 @@ const file_classicfarm_v1_data_data_model_proto_rawDesc = "" +
 	"\rcreated_at_ms\x18\n" +
 	" \x01(\x03R\vcreatedAtMs\x12\x18\n" +
 	"\apayload\x18\v \x01(\fR\apayload\x12%\n" +
-	"\x0epayload_sha256\x18\f \x01(\fR\rpayloadSha256\"\x9a\x02\n" +
+	"\x0epayload_sha256\x18\f \x01(\fR\rpayloadSha256\"\xdc\x02\n" +
 	"\x10ShardMapSnapshot\x12\x1f\n" +
 	"\vshard_count\x18\x01 \x01(\rR\n" +
 	"shardCount\x124\n" +
@@ -3285,7 +3301,8 @@ const file_classicfarm_v1_data_data_model_proto_rawDesc = "" +
 	"mapVersion\x12%\n" +
 	"\x0ecommitted_term\x18\x04 \x01(\x04R\rcommittedTerm\x12'\n" +
 	"\x0fcommitted_index\x18\x05 \x01(\x04R\x0ecommittedIndex\x12>\n" +
-	"\aentries\x18\x06 \x03(\v2$.classicfarm.data.v1.ShardRouteEntryR\aentries\"\x87\x04\n" +
+	"\aentries\x18\x06 \x03(\v2$.classicfarm.data.v1.ShardRouteEntryR\aentries\x12@\n" +
+	"\x1cassignment_algorithm_version\x18\a \x01(\rR\x1aassignmentAlgorithmVersion\"\xae\x04\n" +
 	"\x0fShardRouteEntry\x12\x19\n" +
 	"\bshard_id\x18\x01 \x01(\rR\ashardId\x12'\n" +
 	"\rowner_zone_id\x18\x02 \x01(\tH\x00R\vownerZoneId\x88\x01\x01\x12\x1f\n" +
@@ -3300,7 +3317,8 @@ const file_classicfarm_v1_data_data_model_proto_rawDesc = "" +
 	"\x16previous_owner_zone_id\x18\t \x01(\tH\x01R\x13previousOwnerZoneId\x88\x01\x01\x12(\n" +
 	"\rtransition_id\x18\n" +
 	" \x01(\fH\x02R\ftransitionId\x88\x01\x01\x12\"\n" +
-	"\rupdated_at_ms\x18\v \x01(\x03R\vupdatedAtMsB\x10\n" +
+	"\rupdated_at_ms\x18\v \x01(\x03R\vupdatedAtMs\x12%\n" +
+	"\x0eowner_endpoint\x18\f \x01(\tR\rownerEndpointB\x10\n" +
 	"\x0e_owner_zone_idB\x19\n" +
 	"\x17_previous_owner_zone_idB\x10\n" +
 	"\x0e_transition_id\"\xe7\x01\n" +

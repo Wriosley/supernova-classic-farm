@@ -245,6 +245,10 @@ const (
 	ErrorCode_SERVER_BUSY                    ErrorCode = 201
 	ErrorCode_REQUEST_OUTCOME_UNKNOWN        ErrorCode = 202
 	ErrorCode_CONFIG_UNAVAILABLE             ErrorCode = 203
+	ErrorCode_ZONE_MIGRATING                 ErrorCode = 204
+	ErrorCode_ZONE_UNAVAILABLE               ErrorCode = 205
+	ErrorCode_ZONE_WARMING_UP                ErrorCode = 206
+	ErrorCode_STORAGE_UNAVAILABLE            ErrorCode = 207
 	ErrorCode_SHOP_ENTRY_NOT_FOUND           ErrorCode = 300
 	ErrorCode_SHOP_ENTRY_DISABLED            ErrorCode = 301
 	ErrorCode_PRICE_CHANGED                  ErrorCode = 302
@@ -297,6 +301,10 @@ var (
 		201: "SERVER_BUSY",
 		202: "REQUEST_OUTCOME_UNKNOWN",
 		203: "CONFIG_UNAVAILABLE",
+		204: "ZONE_MIGRATING",
+		205: "ZONE_UNAVAILABLE",
+		206: "ZONE_WARMING_UP",
+		207: "STORAGE_UNAVAILABLE",
 		300: "SHOP_ENTRY_NOT_FOUND",
 		301: "SHOP_ENTRY_DISABLED",
 		302: "PRICE_CHANGED",
@@ -346,6 +354,10 @@ var (
 		"SERVER_BUSY":                    201,
 		"REQUEST_OUTCOME_UNKNOWN":        202,
 		"CONFIG_UNAVAILABLE":             203,
+		"ZONE_MIGRATING":                 204,
+		"ZONE_UNAVAILABLE":               205,
+		"ZONE_WARMING_UP":                206,
+		"STORAGE_UNAVAILABLE":            207,
 		"SHOP_ENTRY_NOT_FOUND":           300,
 		"SHOP_ENTRY_DISABLED":            301,
 		"PRICE_CHANGED":                  302,
@@ -8141,7 +8153,8 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x14PLAYER_STATE_CHANGED\x10\xe8\a\x12\x16\n" +
 	"\x11FARM_VIEW_CHANGED\x10\xcc\b\x12\x1a\n" +
 	"\x15FARM_PRESENCE_CHANGED\x10\xcd\b\x12\x14\n" +
-	"\x0fRED_DOT_CHANGED\x10\xce\b\"\x04\b\x03\x10c\"\x05\bg\x10\xc7\x01\"\x06\b\xd5\x01\x10\xab\x02\"\x06\b\xaf\x02\x10\xb5\x02\"\x06\b\xb9\x02\x10\xbf\x02\"\x06\b\xc9\x02\x10\xe7\a\"\x06\b\xe9\a\x10\xcb\b\"\x06\b\xcf\b\x10\xcf\x0f*\xae\t\n" +
+	"\x0fRED_DOT_CHANGED\x10\xce\b\"\x04\b\x03\x10c\"\x05\bg\x10\xc7\x01\"\x06\b\xd5\x01\x10\xab\x02\"\x06\b\xaf\x02\x10\xb5\x02\"\x06\b\xb9\x02\x10\xbf\x02\"\x06\b\xc9\x02\x10\xe7\a\"\x06\b\xe9\a\x10\xcb\b\"\x06\b\xcf\b\x10\xcf\x0f*\x8a\n" +
+	"\n" +
 	"\tErrorCode\x12\x15\n" +
 	"\x11ERROR_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10INVALID_ARGUMENT\x10d\x12\x12\n" +
@@ -8154,7 +8167,11 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x13SERVICE_UNAVAILABLE\x10\xc8\x01\x12\x10\n" +
 	"\vSERVER_BUSY\x10\xc9\x01\x12\x1c\n" +
 	"\x17REQUEST_OUTCOME_UNKNOWN\x10\xca\x01\x12\x17\n" +
-	"\x12CONFIG_UNAVAILABLE\x10\xcb\x01\x12\x19\n" +
+	"\x12CONFIG_UNAVAILABLE\x10\xcb\x01\x12\x13\n" +
+	"\x0eZONE_MIGRATING\x10\xcc\x01\x12\x15\n" +
+	"\x10ZONE_UNAVAILABLE\x10\xcd\x01\x12\x14\n" +
+	"\x0fZONE_WARMING_UP\x10\xce\x01\x12\x18\n" +
+	"\x13STORAGE_UNAVAILABLE\x10\xcf\x01\x12\x19\n" +
 	"\x14SHOP_ENTRY_NOT_FOUND\x10\xac\x02\x12\x18\n" +
 	"\x13SHOP_ENTRY_DISABLED\x10\xad\x02\x12\x12\n" +
 	"\rPRICE_CHANGED\x10\xae\x02\x12\x1a\n" +

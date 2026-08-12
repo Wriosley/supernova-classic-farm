@@ -9,6 +9,7 @@ data:
   STORAGE_MODE: tcaplus
   INTERNAL_NETWORK_MODE: kubernetes
   ROUTING_MODE: static-dual-zone
+  COORDINATOR_ROUTE_STORE: legacy-fence
   COORDINATOR_URL: http://coordinator:8083
   FRIEND_RPC_URL: http://friend:8085
   INFO_RPC_URL: http://info:8086
@@ -20,6 +21,8 @@ data:
   TCAPLUS_SESSION_TABLE: Session
   TCAPLUS_FENCE_TABLE: ShardFence
   TCAPLUS_MIGRATION_TABLE: MigrationProgress
+  TCAPLUS_SHARD_MAP_META_TABLE: ShardMapMeta
+  TCAPLUS_SHARD_ROUTE_TABLE: ShardRoute
   TCAPLUS_OUTBOX_TABLE: PlayerOutbox
   TCAPLUS_FRIEND_CODE_CURRENT_TABLE: FriendCodeCurrent
   TCAPLUS_FRIEND_CODE_LOOKUP_TABLE: FriendCodeLookup

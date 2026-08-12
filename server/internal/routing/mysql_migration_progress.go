@@ -402,3 +402,6 @@ func formatUUIDBytes(value []byte) string {
 		value[10:16],
 	)
 }
+
+// FormatUUIDBytes converts a 16-byte durable identity to canonical text.
+func FormatUUIDBytes(value []byte) string { return formatUUIDBytes(value) }

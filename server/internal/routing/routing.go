@@ -139,6 +139,43 @@ func NewStaticMap(
 	return m, nil
 }
 
+// NewMapFromSnapshot restores an exact committed ShardMap without minting new
+// route, lease, transition or epoch identities.
+func NewMapFromSnapshot(snapshot Snapshot) (*Map, error) {
+	if snapshot.ShardCount != ShardCount ||
+		snapshot.HashAlgorithmVersion != HashAlgorithmVersion ||
+		snapshot.AssignmentAlgorithmVersion != AssignmentAlgorithmVersion ||
+		snapshot.MapVersion == 0 || snapshot.CommittedTerm == 0 ||
+		snapshot.CommittedIndex == 0 || len(snapshot.Entries) != int(ShardCount) {
+		return nil, errors.New("invalid ShardMap snapshot metadata")
+	}
+	m := &Map{mapVersion: snapshot.MapVersion, committedTerm: snapshot.CommittedTerm,
+		committedIndex: snapshot.CommittedIndex}
+	for index, entry := range snapshot.Entries {
+		if entry.ShardID != uint32(index) || entry.OwnerEpoch == 0 ||
+			entry.RouteVersion == 0 || entry.UpdatedAt.IsZero() {
+			return nil, fmt.Errorf("invalid route entry %d", index)
+		}
+		switch entry.State {
+		case RouteStateActive:
+			if entry.OwnerZoneID == "" || entry.OwnerEndpoint == "" || entry.LeaseID == "" {
+				return nil, fmt.Errorf("invalid ACTIVE route entry %d", index)
+			}
+		case RouteStatePreparing:
+			if entry.OwnerZoneID == "" || entry.OwnerEndpoint == "" || entry.LeaseID == "" ||
+				entry.PreviousOwnerZoneID == "" || entry.TransitionID == "" {
+				return nil, fmt.Errorf("invalid PREPARING route entry %d", index)
+			}
+		case RouteStateUnassigned:
+		default:
+			return nil, fmt.Errorf("invalid route state %q at %d", entry.State, index)
+		}
+		m.entries[index] = entry
+		m.epochHighWater[index] = entry.OwnerEpoch
+	}
+	return m, nil
+}
+
 // RendezvousOwner returns the highest-scoring candidate for a shard. Callers
 // must pass candidates validated by NewStaticMap or otherwise guarantee that
 // the slice is non-empty and contains unique, non-empty Zone IDs.
@@ -327,6 +364,62 @@ func (m *Map) Prepare(
 	m.commitEntry(next)
 	m.epochHighWater[shardID] = next.OwnerEpoch
 	return next, nil
+}
+
+// ProposePrepare creates the next PREPARING entry without changing Current.
+func (m *Map) ProposePrepare(shardID uint32, ownerZoneID, ownerEndpoint string, now time.Time, leaseDuration time.Duration) (RouteEntry, error) {
+	if err := validShardID(shardID); err != nil {
+		return RouteEntry{}, err
+	}
+	if ownerZoneID == "" || ownerEndpoint == "" || leaseDuration <= 0 {
+		return RouteEntry{}, errors.New("owner identity and positive lease duration are required")
+	}
+	leaseID, err := newUUID()
+	if err != nil {
+		return RouteEntry{}, err
+	}
+	transitionID, err := newUUID()
+	if err != nil {
+		return RouteEntry{}, err
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	current := m.entries[shardID]
+	baseEpoch := max(current.OwnerEpoch, m.epochHighWater[shardID])
+	if current.State != RouteStateActive || baseEpoch == math.MaxUint64 || current.RouteVersion == math.MaxUint64 {
+		return RouteEntry{}, errors.New("ACTIVE route cannot advance")
+	}
+	now = now.UTC()
+	return RouteEntry{ShardID: shardID, OwnerZoneID: ownerZoneID,
+		OwnerEndpoint: ownerEndpoint, OwnerEpoch: baseEpoch + 1,
+		RouteVersion: current.RouteVersion + 1, State: RouteStatePreparing,
+		LeaseTerm: m.committedTerm, LeaseID: leaseID,
+		LeaseExpiresAt: now.Add(leaseDuration), PreviousOwnerZoneID: current.OwnerZoneID,
+		TransitionID: transitionID, UpdatedAt: now}, nil
+}
+
+// ApplyCommittedSnapshot atomically replaces Current only after an external
+// authority has committed a strictly newer complete snapshot.
+func (m *Map) ApplyCommittedSnapshot(snapshot Snapshot) error {
+	restored, err := NewMapFromSnapshot(snapshot)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if snapshot.MapVersion <= m.mapVersion {
+		return errors.New("committed snapshot does not advance map_version")
+	}
+	m.mapVersion = restored.mapVersion
+	m.committedTerm = restored.committedTerm
+	m.committedIndex = restored.committedIndex
+	m.entries = restored.entries
+	for index := range restored.epochHighWater {
+		if restored.epochHighWater[index] > m.epochHighWater[index] {
+			m.epochHighWater[index] = restored.epochHighWater[index]
+		}
+	}
+	return nil
 }
 
 // Activate commits ACTIVE for the exact prepared transition without changing

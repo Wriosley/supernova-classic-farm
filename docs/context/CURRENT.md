@@ -176,8 +176,29 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   merges the returned `visitor_patch` optimistically (no `state_version` on
   `FriendActionResponse` by frozen contract) and relies on the independent
   `FarmViewPatch` push for the owner's plot update.
+- Final delivery sprint **07/01 Coordinator contract baseline** is complete:
+  existing route records gained additive assignment-version/endpoint fields;
+  the generated Coordinator unary/Watch/failure-evidence gRPC contract and
+  retryable routing error numbers 204–207 are frozen. Runtime wiring, durable
+  ShardRoute, Kubernetes discovery and failover remain later phases. Evidence:
+  `../evidence/2026-08-12-coordinator-contract-baseline.md`.
+- Final delivery sprint **07/02 durable Current ShardRoute** is offline-complete:
+  opt-in Tcaplus `ShardMapMeta` + 4096 `ShardRoute` rows, self-contained pending
+  intent recovery, exact Map restore, durable-first manual migration and a
+  binding-checked runtime lease-expiry overlay pass fake-Tcaplus/process/unit
+  regression. The kind default remains `legacy-fence` because the two live
+  tables and live restart workflow were not verified. Evidence:
+  `../evidence/2026-08-12-durable-current-shard-route.md`.
 
 ## Current accepted direction
+
+- ADR-0012 is the accepted Coordinator evolution target: Kubernetes discovers
+  Zone membership and elects one Coordinator Leader; Tcaplus persists Current
+  ShardRoute/Fence/MigrationProgress; embedded SDKs receive committed route
+  updates. This replaces ADR-0008's production 2/3 Route Log implementation
+  choice, while retaining its single-Owner, epoch, Fence and cached ordinary
+  request-path principles. None of ADR-0012's dynamic discovery, Watch,
+  automatic failover or Leader Election is implemented yet.
 
 - The 30-million-DAU production target uses stateful Player Actors in Zone processes.
 - One logical shard has exactly one write-authorized Active Zone Owner at a time; one Zone owns many logical shards.

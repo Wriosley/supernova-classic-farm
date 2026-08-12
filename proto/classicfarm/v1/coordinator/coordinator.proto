@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package classicfarm.coordinator.v1;
+
+import "classicfarm/v1/data/data_model.proto";
+
+option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/coordinator;coordinatorv1";
+
+service CoordinatorService {
+  rpc GetRouteSnapshot(GetRouteSnapshotRequest) returns (GetRouteSnapshotResponse);
+  rpc GetShardRoute(GetShardRouteRequest) returns (GetShardRouteResponse);
+  rpc WatchRoutes(stream WatchRoutesRequest) returns (stream WatchRoutesResponse);
+  rpc ReportZoneFailure(ReportZoneFailureRequest) returns (ReportZoneFailureResponse);
+}
+
+enum SubscriberKind {
+  SUBSCRIBER_KIND_UNSPECIFIED = 0;
+  SUBSCRIBER_KIND_GATE = 1;
+  SUBSCRIBER_KIND_INFO = 2;
+  SUBSCRIBER_KIND_ZONE = 3;
+  SUBSCRIBER_KIND_OTHER = 4;
+}
+
+enum ZoneAvailability {
+  ZONE_AVAILABILITY_UNSPECIFIED = 0;
+  ZONE_AVAILABILITY_HEALTHY = 1;
+  ZONE_AVAILABILITY_SUSPECT = 2;
+  ZONE_AVAILABILITY_DEAD = 3;
+  ZONE_AVAILABILITY_DRAINING = 4;
+}
+
+enum ZoneFailureKind {
+  ZONE_FAILURE_KIND_UNSPECIFIED = 0;
+  ZONE_FAILURE_KIND_CONNECTION_REFUSED = 1;
+  ZONE_FAILURE_KIND_TIMEOUT = 2;
+  ZONE_FAILURE_KIND_CONNECTION_RESET = 3;
+  ZONE_FAILURE_KIND_GRPC_UNAVAILABLE = 4;
+}
+
+message ZoneIdentity {
+  string logical_zone_id = 1;
+  string incarnation_id = 2;
+  string endpoint = 3;
+}
+
+message GetRouteSnapshotRequest {}
+
+message GetRouteSnapshotResponse {
+  classicfarm.data.v1.ShardMapSnapshot snapshot = 1;
+}
+
+message GetShardRouteRequest {
+  uint32 shard_id = 1;
+}
+
+message GetShardRouteResponse {
+  classicfarm.data.v1.ShardRouteEntry route = 1;
+  uint64 map_version = 2;
+}
+
+message WatchRoutesRequest {
+  oneof payload {
+    Subscribe subscribe = 1;
+    RouteAck ack = 2;
+    WatchPong pong = 3;
+  }
+}
+
+message Subscribe {
+  string subscriber_id = 1;
+  SubscriberKind kind = 2;
+  uint64 last_map_version = 3;
+  uint64 last_availability_version = 4;
+}
+
+message RouteAck {
+  uint64 map_version = 1;
+}
+
+message WatchPong {
+  uint64 ping_id = 1;
+}
+
+message WatchRoutesResponse {
+  oneof payload {
+    classicfarm.data.v1.ShardMapSnapshot snapshot = 1;
+    RouteBatch route_batch = 2;
+    AvailabilityBatch availability_batch = 3;
+    WatchPing ping = 4;
+    ResyncRequired resync_required = 5;
+  }
+}
+
+message RouteBatch {
+  uint64 previous_map_version = 1;
+  uint64 map_version = 2;
+  repeated classicfarm.data.v1.ShardRouteEntry routes = 3;
+}
+
+message ZoneAvailabilityEntry {
+  string logical_zone_id = 1;
+  ZoneAvailability availability = 2;
+  string incarnation_id = 3;
+  int64 observed_at_ms = 4;
+}
+
+message AvailabilityBatch {
+  uint64 previous_availability_version = 1;
+  uint64 availability_version = 2;
+  repeated ZoneAvailabilityEntry zones = 3;
+}
+
+message WatchPing {
+  uint64 ping_id = 1;
+}
+
+message ResyncRequired {
+  string reason = 1;
+}
+
+message ReportZoneFailureRequest {
+  string reporter_id = 1;
+  SubscriberKind reporter_kind = 2;
+  uint64 player_id = 3;
+  uint32 shard_id = 4;
+  string logical_zone_id = 5;
+  string incarnation_id = 6;
+  ZoneFailureKind failure_kind = 7;
+  int64 observed_at_ms = 8;
+}
+
+message ReportZoneFailureResponse {
+  ZoneAvailability observed_availability = 1;
+}

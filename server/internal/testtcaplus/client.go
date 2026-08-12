@@ -138,6 +138,10 @@ func recordKey(message proto.Message) string {
 		key = fmt.Sprintf("%x", record.SessionDigest)
 	case *tcaplusv1.ShardFence:
 		key = strconv.FormatUint(uint64(record.LogicalShardId), 10)
+	case *tcaplusv1.ShardMapMeta:
+		key = strconv.FormatUint(uint64(record.MapId), 10)
+	case *tcaplusv1.ShardRoute:
+		key = strconv.FormatUint(uint64(record.LogicalShardId), 10)
 	case *tcaplusv1.MigrationProgress:
 		key = strconv.FormatUint(uint64(record.LogicalShardId), 10)
 	case *tcaplusv1.PlayerOutbox:

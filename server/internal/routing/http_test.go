@@ -122,6 +122,81 @@ func TestRouteHTTPRejectsExpiredLeaseAsNotOwner(t *testing.T) {
 	}
 }
 
+func TestRouteHTTPUsesRuntimeLeaseBeyondDurableExpiry(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	routes, err := NewLocalMap(now, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay, err := NewRuntimeLeaseOverlay(routes.Snapshot(), now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := func() time.Time { return now.Add(45 * time.Second) }
+	handler := NewHTTPHandlerWithRuntimeLeases(routes, overlay, clock)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/internal/v1/routes/42", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body routeResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.LeaseExpiresAtMS != now.Add(time.Minute).UnixMilli() || !body.Routable {
+		t.Fatalf("effective route=%+v", body)
+	}
+}
+
+func TestDurableHTTPLeaseRefreshKeepsZoneAuthorizedPastStoredExpiry(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	routes, _ := NewLocalMap(now, 30*time.Second)
+	durable := routes.Snapshot()
+	overlay, _ := NewRuntimeLeaseOverlay(durable, now.Add(20*time.Second), 30*time.Second)
+	refreshAt := now.Add(45 * time.Second)
+	effective := durable
+	effective.Entries = append([]RouteEntry(nil), durable.Entries...)
+	for index, entry := range effective.Entries {
+		resolved, err := overlay.Effective(entry, refreshAt)
+		if err != nil {
+			t.Fatalf("effective shard %d: %v", index, err)
+		}
+		effective.Entries[index] = resolved
+	}
+	table, _ := NewAuthorizationTable(DefaultZoneID)
+	if err := table.Replace(durable); err != nil {
+		t.Fatal(err)
+	}
+	if err := table.Replace(effective); err != nil {
+		t.Fatalf("same-version HTTP lease refresh rejected: %v", err)
+	}
+	playerID, shardID := playerOwnedBy(t, routes, DefaultZoneID)
+	if err := table.Validate(playerID, shardID, DefaultZoneID, 1, refreshAt); err != nil {
+		t.Fatalf("Zone rejected durable route after stored 30s expiry: %v", err)
+	}
+}
+
+func TestRouteHTTPFailsClosedWhenRuntimeLeaseBindingIsStale(t *testing.T) {
+	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	routes, _ := NewLocalMap(now, 30*time.Second)
+	overlay, _ := NewRuntimeLeaseOverlay(routes.Snapshot(), now, time.Minute)
+	before := routes.Snapshot()
+	changed := before
+	changed.MapVersion++
+	changed.CommittedIndex++
+	changed.Entries = append([]RouteEntry(nil), before.Entries...)
+	changed.Entries[42].RouteVersion++
+	if err := routes.ApplyCommittedSnapshot(changed); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHTTPHandlerWithRuntimeLeases(routes, overlay, func() time.Time { return now })
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/internal/v1/routes/42", nil))
+	if response.Code != http.StatusConflict {
+		t.Fatalf("stale overlay status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestRouteHTTPRejectsInvalidShardID(t *testing.T) {
 	now := time.Now().UTC()
 	routes, err := NewLocalMap(now, time.Minute)

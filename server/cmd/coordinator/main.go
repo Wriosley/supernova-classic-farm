@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/routestore"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
@@ -60,12 +61,17 @@ func run() error {
 	}
 
 	now := time.Now().UTC()
+	routeStoreMode, err := validateRouteStoreMode(os.Getenv("COORDINATOR_ROUTE_STORE"), os.Getenv("STORAGE_MODE"))
+	if err != nil {
+		return err
+	}
 	routes, err := routing.NewStaticMap(now, leaseDuration, zones)
 	if err != nil {
 		return err
 	}
 	var mysqlDB *sql.DB
 	var migrations *migrationHandler
+	var runtimeLeases *routing.RuntimeLeaseOverlay
 	if mode == routingModeStaticDualZone {
 		migrations = newMigrationHandler(
 			routes, zones, &http.Client{Timeout: 5 * time.Second},
@@ -91,8 +97,21 @@ func run() error {
 			if configErr != nil {
 				return configErr
 			}
+			tables := []string{fenceTable, migrationTable}
+			var durableStore *routestore.TcaplusStore
+			if routeStoreMode == routeStoreTcaplus {
+				metaTable, tableErr := tcaplusdb.TableName("TCAPLUS_SHARD_MAP_META_TABLE", "ShardMapMeta")
+				if tableErr != nil {
+					return tableErr
+				}
+				routeTable, tableErr := tcaplusdb.TableName("TCAPLUS_SHARD_ROUTE_TABLE", "ShardRoute")
+				if tableErr != nil {
+					return tableErr
+				}
+				tables = append(tables, metaTable, routeTable)
+			}
 			client, openErr := tcaplusdb.Open(
-				tcaplusConfig, fenceTable, migrationTable,
+				tcaplusConfig, tables...,
 			)
 			if openErr != nil {
 				return openErr
@@ -103,6 +122,24 @@ func run() error {
 			)
 			if controlErr != nil {
 				return controlErr
+			}
+			if routeStoreMode == routeStoreTcaplus {
+				durableStore, configErr = routestore.NewTcaplusStore(client, tcaplusConfig.ZoneID)
+				if configErr != nil {
+					return configErr
+				}
+				candidate := routestore.FromRoutingSnapshot(routes.Snapshot(), now)
+				bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 60*time.Second)
+				var created bool
+				routes, runtimeLeases, created, configErr = bootstrapDurableCurrent(bootstrapCtx, durableStore, candidate, now, leaseDuration)
+				bootstrapCancel()
+				if configErr != nil {
+					return configErr
+				}
+				migrations.routes = routes
+				migrations.routeStore = durableStore
+				migrations.runtimeLeases = runtimeLeases
+				logger.Info("durable Current ShardRoute ready", "bootstrapped", created, "map_version", routes.Snapshot().MapVersion)
 			}
 			fenceCtx, fenceCancel := context.WithTimeout(
 				context.Background(), 60*time.Second,
@@ -119,11 +156,11 @@ func run() error {
 				fenceCancel()
 				return loadErr
 			}
-			if hydrateErr := routing.HydrateActiveRoutesFromFences(
-				routes, fences, zones, now, leaseDuration,
-			); hydrateErr != nil {
-				fenceCancel()
-				return hydrateErr
+			if routeStoreMode == routeStoreLegacyFence {
+				if hydrateErr := routing.HydrateActiveRoutesFromFences(routes, fences, zones, now, leaseDuration); hydrateErr != nil {
+					fenceCancel()
+					return hydrateErr
+				}
 			}
 			fenceCancel()
 			logger.Info(
@@ -145,6 +182,21 @@ func run() error {
 					"loaded open PREPARING migrations; fail-closed until continue or abandon",
 					"open_migrations", openCount,
 				)
+			}
+			if routeStoreMode == routeStoreTcaplus {
+				progress := make(map[uint32]*migrationProgress, openCount)
+				for shardID, item := range migrations.progress {
+					if item != nil {
+						progress[uint32(shardID)] = item
+					}
+				}
+				loaded, loadCurrentErr := durableStore.Load(context.Background())
+				if loadCurrentErr != nil {
+					return loadCurrentErr
+				}
+				if reconcileErr := validateCurrentFences(loaded, fences, progress); reconcileErr != nil {
+					return reconcileErr
+				}
 			}
 		} else if dsn := strings.TrimSpace(os.Getenv("MYSQL_DSN")); dsn != "" {
 			if strings.TrimSpace(os.Getenv("DUAL_ZONE_FENCE_BOOTSTRAP")) != "1" {
@@ -214,10 +266,18 @@ func run() error {
 
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
-	go renewOwnedLeases(ctx, routes, zones, leaseDuration, logger)
+	if routeStoreMode == routeStoreTcaplus {
+		go renewRuntimeLeaseOverlay(ctx, routes, runtimeLeases, leaseDuration, logger)
+	} else {
+		go renewOwnedLeases(ctx, routes, zones, leaseDuration, logger)
+	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/internal/v1/", routing.NewHTTPHandler(routes, time.Now))
+	if routeStoreMode == routeStoreTcaplus {
+		mux.Handle("/internal/v1/", routing.NewHTTPHandlerWithRuntimeLeases(routes, runtimeLeases, time.Now))
+	} else {
+		mux.Handle("/internal/v1/", routing.NewHTTPHandler(routes, time.Now))
+	}
 	if mode == routingModeStaticDualZone && migrations != nil {
 		mux.HandleFunc(
 			"POST /internal/v1/shards/{shard_id}/move",
@@ -279,6 +339,21 @@ func run() error {
 		"high_availability", false,
 	)
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
+}
+
+func renewRuntimeLeaseOverlay(ctx context.Context, routes *routing.Map, overlay *routing.RuntimeLeaseOverlay, leaseDuration time.Duration, logger *slog.Logger) {
+	ticker := time.NewTicker(leaseDuration / 3)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			if err := overlay.Renew(routes.Snapshot(), now.UTC(), leaseDuration); err != nil {
+				logger.Error("runtime lease overlay renewal failed", "error", err)
+			}
+		}
+	}
 }
 
 func renewOwnedLeases(

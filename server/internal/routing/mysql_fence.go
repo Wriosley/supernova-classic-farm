@@ -122,6 +122,10 @@ func parseUUIDBytes(value string) ([]byte, error) {
 	return decoded, nil
 }
 
+// ParseUUIDBytes converts the canonical route identity representation to its
+// 16-byte durable form.
+func ParseUUIDBytes(value string) ([]byte, error) { return parseUUIDBytes(value) }
+
 // ReconcileStaticMySQLFences atomically converts the original zone-local
 // bootstrap fences to the committed static dual-Zone assignment. It accepts
 // only epoch-one/version-one rows and never advances an existing migration.

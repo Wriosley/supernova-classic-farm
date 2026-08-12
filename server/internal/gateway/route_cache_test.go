@@ -12,9 +12,10 @@ import (
 )
 
 type recordingRouteSource struct {
-	snapshot RouteSnapshot
-	resolved Route
-	calls    atomic.Int32
+	snapshot      RouteSnapshot
+	resolved      Route
+	snapshotCalls atomic.Int32
+	calls         atomic.Int32
 }
 
 func TestNotOwnerInvalidatesCachedVersionAndRetriesSameRequest(t *testing.T) {
@@ -74,6 +75,7 @@ func TestNotOwnerInvalidatesCachedVersionAndRetriesSameRequest(t *testing.T) {
 }
 
 func (s *recordingRouteSource) LoadSnapshot(context.Context) (RouteSnapshot, error) {
+	s.snapshotCalls.Add(1)
 	return s.snapshot, nil
 }
 
@@ -92,6 +94,9 @@ func TestCachedRouteResolverWarmKeepsCoordinatorOffHitPath(t *testing.T) {
 	}
 	if err := cache.Warm(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	if source.snapshotCalls.Load() != 1 {
+		t.Fatalf("Coordinator snapshot calls = %d, want 1", source.snapshotCalls.Load())
 	}
 	for attempt := 0; attempt < 3; attempt++ {
 		route, err := cache.Resolve(context.Background(), 42)

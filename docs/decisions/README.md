@@ -30,6 +30,7 @@ Current-state entry points:
 | ADR-0009 | Keep current chapter-task progress in Player Actor | Current first-slice task decision. |
 | ADR-0010 | Freeze short-lived WS Ticket/CSRF restart-loss for the local prototype | Current local auth durability boundary; unused tickets stay process-local even with MySQL Sessions. |
 | ADR-0011 | 用 CheckpointStore 隔离玩家检查点与具体数据库 | Accepted；先保持 MySQL 行为，再接入 Tcaplus PlayerCheckpoint POC。 |
+| ADR-0012 | Kubernetes 发现、Tcaplus 权威路由与主动发布的 Coordinator | Current Coordinator evolution target；以 Kubernetes Lease + Tcaplus CAS 替代 ADR-0008 的生产 2/3 Route Log 实现选择，保留单 Owner、epoch 和 Fence。 |
 
 The table is a navigation aid. If it conflicts with `CURRENT.md` or a newer accepted architecture/ADR, update this README rather than rewriting historical ADR content.
 

@@ -56,6 +56,19 @@ func (t *AuthorizationTable) Replace(snapshot Snapshot) error {
 		return errors.New("authorization snapshot would move map_version backwards")
 	}
 	if current != nil && current.mapVersion == next.mapVersion {
+		for index := range next.entries {
+			before := current.entries[index]
+			after := next.entries[index]
+			beforeExpiry := before.LeaseExpiresAt
+			afterExpiry := after.LeaseExpiresAt
+			before.LeaseExpiresAt = time.Time{}
+			after.LeaseExpiresAt = time.Time{}
+			if before != after || afterExpiry.Before(beforeExpiry) {
+				return errors.New("same-version authorization refresh changed durable route identity")
+			}
+		}
+		table := next
+		t.table.Store(table)
 		return nil
 	}
 	t.table.Store(next)

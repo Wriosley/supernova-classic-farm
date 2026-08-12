@@ -70,6 +70,49 @@ message ShardFence {
   int64 fenced_at_ms = 6;
 }
 
+message ShardMapMeta {
+  option (tcaplusservice.tcaplus_primary_key) = "map_id";
+
+  uint32 map_id = 1;
+  uint32 shard_count = 2;
+  uint32 hash_algorithm_version = 3;
+  uint32 assignment_algorithm_version = 4;
+  uint64 map_version = 5;
+  int64 updated_at_ms = 6;
+  bool has_pending_commit = 7;
+  uint32 pending_shard_id = 8;
+  uint64 pending_map_version = 9;
+  uint64 pending_route_version = 10;
+  bytes pending_transition_id = 11;
+  string pending_state = 12;
+  string pending_owner_zone_id = 13;
+  string pending_owner_endpoint = 14;
+  uint64 pending_owner_epoch = 15;
+  uint64 pending_lease_term = 16;
+  bytes pending_lease_id = 17;
+  int64 pending_lease_expires_at_ms = 18;
+  string pending_previous_owner_zone_id = 19;
+  int64 pending_updated_at_ms = 20;
+}
+
+message ShardRoute {
+  option (tcaplusservice.tcaplus_primary_key) = "logical_shard_id";
+
+  uint32 logical_shard_id = 1;
+  string owner_zone_id = 2;
+  string owner_endpoint = 3;
+  uint64 owner_epoch = 4;
+  uint64 route_version = 5;
+  uint64 committed_map_version = 6;
+  string state = 7;
+  uint64 lease_term = 8;
+  bytes lease_id = 9;
+  int64 lease_expires_at_ms = 10;
+  string previous_owner_zone_id = 11;
+  bytes transition_id = 12;
+  int64 updated_at_ms = 13;
+}
+
 message MigrationProgress {
   option (tcaplusservice.tcaplus_primary_key) = "logical_shard_id";
 

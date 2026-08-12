@@ -14,20 +14,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/routestore"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
 
 type migrationHandler struct {
-	routes        *routing.Map
-	zones         map[string]routing.ZoneCandidate
-	client        *http.Client
-	now           func() time.Time
-	leaseDuration time.Duration
-	locks         [routing.ShardCount]sync.Mutex
-	advanceFence  func(context.Context, routing.RouteEntry) error
-	db            *sql.DB
-	tcaplus       *routing.TcaplusControlStore
-	progress      [routing.ShardCount]*migrationProgress
+	routes                 *routing.Map
+	zones                  map[string]routing.ZoneCandidate
+	client                 *http.Client
+	now                    func() time.Time
+	leaseDuration          time.Duration
+	locks                  [routing.ShardCount]sync.Mutex
+	advanceFence           func(context.Context, routing.RouteEntry) error
+	db                     *sql.DB
+	tcaplus                *routing.TcaplusControlStore
+	routeStore             routestore.Store
+	runtimeLeases          *routing.RuntimeLeaseOverlay
+	deleteProgressOverride func(context.Context, *migrationProgress) error
+	progress               [routing.ShardCount]*migrationProgress
 }
 
 type migrationProgress struct {
@@ -85,12 +89,22 @@ func (h *migrationHandler) loadOpenProgress(
 	}
 	for _, row := range rows {
 		progress := progressFromRow(row)
-		if err := h.routes.RestorePreparing(progress.Prepared); err != nil {
-			return 0, fmt.Errorf(
-				"restore PREPARING shard %d: %w", row.ShardID, err,
-			)
+		if h.routeStore == nil {
+			if err := h.routes.RestorePreparing(progress.Prepared); err != nil {
+				return 0, fmt.Errorf("restore PREPARING shard %d: %w", row.ShardID, err)
+			}
+			h.routes.NoteConsumedEpoch(row.ShardID, row.PreparedOwnerEpoch)
+		} else {
+			current, currentErr := h.routes.Entry(row.ShardID)
+			if currentErr != nil {
+				return 0, currentErr
+			}
+			if current.State == routing.RouteStatePreparing &&
+				current.TransitionID == progress.Prepared.TransitionID &&
+				progress.Step == routing.MigrationStepDrained {
+				progress.Step = routing.MigrationStepPreparingCommitted
+			}
 		}
-		h.routes.NoteConsumedEpoch(row.ShardID, row.PreparedOwnerEpoch)
 		h.progress[row.ShardID] = progress
 	}
 	_ = now
@@ -124,10 +138,151 @@ func (h *migrationHandler) move(w http.ResponseWriter, r *http.Request) {
 	h.locks[shardID].Lock()
 	defer h.locks[shardID].Unlock()
 	if h.advanceFence != nil {
+		if h.routeStore != nil {
+			h.moveDurable(w, r, shardID, target)
+			return
+		}
 		h.moveMySQL(w, r, shardID, target)
 		return
 	}
 	h.moveMemory(w, r, shardID, target)
+}
+
+func (h *migrationHandler) moveDurable(w http.ResponseWriter, r *http.Request, shardID uint32, target routing.ZoneCandidate) {
+	now := h.now().UTC()
+	entry, err := h.routes.Entry(shardID)
+	if err != nil {
+		writeMigrationError(w, http.StatusConflict, "SHARD_NOT_ACTIVE")
+		return
+	}
+	progress := h.progress[shardID]
+	if entry.State == routing.RouteStateActive && entry.OwnerZoneID == target.ZoneID {
+		if progress == nil || progress.Prepared.TransitionID != entry.TransitionID {
+			writeMigrationError(w, http.StatusConflict, "ALREADY_OWNER")
+			return
+		}
+		if err := h.refreshTarget(r, target); err != nil {
+			writeMigrationError(w, http.StatusServiceUnavailable, "TARGET_REFRESH_FAILED")
+			return
+		}
+		if err := h.deleteProgress(r.Context(), progress); err != nil {
+			writeMigrationError(w, http.StatusServiceUnavailable, "PROGRESS_CLEANUP_FAILED")
+			return
+		}
+		h.progress[shardID] = nil
+		writeMigrationRoute(w, entry)
+		return
+	}
+
+	if entry.State == routing.RouteStateActive {
+		if progress == nil {
+			if err := h.checkTargetReady(r, target); err != nil {
+				writeMigrationError(w, http.StatusServiceUnavailable, "TARGET_NOT_READY")
+				return
+			}
+			if err := h.callZoneControl(r, entry.OwnerEndpoint, shardID, "drain", entry.OwnerEpoch); err != nil {
+				h.resumeZone(r, entry.OwnerEndpoint, shardID, entry.OwnerEpoch)
+				writeMigrationError(w, http.StatusConflict, "DRAIN_REJECTED")
+				return
+			}
+			prepared, proposeErr := h.routes.ProposePrepare(shardID, target.ZoneID, target.Endpoint, now, h.leaseDuration)
+			if proposeErr != nil {
+				writeMigrationError(w, http.StatusConflict, "PREPARE_FAILED")
+				return
+			}
+			progress = &migrationProgress{Prepared: prepared, Source: entry}
+			players, drainErr := h.completeZoneDrain(r, progress)
+			if drainErr != nil {
+				writeMigrationError(w, http.StatusConflict, "FINAL_DRAIN_FAILED")
+				return
+			}
+			progress.Players = players
+			progress.Step = routing.MigrationStepDrained
+			h.progress[shardID] = progress
+			if err := h.persistProgress(r.Context(), progress); err != nil {
+				writeMigrationError(w, http.StatusConflict, "PROGRESS_PERSIST_FAILED")
+				return
+			}
+		} else if progress.Step != routing.MigrationStepDrained || progress.Source != entry {
+			writeMigrationError(w, http.StatusConflict, "RECOVERY_REQUIRED")
+			return
+		}
+		committed, commitErr := h.routeStore.CommitPreparing(r.Context(), progress.Prepared, h.routes.Snapshot().MapVersion)
+		if commitErr != nil {
+			writeMigrationError(w, http.StatusConflict, "PREPARING_STORE_FAILED")
+			return
+		}
+		if err := h.applyDurableSnapshot(committed); err != nil {
+			writeMigrationError(w, http.StatusInternalServerError, "CURRENT_APPLY_FAILED")
+			return
+		}
+		progress.Step = routing.MigrationStepPreparingCommitted
+		if err := h.persistProgress(r.Context(), progress); err != nil {
+			writeMigrationError(w, http.StatusConflict, "PROGRESS_PERSIST_FAILED")
+			return
+		}
+		entry = progress.Prepared
+	}
+	if entry.State != routing.RouteStatePreparing || progress == nil || entry.TransitionID != progress.Prepared.TransitionID {
+		writeMigrationError(w, http.StatusConflict, "RECOVERY_REQUIRED")
+		return
+	}
+	if progress.Step == routing.MigrationStepPreparingCommitted {
+		if err := h.advanceFence(r.Context(), progress.Prepared); err != nil {
+			writeMigrationError(w, http.StatusConflict, "FENCE_ADVANCE_FAILED")
+			return
+		}
+		progress.Step = routing.MigrationStepFenceAdvanced
+		if err := h.persistProgress(r.Context(), progress); err != nil {
+			writeMigrationError(w, http.StatusConflict, "PROGRESS_PERSIST_FAILED")
+			return
+		}
+	}
+	if progress.Step == routing.MigrationStepFenceAdvanced {
+		if err := h.prepareTarget(r, target, progress); err != nil {
+			writeMigrationError(w, http.StatusConflict, "TARGET_PREPARE_FAILED")
+			return
+		}
+		progress.Step = routing.MigrationStepTargetPrepared
+		if err := h.persistProgress(r.Context(), progress); err != nil {
+			writeMigrationError(w, http.StatusConflict, "PROGRESS_PERSIST_FAILED")
+			return
+		}
+	}
+	active := progress.Prepared
+	active.State = routing.RouteStateActive
+	active.RouteVersion++
+	active.LeaseExpiresAt = h.now().UTC().Add(h.leaseDuration)
+	active.UpdatedAt = h.now().UTC()
+	committed, err := h.routeStore.CommitActive(r.Context(), active, h.routes.Snapshot().MapVersion)
+	if err != nil {
+		writeMigrationError(w, http.StatusConflict, "ACTIVE_STORE_FAILED")
+		return
+	}
+	if err := h.applyDurableSnapshot(committed); err != nil {
+		writeMigrationError(w, http.StatusInternalServerError, "CURRENT_APPLY_FAILED")
+		return
+	}
+	if err := h.refreshTarget(r, target); err != nil {
+		writeMigrationError(w, http.StatusServiceUnavailable, "TARGET_REFRESH_FAILED")
+		return
+	}
+	if err := h.deleteProgress(r.Context(), progress); err != nil {
+		writeMigrationError(w, http.StatusServiceUnavailable, "PROGRESS_CLEANUP_FAILED")
+		return
+	}
+	h.progress[shardID] = nil
+	writeMigrationRoute(w, active)
+}
+
+func (h *migrationHandler) applyDurableSnapshot(snapshot routestore.Snapshot) error {
+	if err := h.routes.ApplyCommittedSnapshot(routestore.RoutingSnapshot(snapshot)); err != nil {
+		return err
+	}
+	if h.runtimeLeases != nil {
+		return h.runtimeLeases.Renew(h.routes.Snapshot(), h.now().UTC(), h.leaseDuration)
+	}
+	return nil
 }
 
 func (h *migrationHandler) inspect(w http.ResponseWriter, r *http.Request) {
@@ -256,6 +411,48 @@ func (h *migrationHandler) continueMigration(
 	h.moveMySQL(w, r, shardID, target)
 }
 
+func (h *migrationHandler) abandonDurable(w http.ResponseWriter, r *http.Request, progress *migrationProgress) {
+	shardID := progress.Prepared.ShardID
+	current, err := h.routes.Entry(shardID)
+	if err != nil {
+		writeMigrationError(w, http.StatusConflict, "RESTORE_SOURCE_FAILED")
+		return
+	}
+	now := h.now().UTC()
+	source := progress.Source
+	source.State = routing.RouteStateActive
+	source.RouteVersion = current.RouteVersion + 1
+	source.LeaseExpiresAt = now.Add(h.leaseDuration)
+	source.UpdatedAt = now
+	source.PreviousOwnerZoneID = ""
+	source.TransitionID = ""
+	if current.State == routing.RouteStatePreparing {
+		committed, commitErr := h.routeStore.RestoreSource(r.Context(), source, h.routes.Snapshot().MapVersion)
+		if commitErr != nil || h.applyDurableSnapshot(committed) != nil {
+			writeMigrationError(w, http.StatusConflict, "RESTORE_SOURCE_FAILED")
+			return
+		}
+	} else if current.State != routing.RouteStateActive || current.OwnerZoneID != source.OwnerZoneID {
+		writeMigrationError(w, http.StatusConflict, "RESTORE_SOURCE_FAILED")
+		return
+	} else {
+		source = current
+	}
+	var abandonErr error
+	if h.tcaplus != nil {
+		abandonErr = h.tcaplus.MarkAbandoned(r.Context(), shardID, progress.Prepared.TransitionID, now)
+	} else if h.db != nil {
+		abandonErr = routing.MarkMigrationAbandoned(r.Context(), h.db, shardID, progress.Prepared.TransitionID, now)
+	}
+	if abandonErr != nil {
+		writeMigrationError(w, http.StatusConflict, "ABANDON_FAILED")
+		return
+	}
+	h.resumeZone(r, progress.Source.OwnerEndpoint, shardID, progress.Source.OwnerEpoch)
+	h.progress[shardID] = nil
+	writeMigrationRoute(w, source)
+}
+
 func (h *migrationHandler) abandonMigration(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -284,6 +481,10 @@ func (h *migrationHandler) abandonMigration(
 	if progress.Step == routing.MigrationStepFenceAdvanced ||
 		progress.Step == routing.MigrationStepTargetPrepared {
 		writeMigrationError(w, http.StatusConflict, "FENCE_ALREADY_ADVANCED")
+		return
+	}
+	if h.routeStore != nil {
+		h.abandonDurable(w, r, progress)
 		return
 	}
 	now := h.now().UTC()
@@ -579,6 +780,9 @@ func (h *migrationHandler) deleteProgress(
 	ctx context.Context,
 	progress *migrationProgress,
 ) error {
+	if h.deleteProgressOverride != nil {
+		return h.deleteProgressOverride(ctx, progress)
+	}
 	if (h.db == nil && h.tcaplus == nil) || progress == nil {
 		return nil
 	}
