@@ -125,6 +125,72 @@ func (s *TcaplusTaskStore) Cancel(ctx context.Context, shardID uint32, taskID []
 	return ErrTaskCASConflict
 }
 
+func (s *TcaplusTaskStore) Claim(ctx context.Context, shardID uint32, taskID []byte) (Task, error) {
+	for attempt := 0; attempt < maxCASAttempts; attempt++ {
+		current, version, found, err := s.load(ctx, shardID)
+		if err != nil {
+			return Task{}, err
+		}
+		next, changed, err := resolveClaim(current, found, taskID, nowUnixMilli())
+		if err != nil || !changed {
+			return next, err
+		}
+		err = s.client.DoUpdate(taskRecord(next), &option.PBOpt{Ctx: ctx, Version: version}, s.zoneID)
+		if isCASConflict(err) {
+			continue
+		}
+		if err != nil {
+			return Task{}, fmt.Errorf("claim migration task %d: %w", shardID, err)
+		}
+		return next, nil
+	}
+	return Task{}, ErrTaskCASConflict
+}
+
+func (s *TcaplusTaskStore) Retry(ctx context.Context, shardID uint32, taskID []byte, attempt uint32, retryAtMS int64, code string) error {
+	for casAttempt := 0; casAttempt < maxCASAttempts; casAttempt++ {
+		current, version, found, err := s.load(ctx, shardID)
+		if err != nil {
+			return err
+		}
+		next, err := resolveRetry(current, found, taskID, attempt, retryAtMS, code, nowUnixMilli())
+		if err != nil {
+			return err
+		}
+		err = s.client.DoUpdate(taskRecord(next), &option.PBOpt{Ctx: ctx, Version: version}, s.zoneID)
+		if isCASConflict(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("retry migration task %d: %w", shardID, err)
+		}
+		return nil
+	}
+	return ErrTaskCASConflict
+}
+
+func (s *TcaplusTaskStore) Complete(ctx context.Context, shardID uint32, taskID []byte) error {
+	for attempt := 0; attempt < maxCASAttempts; attempt++ {
+		current, version, found, err := s.load(ctx, shardID)
+		if err != nil {
+			return err
+		}
+		next, changed, err := resolveComplete(current, found, taskID, nowUnixMilli())
+		if err != nil || !changed {
+			return err
+		}
+		err = s.client.DoUpdate(taskRecord(next), &option.PBOpt{Ctx: ctx, Version: version}, s.zoneID)
+		if isCASConflict(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("complete migration task %d: %w", shardID, err)
+		}
+		return nil
+	}
+	return ErrTaskCASConflict
+}
+
 func (s *TcaplusTaskStore) load(ctx context.Context, shardID uint32) (Task, int32, bool, error) {
 	record := &tcaplusv1.MigrationTask{LogicalShardId: shardID}
 	opt := &option.PBOpt{Ctx: ctx}

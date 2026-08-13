@@ -64,6 +64,49 @@ type TaskStore interface {
 	LoadOpen(context.Context) ([]Task, error)
 	Get(context.Context, uint32) (Task, bool, error)
 	Cancel(context.Context, uint32, []byte, string) error
+	Claim(context.Context, uint32, []byte) (Task, error)
+	Retry(context.Context, uint32, []byte, uint32, int64, string) error
+	Complete(context.Context, uint32, []byte) error
+}
+
+func resolveClaim(task Task, found bool, taskID []byte, nowMS int64) (Task, bool, error) {
+	if !found || !bytes.Equal(task.TaskID, taskID) {
+		return Task{}, false, ErrTaskConflict
+	}
+	if task.Status == StatusRunning {
+		return cloneTask(task), false, nil
+	}
+	if task.Status != StatusPlanned {
+		return Task{}, false, ErrTaskConflict
+	}
+	task.Status = StatusRunning
+	task.UpdatedAtMS = nowMS
+	return cloneTask(task), true, nil
+}
+
+func resolveRetry(task Task, found bool, taskID []byte, attempt uint32, retryAtMS int64, code string, nowMS int64) (Task, error) {
+	if !found || task.Status != StatusRunning || !bytes.Equal(task.TaskID, taskID) ||
+		attempt <= task.Attempt || retryAtMS <= 0 || strings.TrimSpace(code) == "" {
+		return Task{}, ErrTaskConflict
+	}
+	task.Status, task.Attempt, task.RetryAtMS = StatusPlanned, attempt, retryAtMS
+	task.LastErrorCode, task.UpdatedAtMS = code, nowMS
+	return cloneTask(task), nil
+}
+
+func resolveComplete(task Task, found bool, taskID []byte, nowMS int64) (Task, bool, error) {
+	if !found || !bytes.Equal(task.TaskID, taskID) {
+		return Task{}, false, ErrTaskConflict
+	}
+	if task.Status == StatusCompleted {
+		return cloneTask(task), false, nil
+	}
+	if task.Status != StatusRunning {
+		return Task{}, false, ErrTaskConflict
+	}
+	task.Status, task.RetryAtMS, task.LastErrorCode = StatusCompleted, 0, ""
+	task.UpdatedAtMS = nowMS
+	return cloneTask(task), true, nil
 }
 
 func validateProposal(task Task) error {

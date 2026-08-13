@@ -119,6 +119,95 @@ func TestTcaplusTaskStoreRetriesStaleRecordVersion(t *testing.T) {
 	}
 }
 
+func TestTaskStoresClaimRetryAndCompleteExactTask(t *testing.T) {
+	tests := []struct {
+		name string
+		new  func(t *testing.T) TaskStore
+	}{
+		{name: "memory", new: func(t *testing.T) TaskStore {
+			store, err := NewMemoryTaskStore()
+			if err != nil {
+				t.Fatal(err)
+			}
+			return store
+		}},
+		{name: "tcaplus", new: func(t *testing.T) TaskStore {
+			store, err := NewTcaplusTaskStore(testtcaplus.New(), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return store
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := test.new(t)
+			created, _, err := store.UpsertPlanned(ctx, rebalanceTask(44, "zone-a", "zone-b", 9))
+			if err != nil {
+				t.Fatalf("UpsertPlanned: %v", err)
+			}
+			if _, err := store.Claim(ctx, 44, []byte("wrong-task-id")); !errors.Is(err, ErrTaskConflict) {
+				t.Fatalf("stale Claim error = %v, want ErrTaskConflict", err)
+			}
+			claimed, err := store.Claim(ctx, 44, created.TaskID)
+			if err != nil || claimed.Status != StatusRunning {
+				t.Fatalf("Claim = (%+v, %v)", claimed, err)
+			}
+			replayed, err := store.Claim(ctx, 44, created.TaskID)
+			if err != nil || replayed.Status != StatusRunning || !bytes.Equal(replayed.TaskID, created.TaskID) {
+				t.Fatalf("Claim replay = (%+v, %v)", replayed, err)
+			}
+			if err := store.Retry(ctx, 44, []byte("wrong-task-id"), 1, 1234, "TEMPORARY"); !errors.Is(err, ErrTaskConflict) {
+				t.Fatalf("stale Retry error = %v, want ErrTaskConflict", err)
+			}
+			if err := store.Retry(ctx, 44, created.TaskID, 1, 1234, "TEMPORARY"); err != nil {
+				t.Fatalf("Retry: %v", err)
+			}
+			retried, found, err := store.Get(ctx, 44)
+			if err != nil || !found || retried.Status != StatusPlanned || retried.Attempt != 1 ||
+				retried.RetryAtMS != 1234 || retried.LastErrorCode != "TEMPORARY" {
+				t.Fatalf("retried task = (%+v, %t, %v)", retried, found, err)
+			}
+			if _, err := store.Claim(ctx, 44, created.TaskID); err != nil {
+				t.Fatalf("second Claim: %v", err)
+			}
+			if err := store.Complete(ctx, 44, []byte("wrong-task-id")); !errors.Is(err, ErrTaskConflict) {
+				t.Fatalf("stale Complete error = %v, want ErrTaskConflict", err)
+			}
+			if err := store.Complete(ctx, 44, created.TaskID); err != nil {
+				t.Fatalf("Complete: %v", err)
+			}
+			if err := store.Complete(ctx, 44, created.TaskID); err != nil {
+				t.Fatalf("Complete replay: %v", err)
+			}
+			completed, found, err := store.Get(ctx, 44)
+			if err != nil || !found || completed.Status != StatusCompleted {
+				t.Fatalf("completed task = (%+v, %t, %v)", completed, found, err)
+			}
+		})
+	}
+}
+
+func TestTcaplusTaskLifecycleRetriesStaleRecordVersion(t *testing.T) {
+	ctx := context.Background()
+	client := &oneStaleUpdateClient{Client: testtcaplus.New()}
+	store, err := NewTcaplusTaskStore(client, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, _, err := store.UpsertPlanned(ctx, rebalanceTask(8, "zone-a", "zone-b", 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.failNext = true
+	client.updateCalls = 0
+	claimed, err := store.Claim(ctx, 8, created.TaskID)
+	if err != nil || claimed.Status != StatusRunning || client.updateCalls != 2 {
+		t.Fatalf("Claim after stale CAS = (%+v, %v), update calls=%d", claimed, err, client.updateCalls)
+	}
+}
+
 type oneStaleUpdateClient struct {
 	*testtcaplus.Client
 	failNext    bool

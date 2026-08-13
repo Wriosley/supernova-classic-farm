@@ -82,3 +82,46 @@ func (s *MemoryTaskStore) Cancel(ctx context.Context, shardID uint32, taskID []b
 	s.tasks[shardID] = task
 	return nil
 }
+
+func (s *MemoryTaskStore) Claim(ctx context.Context, shardID uint32, taskID []byte) (Task, error) {
+	if err := ctx.Err(); err != nil {
+		return Task{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, found := s.tasks[shardID]
+	next, changed, err := resolveClaim(current, found, taskID, nowUnixMilli())
+	if err != nil || !changed {
+		return next, err
+	}
+	s.tasks[shardID] = cloneTask(next)
+	return next, nil
+}
+
+func (s *MemoryTaskStore) Retry(ctx context.Context, shardID uint32, taskID []byte, attempt uint32, retryAtMS int64, code string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, found := s.tasks[shardID]
+	next, err := resolveRetry(current, found, taskID, attempt, retryAtMS, code, nowUnixMilli())
+	if err == nil {
+		s.tasks[shardID] = next
+	}
+	return err
+}
+
+func (s *MemoryTaskStore) Complete(ctx context.Context, shardID uint32, taskID []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, found := s.tasks[shardID]
+	next, changed, err := resolveComplete(current, found, taskID, nowUnixMilli())
+	if err == nil && changed {
+		s.tasks[shardID] = next
+	}
+	return err
+}
