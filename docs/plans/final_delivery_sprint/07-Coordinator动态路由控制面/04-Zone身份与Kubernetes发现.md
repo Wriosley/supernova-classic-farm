@@ -1,7 +1,8 @@
 # Stable Zone Identity and Kubernetes Discovery Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
-> `superpowers:test-driven-development`. Execute only after Phases 01–03 are
+> `superpowers:executing-plans` and `superpowers:test-driven-development`.
+> Execute only after Phases 01–03 are
 > complete and reviewed. Do not calculate Desired placement, create migration
 > tasks, change Current owners, perform failover or add Leader Election here.
 
@@ -23,6 +24,8 @@ Protobuf/gRPC Watch transport from Phase 03, HTTP health probes, kind.
 ## Global Constraints
 
 - Read ADR-0012, `00-总路线图.md`, and Phases 01–03 before editing.
+- Read the owner-approved narrowed design at
+  `docs/superpowers/specs/2026-08-13-third-zone-kubernetes-discovery-design.md`.
 - Keep `ShardCount=4096`, Player→Shard hashing and durable Current Route
   unchanged.
 - Kubernetes discovery reports candidates and availability; it never grants
@@ -68,16 +71,16 @@ Pod IP, Pod UID or endpoint.
 
 ```text
 Current owners: zone-a + zone-b Deployments (unchanged)
-Candidate pool: zone-pool StatefulSet (initially 8 replicas, owns no Shards)
+Candidate pool: zone-pool StatefulSet (first acceptance run 1 replica, owns no Shards)
 Discovery: Zone Pods -> zone-discovery Service -> EndpointSlices
 Coordinator: Pod/EndpointSlice Watch + identity/livez probe
 Publisher: AvailabilityBatch -> Gate/Info/Zone SDK
 ```
 
-The candidate pool may be scaled down for a resource-constrained local run,
-but the rendered manifest and deterministic identity tests must cover ordinals
-`0..7`. Do not claim eight live Ready Pods unless kind evidence captured that
-exact run.
+The first acceptance run creates only `zone-pool-0`. Deterministic identity
+tests must still cover ordinals `0..7`, proving the manifest can be scaled
+later without changing code. Do not claim eight live Ready Pods unless a later
+kind exercise captures that exact run.
 
 ## Target Runtime Flow
 
@@ -623,7 +626,7 @@ Expected: PASS.
 **Manifest requirements:**
 
 - preserve existing `zone-a` and `zone-b` Deployments and Services;
-- add `zone-pool` StatefulSet with `replicas: 8` and
+- add `zone-pool` StatefulSet with `replicas: 1` and
   `serviceName: zone-headless`;
 - add headless `zone-headless` Service and selector-based `zone-discovery`
   Service so Kubernetes creates EndpointSlices;
@@ -646,7 +649,7 @@ Expected: PASS.
 ```bash
 kubectl kustomize deploy/k8s >/tmp/classic-farm-rendered.yaml
 kubectl apply --dry-run=client -f /tmp/classic-farm-rendered.yaml
-rg -n 'kind: StatefulSet|replicas: 8|zone-discovery|EndpointSlice|pods' \
+rg -n 'kind: StatefulSet|replicas: 1|zone-discovery|EndpointSlice|pods' \
   /tmp/classic-farm-rendered.yaml
 ```
 
@@ -689,12 +692,13 @@ Expected: byte-equivalent ownership/version fields.
 - Modify: `server/test/e2e/dual_zone_routing_test.go` only if setup must expose
   the new identity endpoint
 - Create after successful execution:
-  `docs/evidence/2026-08-12-zone-identity-k8s-discovery.md`
+  `docs/evidence/2026-08-13-zone-identity-k8s-discovery.md`
 - Modify after successful execution: `docs/context/CURRENT.md`
 
 **Required checks:**
 
-1. UUIDv5 vectors produce eight unique, restart-stable logical IDs.
+1. UUIDv5 vectors produce eight unique, restart-stable logical IDs in unit
+   tests; the first live run creates only ordinal 0.
 2. Candidate Zone process restart preserves logical ID and changes incarnation.
 3. EndpointSlice add reaches HEALTHY and is visible in Gate/Info/Zone SDKs.
 4. One and two forced `/livez` failures publish SUSPECT.
