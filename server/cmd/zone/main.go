@@ -41,6 +41,7 @@ const (
 )
 
 func main() {
+	readiness := newReadinessState()
 	routingMode := environmentOr("ROUTING_MODE", "local")
 	if routingMode != "local" && routingMode != dualRoutingMode {
 		log.Fatalf("unsupported ROUTING_MODE %q", routingMode)
@@ -189,6 +190,10 @@ func main() {
 
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
+	go func() {
+		<-ctx.Done()
+		readiness.SetNotReady("shutdown")
+	}()
 	gates := &shardExecutionGates{}
 	var authorization ownerAuthorization = localAuthorization{}
 	var lifecycle *lifecycleHandler
@@ -360,7 +365,7 @@ func main() {
 		mux.HandleFunc("POST /internal/v1/shards/{shard_id}/resume", lifecycle.resume)
 		mux.HandleFunc("POST /internal/v1/ownership/refresh", lifecycle.refreshOwnership)
 	}
-	healthHandler := health.NewHandler()
+	healthHandler := health.NewHandler(health.Check{Name: "startup", Run: readiness.Check})
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
 	mux.Handle("GET /internal/v1/zone-identity", newZoneIdentityHandler(identity))
@@ -444,6 +449,7 @@ func main() {
 			return "mysql-checkpoint"
 		}(),
 	)
+	readiness.SetReady()
 	if err := shutdown.Serve(ctx, server, 5*time.Second, logger); err != nil {
 		logger.Error("zone stopped", "error", err)
 	}
