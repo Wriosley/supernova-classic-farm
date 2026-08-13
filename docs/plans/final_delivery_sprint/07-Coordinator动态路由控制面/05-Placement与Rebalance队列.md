@@ -1,6 +1,7 @@
 # Placement and Rebalance Queue Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:test-driven-development`.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> `superpowers:executing-plans` and `superpowers:test-driven-development`.
 > Execute only after Phases 01–04 pass. This phase calculates Desired and
 > persists work; it must not drain Zones, advance Fence or mutate Current.
 
@@ -24,6 +25,12 @@ membership packages.
 - Existing owner remains Current until Phase 06 completes migration.
 - Priority order is `FAILOVER > DRAIN > REBALANCE`.
 - No Source/Target RPC, Fence write, RouteStore commit or Publisher call here.
+- Use local unit/race tests during Tasks 1–4. Build the Coordinator Docker
+  image only for the final kind/Tcaplus gate.
+- The live gate uses three `zone-pool` candidates plus `zone-a` and `zone-b`;
+  the 8→9 transition remains an offline deterministic test.
+- Do not ask the owner to create `MigrationTask` until Task 2 schema generation
+  and fake-Tcaplus round-trip tests pass.
 
 ## Task 1: Extract pure placement calculation
 
@@ -172,4 +179,3 @@ func (p *Planner) Reconcile(ctx context.Context) (Result, error)
 Same membership always yields the same Desired; 8→9 changes only Rendezvous
 winners; proposals survive restart and deduplicate; no code in this phase can
 grant ownership. Next: `06-正常迁移状态机.md`.
-
