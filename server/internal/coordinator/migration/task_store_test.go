@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/testtcaplus"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/protocol/option"
 	"google.golang.org/protobuf/proto"
@@ -117,6 +118,36 @@ func TestTcaplusTaskStoreRetriesStaleRecordVersion(t *testing.T) {
 	if err != nil || !changed || got.TargetZoneID != "zone-c" || client.updateCalls != 2 {
 		t.Fatalf("replacement after stale CAS = (%+v, %t, %v), update calls=%d", got, changed, err, client.updateCalls)
 	}
+}
+
+func TestTcaplusTaskStoreRecoversOpenTasksWhenTraverseOmitsRows(t *testing.T) {
+	ctx := context.Background()
+	client := &emptyTaskTraverseClient{Client: testtcaplus.New()}
+	store, err := NewTcaplusTaskStore(client, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, _, err := store.UpsertPlanned(ctx, rebalanceTask(61, "zone-a", "zone-b", 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := NewTcaplusTaskStore(client, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open, err := restarted.LoadOpen(ctx)
+	if err != nil || len(open) != 1 || open[0].ShardID != 61 || !bytes.Equal(open[0].TaskID, created.TaskID) {
+		t.Fatalf("LoadOpen after restart = (%+v, %v)", open, err)
+	}
+}
+
+type emptyTaskTraverseClient struct{ *testtcaplus.Client }
+
+func (client *emptyTaskTraverseClient) Traverse(message proto.Message) ([]proto.Message, error) {
+	if _, ok := message.(*tcaplusv1.MigrationTask); ok {
+		return nil, nil
+	}
+	return client.Client.Traverse(message)
 }
 
 func TestTaskStoresClaimRetryAndCompleteExactTask(t *testing.T) {

@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/protocol/option"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/terror"
 	"google.golang.org/protobuf/proto"
@@ -23,15 +25,18 @@ type TcaplusClient interface {
 }
 
 type TcaplusTaskStore struct {
-	client TcaplusClient
-	zoneID uint32
+	client  TcaplusClient
+	zoneID  uint32
+	mu      sync.Mutex
+	indexed bool
+	open    map[uint32]Task
 }
 
 func NewTcaplusTaskStore(client TcaplusClient, zoneID uint32) (*TcaplusTaskStore, error) {
 	if client == nil || zoneID == 0 {
 		return nil, errors.New("Tcaplus migration task client and zone are required")
 	}
-	return &TcaplusTaskStore{client: client, zoneID: zoneID}, nil
+	return &TcaplusTaskStore{client: client, zoneID: zoneID, open: make(map[uint32]Task)}, nil
 }
 
 func (s *TcaplusTaskStore) UpsertPlanned(ctx context.Context, proposal Task) (Task, bool, error) {
@@ -62,6 +67,7 @@ func (s *TcaplusTaskStore) UpsertPlanned(ctx context.Context, proposal Task) (Ta
 		if err != nil {
 			return Task{}, false, fmt.Errorf("persist migration task %d: %w", proposal.ShardID, err)
 		}
+		s.cache(next)
 		return next, true, nil
 	}
 	return Task{}, false, ErrTaskCASConflict
@@ -71,29 +77,36 @@ func (s *TcaplusTaskStore) LoadOpen(ctx context.Context) ([]Task, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	messages, err := s.client.Traverse(&tcaplusv1.MigrationTask{})
-	if tcaplusdb.IsNotFound(err) {
-		return []Task{}, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.indexed {
+		for shardID := uint32(0); shardID < routing.ShardCount; shardID++ {
+			task, _, found, err := s.load(ctx, shardID)
+			if err != nil {
+				return nil, fmt.Errorf("index migration task %d: %w", shardID, err)
+			}
+			if found && (task.Status == StatusPlanned || task.Status == StatusRunning) {
+				s.open[shardID] = cloneTask(task)
+			}
+		}
+		s.indexed = true
 	}
-	if err != nil {
-		return nil, fmt.Errorf("traverse migration tasks: %w", err)
-	}
-	result := make([]Task, 0, len(messages))
-	for _, message := range messages {
-		record, ok := message.(*tcaplusv1.MigrationTask)
-		if !ok {
-			return nil, fmt.Errorf("traverse migration tasks returned %T", message)
-		}
-		task := taskFromRecord(record)
-		if err := validateStored(task); err != nil {
-			return nil, fmt.Errorf("decode migration task %d: %w", task.ShardID, err)
-		}
-		if task.Status == StatusPlanned || task.Status == StatusRunning {
-			result = append(result, task)
-		}
+	result := make([]Task, 0, len(s.open))
+	for _, task := range s.open {
+		result = append(result, cloneTask(task))
 	}
 	sortOpen(result)
 	return result, nil
+}
+
+func (s *TcaplusTaskStore) cache(task Task) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if task.Status == StatusPlanned || task.Status == StatusRunning {
+		s.open[task.ShardID] = cloneTask(task)
+	} else {
+		delete(s.open, task.ShardID)
+	}
 }
 
 func (s *TcaplusTaskStore) Get(ctx context.Context, shardID uint32) (Task, bool, error) {
@@ -120,6 +133,7 @@ func (s *TcaplusTaskStore) Cancel(ctx context.Context, shardID uint32, taskID []
 		if err != nil {
 			return fmt.Errorf("cancel migration task %d: %w", shardID, err)
 		}
+		s.cache(task)
 		return nil
 	}
 	return ErrTaskCASConflict
@@ -142,6 +156,7 @@ func (s *TcaplusTaskStore) Claim(ctx context.Context, shardID uint32, taskID []b
 		if err != nil {
 			return Task{}, fmt.Errorf("claim migration task %d: %w", shardID, err)
 		}
+		s.cache(next)
 		return next, nil
 	}
 	return Task{}, ErrTaskCASConflict
@@ -164,6 +179,7 @@ func (s *TcaplusTaskStore) Retry(ctx context.Context, shardID uint32, taskID []b
 		if err != nil {
 			return fmt.Errorf("retry migration task %d: %w", shardID, err)
 		}
+		s.cache(next)
 		return nil
 	}
 	return ErrTaskCASConflict
@@ -186,6 +202,7 @@ func (s *TcaplusTaskStore) Complete(ctx context.Context, shardID uint32, taskID 
 		if err != nil {
 			return fmt.Errorf("complete migration task %d: %w", shardID, err)
 		}
+		s.cache(next)
 		return nil
 	}
 	return ErrTaskCASConflict
@@ -208,6 +225,7 @@ func (s *TcaplusTaskStore) Fail(ctx context.Context, shardID uint32, taskID []by
 		if err != nil {
 			return fmt.Errorf("fail migration task %d: %w", shardID, err)
 		}
+		s.cache(next)
 		return nil
 	}
 	return ErrTaskCASConflict

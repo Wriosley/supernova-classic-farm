@@ -581,14 +581,38 @@ func moveShard(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != wantStatus {
+	wantEnqueueStatus := wantStatus
+	if wantStatus == http.StatusOK {
+		wantEnqueueStatus = http.StatusAccepted
+	}
+	if response.StatusCode != wantEnqueueStatus {
 		t.Fatalf("move shard %d status=%d want=%d body=%s",
-			shardID, response.StatusCode, wantStatus, responseBody)
+			shardID, response.StatusCode, wantEnqueueStatus, responseBody)
 	}
 	var moved movedRoute
 	if wantStatus == http.StatusOK {
-		if err := json.Unmarshal(responseBody, &moved); err != nil {
-			t.Fatal(err)
+		var queued struct {
+			TaskID string `json:"task_id"`
+		}
+		if err := json.Unmarshal(responseBody, &queued); err != nil || queued.TaskID == "" {
+			t.Fatalf("decode queued migration: task=%+v err=%v body=%s", queued, err, responseBody)
+		}
+		deadline := time.Now().Add(45 * time.Second)
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			snapshot, err := routing.FetchSnapshot(ctx, &http.Client{Timeout: 5 * time.Second}, "http://127.0.0.1:8083")
+			cancel()
+			if err == nil && len(snapshot.Entries) == int(routing.ShardCount) {
+				entry := snapshot.Entries[shardID]
+				if entry.State == routing.RouteStateActive && entry.OwnerZoneID == targetZoneID {
+					moved = movedRoute{OwnerZoneID: entry.OwnerZoneID, OwnerEpoch: strconv.FormatUint(entry.OwnerEpoch, 10), State: string(entry.State)}
+					break
+				}
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("migration task %s did not commit ACTIVE route: last_error=%v", queued.TaskID, err)
+			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 	return moved
