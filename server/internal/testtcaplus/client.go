@@ -144,6 +144,8 @@ func recordKey(message proto.Message) string {
 		key = strconv.FormatUint(uint64(record.LogicalShardId), 10)
 	case *tcaplusv1.MigrationProgress:
 		key = strconv.FormatUint(uint64(record.LogicalShardId), 10)
+	case *tcaplusv1.MigrationTask:
+		key = strconv.FormatUint(uint64(record.LogicalShardId), 10)
 	case *tcaplusv1.PlayerOutbox:
 		key = fmt.Sprintf("%x", record.EventId)
 	case *tcaplusv1.FriendCodeCurrent:

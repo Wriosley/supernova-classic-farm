@@ -55,11 +55,11 @@ func Compute(shardCount uint32, assignmentVersion uint32,
 - Reject empty candidates, duplicate ID with conflicting endpoint, unsupported
   assignment version and shard count other than 4096.
 
-- [ ] Write golden-vector tests for 8 candidates, input-order independence,
+- [x] Write golden-vector tests for 8 candidates, input-order independence,
   deterministic restart, duplicate rejection and statistical counts.
-- [ ] Add an 8→9 test asserting only Shards won by the ninth Zone change and
+- [x] Add an 8→9 test asserting only Shards won by the ninth Zone change and
   old-to-old ownership never changes.
-- [ ] Run `cd server && go test ./internal/coordinator/placement ./internal/routing`;
+- [x] Run `cd server && go test ./internal/coordinator/placement ./internal/routing`;
   expected PASS without changing existing routing vectors.
 
 ## Task 2: Define persistent MigrationTask
@@ -87,7 +87,7 @@ message MigrationTask {
   string target_zone_id = 10;
   string target_endpoint = 11;
   uint64 planned_from_map_version = 12;
-  uint64 planned_from_availability_version = 13;
+  uint64 planned_availability_version = 13;
   uint32 attempt = 14;
   int64 retry_at_ms = 15;
   string last_error_code = 16;
@@ -100,10 +100,10 @@ One Shard has at most one open task. `task_id` is immutable UUID; status is
 `PLANNED/RUNNING/COMPLETED/CANCELLED`. Do not overload existing
 `MigrationProgress`; Task schedules work, Progress records execution steps.
 
-- [ ] Write fake-Tcaplus record-key and round-trip tests first.
-- [ ] Add schema, regenerate with the existing Buf command, and document
+- [x] Write fake-Tcaplus record-key and round-trip tests first.
+- [x] Add schema, regenerate with the existing Buf command, and document
   `TCAPLUS_MIGRATION_TASK_TABLE=MigrationTask`.
-- [ ] Run `cd server && go test ./internal/testtcaplus ./internal/routing`.
+- [x] Run `cd server && go test ./internal/testtcaplus ./internal/routing`.
 
 ## Task 3: Implement queue Store
 
@@ -130,9 +130,9 @@ type TaskStore interface {
 - Ordering is priority descending, then `created_at_ms`, then `shard_id`.
 - All updates use record-version CAS and bounded retries.
 
-- [ ] Test deduplication, replacement, stale CAS, restart load and stable order.
-- [ ] Implement memory then Tcaplus adapters.
-- [ ] Run `cd server && go test -race ./internal/coordinator/migration`.
+- [x] Test deduplication, replacement, stale CAS, restart load and stable order.
+- [x] Implement memory then Tcaplus adapters.
+- [x] Run `cd server && go test -race ./internal/coordinator/migration`.
 
 ## Task 4: Implement Current/Desired planner
 
@@ -160,10 +160,10 @@ func (p *Planner) Reconcile(ctx context.Context) (Result, error)
 - Trigger on membership change plus configurable 30s reconciliation; coalesce
   bursts into one run.
 
-- [ ] Test no-op, 8→9 diff, member recovery, stale Current, existing task and
+- [x] Test no-op, 8→9 diff, member recovery, stale Current, existing task and
   zero calls to RouteStore/Fence/Publisher.
-- [ ] Wire behind `COORDINATOR_PLANNER_ENABLED=0|1`, default 0.
-- [ ] Run `cd server && go test -race ./internal/coordinator/placement
+- [x] Wire behind `COORDINATOR_PLANNER_ENABLED=0|1`, default 0.
+- [x] Run `cd server && go test -race ./internal/coordinator/placement
   ./internal/coordinator/migration ./cmd/coordinator && go test ./...`.
 
 ## Task 5: Verify and document

@@ -20,13 +20,14 @@ type Registry struct {
 	now     func() time.Time
 	version uint64
 	members map[string]Member
+	changes chan struct{}
 }
 
 func NewRegistry(now func() time.Time) *Registry {
 	if now == nil {
 		now = time.Now
 	}
-	return &Registry{now: now, members: make(map[string]Member)}
+	return &Registry{now: now, members: make(map[string]Member), changes: make(chan struct{}, 1)}
 }
 
 func (registry *Registry) Apply(observation Observation) (Snapshot, bool, error) {
@@ -63,9 +64,17 @@ func (registry *Registry) Apply(observation Observation) (Snapshot, bool, error)
 	registry.members = next
 	if visibleChanged {
 		registry.version++
+		select {
+		case registry.changes <- struct{}{}:
+		default:
+		}
 	}
 	return snapshotLocked(registry.version, registry.members), visibleChanged, nil
 }
+
+// Changes emits a coalesced notification after externally visible membership
+// changes. Consumers must always read a fresh immutable Snapshot.
+func (registry *Registry) Changes() <-chan struct{} { return registry.changes }
 
 func (registry *Registry) Snapshot() Snapshot {
 	registry.mu.RLock()

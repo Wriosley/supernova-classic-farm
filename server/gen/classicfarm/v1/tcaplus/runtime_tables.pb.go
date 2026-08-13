@@ -1022,6 +1022,186 @@ func (x *MigrationProgress) GetUpdatedAtMs() int64 {
 	return 0
 }
 
+type MigrationTask struct {
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	LogicalShardId             uint32                 `protobuf:"varint,1,opt,name=logical_shard_id,json=logicalShardId,proto3" json:"logical_shard_id,omitempty"`
+	TaskId                     []byte                 `protobuf:"bytes,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Reason                     string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	Status                     string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Priority                   uint32                 `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
+	SourceZoneId               string                 `protobuf:"bytes,6,opt,name=source_zone_id,json=sourceZoneId,proto3" json:"source_zone_id,omitempty"`
+	SourceEndpoint             string                 `protobuf:"bytes,7,opt,name=source_endpoint,json=sourceEndpoint,proto3" json:"source_endpoint,omitempty"`
+	SourceOwnerEpoch           uint64                 `protobuf:"varint,8,opt,name=source_owner_epoch,json=sourceOwnerEpoch,proto3" json:"source_owner_epoch,omitempty"`
+	SourceRouteVersion         uint64                 `protobuf:"varint,9,opt,name=source_route_version,json=sourceRouteVersion,proto3" json:"source_route_version,omitempty"`
+	TargetZoneId               string                 `protobuf:"bytes,10,opt,name=target_zone_id,json=targetZoneId,proto3" json:"target_zone_id,omitempty"`
+	TargetEndpoint             string                 `protobuf:"bytes,11,opt,name=target_endpoint,json=targetEndpoint,proto3" json:"target_endpoint,omitempty"`
+	PlannedFromMapVersion      uint64                 `protobuf:"varint,12,opt,name=planned_from_map_version,json=plannedFromMapVersion,proto3" json:"planned_from_map_version,omitempty"`
+	PlannedAvailabilityVersion uint64                 `protobuf:"varint,13,opt,name=planned_availability_version,json=plannedAvailabilityVersion,proto3" json:"planned_availability_version,omitempty"`
+	Attempt                    uint32                 `protobuf:"varint,14,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	RetryAtMs                  int64                  `protobuf:"varint,15,opt,name=retry_at_ms,json=retryAtMs,proto3" json:"retry_at_ms,omitempty"`
+	LastErrorCode              string                 `protobuf:"bytes,16,opt,name=last_error_code,json=lastErrorCode,proto3" json:"last_error_code,omitempty"`
+	CreatedAtMs                int64                  `protobuf:"varint,17,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	UpdatedAtMs                int64                  `protobuf:"varint,18,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *MigrationTask) Reset() {
+	*x = MigrationTask{}
+	mi := &file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MigrationTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MigrationTask) ProtoMessage() {}
+
+func (x *MigrationTask) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MigrationTask.ProtoReflect.Descriptor instead.
+func (*MigrationTask) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MigrationTask) GetLogicalShardId() uint32 {
+	if x != nil {
+		return x.LogicalShardId
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetTaskId() []byte {
+	if x != nil {
+		return x.TaskId
+	}
+	return nil
+}
+
+func (x *MigrationTask) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *MigrationTask) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *MigrationTask) GetPriority() uint32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetSourceZoneId() string {
+	if x != nil {
+		return x.SourceZoneId
+	}
+	return ""
+}
+
+func (x *MigrationTask) GetSourceEndpoint() string {
+	if x != nil {
+		return x.SourceEndpoint
+	}
+	return ""
+}
+
+func (x *MigrationTask) GetSourceOwnerEpoch() uint64 {
+	if x != nil {
+		return x.SourceOwnerEpoch
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetSourceRouteVersion() uint64 {
+	if x != nil {
+		return x.SourceRouteVersion
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetTargetZoneId() string {
+	if x != nil {
+		return x.TargetZoneId
+	}
+	return ""
+}
+
+func (x *MigrationTask) GetTargetEndpoint() string {
+	if x != nil {
+		return x.TargetEndpoint
+	}
+	return ""
+}
+
+func (x *MigrationTask) GetPlannedFromMapVersion() uint64 {
+	if x != nil {
+		return x.PlannedFromMapVersion
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetPlannedAvailabilityVersion() uint64 {
+	if x != nil {
+		return x.PlannedAvailabilityVersion
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetRetryAtMs() int64 {
+	if x != nil {
+		return x.RetryAtMs
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetLastErrorCode() string {
+	if x != nil {
+		return x.LastErrorCode
+	}
+	return ""
+}
+
+func (x *MigrationTask) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+func (x *MigrationTask) GetUpdatedAtMs() int64 {
+	if x != nil {
+		return x.UpdatedAtMs
+	}
+	return 0
+}
+
 type PlayerOutbox struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	EventId              []byte                 `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
@@ -1049,7 +1229,7 @@ type PlayerOutbox struct {
 
 func (x *PlayerOutbox) Reset() {
 	*x = PlayerOutbox{}
-	mi := &file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes[8]
+	mi := &file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1061,7 +1241,7 @@ func (x *PlayerOutbox) String() string {
 func (*PlayerOutbox) ProtoMessage() {}
 
 func (x *PlayerOutbox) ProtoReflect() protoreflect.Message {
-	mi := &file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes[8]
+	mi := &file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1074,7 +1254,7 @@ func (x *PlayerOutbox) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerOutbox.ProtoReflect.Descriptor instead.
 func (*PlayerOutbox) Descriptor() ([]byte, []int) {
-	return file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDescGZIP(), []int{8}
+	return file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PlayerOutbox) GetEventId() []byte {
@@ -1328,7 +1508,27 @@ const file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDesc = "" +
 	"\x11prepared_lease_id\x18\x0e \x01(\fR\x0fpreparedLeaseId\x12.\n" +
 	"\x13prepared_lease_term\x18\x0f \x01(\x04R\x11preparedLeaseTerm\x12!\n" +
 	"\fplayers_json\x18\x10 \x01(\fR\vplayersJson\x12\"\n" +
-	"\rupdated_at_ms\x18\x11 \x01(\x03R\vupdatedAtMs:\x14\x82\xa6\x1d\x10logical_shard_id\"\x86\x06\n" +
+	"\rupdated_at_ms\x18\x11 \x01(\x03R\vupdatedAtMs:\x14\x82\xa6\x1d\x10logical_shard_id\"\xd7\x05\n" +
+	"\rMigrationTask\x12(\n" +
+	"\x10logical_shard_id\x18\x01 \x01(\rR\x0elogicalShardId\x12\x17\n" +
+	"\atask_id\x18\x02 \x01(\fR\x06taskId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1a\n" +
+	"\bpriority\x18\x05 \x01(\rR\bpriority\x12$\n" +
+	"\x0esource_zone_id\x18\x06 \x01(\tR\fsourceZoneId\x12'\n" +
+	"\x0fsource_endpoint\x18\a \x01(\tR\x0esourceEndpoint\x12,\n" +
+	"\x12source_owner_epoch\x18\b \x01(\x04R\x10sourceOwnerEpoch\x120\n" +
+	"\x14source_route_version\x18\t \x01(\x04R\x12sourceRouteVersion\x12$\n" +
+	"\x0etarget_zone_id\x18\n" +
+	" \x01(\tR\ftargetZoneId\x12'\n" +
+	"\x0ftarget_endpoint\x18\v \x01(\tR\x0etargetEndpoint\x127\n" +
+	"\x18planned_from_map_version\x18\f \x01(\x04R\x15plannedFromMapVersion\x12@\n" +
+	"\x1cplanned_availability_version\x18\r \x01(\x04R\x1aplannedAvailabilityVersion\x12\x18\n" +
+	"\aattempt\x18\x0e \x01(\rR\aattempt\x12\x1e\n" +
+	"\vretry_at_ms\x18\x0f \x01(\x03R\tretryAtMs\x12&\n" +
+	"\x0flast_error_code\x18\x10 \x01(\tR\rlastErrorCode\x12\"\n" +
+	"\rcreated_at_ms\x18\x11 \x01(\x03R\vcreatedAtMs\x12\"\n" +
+	"\rupdated_at_ms\x18\x12 \x01(\x03R\vupdatedAtMs:\x14\x82\xa6\x1d\x10logical_shard_id\"\x86\x06\n" +
 	"\fPlayerOutbox\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\fR\aeventId\x12\x1e\n" +
 	"\vdb_shard_id\x18\x02 \x01(\rR\tdbShardId\x12.\n" +
@@ -1365,7 +1565,7 @@ func file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDescGZIP() []byte {
 	return file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDescData
 }
 
-var file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_classicfarm_v1_tcaplus_runtime_tables_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_classicfarm_v1_tcaplus_runtime_tables_proto_goTypes = []any{
 	(*PlayerIdCounter)(nil),   // 0: classicfarm.tcaplus.v1.PlayerIdCounter
 	(*AccountByName)(nil),     // 1: classicfarm.tcaplus.v1.AccountByName
@@ -1375,7 +1575,8 @@ var file_classicfarm_v1_tcaplus_runtime_tables_proto_goTypes = []any{
 	(*ShardMapMeta)(nil),      // 5: classicfarm.tcaplus.v1.ShardMapMeta
 	(*ShardRoute)(nil),        // 6: classicfarm.tcaplus.v1.ShardRoute
 	(*MigrationProgress)(nil), // 7: classicfarm.tcaplus.v1.MigrationProgress
-	(*PlayerOutbox)(nil),      // 8: classicfarm.tcaplus.v1.PlayerOutbox
+	(*MigrationTask)(nil),     // 8: classicfarm.tcaplus.v1.MigrationTask
+	(*PlayerOutbox)(nil),      // 9: classicfarm.tcaplus.v1.PlayerOutbox
 }
 var file_classicfarm_v1_tcaplus_runtime_tables_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1396,7 +1597,7 @@ func file_classicfarm_v1_tcaplus_runtime_tables_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDesc), len(file_classicfarm_v1_tcaplus_runtime_tables_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

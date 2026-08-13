@@ -135,6 +135,29 @@ message MigrationProgress {
   int64 updated_at_ms = 17;
 }
 
+message MigrationTask {
+  option (tcaplusservice.tcaplus_primary_key) = "logical_shard_id";
+
+  uint32 logical_shard_id = 1;
+  bytes task_id = 2;
+  string reason = 3;
+  string status = 4;
+  uint32 priority = 5;
+  string source_zone_id = 6;
+  string source_endpoint = 7;
+  uint64 source_owner_epoch = 8;
+  uint64 source_route_version = 9;
+  string target_zone_id = 10;
+  string target_endpoint = 11;
+  uint64 planned_from_map_version = 12;
+  uint64 planned_availability_version = 13;
+  uint32 attempt = 14;
+  int64 retry_at_ms = 15;
+  string last_error_code = 16;
+  int64 created_at_ms = 17;
+  int64 updated_at_ms = 18;
+}
+
 message PlayerOutbox {
   option (tcaplusservice.tcaplus_primary_key) = "event_id";
 

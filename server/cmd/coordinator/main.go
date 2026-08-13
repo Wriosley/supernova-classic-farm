@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	coordinatormigration "github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/migration"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/publisher"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/routestore"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
@@ -67,11 +68,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	plannerConfig, err := plannerConfigFromEnvironment()
+	if err != nil {
+		return err
+	}
 
 	now := time.Now().UTC()
 	routeStoreMode, err := validateRouteStoreMode(os.Getenv("COORDINATOR_ROUTE_STORE"), os.Getenv("STORAGE_MODE"))
 	if err != nil {
 		return err
+	}
+	if plannerConfig.Enabled && (routeStoreMode != routeStoreTcaplus || strings.TrimSpace(os.Getenv("STORAGE_MODE")) != "tcaplus") {
+		return errors.New("enabled planner requires STORAGE_MODE=tcaplus and COORDINATOR_ROUTE_STORE=tcaplus")
 	}
 	routes, err := routing.NewStaticMap(now, leaseDuration, zones)
 	if err != nil {
@@ -79,6 +87,7 @@ func run() error {
 	}
 	var mysqlDB *sql.DB
 	var migrations *migrationHandler
+	var migrationTasks coordinatormigration.TaskStore
 	var runtimeLeases *routing.RuntimeLeaseOverlay
 	if mode == routingModeStaticDualZone {
 		migrations = newMigrationHandler(
@@ -106,6 +115,13 @@ func run() error {
 				return configErr
 			}
 			tables := []string{fenceTable, migrationTable}
+			if plannerConfig.Enabled {
+				taskTable, tableErr := tcaplusdb.TableName("TCAPLUS_MIGRATION_TASK_TABLE", "MigrationTask")
+				if tableErr != nil {
+					return tableErr
+				}
+				tables = append(tables, taskTable)
+			}
 			var durableStore *routestore.TcaplusStore
 			if routeStoreMode == routeStoreTcaplus {
 				metaTable, tableErr := tcaplusdb.TableName("TCAPLUS_SHARD_MAP_META_TABLE", "ShardMapMeta")
@@ -125,6 +141,12 @@ func run() error {
 				return openErr
 			}
 			defer client.Close()
+			if plannerConfig.Enabled {
+				migrationTasks, configErr = coordinatormigration.NewTcaplusTaskStore(client, tcaplusConfig.ZoneID)
+				if configErr != nil {
+					return configErr
+				}
+			}
 			control, controlErr := routing.NewTcaplusControlStore(
 				client, tcaplusConfig.ZoneID,
 			)
@@ -301,6 +323,9 @@ func run() error {
 	defer routePublisher.Close()
 	membershipRuntime, err := startMembership(ctx, routePublisher, zones, membershipConfig)
 	if err != nil {
+		return err
+	}
+	if err := startPlanner(ctx, routes, membershipRuntime, migrationTasks, plannerConfig, logger); err != nil {
 		return err
 	}
 	if migrations != nil {

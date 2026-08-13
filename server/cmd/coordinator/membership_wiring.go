@@ -60,11 +60,15 @@ func membershipConfigFromEnvironment() (membershipConfig, error) {
 func startMembership(ctx context.Context, routePublisher *publisher.Publisher, zones []routing.ZoneCandidate, config membershipConfig) (*membershipRuntime, error) {
 	registry := membership.NewRegistry(time.Now)
 	if config.Source == "static" {
+		if err := seedStaticMembership(registry, zones, time.Now().UTC()); err != nil {
+			return nil, err
+		}
+		staticSnapshot := registry.Snapshot()
 		entries := make([]*coordinatorv1.ZoneAvailabilityEntry, 0, len(zones))
 		for _, zone := range zones {
 			entries = append(entries, &coordinatorv1.ZoneAvailabilityEntry{LogicalZoneId: zone.ZoneID, Availability: coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY, IncarnationId: "static-" + zone.ZoneID, ObservedAtMs: time.Now().UTC().UnixMilli()})
 		}
-		if err := routePublisher.PublishAvailability(&coordinatorv1.AvailabilityBatch{AvailabilityVersion: 1, Zones: entries}); err != nil {
+		if err := routePublisher.PublishAvailability(&coordinatorv1.AvailabilityBatch{AvailabilityVersion: staticSnapshot.AvailabilityVersion, Zones: entries}); err != nil {
 			return nil, err
 		}
 		ready := make(chan struct{})
@@ -96,6 +100,20 @@ func startMembership(ctx context.Context, routePublisher *publisher.Publisher, z
 		}
 	}()
 	return &membershipRuntime{ready: source.Ready(), registry: registry}, nil
+}
+
+func seedStaticMembership(registry *membership.Registry, zones []routing.ZoneCandidate, observedAt time.Time) error {
+	for index, zone := range zones {
+		identity := "static-" + zone.ZoneID
+		if _, _, err := registry.Apply(membership.Observation{
+			LogicalZoneID: zone.ZoneID, IncarnationID: identity, Endpoint: zone.Endpoint,
+			PodName: identity, PodUID: identity, ResourceVersion: strconv.Itoa(index + 1),
+			State: membership.StateHealthy, ObservedAt: observedAt.UTC(),
+		}); err != nil {
+			return fmt.Errorf("seed static membership %q: %w", zone.ZoneID, err)
+		}
+	}
+	return nil
 }
 
 func (runtime *membershipRuntime) Check(context.Context) error {

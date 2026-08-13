@@ -20,6 +20,16 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 
 ## Snapshot at handoff
 
+- Final delivery sprint 07/05 Placement and Rebalance Queue has passed its
+  offline implementation gate: exact existing Rendezvous bytes produce a
+  deterministic Desired map; `MigrationTask` has generated Tcaplus types plus
+  memory/Tcaplus CAS stores; the disabled-by-default Planner consumes HEALTHY
+  membership and persists only Current/Desired differences without granting
+  ownership. The Tcaplus field-name limit was captured by a descriptor test and
+  field 13 is `planned_availability_version`. The live kind/Tcaplus gate remains
+  pending creation of the corrected `MigrationTask` table. Evidence:
+  `../evidence/2026-08-13-placement-rebalance-queue.md`.
+
 - Final delivery sprint 07/04 Zone identity and Kubernetes discovery is
   complete. The kind cluster runs `zone-pool-0` as a discovered HEALTHY
   candidate with stable UUIDv5 logical identity and zero owned Shards;

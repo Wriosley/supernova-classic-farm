@@ -32,6 +32,7 @@ AccountByPlayer
 Session
 ShardFence
 MigrationProgress
+MigrationTask
 ShardMapMeta
 ShardRoute
 PlayerOutbox
@@ -40,6 +41,10 @@ PlayerOutbox
 已有环境在启用 `COORDINATOR_ROUTE_STORE=tcaplus` 前也必须从最新
 `runtime_tables.proto` 创建 `ShardMapMeta` 和 `ShardRoute`；缺少任一表时
 Coordinator 必须保持旧模式或启动失败，不能从 Fence 猜测 Current Route。
+
+启用 Phase 05 Placement Planner 前必须再创建 `MigrationTask`。它只保存
+待执行的 Shard 迁移意图，不替代记录执行阶段的 `MigrationProgress`，也不
+直接改变 `ShardRoute` Current 所有权。
 
 好友功能从阶段 2 起还需使用 `friend_tables.proto` 创建以下 PB Generic
 表：
@@ -104,6 +109,7 @@ export TCAPLUS_ACCOUNT_BY_PLAYER_TABLE='AccountByPlayer'
 export TCAPLUS_SESSION_TABLE='Session'
 export TCAPLUS_FENCE_TABLE='ShardFence'
 export TCAPLUS_MIGRATION_TABLE='MigrationProgress'
+export TCAPLUS_MIGRATION_TASK_TABLE='MigrationTask'
 export TCAPLUS_SHARD_MAP_META_TABLE='ShardMapMeta'
 export TCAPLUS_SHARD_ROUTE_TABLE='ShardRoute'
 export TCAPLUS_OUTBOX_TABLE='PlayerOutbox'

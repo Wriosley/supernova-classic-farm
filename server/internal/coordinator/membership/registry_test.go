@@ -43,6 +43,38 @@ func TestRegistryApplyVersionsVisibleChangesAndRejectsStaleConflict(t *testing.T
 	}
 }
 
+func TestRegistryCoalescesVisibleChangeNotifications(t *testing.T) {
+	base := time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC)
+	registry := NewRegistry(func() time.Time { return base })
+	observation := Observation{LogicalZoneID: "zone-a", IncarnationID: "inc-a", Endpoint: "http://a:8082", PodUID: "uid-a", PodName: "a", ResourceVersion: "1", State: StateHealthy, ObservedAt: base}
+	if _, _, err := registry.Apply(observation); err != nil {
+		t.Fatal(err)
+	}
+	observation.State, observation.ObservedAt = StateSuspect, base.Add(time.Second)
+	if _, _, err := registry.Apply(observation); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-registry.Changes():
+	default:
+		t.Fatal("visible changes did not notify")
+	}
+	select {
+	case <-registry.Changes():
+		t.Fatal("burst was not coalesced")
+	default:
+	}
+	if _, changed, err := registry.Apply(observation); err != nil || changed {
+		t.Fatalf("duplicate apply = changed %t err %v", changed, err)
+	}
+	select {
+	case <-registry.Changes():
+		t.Fatal("invisible duplicate notified")
+	default:
+	}
+}
+
 func TestRegistryNewIncarnationEndpointOrderingAndImmutableSnapshot(t *testing.T) {
 	base := time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC)
 	registry := NewRegistry(func() time.Time { return base })
