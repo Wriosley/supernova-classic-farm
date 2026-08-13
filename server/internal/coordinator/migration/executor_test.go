@@ -97,6 +97,85 @@ func TestExecutorDrainFailureRestoresSourceBeforeFence(t *testing.T) {
 	}
 }
 
+func TestExecutorResumesAfterEveryProgressPersistenceBoundary(t *testing.T) {
+	steps := []Step{
+		StepSourceFlushed, StepRoutePreparing, StepFenceAdvanced,
+		StepTargetLoading, StepTargetReady, StepRouteActive,
+	}
+	for _, failedStep := range steps {
+		t.Run(string(failedStep), func(t *testing.T) {
+			fixture := newExecutorFixture(t)
+			fault := &faultProgressStore{ProgressStore: fixture.progress, failAdvance: failedStep}
+			fixture.executor.cfg.Progress = fault
+			if err := fixture.executor.Execute(context.Background(), fixture.task.ShardID, fixture.task.TaskID); err == nil {
+				t.Fatalf("Execute succeeded, want injected %s persistence failure", failedStep)
+			}
+
+			// A restarted Coordinator rebuilds the Executor around the same durable
+			// Task, Progress and RouteStore state.
+			fixture.executor.cfg.Progress = fixture.progress
+			if err := fixture.executor.Execute(context.Background(), fixture.task.ShardID, fixture.task.TaskID); err != nil {
+				t.Fatalf("resume after %s: %v", failedStep, err)
+			}
+			entry := fixture.routes.Snapshot().Entries[fixture.task.ShardID]
+			if entry.State != routing.RouteStateActive || entry.OwnerZoneID != "zone-b" {
+				t.Fatalf("final Current after %s = %+v", failedStep, entry)
+			}
+			if fixture.zone.restoreCalls != 0 {
+				t.Fatalf("failure at %s restored Source %d times", failedStep, fixture.zone.restoreCalls)
+			}
+			activePublishes := 0
+			for _, state := range fixture.publisher.states {
+				if state == routing.RouteStateActive {
+					activePublishes++
+				}
+			}
+			if activePublishes != 1 {
+				t.Fatalf("ACTIVE publishes after %s = %d, states=%v", failedStep, activePublishes, fixture.publisher.states)
+			}
+		})
+	}
+}
+
+func TestExecutorResumesAfterProgressCompletionFailure(t *testing.T) {
+	fixture := newExecutorFixture(t)
+	fault := &faultProgressStore{ProgressStore: fixture.progress, failComplete: true}
+	fixture.executor.cfg.Progress = fault
+	if err := fixture.executor.Execute(context.Background(), fixture.task.ShardID, fixture.task.TaskID); err == nil {
+		t.Fatal("Execute succeeded, want injected completion failure")
+	}
+	fixture.executor.cfg.Progress = fixture.progress
+	if err := fixture.executor.Execute(context.Background(), fixture.task.ShardID, fixture.task.TaskID); err != nil {
+		t.Fatalf("resume after completion failure: %v", err)
+	}
+	stored, found, err := fixture.tasks.Get(context.Background(), fixture.task.ShardID)
+	if err != nil || !found || stored.Status != StatusCompleted {
+		t.Fatalf("task after resume = (%+v, %t, %v)", stored, found, err)
+	}
+}
+
+type faultProgressStore struct {
+	ProgressStore
+	failAdvance  Step
+	failComplete bool
+}
+
+func (store *faultProgressStore) Advance(ctx context.Context, progress Progress, next Step) error {
+	if store.failAdvance == next {
+		store.failAdvance = ""
+		return errors.New("injected progress persistence failure")
+	}
+	return store.ProgressStore.Advance(ctx, progress, next)
+}
+
+func (store *faultProgressStore) Complete(ctx context.Context, progress Progress) error {
+	if store.failComplete {
+		store.failComplete = false
+		return errors.New("injected progress completion failure")
+	}
+	return store.ProgressStore.Complete(ctx, progress)
+}
+
 type executorFixture struct {
 	executor   *Executor
 	routes     *routing.Map
