@@ -82,6 +82,8 @@ func TestDurableActiveFailureLeavesPreparingInMemory(t *testing.T) {
 
 func TestDurableMigrationExposesOnlyCommittedActive(t *testing.T) {
 	handler, routes, shardID, request := durableMigrationFixture(t)
+	recorder := &recordingRoutePublisher{}
+	handler.routePublisher = recorder
 	response := httptest.NewRecorder()
 	handler.move(response, request)
 	entry, err := routes.Entry(shardID)
@@ -89,6 +91,33 @@ func TestDurableMigrationExposesOnlyCommittedActive(t *testing.T) {
 		entry.OwnerZoneID != "zone-b" || routes.Snapshot().MapVersion != 3 {
 		t.Fatalf("status=%d map=%d route=%+v err=%v", response.Code, routes.Snapshot().MapVersion, entry, err)
 	}
+	if len(recorder.changes) != 2 || recorder.changes[0][0].Entries[shardID].State != routing.RouteStateActive || recorder.changes[0][1].Entries[shardID].State != routing.RouteStatePreparing || recorder.changes[1][1].Entries[shardID].State != routing.RouteStateActive {
+		t.Fatalf("published changes=%v", recorder.changes)
+	}
+}
+
+func TestDurablePublisherFailureDoesNotRollBackCurrent(t *testing.T) {
+	handler, routes, shardID, request := durableMigrationFixture(t)
+	handler.routePublisher = failingRoutePublisher{}
+	response := httptest.NewRecorder()
+	handler.move(response, request)
+	entry, _ := routes.Entry(shardID)
+	if entry.State != routing.RouteStateActive || entry.OwnerZoneID != "zone-b" || routes.Snapshot().MapVersion != 3 {
+		t.Fatalf("publisher failure rolled back Current: %+v", entry)
+	}
+}
+
+type recordingRoutePublisher struct{ changes [][2]routing.Snapshot }
+
+func (p *recordingRoutePublisher) PublishRoutes(previous, current routing.Snapshot) error {
+	p.changes = append(p.changes, [2]routing.Snapshot{previous, current})
+	return nil
+}
+
+type failingRoutePublisher struct{}
+
+func (failingRoutePublisher) PublishRoutes(routing.Snapshot, routing.Snapshot) error {
+	return errors.New("injected publish failure")
 }
 
 type failingRouteStore struct {

@@ -13,12 +13,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/publisher"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/routestore"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
@@ -278,6 +281,27 @@ func run() error {
 	}
 
 	mux := http.NewServeMux()
+	routePublisher, err := publisher.New(routes, publisher.Config{})
+	if err != nil {
+		return err
+	}
+	defer routePublisher.Close()
+	if migrations != nil {
+		migrations.routePublisher = routePublisher
+	}
+	coordinatorService, err := publisher.NewGRPCServer(routes, routePublisher, publisher.GRPCConfig{})
+	if err != nil {
+		return err
+	}
+	hmacKey, err := rpcauth.LoadKeyFromEnv()
+	if err != nil {
+		return err
+	}
+	grpcServer, err := newCoordinatorGRPCServer(coordinatorService, hmacKey)
+	if err != nil {
+		return err
+	}
+	defer grpcServer.Stop()
 	if routeStoreMode == routeStoreTcaplus {
 		mux.Handle("/internal/v1/", routing.NewHTTPHandlerWithRuntimeLeases(routes, runtimeLeases, time.Now))
 	} else {
@@ -305,6 +329,7 @@ func run() error {
 			migrations.abandonMigration,
 		)
 	}
+	mux.HandleFunc("GET /internal/v1/debug/route-subscribers", subscriberDiagnosticsHandler(routePublisher))
 	mux.Handle("/", health.NewHandler(health.Check{
 		Name: "shard_map",
 		Run: func(context.Context) error {
@@ -327,7 +352,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           mux,
+		Handler:           rpcnet.H2CHandler(grpcServer, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -30,8 +31,13 @@ type migrationHandler struct {
 	tcaplus                *routing.TcaplusControlStore
 	routeStore             routestore.Store
 	runtimeLeases          *routing.RuntimeLeaseOverlay
+	routePublisher         RouteChangePublisher
 	deleteProgressOverride func(context.Context, *migrationProgress) error
 	progress               [routing.ShardCount]*migrationProgress
+}
+
+type RouteChangePublisher interface {
+	PublishRoutes(previous, current routing.Snapshot) error
 }
 
 type migrationProgress struct {
@@ -276,11 +282,20 @@ func (h *migrationHandler) moveDurable(w http.ResponseWriter, r *http.Request, s
 }
 
 func (h *migrationHandler) applyDurableSnapshot(snapshot routestore.Snapshot) error {
+	previous := h.routes.Snapshot()
 	if err := h.routes.ApplyCommittedSnapshot(routestore.RoutingSnapshot(snapshot)); err != nil {
 		return err
 	}
+	current := h.routes.Snapshot()
 	if h.runtimeLeases != nil {
-		return h.runtimeLeases.Renew(h.routes.Snapshot(), h.now().UTC(), h.leaseDuration)
+		if err := h.runtimeLeases.Renew(current, h.now().UTC(), h.leaseDuration); err != nil {
+			return err
+		}
+	}
+	if h.routePublisher != nil {
+		if err := h.routePublisher.PublishRoutes(previous, current); err != nil {
+			slog.Warn("publish committed route change", "error", err, "previous_map_version", previous.MapVersion, "map_version", current.MapVersion)
+		}
 	}
 	return nil
 }
