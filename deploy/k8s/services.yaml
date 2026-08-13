@@ -103,3 +103,34 @@ spec:
     - name: http
       port: 8082
       targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zone-headless
+  namespace: classic-farm
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: zone
+    classic-farm/zone-pool: dynamic
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zone-discovery
+  namespace: classic-farm
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: zone
+    classic-farm/zone-pool: dynamic
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http

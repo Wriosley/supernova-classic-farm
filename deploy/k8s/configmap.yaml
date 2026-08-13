@@ -11,6 +11,9 @@ data:
   ROUTING_MODE: static-dual-zone
   COORDINATOR_ROUTE_STORE: tcaplus
   COORDINATOR_ROUTE_REINITIALIZE: "false"
+  COORDINATOR_MEMBERSHIP_SOURCE: static
+  CLUSTER_ID: classic-farm-local
+  ZONE_DISCOVERY_SERVICE: zone-discovery
   COORDINATOR_URL: http://coordinator:8083
   COORDINATOR_RPC_URL: http://coordinator:8083
   GATE_ROUTE_SOURCE: coordinator-sdk

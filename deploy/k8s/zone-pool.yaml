@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zone-pool
+  namespace: classic-farm
+spec:
+  replicas: 1
+  serviceName: zone-headless
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zone
+      classic-farm/zone-pool: dynamic
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zone
+        app.kubernetes.io/part-of: classic-farm
+        classic-farm/zone-pool: dynamic
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: zone
+          image: classic-farm/zone:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: classic-farm-runtime
+            - secretRef:
+                name: classic-farm-tcaplus
+            - secretRef:
+                name: classic-farm-internal-rpc
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: ZONE_STATEFULSET_NAME
+              value: zone-pool
+            - name: CLUSTER_ID
+              value: classic-farm-local
+            - name: ZONE_ADVERTISED_ENDPOINT
+              value: http://$(POD_NAME).zone-headless.$(POD_NAMESPACE).svc.cluster.local:8082
+            - name: ZONE_HTTP_ADDRESS
+              value: 0.0.0.0:8082
+            - name: INTERNAL_RPC_CALLER_SERVICE
+              value: zone
+            - name: GATE_RPC_URL
+              value: http://gate:8081
+          ports:
+            - name: http
+              containerPort: 8082
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            failureThreshold: 60
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            failureThreshold: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
