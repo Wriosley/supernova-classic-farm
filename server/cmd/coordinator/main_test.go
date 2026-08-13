@@ -76,3 +76,23 @@ func TestLeaseDurationFromEnvironment(t *testing.T) {
 		t.Fatal("invalid duration accepted")
 	}
 }
+
+func TestRouteBootstrapTimeoutFromEnvironment(t *testing.T) {
+	for _, test := range []struct {
+		raw  string
+		want time.Duration
+		ok   bool
+	}{
+		{raw: "", want: 10 * time.Minute, ok: true},
+		{raw: "15m", want: 15 * time.Minute, ok: true},
+		{raw: "0s", ok: false},
+		{raw: "-1s", ok: false},
+		{raw: "invalid", ok: false},
+	} {
+		t.Setenv("COORDINATOR_ROUTE_BOOTSTRAP_TIMEOUT", test.raw)
+		got, err := routeBootstrapTimeoutFromEnvironment()
+		if (err == nil) != test.ok || got != test.want {
+			t.Fatalf("raw=%q timeout=%v err=%v", test.raw, got, err)
+		}
+	}
+}

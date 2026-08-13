@@ -215,10 +215,27 @@ Successful commit allocates exactly `expected+1`, stores it in
 `BootstrapIfEmpty` returns `(loaded, created, error)`:
 
 - both tables empty: insert metadata and exactly 4096 ordered routes;
+- metadata absent with a candidate-equal subset of routes: treat it as an
+  interrupted first bootstrap, validate every existing row exactly and insert
+  only missing routes;
+- insert `ShardMapMeta` only after all 4096 routes exist and match the bootstrap
+  candidate; Coordinator must not become Ready before that succeeds;
+- partial route content that differs from the candidate is corruption and must
+  never be guessed, overwritten or recomputed;
 - both complete: return the stored snapshot with `created=false`;
 - only one table exists, wrong row count, duplicate/out-of-order Shard IDs, or
   incompatible algorithm metadata: return `ErrRouteStoreCorrupt`;
 - concurrent bootstrap: loser reloads and validates the winner's snapshot.
+
+One durable bootstrap attempt uses
+`COORDINATOR_ROUTE_BOOTSTRAP_TIMEOUT`, default `10m`. Timeout or process exit
+preserves successfully inserted route rows so a later start can validate and
+continue. Persistent database failure still fails startup; the timeout is not a
+permission to publish partial Current.
+
+Normal `Load` consumes `ShardRoute` traversal records directly. It must not
+perform one `DoGet` per traversed route. Only pending-intent recovery reads its
+single target route separately to obtain the CAS record version.
 
 - [ ] **Step 1: Write MemoryStore tests first**
 

@@ -25,6 +25,7 @@ import (
 )
 
 const defaultLeaseDuration = 30 * time.Second
+const defaultRouteBootstrapTimeout = 10 * time.Minute
 
 const (
 	routingModeLocal          = "local"
@@ -128,8 +129,12 @@ func run() error {
 				if configErr != nil {
 					return configErr
 				}
+				bootstrapTimeout, timeoutErr := routeBootstrapTimeoutFromEnvironment()
+				if timeoutErr != nil {
+					return timeoutErr
+				}
 				candidate := routestore.FromRoutingSnapshot(routes.Snapshot(), now)
-				bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 60*time.Second)
+				bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), bootstrapTimeout)
 				var created bool
 				routes, runtimeLeases, created, configErr = bootstrapDurableCurrent(bootstrapCtx, durableStore, candidate, now, leaseDuration)
 				bootstrapCancel()
@@ -434,6 +439,18 @@ func leaseDurationFromEnvironment() (time.Duration, error) {
 	duration, err := time.ParseDuration(raw)
 	if err != nil || duration < 3*time.Millisecond {
 		return 0, fmt.Errorf("invalid COORDINATOR_LEASE_DURATION %q", raw)
+	}
+	return duration, nil
+}
+
+func routeBootstrapTimeoutFromEnvironment() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv("COORDINATOR_ROUTE_BOOTSTRAP_TIMEOUT"))
+	if raw == "" {
+		return defaultRouteBootstrapTimeout, nil
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil || duration <= 0 {
+		return 0, fmt.Errorf("invalid COORDINATOR_ROUTE_BOOTSTRAP_TIMEOUT %q", raw)
 	}
 	return duration, nil
 }
