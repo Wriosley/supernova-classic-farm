@@ -9,6 +9,8 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	clientfeatures "k8s.io/client-go/features"
+	clientfeaturestesting "k8s.io/client-go/features/testing"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -25,6 +27,7 @@ func (sink *recordingSink) DeletePod(namespace, name, uid, resourceVersion strin
 }
 
 func TestKubernetesSourceCorrelatesEndpointSliceWithStatefulSetPod(t *testing.T) {
+	clientfeaturestesting.SetFeatureDuringTest(t, clientfeatures.WatchListClient, false)
 	ready := true
 	portName, protocol, port := "http", corev1.ProtocolTCP, int32(8082)
 	controller := true
@@ -38,15 +41,23 @@ func TestKubernetesSourceCorrelatesEndpointSliceWithStatefulSetPod(t *testing.T)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = source.Run(ctx) }()
+	runResult := make(chan error, 1)
+	go func() { runResult <- source.Run(ctx) }()
 
 	select {
 	case got := <-sink.upserts:
 		if got.PodName != "zone-pool-0" || got.StatefulSetName != "zone-pool" || got.Ordinal != 0 || got.Endpoint != "http://10.0.0.8:8082" || !got.EndpointReady || got.PodPhase != "Running" {
 			t.Fatalf("observation=%+v", got)
 		}
+	case err := <-runResult:
+		t.Fatalf("source exited before observation: %v", err)
 	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for endpoint observation")
+		select {
+		case <-source.Ready():
+			t.Fatal("source cache synced but emitted no endpoint observation")
+		default:
+			t.Fatal("source informer cache did not sync")
+		}
 	}
 
 	if err := client.CoreV1().Pods("classic-farm").Delete(ctx, "zone-pool-0", metav1.DeleteOptions{}); err != nil {
@@ -60,6 +71,7 @@ func TestKubernetesSourceCorrelatesEndpointSliceWithStatefulSetPod(t *testing.T)
 }
 
 func TestKubernetesSourceIgnoresEndpointWithMismatchedPodUID(t *testing.T) {
+	clientfeaturestesting.SetFeatureDuringTest(t, clientfeatures.WatchListClient, false)
 	ready := true
 	portName, port := "http", int32(8082)
 	controller := true

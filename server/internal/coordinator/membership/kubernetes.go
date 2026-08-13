@@ -45,14 +45,17 @@ type KubernetesSource struct {
 	serviceName string
 	clusterID   string
 	sink        ObservationSink
+	ready       chan struct{}
 }
 
 func NewKubernetesSource(client kubernetes.Interface, namespace, serviceName, clusterID string, sink ObservationSink) (*KubernetesSource, error) {
 	if client == nil || sink == nil || strings.TrimSpace(namespace) == "" || strings.TrimSpace(serviceName) == "" || strings.TrimSpace(clusterID) == "" {
 		return nil, errors.New("complete Kubernetes Zone discovery configuration is required")
 	}
-	return &KubernetesSource{client: client, namespace: namespace, serviceName: serviceName, clusterID: clusterID, sink: sink}, nil
+	return &KubernetesSource{client: client, namespace: namespace, serviceName: serviceName, clusterID: clusterID, sink: sink, ready: make(chan struct{})}, nil
 }
+
+func (source *KubernetesSource) Ready() <-chan struct{} { return source.ready }
 
 func (source *KubernetesSource) Run(ctx context.Context) error {
 	factory := informers.NewSharedInformerFactoryWithOptions(source.client, 0, informers.WithNamespace(source.namespace))
@@ -105,6 +108,7 @@ func (source *KubernetesSource) Run(ctx context.Context) error {
 		return ctx.Err()
 	}
 	reconcileAll()
+	close(source.ready)
 	<-ctx.Done()
 	return nil
 }
