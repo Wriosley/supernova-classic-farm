@@ -63,20 +63,28 @@ that ACTIVE cross-checks owner/epoch; activation intentionally increments the
 route version after Fence advance. `validateCurrentFences` incorrectly also
 required route-version equality. No Tcaplus repair is required.
 
-The live gate was rolled back: the old healthy Coordinator remains the only
-serving Coordinator Pod, `zone-a` and `zone-b` remain Ready, and `zone-pool`
-was scaled to zero. No membership code wrote ShardRoute, ShardFence or
-MigrationProgress. The Coordinator Deployment is paused while pinned to the
-surviving old revision; repair shard 69 before resuming/applying the new image.
+The first failed gate was rolled back without writing ShardRoute, ShardFence or
+MigrationProgress. After the validator correction the Deployment was resumed
+with the new Coordinator image and the candidate was scaled back to one for
+the successful acceptance below.
 
-## Remaining acceptance
+## Completed live acceptance
 
-After deploying the corrected ACTIVE validation:
+After correcting ACTIVE validation, Pod/EndpointSlice resource-version domain
+handling, and discovery endpoint construction, the kind gate passed:
 
-1. resume/apply the new Coordinator image and set membership source to
-   `kubernetes`;
-2. scale `zone-pool` to one;
-3. verify candidate identity `d859cea1-ac5b-5524-bffa-4e542301cd95` becomes
-   HEALTHY and owns zero Shards;
-4. restart the candidate and verify stable logical ID/new incarnation;
-5. compare all 4096 Current routes to the saved before snapshot.
+- Coordinator and `zone-pool-0` are both Ready;
+- candidate logical identity is
+  `d859cea1-ac5b-5524-bffa-4e542301cd95`;
+- candidate restart preserved that logical ID and generated a new incarnation;
+- availability version advanced from `1` to `3` across replacement (old
+  incarnation DEAD, new incarnation HEALTHY);
+- five SDK subscribers remained connected, with zero queue overflow/resync;
+- all 4096 durable route fields matched the pre-deployment snapshot after
+  excluding only runtime overlay `lease_expires_at_ms`/`routable`;
+- map version remained `4117` and candidate-owned Shards remained `0`.
+
+The discovery source now probes stable per-Pod headless DNS. EndpointSlice IP
+is used to correlate the Pod target but never becomes the advertised Zone
+identity. Stale informer/probe observations are ignored rather than stopping
+the membership controller; unexpected controller exits are logged.

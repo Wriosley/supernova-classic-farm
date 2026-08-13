@@ -20,15 +20,14 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 
 ## Snapshot at handoff
 
-- Final delivery sprint 07/04 Zone identity and Kubernetes discovery Tasks
-  1-7 are implemented and unit/race tested. The live third-Zone registration
-  gate initially exposed a validator defect at shard 69: ACTIVE Current is
-  `zone-b/epoch=2/route_version=3`, while the matching Fence correctly retains
-  PREPARING `route_version=2`. ACTIVE validation must compare owner/epoch, not
-  route-version equality; no Tcaplus repair is required.
-  The cluster was restored to its old healthy Coordinator, existing zone-a/b,
-  and `zone-pool=0`; the Coordinator Deployment is paused pending rollout of
-  the validator correction. Evidence:
+- Final delivery sprint 07/04 Zone identity and Kubernetes discovery is
+  complete. The kind cluster runs `zone-pool-0` as a discovered HEALTHY
+  candidate with stable UUIDv5 logical identity and zero owned Shards;
+  replacement changes incarnation and advances availability without changing
+  any of the 4096 durable routes (map version remains 4117). The live gate
+  found and fixed ACTIVE Fence over-validation, cross-object resource-version
+  comparison, stable-DNS probing and stale-event Controller exit defects.
+  Evidence:
   `../evidence/2026-08-13-zone-kubernetes-discovery.md`.
 
 - The single-player owner loop is complete through `player_seq=8`.
