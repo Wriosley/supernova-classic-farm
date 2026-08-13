@@ -50,6 +50,13 @@ func bootstrapDurableCurrent(ctx context.Context, store routestore.Store, candid
 	return routes, overlay, created, nil
 }
 
+func durableBootstrapCandidate(routes *routing.Map, fences []routing.ShardFence, zones []routing.ZoneCandidate, now time.Time, leaseDuration time.Duration) (routestore.Snapshot, error) {
+	if err := routing.HydrateActiveRoutesFromFences(routes, fences, zones, now, leaseDuration); err != nil {
+		return routestore.Snapshot{}, fmt.Errorf("hydrate durable bootstrap candidate from fences: %w", err)
+	}
+	return routestore.FromRoutingSnapshot(routes.Snapshot(), now), nil
+}
+
 func validateCurrentFences(snapshot routestore.Snapshot, fences []routing.ShardFence, progress map[uint32]*migrationProgress) error {
 	if len(fences) != int(routing.ShardCount) || len(snapshot.Entries) != int(routing.ShardCount) {
 		return errors.New("Current and Fence sets must both contain 4096 rows")

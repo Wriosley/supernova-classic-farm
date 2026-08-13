@@ -124,28 +124,6 @@ func run() error {
 			if controlErr != nil {
 				return controlErr
 			}
-			if routeStoreMode == routeStoreTcaplus {
-				durableStore, configErr = routestore.NewTcaplusStore(client, tcaplusConfig.ZoneID)
-				if configErr != nil {
-					return configErr
-				}
-				bootstrapTimeout, timeoutErr := routeBootstrapTimeoutFromEnvironment()
-				if timeoutErr != nil {
-					return timeoutErr
-				}
-				candidate := routestore.FromRoutingSnapshot(routes.Snapshot(), now)
-				bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), bootstrapTimeout)
-				var created bool
-				routes, runtimeLeases, created, configErr = bootstrapDurableCurrent(bootstrapCtx, durableStore, candidate, now, leaseDuration)
-				bootstrapCancel()
-				if configErr != nil {
-					return configErr
-				}
-				migrations.routes = routes
-				migrations.routeStore = durableStore
-				migrations.runtimeLeases = runtimeLeases
-				logger.Info("durable Current ShardRoute ready", "bootstrapped", created, "map_version", routes.Snapshot().MapVersion)
-			}
 			fenceCtx, fenceCancel := context.WithTimeout(
 				context.Background(), 60*time.Second,
 			)
@@ -157,17 +135,39 @@ func run() error {
 				return ensureErr
 			}
 			fences, loadErr := control.LoadFences(fenceCtx)
+			fenceCancel()
 			if loadErr != nil {
-				fenceCancel()
 				return loadErr
 			}
-			if routeStoreMode == routeStoreLegacyFence {
+			if routeStoreMode == routeStoreTcaplus {
+				durableStore, configErr = routestore.NewTcaplusStore(client, tcaplusConfig.ZoneID)
+				if configErr != nil {
+					return configErr
+				}
+				bootstrapTimeout, timeoutErr := routeBootstrapTimeoutFromEnvironment()
+				if timeoutErr != nil {
+					return timeoutErr
+				}
+				candidate, candidateErr := durableBootstrapCandidate(routes, fences, zones, now, leaseDuration)
+				if candidateErr != nil {
+					return candidateErr
+				}
+				bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), bootstrapTimeout)
+				var created bool
+				routes, runtimeLeases, created, configErr = bootstrapDurableCurrent(bootstrapCtx, durableStore, candidate, now, leaseDuration)
+				bootstrapCancel()
+				if configErr != nil {
+					return configErr
+				}
+				migrations.routes = routes
+				migrations.routeStore = durableStore
+				migrations.runtimeLeases = runtimeLeases
+				logger.Info("durable Current ShardRoute ready", "bootstrapped", created, "map_version", routes.Snapshot().MapVersion)
+			} else {
 				if hydrateErr := routing.HydrateActiveRoutesFromFences(routes, fences, zones, now, leaseDuration); hydrateErr != nil {
-					fenceCancel()
 					return hydrateErr
 				}
 			}
-			fenceCancel()
 			logger.Info(
 				"dual-Zone Tcaplus fences ready",
 				"initialized_or_aligned_shards", updated,

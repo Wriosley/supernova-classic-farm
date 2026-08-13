@@ -182,12 +182,15 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   retryable routing error numbers 204–207 are frozen. Runtime wiring, durable
   ShardRoute, Kubernetes discovery and failover remain later phases. Evidence:
   `../evidence/2026-08-12-coordinator-contract-baseline.md`.
-- Final delivery sprint **07/02 durable Current ShardRoute** is offline-complete:
+- Final delivery sprint **07/02 durable Current ShardRoute** is live-verified:
   opt-in Tcaplus `ShardMapMeta` + 4096 `ShardRoute` rows, self-contained pending
   intent recovery, exact Map restore, durable-first manual migration and a
   binding-checked runtime lease-expiry overlay pass fake-Tcaplus/process/unit
-  regression. The kind default remains `legacy-fence` because the two live
-  tables and live restart workflow were not verified. Evidence:
+  regression. Live Tcaplus now completes a Fence-aligned 4096-row Meta-last
+  bootstrap in about six minutes with a configurable 10-minute budget; normal
+  Load avoids per-row `DoGet`, and a clean restart restores the same durable
+  Current in about two seconds (`bootstrapped=false`). The kind default remains
+  `legacy-fence` pending an explicit deployment-mode change. Evidence:
   `../evidence/2026-08-12-durable-current-shard-route.md`.
 
 ## Current accepted direction

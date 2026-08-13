@@ -66,6 +66,41 @@ func TestBootstrapDurableCurrentUsesStoredRoutesOnRestart(t *testing.T) {
 	}
 }
 
+func TestDurableBootstrapCandidateUsesCurrentFences(t *testing.T) {
+	now := time.Date(2026, 8, 13, 11, 30, 0, 0, time.UTC)
+	zones := []routing.ZoneCandidate{
+		{ZoneID: "zone-a", Endpoint: "http://zone-a:8082"},
+		{ZoneID: "zone-b", Endpoint: "http://zone-b:8082"},
+	}
+	routes, err := routing.NewStaticMap(now, time.Minute, zones)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := routes.Snapshot()
+	fences := make([]routing.ShardFence, routing.ShardCount)
+	for index, entry := range current.Entries {
+		fences[index] = routing.ShardFence{ShardID: uint32(index), OwnerZoneID: entry.OwnerZoneID,
+			OwnerEpoch: entry.OwnerEpoch, RouteVersion: entry.RouteVersion}
+	}
+	shardID := uint32(145)
+	if fences[shardID].OwnerZoneID == "zone-a" {
+		fences[shardID].OwnerZoneID = "zone-b"
+	} else {
+		fences[shardID].OwnerZoneID = "zone-a"
+	}
+	fences[shardID].OwnerEpoch = 2
+	fences[shardID].RouteVersion = 2
+
+	candidate, err := durableBootstrapCandidate(routes, fences, zones, now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := candidate.Entries[shardID]
+	if entry.OwnerZoneID != fences[shardID].OwnerZoneID || entry.OwnerEpoch != 2 || entry.RouteVersion != 2 {
+		t.Fatalf("candidate ignored current Fence: %+v", entry)
+	}
+}
+
 func TestValidateCurrentFencesFailsClosedOnMismatch(t *testing.T) {
 	now := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
 	snapshot := staticCandidate(t, now, []routing.ZoneCandidate{{ZoneID: "zone-a", Endpoint: "http://zone-a:8082"}})
