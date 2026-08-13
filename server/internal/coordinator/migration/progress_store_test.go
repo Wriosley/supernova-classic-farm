@@ -65,6 +65,15 @@ func TestProgressStoreEnforcesAdjacentTransitionsAndFrozenEvidence(t *testing.T)
 	if err := store.Advance(ctx, loaded, StepRoutePreparing); err != nil {
 		t.Fatalf("Advance replay: %v", err)
 	}
+	for _, next := range []Step{StepFenceAdvanced, StepTargetLoading, StepTargetReady, StepRouteActive} {
+		current, found, err := store.Get(ctx, progress.ShardID)
+		if err != nil || !found {
+			t.Fatalf("Get before %s = (%+v, %t, %v)", next, current, found, err)
+		}
+		if err := store.Advance(ctx, current, next); err != nil {
+			t.Fatalf("Advance %s: %v", next, err)
+		}
+	}
 }
 
 func TestProgressStoreRestartLoadCompleteAndAbandon(t *testing.T) {

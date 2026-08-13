@@ -178,6 +178,10 @@ func sameProgressIdentity(left, right Progress) bool {
 	left.Step, right.Step = "", ""
 	left.UpdatedAtMS, right.UpdatedAtMS = 0, 0
 	left.Manifest, right.Manifest = nil, nil
+	left.Source.LeaseExpiresAt, right.Source.LeaseExpiresAt = time.Time{}, time.Time{}
+	left.Source.UpdatedAt, right.Source.UpdatedAt = time.Time{}, time.Time{}
+	left.Prepared.LeaseExpiresAt, right.Prepared.LeaseExpiresAt = time.Time{}, time.Time{}
+	left.Prepared.UpdatedAt, right.Prepared.UpdatedAt = time.Time{}, time.Time{}
 	return reflect.DeepEqual(left, right)
 }
 
