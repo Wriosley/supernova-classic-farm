@@ -103,6 +103,7 @@ func (c *routeCache) resolveShard(id uint32) (routing.RouteEntry, error) {
 			return routing.RouteEntry{}, ErrRouteUnavailable
 		}
 	}
+	entry.LeaseExpiresAt = time.UnixMilli(c.freshUntil.Load()).UTC()
 	return entry, nil
 }
 
@@ -142,6 +143,17 @@ func (c *routeCache) getSnapshot() routing.Snapshot {
 	copy := *current
 	copy.Entries = append([]routing.RouteEntry(nil), current.Entries...)
 	return copy
+}
+
+func (c *routeCache) effectiveSnapshot() routing.Snapshot {
+	snapshot := c.getSnapshot()
+	expiry := time.UnixMilli(c.freshUntil.Load()).UTC()
+	for index := range snapshot.Entries {
+		if snapshot.Entries[index].State == routing.RouteStateActive {
+			snapshot.Entries[index].LeaseExpiresAt = expiry
+		}
+	}
+	return snapshot
 }
 
 func decodeSnapshot(encoded *datav1.ShardMapSnapshot) (routing.Snapshot, error) {

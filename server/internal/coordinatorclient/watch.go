@@ -32,6 +32,10 @@ func (c *Client) syncAndOpen() error {
 		return err
 	}
 	c.cache.markFresh()
+	if err := c.notifySnapshot(); err != nil {
+		streamCancel()
+		return err
+	}
 	c.currentStream = stream
 	c.streamCancel = streamCancel
 	return nil
@@ -96,6 +100,9 @@ func (c *Client) consume(stream coordinatorv1.CoordinatorService_WatchRoutesClie
 					return err
 				}
 				c.cache.markFresh()
+				if err := c.notifySnapshot(); err != nil {
+					return err
+				}
 				_ = stream.Send(ack(c.cache.getSnapshot().MapVersion))
 				continue
 			}
@@ -104,6 +111,9 @@ func (c *Client) consume(stream coordinatorv1.CoordinatorService_WatchRoutesClie
 					return err
 				}
 				c.cache.markFresh()
+				if err := c.notifySnapshot(); err != nil {
+					return err
+				}
 				if err := stream.Send(ack(batch.MapVersion)); err != nil {
 					return err
 				}
@@ -111,6 +121,9 @@ func (c *Client) consume(stream coordinatorv1.CoordinatorService_WatchRoutesClie
 			}
 			if ping := message.GetPing(); ping != nil {
 				c.cache.markFresh()
+				if err := c.notifySnapshot(); err != nil {
+					return err
+				}
 				if err := stream.Send(&coordinatorv1.WatchRoutesRequest{Payload: &coordinatorv1.WatchRoutesRequest_Pong{Pong: &coordinatorv1.WatchPong{PingId: ping.PingId}}}); err != nil {
 					return err
 				}

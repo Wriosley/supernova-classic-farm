@@ -22,6 +22,7 @@ type Config struct {
 	DisconnectTTL, MinBackoff, MaxBackoff time.Duration
 	Now                                   func() time.Time
 	Dialer                                func(context.Context, string) (net.Conn, error)
+	OnSnapshot                            func(routing.Snapshot) error
 }
 type Client struct {
 	cfg           Config
@@ -124,6 +125,12 @@ func (c *Client) ResolveShard(shardID uint32) (routing.RouteEntry, error) {
 	return c.cache.resolveShard(shardID)
 }
 func (c *Client) Snapshot() routing.Snapshot { return c.cache.getSnapshot() }
+func (c *Client) notifySnapshot() error {
+	if c.cfg.OnSnapshot == nil {
+		return nil
+	}
+	return c.cfg.OnSnapshot(c.cache.effectiveSnapshot())
+}
 func (c *Client) ForceResync() {
 	select {
 	case c.resync <- struct{}{}:

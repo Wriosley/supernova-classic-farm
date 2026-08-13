@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	coordinatorv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/coordinator"
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/connection"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinatorclient"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/farmview"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/interaction"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/outbox"
@@ -190,20 +192,37 @@ func main() {
 		if tableErr != nil {
 			log.Fatal(tableErr)
 		}
-		client := &http.Client{Timeout: 5 * time.Second}
-		if err := refreshAuthorization(ctx, table, client, coordinatorURL); err != nil {
-			log.Fatalf("load initial ownership snapshot: %v", err)
-		}
 		authorization = table
-		lifecycle = &lifecycleHandler{
-			runtime: runtime, authorization: table, gates: gates, now: time.Now,
-			refresh: func() error {
+		client := &http.Client{Timeout: 5 * time.Second}
+		switch routeSource := environmentOr("ZONE_ROUTE_SOURCE", "http-poll"); routeSource {
+		case "http-poll":
+			if err := refreshAuthorization(ctx, table, client, coordinatorURL); err != nil {
+				log.Fatalf("load initial ownership snapshot: %v", err)
+			}
+			lifecycle = &lifecycleHandler{runtime: runtime, authorization: table, gates: gates, now: time.Now, refresh: func() error {
 				refreshCtx, refreshCancel := context.WithTimeout(ctx, 3*time.Second)
 				defer refreshCancel()
 				return refreshAuthorization(refreshCtx, table, client, coordinatorURL)
-			},
+			}}
+			go refreshAuthorizationLoop(ctx, table, client, coordinatorURL, logger)
+		case "coordinator-sdk":
+			sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: environmentOr("COORDINATOR_RPC_URL", coordinatorURL), SubscriberID: environmentOr("ZONE_INSTANCE_ID", ownerZoneID), Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE, HMACKey: rpcKey, OnSnapshot: table.Replace})
+			if sdkErr != nil {
+				log.Fatal(sdkErr)
+			}
+			if sdkErr = sdk.Start(ctx); sdkErr != nil {
+				log.Fatalf("start Coordinator SDK: %v", sdkErr)
+			}
+			defer sdk.Close()
+			lifecycle = &lifecycleHandler{runtime: runtime, authorization: table, gates: gates, now: time.Now, refresh: func() error { sdk.ForceResync(); return nil }}
+			interval, intervalErr := time.ParseDuration(environmentOr("ZONE_ROUTE_VERIFY_INTERVAL", "5m"))
+			if intervalErr != nil || interval <= 0 {
+				log.Fatal("invalid ZONE_ROUTE_VERIFY_INTERVAL")
+			}
+			go verifySDKRoutesLoop(ctx, sdk, client, coordinatorURL, interval, logger)
+		default:
+			log.Fatalf("unsupported ZONE_ROUTE_SOURCE %q", routeSource)
 		}
-		go refreshAuthorizationLoop(ctx, table, client, coordinatorURL, logger)
 	}
 
 	pushEndpoint := os.Getenv("GATE_RPC_URL")
@@ -341,18 +360,18 @@ func main() {
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
-			rpcv1.GameCommandService_ExecutePlayerCommand_FullMethodName:   {"gate"},
-			rpcv1.PlayerSocialService_ApplyFriendTaskCredit_FullMethodName: {"friend"},
-			rpcv1.PlayerSocialService_ApplyMailReward_FullMethodName:       {"mail"},
-			rpcv1.VisitorZoneService_EnterFriendFarm_FullMethodName:        {"gate"},
-			rpcv1.VisitorZoneService_HeartbeatFriendFarm_FullMethodName:    {"gate"},
-			rpcv1.VisitorZoneService_ExitFriendFarm_FullMethodName:         {"gate"},
-			rpcv1.OwnerFarmService_EnterVisitor_FullMethodName:             {"zone-local", "zone-a", "zone-b"},
-			rpcv1.OwnerFarmService_RefreshVisitorHeartbeat_FullMethodName:  {"zone-local", "zone-a", "zone-b"},
-			rpcv1.OwnerFarmService_ExitVisitor_FullMethodName:              {"zone-local", "zone-a", "zone-b"},
-			rpcv1.OwnerFarmService_GetPublicFarmSnapshot_FullMethodName:    {"zone-local", "zone-a", "zone-b"},
-			rpcv1.VisitorZoneService_ExecuteFriendAction_FullMethodName:    {"gate"},
-			rpcv1.OwnerFarmService_ApplyVisitorAction_FullMethodName:       {"zone-local", "zone-a", "zone-b"},
+			rpcv1.GameCommandService_ExecutePlayerCommand_FullMethodName:            {"gate"},
+			rpcv1.PlayerSocialService_ApplyFriendTaskCredit_FullMethodName:          {"friend"},
+			rpcv1.PlayerSocialService_ApplyMailReward_FullMethodName:                {"mail"},
+			rpcv1.VisitorZoneService_EnterFriendFarm_FullMethodName:                 {"gate"},
+			rpcv1.VisitorZoneService_HeartbeatFriendFarm_FullMethodName:             {"gate"},
+			rpcv1.VisitorZoneService_ExitFriendFarm_FullMethodName:                  {"gate"},
+			rpcv1.OwnerFarmService_EnterVisitor_FullMethodName:                      {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_RefreshVisitorHeartbeat_FullMethodName:           {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_ExitVisitor_FullMethodName:                       {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_GetPublicFarmSnapshot_FullMethodName:             {"zone-local", "zone-a", "zone-b"},
+			rpcv1.VisitorZoneService_ExecuteFriendAction_FullMethodName:             {"gate"},
+			rpcv1.OwnerFarmService_ApplyVisitorAction_FullMethodName:                {"zone-local", "zone-a", "zone-b"},
 			rpcv1.PlayerConnectionService_RegisterPlayerConnection_FullMethodName:   {"gate"},
 			rpcv1.PlayerConnectionService_RefreshPlayerConnection_FullMethodName:    {"gate"},
 			rpcv1.PlayerConnectionService_UnregisterPlayerConnection_FullMethodName: {"gate"},
@@ -461,6 +480,48 @@ func refreshAuthorizationLoop(
 			logger.Debug("ownership snapshot refreshed")
 		}
 	}
+}
+
+type routeSnapshotClient interface {
+	Snapshot() routing.Snapshot
+	ForceResync()
+}
+
+func verifySDKRoutesLoop(ctx context.Context, sdk routeSnapshotClient, client *http.Client, coordinatorURL string, interval time.Duration, logger *slog.Logger) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			verifyCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			remote, err := routing.FetchSnapshot(verifyCtx, client, coordinatorURL)
+			cancel()
+			if err != nil {
+				logger.Error("route SDK verification failed", "error", err)
+				continue
+			}
+			if !sameDurableRoutes(sdk.Snapshot(), remote) {
+				logger.Error("route SDK verification mismatch; resync requested", "sdk_map_version", sdk.Snapshot().MapVersion, "http_map_version", remote.MapVersion)
+				sdk.ForceResync()
+			}
+		}
+	}
+}
+func sameDurableRoutes(a, b routing.Snapshot) bool {
+	if a.MapVersion != b.MapVersion || len(a.Entries) != len(b.Entries) {
+		return false
+	}
+	for i := range a.Entries {
+		x, y := a.Entries[i], b.Entries[i]
+		x.LeaseExpiresAt = time.Time{}
+		y.LeaseExpiresAt = time.Time{}
+		if x != y {
+			return false
+		}
+	}
+	return true
 }
 
 // runInteractionReconcileLoop drives the Phase 5 friend-interaction

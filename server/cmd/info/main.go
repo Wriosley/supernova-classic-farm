@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	coordinatorv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/coordinator"
 	infov1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/info"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinatorclient"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/info"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
@@ -46,18 +49,40 @@ func run() error {
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	routeSource := &gateway.HTTPRouteResolver{
+	httpRouteSource := &gateway.HTTPRouteResolver{
 		Client: client, BaseURL: envOr("COORDINATOR_URL", "http://127.0.0.1:8083"),
 	}
-	routeCache, err := gateway.NewCachedRouteResolver(routeSource, time.Now)
-	if err != nil {
-		return err
-	}
-	warmCtx, warmCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err = routeCache.Warm(warmCtx)
-	warmCancel()
-	if err != nil {
-		return err
+	var routes gateway.RouteResolver
+	switch sourceMode := envOr("INFO_ROUTE_SOURCE", "http"); sourceMode {
+	case "http":
+		routeCache, cacheErr := gateway.NewCachedRouteResolver(httpRouteSource, time.Now)
+		if cacheErr != nil {
+			return cacheErr
+		}
+		warmCtx, warmCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cacheErr = routeCache.Warm(warmCtx)
+		warmCancel()
+		if cacheErr != nil {
+			return cacheErr
+		}
+		routes = routeCache
+	case "coordinator-sdk":
+		instanceID := envOr("INFO_INSTANCE_ID", "info-local")
+		sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: envOr("COORDINATOR_RPC_URL", "http://127.0.0.1:8083"), SubscriberID: instanceID, Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_INFO, HMACKey: rpcKey})
+		if sdkErr != nil {
+			return sdkErr
+		}
+		if sdkErr = sdk.Start(context.Background()); sdkErr != nil {
+			return sdkErr
+		}
+		defer sdk.Close()
+		adapter, adapterErr := info.NewCoordinatorRoutes(sdk, httpRouteSource)
+		if adapterErr != nil {
+			return adapterErr
+		}
+		routes = adapter
+	default:
+		return fmt.Errorf("unsupported INFO_ROUTE_SOURCE %q", sourceMode)
 	}
 
 	zoneClient, err := info.NewZoneClient(rpcKey)
@@ -78,7 +103,7 @@ func run() error {
 		logger.Warn("FRIEND_RPC_URL unset; friend-farm red dots disabled")
 	}
 
-	service, err := info.NewService(routeCache, zoneClient, friendLister, logger)
+	service, err := info.NewService(routes, zoneClient, friendLister, logger)
 	if err != nil {
 		return err
 	}

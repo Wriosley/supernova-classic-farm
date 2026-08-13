@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	coordinatorv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/coordinator"
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinatorclient"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
@@ -82,18 +84,39 @@ func run() error {
 	// advertises, otherwise AuthResponse looks like a config change and the H5
 	// re-downloads the package from a host it cannot resolve.
 	publicConfigURL := envOr("CLIENT_CONFIG_PUBLIC_URL", clientConfigURL)
-	routeSource := &gateway.HTTPRouteResolver{
+	httpRouteSource := &gateway.HTTPRouteResolver{
 		Client: client, BaseURL: envOr("COORDINATOR_URL", "http://127.0.0.1:8083"),
 	}
-	routeCache, err := gateway.NewCachedRouteResolver(routeSource, time.Now)
-	if err != nil {
-		return err
-	}
-	warmCtx, warmCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err = routeCache.Warm(warmCtx)
-	warmCancel()
-	if err != nil {
-		return fmt.Errorf("warm route cache: %w", err)
+	var routes gateway.RouteResolver
+	switch sourceMode := envOr("GATE_ROUTE_SOURCE", "http"); sourceMode {
+	case "http":
+		routeCache, cacheErr := gateway.NewCachedRouteResolver(httpRouteSource, time.Now)
+		if cacheErr != nil {
+			return cacheErr
+		}
+		warmCtx, warmCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cacheErr = routeCache.Warm(warmCtx)
+		warmCancel()
+		if cacheErr != nil {
+			return fmt.Errorf("warm route cache: %w", cacheErr)
+		}
+		routes = routeCache
+	case "coordinator-sdk":
+		sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: envOr("COORDINATOR_RPC_URL", "http://127.0.0.1:8083"), SubscriberID: gatewayID, Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_GATE, HMACKey: rpcKey})
+		if sdkErr != nil {
+			return sdkErr
+		}
+		if sdkErr = sdk.Start(context.Background()); sdkErr != nil {
+			return fmt.Errorf("start coordinator SDK: %w", sdkErr)
+		}
+		defer sdk.Close()
+		adapter, adapterErr := gateway.NewCoordinatorRouteResolver(sdk, httpRouteSource)
+		if adapterErr != nil {
+			return adapterErr
+		}
+		routes = adapter
+	default:
+		return fmt.Errorf("unsupported GATE_ROUTE_SOURCE %q", sourceMode)
 	}
 	connectionClient, err := gateway.NewGRPCPlayerConnectionClient(rpcKey, gatewayID)
 	if err != nil {
@@ -105,7 +128,7 @@ func run() error {
 			Client: client, Endpoint: envOr("LOGIN_TICKET_CONSUME_URL", "http://127.0.0.1:8080/internal/v1/ws-tickets/consume"),
 			GatewayID: gatewayID,
 		},
-		Routes:          routeCache,
+		Routes:          routes,
 		Zone:            zoneCommander,
 		Visitor:         visitorCommander,
 		Friends:         friendCommander,
