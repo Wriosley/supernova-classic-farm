@@ -356,6 +356,64 @@ func TestRuntimeDrainReconcilesAmbiguousFinalFlushCommit(t *testing.T) {
 	}
 }
 
+func TestRuntimePrepareShardIsIdempotentAndDoesNotPrewarmActors(t *testing.T) {
+	const playerID = uint64(42)
+	state := NewDevelopmentState(playerID)
+	store := &recordingCheckpointStore{state: state}
+	runtime, err := NewRuntimeWithStore(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	manifest := []DrainedPlayer{{PlayerID: playerID, OwnerEpoch: 1, CheckpointRevision: state.CheckpointRevision}}
+	shardID := routing.ShardForPlayer(playerID)
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := runtime.PrepareShardForMigration(context.Background(), shardID, 2, manifest); err != nil {
+			t.Fatalf("Prepare attempt %d: %v", attempt, err)
+		}
+		if runtime.HasActiveActorsForShard(shardID) {
+			t.Fatalf("Prepare attempt %d prewarmed an Actor", attempt)
+		}
+	}
+	if store.state.OwnerEpoch != 2 || store.state.CheckpointRevision != manifest[0].CheckpointRevision+1 || len(store.saved) != 1 {
+		t.Fatalf("prepared checkpoint=%+v saves=%d", store.state, len(store.saved))
+	}
+}
+
+func TestRuntimeDrainFlushFailureKeepsActorForRetry(t *testing.T) {
+	const playerID = uint64(42)
+	runtime, err := NewRuntimeWithStore(&failingDrainStore{persisted: NewDevelopmentState(playerID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	if _, err := runtime.Handle(context.Background(), playerID, 1,
+		buySeedsRequest(playerID, "00112233-4455-6677-8899-aabbccddee24", 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.DrainShardForMigration(context.Background(), routing.ShardForPlayer(playerID), 1); err == nil {
+		t.Fatal("Drain succeeded despite final flush failure")
+	}
+	if !runtime.HasActiveActorsForShard(routing.ShardForPlayer(playerID)) {
+		t.Fatal("failed Drain evicted Actor instead of preserving it for retry")
+	}
+}
+
+type failingDrainStore struct{ persisted *State }
+
+func (store *failingDrainStore) Load(ctx context.Context, playerID uint64) (LoadedCheckpoint, error) {
+	checkpoint, err := store.persisted.Checkpoint()
+	if err != nil {
+		return LoadedCheckpoint{}, err
+	}
+	state, err := StateFromCheckpoint(checkpoint)
+	return LoadedCheckpoint{State: state, PersistedRevision: state.CheckpointRevision}, err
+}
+
+func (store *failingDrainStore) SaveCAS(context.Context, CheckpointWrite) (CheckpointWriteResult, error) {
+	return CheckpointWriteResult{}, errors.New("injected final flush failure")
+}
+
 func TestRuntimeActivatesFromCheckpointLoaderOnce(t *testing.T) {
 	var calls atomic.Int32
 	runtime, err := NewRuntimeWithStore(checkpointLoaderFunc(func(_ context.Context, playerID uint64) (*State, error) {

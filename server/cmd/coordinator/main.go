@@ -72,6 +72,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	workerConfig, err := migrationWorkerConfigFromEnvironment()
+	if err != nil {
+		return err
+	}
 
 	now := time.Now().UTC()
 	routeStoreMode, err := validateRouteStoreMode(os.Getenv("COORDINATOR_ROUTE_STORE"), os.Getenv("STORAGE_MODE"))
@@ -81,6 +85,9 @@ func run() error {
 	if plannerConfig.Enabled && (routeStoreMode != routeStoreTcaplus || strings.TrimSpace(os.Getenv("STORAGE_MODE")) != "tcaplus") {
 		return errors.New("enabled planner requires STORAGE_MODE=tcaplus and COORDINATOR_ROUTE_STORE=tcaplus")
 	}
+	if workerConfig.Enabled && (routeStoreMode != routeStoreTcaplus || strings.TrimSpace(os.Getenv("STORAGE_MODE")) != "tcaplus") {
+		return errors.New("enabled migration worker requires STORAGE_MODE=tcaplus and COORDINATOR_ROUTE_STORE=tcaplus")
+	}
 	routes, err := routing.NewStaticMap(now, leaseDuration, zones)
 	if err != nil {
 		return err
@@ -88,6 +95,9 @@ func run() error {
 	var mysqlDB *sql.DB
 	var migrations *migrationHandler
 	var migrationTasks coordinatormigration.TaskStore
+	var migrationProgressBackend coordinatormigration.ProgressBackend
+	var migrationFences coordinatormigration.FenceStore
+	var durableRouteStore routestore.Store
 	var runtimeLeases *routing.RuntimeLeaseOverlay
 	if mode == routingModeStaticDualZone {
 		migrations = newMigrationHandler(
@@ -114,14 +124,11 @@ func run() error {
 			if configErr != nil {
 				return configErr
 			}
-			tables := []string{fenceTable, migrationTable}
-			if plannerConfig.Enabled {
-				taskTable, tableErr := tcaplusdb.TableName("TCAPLUS_MIGRATION_TASK_TABLE", "MigrationTask")
-				if tableErr != nil {
-					return tableErr
-				}
-				tables = append(tables, taskTable)
+			taskTable, tableErr := tcaplusdb.TableName("TCAPLUS_MIGRATION_TASK_TABLE", "MigrationTask")
+			if tableErr != nil {
+				return tableErr
 			}
+			tables := []string{fenceTable, migrationTable, taskTable}
 			var durableStore *routestore.TcaplusStore
 			if routeStoreMode == routeStoreTcaplus {
 				metaTable, tableErr := tcaplusdb.TableName("TCAPLUS_SHARD_MAP_META_TABLE", "ShardMapMeta")
@@ -141,11 +148,9 @@ func run() error {
 				return openErr
 			}
 			defer client.Close()
-			if plannerConfig.Enabled {
-				migrationTasks, configErr = coordinatormigration.NewTcaplusTaskStore(client, tcaplusConfig.ZoneID)
-				if configErr != nil {
-					return configErr
-				}
+			migrationTasks, configErr = coordinatormigration.NewTcaplusTaskStore(client, tcaplusConfig.ZoneID)
+			if configErr != nil {
+				return configErr
 			}
 			control, controlErr := routing.NewTcaplusControlStore(
 				client, tcaplusConfig.ZoneID,
@@ -153,6 +158,8 @@ func run() error {
 			if controlErr != nil {
 				return controlErr
 			}
+			migrationProgressBackend = control
+			migrationFences = control
 			fenceCtx, fenceCancel := context.WithTimeout(
 				context.Background(), 60*time.Second,
 			)
@@ -173,6 +180,7 @@ func run() error {
 				if configErr != nil {
 					return configErr
 				}
+				durableRouteStore = durableStore
 				if environmentOr("COORDINATOR_ROUTE_REINITIALIZE", "false") == "true" {
 					if environmentOr("APP_ENV", "development") == "production" {
 						return errors.New("COORDINATOR_ROUTE_REINITIALIZE is forbidden in production")
@@ -306,6 +314,15 @@ func run() error {
 			}
 		}
 	}
+	if migrations != nil {
+		if migrationTasks == nil {
+			migrationTasks, err = coordinatormigration.NewMemoryTaskStore()
+			if err != nil {
+				return err
+			}
+		}
+		migrations.tasks = migrationTasks
+	}
 
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
@@ -330,6 +347,11 @@ func run() error {
 	}
 	if migrations != nil {
 		migrations.routePublisher = routePublisher
+		migrations.availabilityVersion = func() uint64 { return membershipRuntime.registry.Snapshot().AvailabilityVersion }
+	}
+	if err := startMigrationWorker(ctx, workerConfig, migrationTasks, migrationProgressBackend, routes,
+		durableRouteStore, migrationFences, routePublisher, &http.Client{Timeout: 5 * time.Second}, leaseDuration, logger); err != nil {
+		return err
 	}
 	coordinatorService, err := publisher.NewGRPCServer(routes, routePublisher, publisher.GRPCConfig{})
 	if err != nil {
@@ -361,14 +383,6 @@ func run() error {
 		mux.HandleFunc(
 			"GET /internal/v1/migrations",
 			migrations.listOpen,
-		)
-		mux.HandleFunc(
-			"POST /internal/v1/shards/{shard_id}/migration/continue",
-			migrations.continueMigration,
-		)
-		mux.HandleFunc(
-			"POST /internal/v1/shards/{shard_id}/migration/abandon",
-			migrations.abandonMigration,
 		)
 	}
 	mux.HandleFunc("GET /internal/v1/debug/route-subscribers", subscriberDiagnosticsHandler(routePublisher))

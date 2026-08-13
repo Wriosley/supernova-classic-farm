@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	coordinatormigration "github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/migration"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/routestore"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
@@ -31,6 +33,8 @@ type migrationHandler struct {
 	tcaplus                *routing.TcaplusControlStore
 	routeStore             routestore.Store
 	runtimeLeases          *routing.RuntimeLeaseOverlay
+	tasks                  coordinatormigration.TaskStore
+	availabilityVersion    func() uint64
 	routePublisher         RouteChangePublisher
 	deleteProgressOverride func(context.Context, *migrationProgress) error
 	progress               [routing.ShardCount]*migrationProgress
@@ -140,18 +144,47 @@ func (h *migrationHandler) move(w http.ResponseWriter, r *http.Request) {
 		writeMigrationError(w, http.StatusBadRequest, "UNKNOWN_TARGET_ZONE")
 		return
 	}
-
-	h.locks[shardID].Lock()
-	defer h.locks[shardID].Unlock()
-	if h.advanceFence != nil {
-		if h.routeStore != nil {
-			h.moveDurable(w, r, shardID, target)
-			return
-		}
-		h.moveMySQL(w, r, shardID, target)
+	if h.tasks == nil {
+		writeMigrationError(w, http.StatusServiceUnavailable, "MIGRATION_QUEUE_UNAVAILABLE")
 		return
 	}
-	h.moveMemory(w, r, shardID, target)
+	h.enqueueDrain(w, r, shardID, target)
+}
+
+func (h *migrationHandler) enqueueDrain(w http.ResponseWriter, r *http.Request, shardID uint32, target routing.ZoneCandidate) {
+	current, err := h.routes.Entry(shardID)
+	if err != nil || current.State != routing.RouteStateActive {
+		writeMigrationError(w, http.StatusConflict, "SHARD_NOT_ACTIVE")
+		return
+	}
+	if current.OwnerZoneID == target.ZoneID {
+		writeMigrationError(w, http.StatusConflict, "ALREADY_OWNER")
+		return
+	}
+	availabilityVersion := uint64(1)
+	if h.availabilityVersion != nil {
+		if currentVersion := h.availabilityVersion(); currentVersion > 0 {
+			availabilityVersion = currentVersion
+		}
+	}
+	task, _, err := h.tasks.UpsertPlanned(r.Context(), coordinatormigration.Task{
+		ShardID: shardID, Reason: coordinatormigration.ReasonDrain, Priority: coordinatormigration.PriorityDrain,
+		SourceZoneID: current.OwnerZoneID, SourceEndpoint: current.OwnerEndpoint,
+		SourceOwnerEpoch: current.OwnerEpoch, SourceRouteVersion: current.RouteVersion,
+		TargetZoneID: target.ZoneID, TargetEndpoint: target.Endpoint,
+		PlannedFromMapVersion: h.routes.Snapshot().MapVersion, PlannedFromAvailabilityVersion: availabilityVersion,
+	})
+	if err != nil {
+		writeMigrationError(w, http.StatusConflict, "TASK_CREATE_FAILED")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(struct {
+		ShardID uint32 `json:"shard_id"`
+		TaskID  string `json:"task_id"`
+		Status  string `json:"status"`
+	}{ShardID: shardID, TaskID: hex.EncodeToString(task.TaskID), Status: string(task.Status)})
 }
 
 func (h *migrationHandler) moveDurable(w http.ResponseWriter, r *http.Request, shardID uint32, target routing.ZoneCandidate) {

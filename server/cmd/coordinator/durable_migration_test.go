@@ -18,7 +18,7 @@ func TestDurableFenceFailureLeavesCommittedPreparing(t *testing.T) {
 	handler, routes, shardID, request := durableMigrationFixture(t)
 	handler.advanceFence = func(context.Context, routing.RouteEntry) error { return errors.New("injected fence failure") }
 	response := httptest.NewRecorder()
-	handler.move(response, request)
+	runLegacyDurable(handler, response, request, shardID)
 	entry, _ := routes.Entry(shardID)
 	if response.Code == http.StatusOK || entry.State != routing.RouteStatePreparing || routes.Snapshot().MapVersion != 2 {
 		t.Fatalf("status=%d map=%d route=%+v", response.Code, routes.Snapshot().MapVersion, entry)
@@ -29,7 +29,7 @@ func TestDurableTargetPrepareFailureRemainsResumable(t *testing.T) {
 	handler, routes, shardID, request := durableMigrationFixture(t)
 	handler.client = clientRejectingPath("/prepare", 1)
 	response := httptest.NewRecorder()
-	handler.move(response, request)
+	runLegacyDurable(handler, response, request, shardID)
 	entry, _ := routes.Entry(shardID)
 	if response.Code == http.StatusOK || entry.State != routing.RouteStatePreparing ||
 		handler.progress[shardID] == nil || handler.progress[shardID].Step != routing.MigrationStepFenceAdvanced {
@@ -48,7 +48,7 @@ func TestDurableActiveRefreshAndCleanupFailuresNeverRollBack(t *testing.T) {
 			handler, routes, shardID, request := durableMigrationFixture(t)
 			configure(handler)
 			response := httptest.NewRecorder()
-			handler.move(response, request)
+			runLegacyDurable(handler, response, request, shardID)
 			entry, _ := routes.Entry(shardID)
 			if response.Code == http.StatusOK || entry.State != routing.RouteStateActive ||
 				entry.OwnerZoneID != "zone-b" || routes.Snapshot().MapVersion != 3 {
@@ -62,7 +62,7 @@ func TestDurablePreparingFailureDoesNotChangeInMemoryCurrent(t *testing.T) {
 	handler, routes, shardID, request := durableMigrationFixture(t)
 	handler.routeStore = &failingRouteStore{Store: handler.routeStore, failPreparing: true}
 	response := httptest.NewRecorder()
-	handler.move(response, request)
+	runLegacyDurable(handler, response, request, shardID)
 	entry, _ := routes.Entry(shardID)
 	if response.Code == http.StatusOK || entry.State != routing.RouteStateActive || entry.OwnerZoneID != "zone-a" {
 		t.Fatalf("status=%d route=%+v", response.Code, entry)
@@ -73,7 +73,7 @@ func TestDurableActiveFailureLeavesPreparingInMemory(t *testing.T) {
 	handler, routes, shardID, request := durableMigrationFixture(t)
 	handler.routeStore = &failingRouteStore{Store: handler.routeStore, failActive: true}
 	response := httptest.NewRecorder()
-	handler.move(response, request)
+	runLegacyDurable(handler, response, request, shardID)
 	entry, _ := routes.Entry(shardID)
 	if response.Code == http.StatusOK || entry.State != routing.RouteStatePreparing || entry.OwnerZoneID != "zone-b" {
 		t.Fatalf("status=%d route=%+v", response.Code, entry)
@@ -85,7 +85,7 @@ func TestDurableMigrationExposesOnlyCommittedActive(t *testing.T) {
 	recorder := &recordingRoutePublisher{}
 	handler.routePublisher = recorder
 	response := httptest.NewRecorder()
-	handler.move(response, request)
+	runLegacyDurable(handler, response, request, shardID)
 	entry, err := routes.Entry(shardID)
 	if err != nil || response.Code != http.StatusOK || entry.State != routing.RouteStateActive ||
 		entry.OwnerZoneID != "zone-b" || routes.Snapshot().MapVersion != 3 {
@@ -100,7 +100,7 @@ func TestDurablePublisherFailureDoesNotRollBackCurrent(t *testing.T) {
 	handler, routes, shardID, request := durableMigrationFixture(t)
 	handler.routePublisher = failingRoutePublisher{}
 	response := httptest.NewRecorder()
-	handler.move(response, request)
+	runLegacyDurable(handler, response, request, shardID)
 	entry, _ := routes.Entry(shardID)
 	if entry.State != routing.RouteStateActive || entry.OwnerZoneID != "zone-b" || routes.Snapshot().MapVersion != 3 {
 		t.Fatalf("publisher failure rolled back Current: %+v", entry)
@@ -118,6 +118,10 @@ type failingRoutePublisher struct{}
 
 func (failingRoutePublisher) PublishRoutes(routing.Snapshot, routing.Snapshot) error {
 	return errors.New("injected publish failure")
+}
+
+func runLegacyDurable(handler *migrationHandler, response http.ResponseWriter, request *http.Request, shardID uint32) {
+	handler.moveDurable(response, request, shardID, handler.zones["zone-b"])
 }
 
 type failingRouteStore struct {

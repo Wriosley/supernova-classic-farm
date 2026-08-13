@@ -10,8 +10,46 @@ import (
 	"testing"
 	"time"
 
+	coordinatormigration "github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/migration"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 )
+
+func TestManualMoveCreatesDrainTaskWithoutChangingRoute(t *testing.T) {
+	now := time.Date(2026, 8, 13, 17, 0, 0, 0, time.UTC)
+	zones := []routing.ZoneCandidate{{ZoneID: "zone-a", Endpoint: "http://zone-a:8082"}, {ZoneID: "zone-b", Endpoint: "http://zone-b:8082"}}
+	routes, err := routing.NewStaticMap(now, time.Minute, zones)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shardID := coordinatorShardOwnedBy(t, routes, "zone-a")
+	store, err := coordinatormigration.NewMemoryTaskStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := newMigrationHandler(routes, zones, nil, func() time.Time { return now }, time.Minute)
+	handler.tasks = store
+	request := httptest.NewRequest(http.MethodPost,
+		"/internal/v1/shards/"+strconv.FormatUint(uint64(shardID), 10)+"/move",
+		strings.NewReader(`{"target_zone_id":"zone-b"}`))
+	request.SetPathValue("shard_id", strconv.FormatUint(uint64(shardID), 10))
+	request.RemoteAddr = "127.0.0.1:45678"
+	response := httptest.NewRecorder()
+
+	handler.move(response, request)
+
+	if response.Code != http.StatusAccepted || !strings.Contains(response.Body.String(), `"task_id"`) {
+		t.Fatalf("move status=%d body=%s", response.Code, response.Body.String())
+	}
+	task, found, err := store.Get(context.Background(), shardID)
+	if err != nil || !found || task.Status != coordinatormigration.StatusPlanned || task.Reason != coordinatormigration.ReasonDrain ||
+		task.Priority != coordinatormigration.PriorityDrain || task.TargetZoneID != "zone-b" {
+		t.Fatalf("queued task = (%+v, %t, %v)", task, found, err)
+	}
+	entry, _ := routes.Entry(shardID)
+	if entry.OwnerZoneID != "zone-a" || entry.State != routing.RouteStateActive || entry.RouteVersion != 1 {
+		t.Fatalf("enqueue changed Current: %+v", entry)
+	}
+}
 
 func TestMySQLMigrationDrainsAdvancesFencePreparesAndActivates(t *testing.T) {
 	var drainStarted atomic.Bool
@@ -85,7 +123,7 @@ func TestMySQLMigrationDrainsAdvancesFencePreparesAndActivates(t *testing.T) {
 	request.SetPathValue("shard_id", strconv.FormatUint(uint64(shardID), 10))
 	request.RemoteAddr = "127.0.0.1:45678"
 	response := httptest.NewRecorder()
-	handler.move(response, request)
+	handler.moveMySQL(response, request, shardID, handler.zones["zone-b"])
 	if response.Code != http.StatusOK {
 		t.Fatalf("move status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -153,7 +191,7 @@ func TestManualMigrationDrainsOldOwnerAndRefreshesNewOwner(t *testing.T) {
 	request.RemoteAddr = "127.0.0.1:45678"
 	response := httptest.NewRecorder()
 
-	handler.move(response, request)
+	handler.moveMemory(response, request, shardID, handler.zones["zone-b"])
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("move status=%d body=%s", response.Code, response.Body.String())
@@ -206,7 +244,7 @@ func TestManualMigrationLeavesRouteUnchangedWhenDrainRejects(t *testing.T) {
 	request.RemoteAddr = "127.0.0.1:45678"
 	response := httptest.NewRecorder()
 
-	handler.move(response, request)
+	handler.moveMemory(response, request, shardID, handler.zones["zone-b"])
 
 	if response.Code != http.StatusConflict {
 		t.Fatalf("move status=%d body=%s", response.Code, response.Body.String())

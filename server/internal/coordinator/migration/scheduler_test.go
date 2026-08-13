@@ -127,6 +127,31 @@ func TestSchedulerCancellationStopsWorkerAndPersistsRetry(t *testing.T) {
 	}
 }
 
+func TestSchedulerShutdownIsBoundedWhenWorkerIgnoresCancellation(t *testing.T) {
+	store := schedulerTaskStore(t, rebalanceTask(11, "zone-a", "zone-b", 1))
+	executor := &stuckTaskExecutor{started: make(chan struct{}), release: make(chan struct{})}
+	scheduler, err := NewScheduler(store, executor, Limits{Global: 1, PerSource: 1, PerTarget: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduler.shutdownTimeout = 20 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- scheduler.Run(ctx) }()
+	<-executor.started
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("shutdown exceeded configured bound")
+	}
+	close(executor.release)
+	scheduler.Wait()
+}
+
 func schedulerTaskStore(t *testing.T, proposals ...Task) *MemoryTaskStore {
 	t.Helper()
 	store, err := NewMemoryTaskStore()
@@ -196,4 +221,15 @@ func (executor *cancelAwareTaskExecutor) Execute(ctx context.Context, _ uint32, 
 	close(executor.started)
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+type stuckTaskExecutor struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (executor *stuckTaskExecutor) Execute(context.Context, uint32, []byte) error {
+	close(executor.started)
+	<-executor.release
+	return context.Canceled
 }

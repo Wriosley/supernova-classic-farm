@@ -25,15 +25,18 @@ func (g *shardExecutionGates) readLock(shardID uint32) func() {
 }
 
 type lifecycleHandler struct {
-	runtime        *player.Runtime
-	authorization  *routing.AuthorizationTable
-	gates          *shardExecutionGates
-	connections    interface{ RemoveShard(shardID uint32) []connection.PlayerConnection }
-	refresh        func() error
-	now            func() time.Time
-	drainCompleted [routing.ShardCount]bool
-	drainManifests [routing.ShardCount][]player.DrainedPlayer
-	drainEpoch     [routing.ShardCount]uint64
+	runtime       *player.Runtime
+	authorization *routing.AuthorizationTable
+	gates         *shardExecutionGates
+	connections   interface {
+		RemoveShard(shardID uint32) []connection.PlayerConnection
+	}
+	refresh         func() error
+	now             func() time.Time
+	drainCompleted  [routing.ShardCount]bool
+	drainManifests  [routing.ShardCount][]player.DrainedPlayer
+	drainEpoch      [routing.ShardCount]uint64
+	drainTransition [routing.ShardCount]string
 }
 
 func (h *lifecycleHandler) drain(w http.ResponseWriter, r *http.Request) {
@@ -46,20 +49,26 @@ func (h *lifecycleHandler) drain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		OwnerEpoch string `json:"owner_epoch"`
+		OwnerEpoch   string `json:"owner_epoch"`
+		TransitionID string `json:"transition_id"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_DRAIN_REQUEST")
 		return
 	}
 	ownerEpoch, err := strconv.ParseUint(request.OwnerEpoch, 10, 64)
-	if err != nil || ownerEpoch == 0 {
+	if err != nil || ownerEpoch == 0 || request.TransitionID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_OWNER_EPOCH")
 		return
 	}
 
 	h.gates.locks[shardID].Lock()
 	defer h.gates.locks[shardID].Unlock()
+	if existing := h.drainTransition[shardID]; existing != "" &&
+		(existing != request.TransitionID || h.drainEpoch[shardID] != ownerEpoch) {
+		writeError(w, http.StatusConflict, "DRAIN_TRANSITION_CONFLICT")
+		return
+	}
 	entry, err := h.authorization.BeginDrain(shardID, ownerEpoch, h.now())
 	if err != nil {
 		writeError(w, http.StatusConflict, "NOT_OWNER")
@@ -69,10 +78,13 @@ func (h *lifecycleHandler) drain(w http.ResponseWriter, r *http.Request) {
 		h.drainCompleted[shardID] = false
 		h.drainManifests[shardID] = nil
 		h.drainEpoch[shardID] = ownerEpoch
+		h.drainTransition[shardID] = request.TransitionID
 	}
 	if h.runtime.HasActiveActorsForShard(shardID) &&
 		!h.runtime.SupportsActiveMigration() {
 		h.authorization.Resume(shardID)
+		h.drainEpoch[shardID] = 0
+		h.drainTransition[shardID] = ""
 		writeError(w, http.StatusConflict, "SHARD_HAS_ACTIVE_ACTORS")
 		return
 	}
@@ -98,19 +110,25 @@ func (h *lifecycleHandler) completeDrain(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var request struct {
-		OwnerEpoch string `json:"owner_epoch"`
+		OwnerEpoch   string `json:"owner_epoch"`
+		TransitionID string `json:"transition_id"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_DRAIN_REQUEST")
 		return
 	}
 	ownerEpoch, err := strconv.ParseUint(request.OwnerEpoch, 10, 64)
-	if err != nil || !h.authorization.IsDraining(shardID, ownerEpoch) {
+	if err != nil || request.TransitionID == "" {
 		writeError(w, http.StatusConflict, "DRAIN_NOT_STARTED")
 		return
 	}
 	h.gates.locks[shardID].Lock()
 	defer h.gates.locks[shardID].Unlock()
+	if !h.authorization.IsDraining(shardID, ownerEpoch) || h.drainEpoch[shardID] != ownerEpoch ||
+		h.drainTransition[shardID] != request.TransitionID {
+		writeError(w, http.StatusConflict, "DRAIN_NOT_STARTED")
+		return
+	}
 	manifest := h.drainManifests[shardID]
 	if !h.drainCompleted[shardID] {
 		manifest, err = h.runtime.DrainShardForMigration(
@@ -208,11 +226,30 @@ func (h *lifecycleHandler) resume(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var request struct {
+		OwnerEpoch   string `json:"owner_epoch"`
+		TransitionID string `json:"transition_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_RESUME_REQUEST")
+		return
+	}
+	ownerEpoch, err := strconv.ParseUint(request.OwnerEpoch, 10, 64)
+	if err != nil || ownerEpoch == 0 || request.TransitionID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_RESUME_REQUEST")
+		return
+	}
 	h.gates.locks[shardID].Lock()
+	if h.drainEpoch[shardID] != ownerEpoch || h.drainTransition[shardID] != request.TransitionID {
+		h.gates.locks[shardID].Unlock()
+		writeError(w, http.StatusConflict, "DRAIN_TRANSITION_CONFLICT")
+		return
+	}
 	h.authorization.Resume(shardID)
 	h.drainCompleted[shardID] = false
 	h.drainManifests[shardID] = nil
 	h.drainEpoch[shardID] = 0
+	h.drainTransition[shardID] = ""
 	h.gates.locks[shardID].Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }

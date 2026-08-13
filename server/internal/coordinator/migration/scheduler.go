@@ -22,10 +22,11 @@ type TaskExecutor interface {
 }
 
 type Scheduler struct {
-	store    TaskStore
-	executor TaskExecutor
-	limits   Limits
-	now      func() time.Time
+	store           TaskStore
+	executor        TaskExecutor
+	limits          Limits
+	now             func() time.Time
+	shutdownTimeout time.Duration
 
 	mu       sync.Mutex
 	active   map[uint32]struct{}
@@ -42,7 +43,7 @@ func NewScheduler(store TaskStore, executor TaskExecutor, limits Limits) (*Sched
 	if limits.Global <= 0 || limits.PerSource <= 0 || limits.PerTarget <= 0 {
 		return nil, errors.New("migration scheduler limits must be positive")
 	}
-	return &Scheduler{store: store, executor: executor, limits: limits, now: time.Now,
+	return &Scheduler{store: store, executor: executor, limits: limits, now: time.Now, shutdownTimeout: 10 * time.Second,
 		active: make(map[uint32]struct{}), sources: make(map[string]int), targets: make(map[string]int)}, nil
 }
 
@@ -58,7 +59,7 @@ func (scheduler *Scheduler) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			cancel()
-			scheduler.Wait()
+			scheduler.waitBounded()
 			return nil
 		case <-ticker.C:
 		}
@@ -95,6 +96,18 @@ func (scheduler *Scheduler) RunOnce(ctx context.Context) (int, error) {
 }
 
 func (scheduler *Scheduler) Wait() { scheduler.workerWG.Wait() }
+
+func (scheduler *Scheduler) waitBounded() {
+	done := make(chan struct{})
+	go func() {
+		scheduler.workerWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(scheduler.shutdownTimeout):
+	}
+}
 
 func (scheduler *Scheduler) reserve(task Task) bool {
 	scheduler.mu.Lock()
