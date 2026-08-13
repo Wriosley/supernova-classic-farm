@@ -78,45 +78,19 @@ func (s *TcaplusStore) BootstrapIfEmpty(ctx context.Context, candidate Snapshot)
 		loaded, loadErr := s.Load(ctx)
 		return loaded, false, loadErr
 	}
-	routes, routesFound, err := s.loadRoutes(ctx)
-	if err != nil {
-		return Snapshot{}, false, err
-	}
-	existing := make(map[uint32]*tcaplusv1.ShardRoute, len(routes))
-	if routesFound {
-		for _, record := range routes {
-			if record.LogicalShardId >= routing.ShardCount {
-				return Snapshot{}, false, fmt.Errorf("%w: partial route %d is outside shard set", ErrRouteStoreCorrupt, record.LogicalShardId)
-			}
-			if _, duplicate := existing[record.LogicalShardId]; duplicate {
-				return Snapshot{}, false, fmt.Errorf("%w: duplicate partial route %d", ErrRouteStoreCorrupt, record.LogicalShardId)
-			}
-			expected, recordErr := routeRecord(candidate.Entries[record.LogicalShardId], candidate.Metadata.MapVersion)
-			if recordErr != nil {
-				return Snapshot{}, false, recordErr
-			}
-			if !proto.Equal(record, expected) {
-				return Snapshot{}, false, fmt.Errorf("%w: partial route %d differs from bootstrap candidate", ErrRouteStoreCorrupt, record.LogicalShardId)
-			}
-			existing[record.LogicalShardId] = record
-		}
-	}
 	for _, entry := range candidate.Entries {
-		if _, found := existing[entry.ShardID]; found {
-			continue
-		}
 		record, err := routeRecord(entry, candidate.Metadata.MapVersion)
 		if err != nil {
 			return Snapshot{}, false, err
 		}
 		if err := s.client.DoInsert(record, &option.PBOpt{Ctx: ctx}, s.zoneID); err != nil {
 			if tcaplusdb.IsAlreadyExists(err) {
-				winner, _, found, loadErr := s.loadRoute(ctx, entry.ShardID)
+				_, version, found, loadErr := s.loadRoute(ctx, entry.ShardID)
 				if loadErr != nil || !found {
-					return Snapshot{}, false, fmt.Errorf("load concurrent bootstrap route %d: %w", entry.ShardID, loadErr)
+					return Snapshot{}, false, fmt.Errorf("load interrupted bootstrap route %d: %w", entry.ShardID, loadErr)
 				}
-				if !proto.Equal(winner, record) {
-					return Snapshot{}, false, fmt.Errorf("%w: concurrent bootstrap route %d differs from candidate", ErrRouteStoreCorrupt, entry.ShardID)
+				if updateErr := s.client.DoUpdate(record, &option.PBOpt{Ctx: ctx, Version: version}, s.zoneID); updateErr != nil {
+					return Snapshot{}, false, fmt.Errorf("replace interrupted bootstrap route %d: %w", entry.ShardID, updateErr)
 				}
 				continue
 			}

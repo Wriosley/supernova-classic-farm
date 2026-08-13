@@ -75,44 +75,34 @@ func TestTcaplusStoreBootstrapReloadAndExactReplay(t *testing.T) {
 func TestTcaplusStoreResumesPartialBootstrap(t *testing.T) {
 	ctx := context.Background()
 	client := &insertCountingClient{Client: testtcaplus.New()}
-	candidate := testSnapshot(t)
-	insertCandidateRoutes(t, client, candidate, 1995)
+	stale := testSnapshot(t)
+	insertCandidateRoutes(t, client, stale, 1995)
 	client.routeInserts = 0
+	candidate := testSnapshot(t)
 
 	loaded, created, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, candidate)
 	if err != nil || !created || len(loaded.Entries) != int(routing.ShardCount) {
 		t.Fatalf("resume created=%v entries=%d err=%v", created, len(loaded.Entries), err)
 	}
-	if want := int(routing.ShardCount) - 1995; client.routeInserts != want || client.metaInserts != 1 {
-		t.Fatalf("resume inserts routes=%d want=%d meta=%d", client.routeInserts, want, client.metaInserts)
+	if want := int(routing.ShardCount) - 1995; client.routeInserts != want || client.routeUpdates != 1995 || client.metaInserts != 1 {
+		t.Fatalf("resume inserts=%d want=%d updates=%d meta=%d", client.routeInserts, want, client.routeUpdates, client.metaInserts)
+	}
+	if loaded.Entries[5] != candidate.Entries[5] || loaded.Entries[3000] != candidate.Entries[3000] {
+		t.Fatal("resumed bootstrap mixed stale and fresh candidates")
 	}
 }
 
-func TestTcaplusStoreRejectsConflictingPartialBootstrap(t *testing.T) {
+func TestTcaplusStorePreservesCommittedCurrent(t *testing.T) {
 	ctx := context.Background()
 	client := testtcaplus.New()
+	committed, _, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, testSnapshot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
 	candidate := testSnapshot(t)
-	insertCandidateRoutes(t, client, candidate, 10)
-	record := &tcaplusv1.ShardRoute{LogicalShardId: 5}
-	opt := &option.PBOpt{}
-	if err := client.DoGet(record, opt); err != nil {
-		t.Fatal(err)
-	}
-	record.OwnerZoneId = "conflicting-zone"
-	if err := client.DoUpdate(record, &option.PBOpt{Version: opt.Version}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, _, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, candidate); !errors.Is(err, ErrRouteStoreCorrupt) {
-		t.Fatalf("conflicting partial bootstrap error=%v", err)
-	}
-	meta := &tcaplusv1.ShardMapMeta{MapId: shardMapMetaID}
-	if err := client.DoGet(meta, &option.PBOpt{}); !tcaplusdb.IsNotFound(err) {
-		t.Fatalf("metadata unexpectedly created: %v", err)
-	}
-	stored := &tcaplusv1.ShardRoute{LogicalShardId: 5}
-	if err := client.DoGet(stored, &option.PBOpt{}); err != nil || stored.OwnerZoneId != "conflicting-zone" {
-		t.Fatalf("conflicting route overwritten: owner=%q err=%v", stored.OwnerZoneId, err)
+	loaded, created, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, candidate)
+	if err != nil || created || loaded.Entries[5] != committed.Entries[5] {
+		t.Fatalf("committed Current overwritten: created=%v route=%+v err=%v", created, loaded.Entries[5], err)
 	}
 }
 
@@ -130,9 +120,13 @@ func TestTcaplusStoreRetriesInterruptedBootstrap(t *testing.T) {
 
 	client.limit = 0
 	client.cancel = nil
-	loaded, created, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(context.Background(), candidate)
+	fresh := testSnapshot(t)
+	loaded, created, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(context.Background(), fresh)
 	if err != nil || !created || len(loaded.Entries) != int(routing.ShardCount) {
 		t.Fatalf("retry created=%v entries=%d err=%v", created, len(loaded.Entries), err)
+	}
+	if loaded.Entries[0] != fresh.Entries[0] {
+		t.Fatal("retry retained the interrupted candidate")
 	}
 }
 
@@ -303,6 +297,7 @@ type failUpdateClient struct {
 type insertCountingClient struct {
 	*testtcaplus.Client
 	routeInserts int
+	routeUpdates int
 	metaInserts  int
 }
 
@@ -311,6 +306,16 @@ type countingClient struct {
 	traversals int
 	metaGets   int
 	routeGets  int
+}
+
+func (c *insertCountingClient) DoUpdate(message proto.Message, opt *option.PBOpt, zones ...uint32) error {
+	err := c.Client.DoUpdate(message, opt, zones...)
+	if err == nil {
+		if _, ok := message.(*tcaplusv1.ShardRoute); ok {
+			c.routeUpdates++
+		}
+	}
+	return err
 }
 
 func (c *countingClient) DoGet(message proto.Message, opt *option.PBOpt, zones ...uint32) error {

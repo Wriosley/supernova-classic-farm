@@ -215,13 +215,13 @@ Successful commit allocates exactly `expected+1`, stores it in
 `BootstrapIfEmpty` returns `(loaded, created, error)`:
 
 - both tables empty: insert metadata and exactly 4096 ordered routes;
-- metadata absent with a candidate-equal subset of routes: treat it as an
-  interrupted first bootstrap, validate every existing row exactly and insert
-  only missing routes;
+- metadata absent with any subset of routes: treat those rows as an interrupted,
+  uncommitted first bootstrap; CAS-overwrite existing rows with the fresh
+  complete candidate and insert missing routes;
 - insert `ShardMapMeta` only after all 4096 routes exist and match the bootstrap
   candidate; Coordinator must not become Ready before that succeeds;
-- partial route content that differs from the candidate is corruption and must
-  never be guessed, overwritten or recomputed;
+- once metadata exists, routes are committed Current and bootstrap must never
+  guess, overwrite or recompute them;
 - both complete: return the stored snapshot with `created=false`;
 - only one table exists, wrong row count, duplicate/out-of-order Shard IDs, or
   incompatible algorithm metadata: return `ErrRouteStoreCorrupt`;

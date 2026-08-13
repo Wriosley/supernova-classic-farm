@@ -4,7 +4,7 @@
 
 **Goal:** Make first-time durable RouteStore bootstrap resumable and complete, while removing the Traverse-plus-N-reads restart path.
 
-**Architecture:** Treat Meta-absent partial routes as an interrupted bootstrap only when every existing row exactly matches the static candidate; insert only missing rows and publish Meta last. Use traversal records directly for normal snapshots and fetch only the pending target row when a record version is needed for recovery. Give one bootstrap attempt a configurable 10-minute context budget.
+**Architecture:** Treat every Meta-absent route as uncommitted bootstrap debris; CAS-overwrite existing rows with one fresh candidate, insert missing rows, and publish Meta last. Use traversal records directly for normal snapshots and fetch only a CAS target row when its record version is needed. Give one bootstrap attempt a configurable 10-minute context budget.
 
 **Tech Stack:** Go, protobuf, TcaplusDB Go SDK, in-memory fake Tcaplus tests, live Tcaplus verification.
 
@@ -12,7 +12,8 @@
 
 - `ShardMapMeta` is inserted only after exactly 4096 candidate-equal `ShardRoute` rows exist.
 - Once Meta exists, static bootstrap never repairs, overwrites or recomputes durable Current.
-- Partial-row mismatch returns `ErrRouteStoreCorrupt` and fails closed.
+- Meta-absent partial rows may be overwritten; Meta-present durable Current
+  never may.
 - The default bootstrap timeout is 10 minutes; invalid or non-positive overrides fail startup.
 - Durable mode remains disabled by default until live bootstrap and restart pass.
 - Do not delete or overwrite the existing partial live table during verification.
@@ -31,9 +32,9 @@
 
 - [ ] **Step 1: Write failing partial-bootstrap tests**
 
-Add tests that pre-insert candidate route records for Shards `0..1994` without Meta, call `BootstrapIfEmpty`, and assert the result contains `routing.ShardCount` entries and Meta exists. Wrap the fake client to count successful `DoInsert` calls by protobuf type and assert only the missing Route count plus one Meta insert occurred.
+Add tests that pre-insert stale route records for Shards `0..1994` without Meta, call `BootstrapIfEmpty`, and assert the result contains the fresh candidate for all `routing.ShardCount` entries and Meta exists. Wrap the fake client to count Route inserts and updates; assert existing rows were updated, missing rows inserted, and Meta inserted once.
 
-Add a second test that mutates an existing partial row's `OwnerZoneId`, calls bootstrap, expects `errors.Is(err, ErrRouteStoreCorrupt)`, and verifies Meta remains absent and the conflicting row was not overwritten.
+Add a second test that first completes Meta plus routes, then calls bootstrap with a different candidate and verifies committed Current is returned unchanged.
 
 Add a third wrapper that cancels the context after a bounded number of route inserts. Assert the first call returns `context.Canceled` with no Meta, then a second call using a fresh context completes all 4096 rows and Meta.
 
@@ -44,13 +45,13 @@ cd server
 go test -count=1 ./internal/coordinator/routestore -run 'TestTcaplusStore(ResumesPartialBootstrap|RejectsConflictingPartialBootstrap|RetriesInterruptedBootstrap)$'
 ```
 
-Expected: FAIL because current `Load` classifies partial routes without Meta as corrupt before bootstrap can resume.
+Expected: FAIL because current bootstrap either classifies partial routes without Meta as corrupt or refuses to replace stale uncommitted rows.
 
 - [ ] **Step 3: Implement candidate-indexed partial validation and completion**
 
-In `BootstrapIfEmpty`, distinguish states by loading Meta and traversing routes. If Meta exists, call `Load` and return committed Current. If Meta is absent, index traversed records by Shard ID, reject duplicate/out-of-range IDs, and compare every existing row to `routeRecord(candidate.Entries[id], candidate.Metadata.MapVersion)` with `proto.Equal`.
+In `BootstrapIfEmpty`, load Meta first. If Meta exists, call `Load` and return committed Current. If Meta is absent, iterate the complete candidate.
 
-Iterate all candidate entries in Shard order. Skip validated rows and `DoInsert` only missing rows. On `AlreadyExists`, call `loadRoute` for that Shard and require exact equality with the candidate record. After the loop, insert `metaRecord(candidate.Metadata)`. If Meta already exists due to a race, call `Load` and return the winner with `created=false`.
+For every candidate row, try `DoInsert`. On `AlreadyExists`, call `loadRoute` to obtain the current record version, then `DoUpdate` the fresh candidate through CAS. After all 4096 mutations succeed, insert `metaRecord(candidate.Metadata)`. If Meta already exists due to a race, call `Load` and return the winner with `created=false`.
 
 - [ ] **Step 4: Run focused and package tests and verify GREEN**
 
