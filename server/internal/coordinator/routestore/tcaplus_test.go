@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/testtcaplus"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/protocol/option"
@@ -68,6 +69,70 @@ func TestTcaplusStoreBootstrapReloadAndExactReplay(t *testing.T) {
 	reloaded, created, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, testSnapshot(t))
 	if err != nil || created || reloaded.Entries[42] != active {
 		t.Fatalf("reload changed current: created=%v route=%+v err=%v", created, reloaded.Entries[42], err)
+	}
+}
+
+func TestTcaplusStoreResumesPartialBootstrap(t *testing.T) {
+	ctx := context.Background()
+	client := &insertCountingClient{Client: testtcaplus.New()}
+	candidate := testSnapshot(t)
+	insertCandidateRoutes(t, client, candidate, 1995)
+	client.routeInserts = 0
+
+	loaded, created, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, candidate)
+	if err != nil || !created || len(loaded.Entries) != int(routing.ShardCount) {
+		t.Fatalf("resume created=%v entries=%d err=%v", created, len(loaded.Entries), err)
+	}
+	if want := int(routing.ShardCount) - 1995; client.routeInserts != want || client.metaInserts != 1 {
+		t.Fatalf("resume inserts routes=%d want=%d meta=%d", client.routeInserts, want, client.metaInserts)
+	}
+}
+
+func TestTcaplusStoreRejectsConflictingPartialBootstrap(t *testing.T) {
+	ctx := context.Background()
+	client := testtcaplus.New()
+	candidate := testSnapshot(t)
+	insertCandidateRoutes(t, client, candidate, 10)
+	record := &tcaplusv1.ShardRoute{LogicalShardId: 5}
+	opt := &option.PBOpt{}
+	if err := client.DoGet(record, opt); err != nil {
+		t.Fatal(err)
+	}
+	record.OwnerZoneId = "conflicting-zone"
+	if err := client.DoUpdate(record, &option.PBOpt{Version: opt.Version}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, candidate); !errors.Is(err, ErrRouteStoreCorrupt) {
+		t.Fatalf("conflicting partial bootstrap error=%v", err)
+	}
+	meta := &tcaplusv1.ShardMapMeta{MapId: shardMapMetaID}
+	if err := client.DoGet(meta, &option.PBOpt{}); !tcaplusdb.IsNotFound(err) {
+		t.Fatalf("metadata unexpectedly created: %v", err)
+	}
+	stored := &tcaplusv1.ShardRoute{LogicalShardId: 5}
+	if err := client.DoGet(stored, &option.PBOpt{}); err != nil || stored.OwnerZoneId != "conflicting-zone" {
+		t.Fatalf("conflicting route overwritten: owner=%q err=%v", stored.OwnerZoneId, err)
+	}
+}
+
+func TestTcaplusStoreRetriesInterruptedBootstrap(t *testing.T) {
+	client := &cancelAfterRouteInsertsClient{Client: testtcaplus.New(), limit: 50}
+	candidate := testSnapshot(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	client.cancel = cancel
+	if _, _, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(ctx, candidate); !errors.Is(err, context.Canceled) {
+		t.Fatalf("interrupted bootstrap error=%v", err)
+	}
+	if err := client.DoGet(&tcaplusv1.ShardMapMeta{MapId: shardMapMetaID}, &option.PBOpt{}); !tcaplusdb.IsNotFound(err) {
+		t.Fatalf("metadata created before routes completed: %v", err)
+	}
+
+	client.limit = 0
+	client.cancel = nil
+	loaded, created, err := newTestTcaplusStore(t, client).BootstrapIfEmpty(context.Background(), candidate)
+	if err != nil || !created || len(loaded.Entries) != int(routing.ShardCount) {
+		t.Fatalf("retry created=%v entries=%d err=%v", created, len(loaded.Entries), err)
 	}
 }
 
@@ -195,6 +260,58 @@ type failUpdateClient struct {
 	*testtcaplus.Client
 	updates int
 	failAt  int
+}
+
+type insertCountingClient struct {
+	*testtcaplus.Client
+	routeInserts int
+	metaInserts  int
+}
+
+func (c *insertCountingClient) DoInsert(message proto.Message, opt *option.PBOpt, zones ...uint32) error {
+	err := c.Client.DoInsert(message, opt, zones...)
+	if err == nil {
+		switch message.(type) {
+		case *tcaplusv1.ShardRoute:
+			c.routeInserts++
+		case *tcaplusv1.ShardMapMeta:
+			c.metaInserts++
+		}
+	}
+	return err
+}
+
+type cancelAfterRouteInsertsClient struct {
+	*testtcaplus.Client
+	limit  int
+	count  int
+	cancel context.CancelFunc
+}
+
+func (c *cancelAfterRouteInsertsClient) DoInsert(message proto.Message, opt *option.PBOpt, zones ...uint32) error {
+	err := c.Client.DoInsert(message, opt, zones...)
+	if err == nil {
+		if _, ok := message.(*tcaplusv1.ShardRoute); ok {
+			c.count++
+			if c.limit > 0 && c.count == c.limit && c.cancel != nil {
+				c.cancel()
+			}
+		}
+	}
+	return err
+}
+
+func insertCandidateRoutes(t *testing.T, client TcaplusClient, candidate Snapshot, count int) {
+	t.Helper()
+	for index := 0; index < count; index++ {
+		record, err := routeRecord(candidate.Entries[index], candidate.Metadata.MapVersion)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.DoInsert(record, &option.PBOpt{}); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func (c *failUpdateClient) DoUpdate(message proto.Message, opt *option.PBOpt, zones ...uint32) error {
