@@ -115,7 +115,7 @@ func run() error {
 			friendv1.FriendService_CreateShareCode_FullMethodName:   {"gate"},
 			friendv1.FriendService_RedeemShareCode_FullMethodName:   {"gate"},
 			friendv1.FriendService_ListFriends_FullMethodName:       {"gate", "info"},
-			friendv1.FriendService_CheckMutualFriend_FullMethodName: {"zone-local", "zone-a", "zone-b", "gate"},
+			friendv1.FriendService_CheckMutualFriend_FullMethodName: append(rpcauth.ZoneAllowedCallers(true), "gate"),
 		},
 	})
 	if err != nil {

@@ -9,10 +9,21 @@ import (
 
 	coordinatorv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/coordinator"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/publisher"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
+
+func TestAuthServiceUsesStableZoneRole(t *testing.T) {
+	got := authService(Config{
+		SubscriberID: "d859cea1-ac5b-5524-bffa-4e542301cd95",
+		Kind:         coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE,
+	})
+	if got != rpcauth.ZoneService {
+		t.Fatalf("authService() = %q, want %q", got, rpcauth.ZoneService)
+	}
+}
 
 func TestClientWarmsAndAppliesPublishedBatch(t *testing.T) {
 	now := time.Date(2026, 8, 13, 15, 0, 0, 0, time.UTC)

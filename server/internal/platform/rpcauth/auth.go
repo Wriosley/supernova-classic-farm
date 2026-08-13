@@ -26,6 +26,7 @@ import (
 
 const (
 	KeyEnvironment = "INTERNAL_GRPC_HMAC_KEY"
+	ZoneService    = "zone"
 
 	CallerServiceMetadata = "x-cf-caller-service"
 	TimestampMetadata     = "x-cf-timestamp"
@@ -36,6 +37,16 @@ const (
 	DefaultClockWindow = 30 * time.Second
 	minimumKeyBytes    = 32
 )
+
+// ZoneAllowedCallers returns the stable Zone service identity and, while the
+// compatibility switch is enabled, the pre-discovery logical Zone identities.
+func ZoneAllowedCallers(includeLegacy bool) []string {
+	callers := []string{ZoneService}
+	if includeLegacy {
+		callers = append(callers, "zone-local", "zone-a", "zone-b")
+	}
+	return callers
+}
 
 var (
 	servicePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)

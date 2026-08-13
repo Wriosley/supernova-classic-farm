@@ -111,13 +111,11 @@ func run() error {
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
-			mailv1.MailService_OpenMailbox_FullMethodName:           {"gate"},
-			mailv1.MailService_MarkMailRead_FullMethodName:          {"gate"},
-			mailv1.MailService_CheckMailboxIndicator_FullMethodName: {"gate"},
-			mailv1.MailService_ClaimMail_FullMethodName:             {"gate"},
-			mailv1.MailService_CreateGiftMail_FullMethodName: {
-				"zone-local", "zone-a", "zone-b",
-			},
+			mailv1.MailService_OpenMailbox_FullMethodName:            {"gate"},
+			mailv1.MailService_MarkMailRead_FullMethodName:           {"gate"},
+			mailv1.MailService_CheckMailboxIndicator_FullMethodName:  {"gate"},
+			mailv1.MailService_ClaimMail_FullMethodName:              {"gate"},
+			mailv1.MailService_CreateGiftMail_FullMethodName:         rpcauth.ZoneAllowedCallers(true),
 			mailv1.MailService_CreateSystemRewardMail_FullMethodName: {"friend"},
 		},
 	})

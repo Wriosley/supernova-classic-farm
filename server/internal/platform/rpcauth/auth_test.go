@@ -164,7 +164,7 @@ func TestLoadKeyFromEnvRequiresStrongKey(t *testing.T) {
 }
 
 func TestStreamInterceptorsAuthenticateAllowedCallers(t *testing.T) {
-	for _, caller := range []string{"gate", "info", "zone-a"} {
+	for _, caller := range []string{"gate", "info", "zone"} {
 		t.Run(caller, func(t *testing.T) {
 			now := time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC)
 			client, err := NewClientStreamInterceptor(ClientConfig{
@@ -176,7 +176,7 @@ func TestStreamInterceptorsAuthenticateAllowedCallers(t *testing.T) {
 			}
 			server, err := NewServerStreamInterceptor(ServerConfig{
 				Key: testKey, Now: func() time.Time { return now },
-				AllowedCallers: map[string][]string{testStreamMethod: {"gate", "info", "zone-a"}},
+				AllowedCallers: map[string][]string{testStreamMethod: {"gate", "info", "zone"}},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -205,6 +205,26 @@ func TestStreamInterceptorsAuthenticateAllowedCallers(t *testing.T) {
 				t.Fatalf("valid stream rejected: %v", err)
 			}
 		})
+	}
+}
+
+func TestZoneAllowedCallersCompatibility(t *testing.T) {
+	if got := ZoneAllowedCallers(false); len(got) != 1 || got[0] != ZoneService {
+		t.Fatalf("strict callers=%v", got)
+	}
+	got := ZoneAllowedCallers(true)
+	want := []string{"zone", "zone-local", "zone-a", "zone-b"}
+	if len(got) != len(want) {
+		t.Fatalf("compat callers=%v", got)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("compat callers=%v", got)
+		}
+	}
+	got[0] = "mutated"
+	if ZoneAllowedCallers(true)[0] != ZoneService {
+		t.Fatal("caller list was mutable across calls")
 	}
 }
 

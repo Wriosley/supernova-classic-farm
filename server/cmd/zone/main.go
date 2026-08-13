@@ -28,6 +28,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/push"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/zoneidentity"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -52,6 +53,11 @@ func main() {
 	if err := internalnet.RequireListenAddress(listenAddress, "ZoneSvr"); err != nil {
 		log.Fatal(err)
 	}
+	identity, err := zoneidentity.New(zoneIdentityConfig(routingMode, ownerZoneID, listenAddress))
+	if err != nil {
+		log.Fatalf("create Zone identity: %v", err)
+	}
+	ownerZoneID = identity.LogicalZoneID
 	dsn := strings.TrimSpace(os.Getenv("MYSQL_DSN"))
 	logger, err := logging.New("zone-"+ownerZoneID, "development", "info")
 	if err != nil {
@@ -206,7 +212,7 @@ func main() {
 			}}
 			go refreshAuthorizationLoop(ctx, table, client, coordinatorURL, logger)
 		case "coordinator-sdk":
-			sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: environmentOr("COORDINATOR_RPC_URL", coordinatorURL), SubscriberID: environmentOr("ZONE_INSTANCE_ID", ownerZoneID), Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE, HMACKey: rpcKey, OnSnapshot: table.Replace})
+			sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: environmentOr("COORDINATOR_RPC_URL", coordinatorURL), SubscriberID: identity.IncarnationID, Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE, HMACKey: rpcKey, OnSnapshot: table.Replace})
 			if sdkErr != nil {
 				log.Fatal(sdkErr)
 			}
@@ -230,7 +236,7 @@ func main() {
 		pushEndpoint = "http://127.0.0.1:8081"
 	}
 	pushForwarder, err = player.NewGRPCPushForwarder(
-		rpcKey, ownerZoneID, pushEndpoint, gatewayID,
+		rpcKey, rpcauth.ZoneService, pushEndpoint, gatewayID,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -240,11 +246,11 @@ func main() {
 	}
 
 	friendURL := environmentOr("FRIEND_RPC_URL", "http://127.0.0.1:8085")
-	friendClient, err := visit.NewFriendRPCClient(rpcKey, ownerZoneID, friendURL)
+	friendClient, err := visit.NewFriendRPCClient(rpcKey, rpcauth.ZoneService, friendURL)
 	if err != nil {
 		log.Fatal(err)
 	}
-	ownerFarmClient, err := visit.NewZoneOwnerFarmClient(rpcKey, ownerZoneID, coordinatorURL, nil)
+	ownerFarmClient, err := visit.NewZoneOwnerFarmClient(rpcKey, rpcauth.ZoneService, coordinatorURL, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -321,7 +327,7 @@ func main() {
 		if mailURL == "" {
 			logger.Warn("MAIL_RPC_URL unset; gift Outbox relay disabled")
 		} else {
-			mailClient, mailErr := outbox.NewMailClient(rpcKey, ownerZoneID, mailURL)
+			mailClient, mailErr := outbox.NewMailClient(rpcKey, rpcauth.ZoneService, mailURL)
 			if mailErr != nil {
 				log.Fatal(mailErr)
 			}
@@ -357,6 +363,7 @@ func main() {
 	healthHandler := health.NewHandler()
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
+	mux.Handle("GET /internal/v1/zone-identity", newZoneIdentityHandler(identity))
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
@@ -366,12 +373,12 @@ func main() {
 			rpcv1.VisitorZoneService_EnterFriendFarm_FullMethodName:                 {"gate"},
 			rpcv1.VisitorZoneService_HeartbeatFriendFarm_FullMethodName:             {"gate"},
 			rpcv1.VisitorZoneService_ExitFriendFarm_FullMethodName:                  {"gate"},
-			rpcv1.OwnerFarmService_EnterVisitor_FullMethodName:                      {"zone-local", "zone-a", "zone-b"},
-			rpcv1.OwnerFarmService_RefreshVisitorHeartbeat_FullMethodName:           {"zone-local", "zone-a", "zone-b"},
-			rpcv1.OwnerFarmService_ExitVisitor_FullMethodName:                       {"zone-local", "zone-a", "zone-b"},
-			rpcv1.OwnerFarmService_GetPublicFarmSnapshot_FullMethodName:             {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_EnterVisitor_FullMethodName:                      rpcauth.ZoneAllowedCallers(true),
+			rpcv1.OwnerFarmService_RefreshVisitorHeartbeat_FullMethodName:           rpcauth.ZoneAllowedCallers(true),
+			rpcv1.OwnerFarmService_ExitVisitor_FullMethodName:                       rpcauth.ZoneAllowedCallers(true),
+			rpcv1.OwnerFarmService_GetPublicFarmSnapshot_FullMethodName:             rpcauth.ZoneAllowedCallers(true),
 			rpcv1.VisitorZoneService_ExecuteFriendAction_FullMethodName:             {"gate"},
-			rpcv1.OwnerFarmService_ApplyVisitorAction_FullMethodName:                {"zone-local", "zone-a", "zone-b"},
+			rpcv1.OwnerFarmService_ApplyVisitorAction_FullMethodName:                rpcauth.ZoneAllowedCallers(true),
 			rpcv1.PlayerConnectionService_RegisterPlayerConnection_FullMethodName:   {"gate"},
 			rpcv1.PlayerConnectionService_RefreshPlayerConnection_FullMethodName:    {"gate"},
 			rpcv1.PlayerConnectionService_UnregisterPlayerConnection_FullMethodName: {"gate"},
@@ -425,6 +432,8 @@ func main() {
 	logger.Info("zone listening",
 		"address", listenAddress,
 		"owner_zone_id", ownerZoneID,
+		"incarnation_id", identity.IncarnationID,
+		"advertised_endpoint", identity.Endpoint,
 		"owner_epoch", player.LocalOwnerEpoch,
 		"routing_mode", routingMode,
 		"gate_rpc_url", pushEndpoint,
@@ -438,6 +447,28 @@ func main() {
 	if err := shutdown.Serve(ctx, server, 5*time.Second, logger); err != nil {
 		logger.Error("zone stopped", "error", err)
 	}
+}
+
+func zoneIdentityConfig(routingMode, ownerZoneID, listenAddress string) zoneidentity.Config {
+	statefulSetName := strings.TrimSpace(os.Getenv("ZONE_STATEFULSET_NAME"))
+	endpoint := strings.TrimSpace(os.Getenv("ZONE_ADVERTISED_ENDPOINT"))
+	if statefulSetName != "" {
+		return zoneidentity.Config{
+			ClusterID:       strings.TrimSpace(os.Getenv("CLUSTER_ID")),
+			Namespace:       strings.TrimSpace(os.Getenv("POD_NAMESPACE")),
+			StatefulSetName: statefulSetName,
+			PodName:         strings.TrimSpace(os.Getenv("POD_NAME")),
+			Endpoint:        endpoint,
+		}
+	}
+	if endpoint == "" {
+		if routingMode == dualRoutingMode {
+			endpoint = "http://" + ownerZoneID + ":8082"
+		} else {
+			endpoint = "http://" + listenAddress
+		}
+	}
+	return zoneidentity.Config{LogicalOverride: ownerZoneID, Endpoint: endpoint}
 }
 
 func refreshAuthorization(

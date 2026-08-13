@@ -1,7 +1,7 @@
 ---
 status: accepted
-version: 1
-date: 2026-08-06
+version: 2
+date: 2026-08-13
 owners:
   - project-owner
 related:
@@ -39,6 +39,14 @@ most 30 seconds of clock skew, rejects a reused nonce during that window,
 verifies the body hash, and compares signatures in constant time. Authentication
 metadata and secrets are never logged. The shared key comes only from a local
 environment variable or Kubernetes Secret.
+
+Zone processes authenticate with the bounded caller-service role `zone`.
+Logical routing identities (including stable discovered Zone UUIDs) remain in
+the request and routing records where ownership is checked; they are never
+used as HMAC allowlist entries. During the static-workload transition only,
+servers may explicitly enable compatibility callers `zone-local`, `zone-a`
+and `zone-b`. Strict mode accepts only `zone`; wildcard and UUID-prefix caller
+authorization are forbidden.
 
 For a streaming RPC, the client signs stream establishment once using the same
 metadata tuple with SHA-256 of an empty body. The server applies the same

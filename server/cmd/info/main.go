@@ -111,12 +111,8 @@ func run() error {
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
-			infov1.InfoService_SetMailRedDot_FullMethodName: {
-				"mail", "zone-local", "zone-a", "zone-b",
-			},
-			infov1.InfoService_NotifyOwnerPlotStealable_FullMethodName: {
-				"zone-local", "zone-a", "zone-b",
-			},
+			infov1.InfoService_SetMailRedDot_FullMethodName:            append([]string{"mail"}, rpcauth.ZoneAllowedCallers(true)...),
+			infov1.InfoService_NotifyOwnerPlotStealable_FullMethodName: rpcauth.ZoneAllowedCallers(true),
 		},
 	})
 	if err != nil {

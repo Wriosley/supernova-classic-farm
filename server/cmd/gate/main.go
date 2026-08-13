@@ -155,18 +155,10 @@ func run() error {
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
-			rpcv1.GatePushService_PublishPlayerStateChanged_FullMethodName: {
-				"zone-local", "zone-a", "zone-b",
-			},
-			rpcv1.GatePushService_PublishFarmPresence_FullMethodName: {
-				"zone-local", "zone-a", "zone-b",
-			},
-			rpcv1.GatePushService_PublishFarmViewPatch_FullMethodName: {
-				"zone-local", "zone-a", "zone-b",
-			},
-			rpcv1.GatePushService_PublishRedDotChanged_FullMethodName: {
-				"zone-local", "zone-a", "zone-b",
-			},
+			rpcv1.GatePushService_PublishPlayerStateChanged_FullMethodName: rpcauth.ZoneAllowedCallers(true),
+			rpcv1.GatePushService_PublishFarmPresence_FullMethodName:       rpcauth.ZoneAllowedCallers(true),
+			rpcv1.GatePushService_PublishFarmViewPatch_FullMethodName:      rpcauth.ZoneAllowedCallers(true),
+			rpcv1.GatePushService_PublishRedDotChanged_FullMethodName:      rpcauth.ZoneAllowedCallers(true),
 		},
 	})
 	if err != nil {

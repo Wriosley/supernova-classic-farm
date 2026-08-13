@@ -28,7 +28,7 @@ func newInfoStealableNotifier(key []byte, endpoint string, logger *slog.Logger) 
 		logger = slog.Default()
 	}
 	interceptor, err := rpcauth.NewClientUnaryInterceptor(rpcauth.ClientConfig{
-		Service: environmentOr("OWNER_ZONE_ID", "zone-local"),
+		Service: rpcauth.ZoneService,
 		Key:     key,
 	})
 	if err != nil {
