@@ -21,6 +21,12 @@ const (
 	MigrationStepDrained            = "DRAINED"
 	MigrationStepFenceAdvanced      = "FENCE_ADVANCED"
 	MigrationStepTargetPrepared     = "TARGET_PREPARED"
+	MigrationStepSourceDraining     = "SOURCE_DRAINING"
+	MigrationStepSourceFlushed      = "SOURCE_FLUSHED"
+	MigrationStepRoutePreparing     = "ROUTE_PREPARING"
+	MigrationStepTargetLoading      = "TARGET_LOADING"
+	MigrationStepTargetReady        = "TARGET_READY"
+	MigrationStepRouteActive        = "ROUTE_ACTIVE"
 )
 
 // MigrationPlayer is one drained Actor identity carried through recovery.
@@ -369,7 +375,13 @@ func validateOpenProgressRow(row MigrationProgressRow) error {
 	case MigrationStepPreparingCommitted,
 		MigrationStepDrained,
 		MigrationStepFenceAdvanced,
-		MigrationStepTargetPrepared:
+		MigrationStepTargetPrepared,
+		MigrationStepSourceDraining,
+		MigrationStepSourceFlushed,
+		MigrationStepRoutePreparing,
+		MigrationStepTargetLoading,
+		MigrationStepTargetReady,
+		MigrationStepRouteActive:
 	default:
 		return fmt.Errorf("unsupported migration step %q", row.Step)
 	}
