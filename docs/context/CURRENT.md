@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-11
+updated: 2026-08-13
 ---
 
 # Current Handoff
@@ -19,6 +19,16 @@ V3 is the only current production-target strategy. A new AI should read, in orde
 Do not resume V1 or V2 as the implementation target. Do not read every ADR as if all decisions were simultaneously active. The ADR directory preserves how the design evolved; current truth comes from this handoff, the current architecture, and the accepted ADRs that the current architecture explicitly references.
 
 ## Snapshot at handoff
+
+- Final delivery sprint 07/04 Zone identity and Kubernetes discovery Tasks
+  1-7 are implemented and unit/race tested. The live third-Zone registration
+  gate is blocked by a pre-existing durable inconsistency at shard 69:
+  Current is `zone-b/epoch=2/route_version=3/ACTIVE`, no MigrationProgress is
+  open, but ShardFence differs, so the new Coordinator correctly fails closed.
+  The cluster was restored to its old healthy Coordinator, existing zone-a/b,
+  and `zone-pool=0`; the Coordinator Deployment is paused. Repair shard 69
+  explicitly before resuming the rollout. Evidence:
+  `../evidence/2026-08-13-zone-kubernetes-discovery.md`.
 
 - The single-player owner loop is complete through `player_seq=8`.
 - Pure Tcaplus is green for auth, checkpoint, Fence, migration, Outbox and
