@@ -20,8 +20,10 @@ import (
 )
 
 type migrationWorkerConfig struct {
-	Enabled bool
-	Limits  coordinatormigration.Limits
+	Enabled      bool
+	Limits       coordinatormigration.Limits
+	CrashAfter   coordinatormigration.PersistBoundary
+	CrashShardID uint32
 }
 
 func migrationWorkerConfigFromEnvironment() (migrationWorkerConfig, error) {
@@ -33,6 +35,33 @@ func migrationWorkerConfigFromEnvironment() (migrationWorkerConfig, error) {
 	default:
 		return config, errors.New("COORDINATOR_MIGRATION_WORKER_ENABLED must be 0 or 1")
 	}
+	crashAfter := strings.TrimSpace(os.Getenv("COORDINATOR_MIGRATION_CRASH_AFTER"))
+	crashShardID := strings.TrimSpace(os.Getenv("COORDINATOR_MIGRATION_CRASH_SHARD_ID"))
+	if crashAfter == "" && crashShardID == "" {
+		return config, nil
+	}
+	if !config.Enabled {
+		return config, errors.New("migration crash injection requires the worker to be enabled")
+	}
+	if environmentOr("APP_ENV", "development") == "production" {
+		return config, errors.New("migration crash injection is forbidden in production")
+	}
+	validBoundary := false
+	for _, boundary := range coordinatormigration.PersistBoundaries {
+		if crashAfter == string(boundary) {
+			config.CrashAfter = boundary
+			validBoundary = true
+			break
+		}
+	}
+	if !validBoundary {
+		return config, errors.New("COORDINATOR_MIGRATION_CRASH_AFTER is not a supported persisted boundary")
+	}
+	parsedShardID, err := strconv.ParseUint(crashShardID, 10, 32)
+	if err != nil || parsedShardID >= uint64(routing.ShardCount) {
+		return config, errors.New("COORDINATOR_MIGRATION_CRASH_SHARD_ID must be a valid Shard ID")
+	}
+	config.CrashShardID = uint32(parsedShardID)
 	return config, nil
 }
 
@@ -60,6 +89,13 @@ func startMigrationWorker(
 		Tasks: tasks, Progress: progress, Routes: routes, RouteStore: routeStore,
 		Zones: newHTTPZoneLifecycle(client), Fences: fences, Publisher: publisher,
 		Now: time.Now, LeaseDuration: leaseDuration,
+		AfterPersist: func(shardID uint32, boundary coordinatormigration.PersistBoundary) error {
+			if config.CrashAfter == boundary && config.CrashShardID == shardID {
+				logger.Error("injecting migration worker crash after persisted boundary", "shard_id", shardID, "boundary", boundary, "exit_code", 86)
+				os.Exit(86)
+			}
+			return nil
+		},
 	})
 	if err != nil {
 		return err

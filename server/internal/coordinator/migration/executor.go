@@ -21,6 +21,26 @@ type RoutePublisher interface {
 	PublishRoutes(routing.Snapshot, routing.Snapshot) error
 }
 
+type PersistBoundary string
+
+const (
+	BoundarySourceDraining    PersistBoundary = "SOURCE_DRAINING"
+	BoundarySourceFlushed     PersistBoundary = "SOURCE_FLUSHED"
+	BoundaryRoutePreparing    PersistBoundary = "ROUTE_PREPARING"
+	BoundaryFenceAdvanced     PersistBoundary = "FENCE_ADVANCED"
+	BoundaryTargetLoading     PersistBoundary = "TARGET_LOADING"
+	BoundaryTargetReady       PersistBoundary = "TARGET_READY"
+	BoundaryRouteActive       PersistBoundary = "ROUTE_ACTIVE"
+	BoundaryProgressCompleted PersistBoundary = "PROGRESS_COMPLETED"
+	BoundaryTaskCompleted     PersistBoundary = "TASK_COMPLETED"
+)
+
+var PersistBoundaries = []PersistBoundary{
+	BoundarySourceDraining, BoundarySourceFlushed, BoundaryRoutePreparing,
+	BoundaryFenceAdvanced, BoundaryTargetLoading, BoundaryTargetReady,
+	BoundaryRouteActive, BoundaryProgressCompleted, BoundaryTaskCompleted,
+}
+
 type ExecutorConfig struct {
 	Tasks         TaskStore
 	Progress      ProgressStore
@@ -31,6 +51,7 @@ type ExecutorConfig struct {
 	Publisher     RoutePublisher
 	Now           func() time.Time
 	LeaseDuration time.Duration
+	AfterPersist  func(uint32, PersistBoundary) error
 }
 
 type Executor struct{ cfg ExecutorConfig }
@@ -68,7 +89,10 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 		}
 		source := current.Entries[shardID]
 		if completedTaskRoute(task, source) {
-			return executor.cfg.Tasks.Complete(ctx, shardID, taskID)
+			if err := executor.cfg.Tasks.Complete(ctx, shardID, taskID); err != nil {
+				return err
+			}
+			return executor.afterPersist(shardID, BoundaryTaskCompleted)
 		}
 		if !taskMatchesSource(task, source) {
 			return ErrTaskConflict
@@ -81,6 +105,9 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			Source: source, Prepared: prepared, UpdatedAtMS: executor.cfg.Now().UTC().UnixMilli()}
 		if err := executor.cfg.Progress.Create(ctx, progress); err != nil {
 			return fmt.Errorf("create migration progress: %w", err)
+		}
+		if err := executor.afterPersist(shardID, BoundarySourceDraining); err != nil {
+			return err
 		}
 	} else if !progressMatchesTask(progress, task) {
 		return ErrProgressConflict
@@ -98,6 +125,9 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepSourceFlushed); err != nil {
 				return err
 			}
+			if err := executor.afterPersist(shardID, BoundarySourceFlushed); err != nil {
+				return err
+			}
 			progress.Step = StepSourceFlushed
 
 		case StepSourceFlushed:
@@ -112,6 +142,9 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepRoutePreparing); err != nil {
 				return err
 			}
+			if err := executor.afterPersist(shardID, BoundaryRoutePreparing); err != nil {
+				return err
+			}
 			progress.Step = StepRoutePreparing
 
 		case StepRoutePreparing:
@@ -121,10 +154,16 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepFenceAdvanced); err != nil {
 				return err
 			}
+			if err := executor.afterPersist(shardID, BoundaryFenceAdvanced); err != nil {
+				return err
+			}
 			progress.Step = StepFenceAdvanced
 
 		case StepFenceAdvanced:
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepTargetLoading); err != nil {
+				return err
+			}
+			if err := executor.afterPersist(shardID, BoundaryTargetLoading); err != nil {
 				return err
 			}
 			progress.Step = StepTargetLoading
@@ -134,6 +173,9 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 				return fmt.Errorf("prepare Target shard: %w", err)
 			}
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepTargetReady); err != nil {
+				return err
+			}
+			if err := executor.afterPersist(shardID, BoundaryTargetReady); err != nil {
 				return err
 			}
 			progress.Step = StepTargetReady
@@ -149,6 +191,9 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepRouteActive); err != nil {
 				return err
 			}
+			if err := executor.afterPersist(shardID, BoundaryRouteActive); err != nil {
+				return err
+			}
 			progress.Step = StepRouteActive
 
 		case StepRouteActive:
@@ -156,12 +201,25 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			if err := executor.cfg.Progress.Complete(ctx, progress); err != nil {
 				return err
 			}
-			return executor.cfg.Tasks.Complete(ctx, shardID, taskID)
+			if err := executor.afterPersist(shardID, BoundaryProgressCompleted); err != nil {
+				return err
+			}
+			if err := executor.cfg.Tasks.Complete(ctx, shardID, taskID); err != nil {
+				return err
+			}
+			return executor.afterPersist(shardID, BoundaryTaskCompleted)
 
 		default:
 			return fmt.Errorf("%w: unsupported step %q", ErrProgressConflict, progress.Step)
 		}
 	}
+}
+
+func (executor *Executor) afterPersist(shardID uint32, boundary PersistBoundary) error {
+	if executor.cfg.AfterPersist == nil {
+		return nil
+	}
+	return executor.cfg.AfterPersist(shardID, boundary)
 }
 
 func (executor *Executor) ensurePreparing(ctx context.Context, progress Progress) (routestore.Snapshot, error) {

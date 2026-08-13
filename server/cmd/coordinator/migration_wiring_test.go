@@ -13,6 +13,8 @@ import (
 )
 
 func TestMigrationWorkerConfigDefaultsDisabled(t *testing.T) {
+	t.Setenv("COORDINATOR_MIGRATION_CRASH_AFTER", "")
+	t.Setenv("COORDINATOR_MIGRATION_CRASH_SHARD_ID", "")
 	t.Setenv("COORDINATOR_MIGRATION_WORKER_ENABLED", "")
 	config, err := migrationWorkerConfigFromEnvironment()
 	if err != nil || config.Enabled || config.Limits != (coordinatormigration.Limits{Global: 8, PerSource: 2, PerTarget: 2}) {
@@ -26,6 +28,27 @@ func TestMigrationWorkerConfigDefaultsDisabled(t *testing.T) {
 	t.Setenv("COORDINATOR_MIGRATION_WORKER_ENABLED", "true")
 	if _, err := migrationWorkerConfigFromEnvironment(); err == nil {
 		t.Fatal("non-0/1 worker switch accepted")
+	}
+}
+
+func TestMigrationWorkerCrashInjectionIsDevelopmentOnlyAndExact(t *testing.T) {
+	t.Setenv("COORDINATOR_MIGRATION_WORKER_ENABLED", "1")
+	t.Setenv("COORDINATOR_MIGRATION_CRASH_AFTER", "ROUTE_PREPARING")
+	t.Setenv("COORDINATOR_MIGRATION_CRASH_SHARD_ID", "17")
+	t.Setenv("APP_ENV", "development")
+	config, err := migrationWorkerConfigFromEnvironment()
+	if err != nil || config.CrashAfter != coordinatormigration.BoundaryRoutePreparing || config.CrashShardID != 17 {
+		t.Fatalf("config = %+v, err=%v", config, err)
+	}
+
+	t.Setenv("APP_ENV", "production")
+	if _, err := migrationWorkerConfigFromEnvironment(); err == nil {
+		t.Fatal("production crash injection accepted")
+	}
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("COORDINATOR_MIGRATION_CRASH_AFTER", "ROUTE_PREP")
+	if _, err := migrationWorkerConfigFromEnvironment(); err == nil {
+		t.Fatal("unknown crash boundary accepted")
 	}
 }
 

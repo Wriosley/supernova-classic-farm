@@ -21,24 +21,36 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 ## Snapshot at handoff
 
 - Final delivery sprint **07/06 normal migration worker** has passed its
-  offline implementation gate through Tasks 1–5 and a successful live Tcaplus
-  migration/restart smoke gate. Persistent MigrationTask
+  offline implementation gate through Tasks 1–5, a successful live Tcaplus
+  migration/restart smoke gate, and one real process crash after persisted
+  `SOURCE_DRAINING`. Persistent MigrationTask
   claim/retry/fail/complete, expanded MigrationProgress recovery, the
   durable-first one-Shard Executor, bounded Scheduler and transition-bound
   Zone lifecycle are implemented. The existing manual move endpoint now only
   creates a DRAIN-priority task and returns `202 + task_id`; it cannot execute
   the retired synchronous path. `COORDINATOR_MIGRATION_WORKER_ENABLED` is
-  wired and remains `0` in Kubernetes until the per-step live Tcaplus
-  crash/restart matrix is complete. The live gate moved Shard 1 from zone-a
+  wired and remains `0` in Kubernetes. The full nine-boundary live Tcaplus
+  crash/restart matrix is explicitly deferred; offline injection covers all
+  boundaries, while the real crash moved Shard 10 from zone-b epoch 1 to
+  zone-a epoch 2 and observed one automatic container restart. The earlier
+  live gate moved Shard 1 from zone-a
   epoch 1 to zone-b epoch 2 (`route_version 1 -> 3`, `map_version 4117 ->
   4119`) and restored that exact durable ACTIVE route after Coordinator
   restart. It also found that live `MigrationTask` Traverse omits rows, so the
   Store now recovers the fixed 4096 primary-key space once at startup and then
-  maintains an in-process open-task index. No new Tcaplus table or field is required. The focused
+  maintains an in-process open-task index. A development/E2E-only persisted-
+  boundary crash hook and reusable matrix runner are present; production
+  rejects crash injection. No new Tcaplus table or field is required. The focused
   Coordinator/Zone/Player/migration race suite passes; the full Player package
   still has a pre-existing mail-reward fixture whose injected clock predates
   `NewDevelopmentState` and is outside this phase. Evidence:
   `../evidence/2026-08-13-normal-migration-worker.md`.
+
+- The next implementation target is final delivery sprint **07/07 Zone failure
+  evidence and Failover**, beginning with validated/deduplicated transport
+  failure evidence. It must reuse Phase 04 membership and the Phase 06 worker;
+  SUSPECT may only pause routing, and ownership/Fence changes are forbidden
+  until the owner is confirmed DEAD.
 
 - Final delivery sprint 07/05 Placement and Rebalance Queue has passed its
   offline implementation gate: exact existing Rendezvous bytes produce a

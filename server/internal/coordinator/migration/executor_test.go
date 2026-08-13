@@ -154,6 +154,41 @@ func TestExecutorResumesAfterProgressCompletionFailure(t *testing.T) {
 	}
 }
 
+func TestExecutorReportsEveryPersistedBoundaryAfterDurableWrite(t *testing.T) {
+	want := []PersistBoundary{
+		BoundarySourceDraining,
+		BoundarySourceFlushed,
+		BoundaryRoutePreparing,
+		BoundaryFenceAdvanced,
+		BoundaryTargetLoading,
+		BoundaryTargetReady,
+		BoundaryRouteActive,
+		BoundaryProgressCompleted,
+		BoundaryTaskCompleted,
+	}
+	fixture := newExecutorFixture(t)
+	var got []PersistBoundary
+	fixture.executor.cfg.AfterPersist = func(shardID uint32, boundary PersistBoundary) error {
+		if shardID != fixture.task.ShardID {
+			t.Fatalf("hook shard = %d, want %d", shardID, fixture.task.ShardID)
+		}
+		got = append(got, boundary)
+		return nil
+	}
+
+	if err := fixture.executor.Execute(t.Context(), fixture.task.ShardID, fixture.task.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("boundaries = %v, want %v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("boundary[%d] = %q, want %q", index, got[index], want[index])
+		}
+	}
+}
+
 type faultProgressStore struct {
 	ProgressStore
 	failAdvance  Step
