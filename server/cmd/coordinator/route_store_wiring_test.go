@@ -118,6 +118,34 @@ func TestValidateCurrentFencesFailsClosedOnMismatch(t *testing.T) {
 	}
 }
 
+func TestValidateCurrentFencesAcceptsActivatedRouteAfterFenceAdvance(t *testing.T) {
+	now := time.Date(2026, 8, 13, 16, 20, 0, 0, time.UTC)
+	snapshot := staticCandidate(t, now, []routing.ZoneCandidate{
+		{ZoneID: "zone-a", Endpoint: "http://zone-a:8082"},
+		{ZoneID: "zone-b", Endpoint: "http://zone-b:8082"},
+	})
+	fences := make([]routing.ShardFence, routing.ShardCount)
+	for index, entry := range snapshot.Entries {
+		fences[index] = routing.ShardFence{ShardID: uint32(index), OwnerZoneID: entry.OwnerZoneID,
+			OwnerEpoch: entry.OwnerEpoch, RouteVersion: entry.RouteVersion}
+	}
+	const shardID = uint32(69)
+	entry := snapshot.Entries[shardID]
+	entry.OwnerZoneID = "zone-b"
+	entry.OwnerEndpoint = "http://zone-b:8082"
+	entry.PreviousOwnerZoneID = "zone-a"
+	entry.OwnerEpoch = 2
+	entry.RouteVersion = 3
+	entry.TransitionID = "80aa8194-40a8-4fca-9588-9f038e8e7fbc"
+	snapshot.Entries[shardID] = entry
+	fences[shardID] = routing.ShardFence{ShardID: shardID, OwnerZoneID: "zone-b", OwnerEpoch: 2,
+		RouteVersion: 2, TransitionID: entry.TransitionID}
+
+	if err := validateCurrentFences(snapshot, fences, nil); err != nil {
+		t.Fatalf("normal ACTIVE-after-Fence migration rejected: %v", err)
+	}
+}
+
 func staticCandidate(t *testing.T, now time.Time, zones []routing.ZoneCandidate) routestore.Snapshot {
 	t.Helper()
 	routes, err := routing.NewStaticMap(now, time.Minute, zones)

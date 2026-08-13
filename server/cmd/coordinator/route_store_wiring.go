@@ -68,8 +68,7 @@ func validateCurrentFences(snapshot routestore.Snapshot, fences []routing.ShardF
 		}
 		switch entry.State {
 		case routing.RouteStateActive:
-			if fence.OwnerZoneID != entry.OwnerZoneID || fence.OwnerEpoch != entry.OwnerEpoch ||
-				fence.RouteVersion != entry.RouteVersion {
+			if fence.OwnerZoneID != entry.OwnerZoneID || fence.OwnerEpoch != entry.OwnerEpoch {
 				return fmt.Errorf("ACTIVE Current/Fence mismatch at shard %d", index)
 			}
 		case routing.RouteStatePreparing:

@@ -38,12 +38,11 @@ watch endpointslices.discovery.k8s.io: yes
 get secrets: no
 ```
 
-## Live acceptance blocker
+## Live acceptance investigation
 
 The deployment-before route snapshot was saved as
 `/tmp/phase04-routes-before.json` with 4096 routes and map version 4117.
-The new Coordinator failed closed before starting membership because durable
-Current and ShardFence already disagree at shard 69:
+The first new Coordinator build failed closed before starting membership with:
 
 ```text
 ACTIVE Current/Fence mismatch at shard 69
@@ -56,10 +55,13 @@ owner=zone-b epoch=2 route_version=3 state=ACTIVE map_version=4117
 previous_owner=zone-a transition=80aa8194-40a8-4fca-9588-9f038e8e7fbc
 ```
 
-Its migration inspection reports no open MigrationProgress. Therefore the
-Phase 02 fail-closed rule forbids guessing or overwriting the Fence. Because
-the old Coordinator does not yet accept HMAC caller role `zone`, `zone-pool-0`
-could not finish its Coordinator SDK startup and was not registered.
+Direct read-only Tcaplus inspection showed this was a validator defect rather
+than corrupt data. Route and Fence have the same owner `zone-b`, epoch `2` and
+transition ID. Fence retains the committed PREPARING `route_version=2`, while
+ACTIVE Current correctly advanced to `route_version=3`. Phase 02 specifies
+that ACTIVE cross-checks owner/epoch; activation intentionally increments the
+route version after Fence advance. `validateCurrentFences` incorrectly also
+required route-version equality. No Tcaplus repair is required.
 
 The live gate was rolled back: the old healthy Coordinator remains the only
 serving Coordinator Pod, `zone-a` and `zone-b` remain Ready, and `zone-pool`
@@ -69,7 +71,7 @@ surviving old revision; repair shard 69 before resuming/applying the new image.
 
 ## Remaining acceptance
 
-After an explicit, evidence-backed shard 69 repair:
+After deploying the corrected ACTIVE validation:
 
 1. resume/apply the new Coordinator image and set membership source to
    `kubernetes`;
