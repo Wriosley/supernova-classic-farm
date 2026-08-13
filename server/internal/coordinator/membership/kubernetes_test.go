@@ -35,7 +35,7 @@ func TestKubernetesSourceCorrelatesEndpointSliceWithStatefulSetPod(t *testing.T)
 	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Namespace: "classic-farm", Name: "zone-discovery-abc", ResourceVersion: "11", Labels: map[string]string{discoveryv1.LabelServiceName: "zone-discovery"}}, AddressType: discoveryv1.AddressTypeIPv4, Ports: []discoveryv1.EndpointPort{{Name: &portName, Protocol: &protocol, Port: &port}}, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"10.0.0.8"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: "classic-farm", Name: "zone-pool-0", UID: types.UID("pod-uid")}}}}
 	client := fake.NewClientset(pod, slice)
 	sink := &recordingSink{upserts: make(chan EndpointObservation, 8), deletes: make(chan string, 8)}
-	source, err := NewKubernetesSource(client, "classic-farm", "zone-discovery", "classic-farm-local", sink)
+	source, err := NewKubernetesSource(client, "classic-farm", "zone-discovery", "zone-headless", "classic-farm-local", sink)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestKubernetesSourceCorrelatesEndpointSliceWithStatefulSetPod(t *testing.T)
 
 	select {
 	case got := <-sink.upserts:
-		if got.PodName != "zone-pool-0" || got.StatefulSetName != "zone-pool" || got.Ordinal != 0 || got.Endpoint != "http://10.0.0.8:8082" || !got.EndpointReady || got.PodPhase != "Running" {
+		if got.PodName != "zone-pool-0" || got.StatefulSetName != "zone-pool" || got.Ordinal != 0 || got.Endpoint != "http://zone-pool-0.zone-headless.classic-farm.svc.cluster.local:8082" || !got.EndpointReady || got.PodPhase != "Running" {
 			t.Fatalf("observation=%+v", got)
 		}
 	case err := <-runResult:
@@ -78,7 +78,7 @@ func TestKubernetesSourceIgnoresEndpointWithMismatchedPodUID(t *testing.T) {
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "classic-farm", Name: "zone-pool-0", UID: types.UID("actual"), OwnerReferences: []metav1.OwnerReference{{Kind: "StatefulSet", Name: "zone-pool", Controller: &controller}}}}
 	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Namespace: "classic-farm", Name: "slice", Labels: map[string]string{discoveryv1.LabelServiceName: "zone-discovery"}}, Ports: []discoveryv1.EndpointPort{{Name: &portName, Port: &port}}, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"10.0.0.8"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: "classic-farm", Name: "zone-pool-0", UID: types.UID("wrong")}}}}
 	sink := &recordingSink{upserts: make(chan EndpointObservation, 1), deletes: make(chan string, 1)}
-	source, err := NewKubernetesSource(fake.NewClientset(pod, slice), "classic-farm", "zone-discovery", "cluster", sink)
+	source, err := NewKubernetesSource(fake.NewClientset(pod, slice), "classic-farm", "zone-discovery", "zone-headless", "cluster", sink)
 	if err != nil {
 		t.Fatal(err)
 	}

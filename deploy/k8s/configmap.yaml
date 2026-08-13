@@ -14,6 +14,7 @@ data:
   COORDINATOR_MEMBERSHIP_SOURCE: static
   CLUSTER_ID: classic-farm-local
   ZONE_DISCOVERY_SERVICE: zone-discovery
+  ZONE_HEADLESS_SERVICE: zone-headless
   COORDINATOR_URL: http://coordinator:8083
   COORDINATOR_RPC_URL: http://coordinator:8083
   GATE_ROUTE_SOURCE: coordinator-sdk

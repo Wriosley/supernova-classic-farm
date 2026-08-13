@@ -18,9 +18,9 @@ import (
 )
 
 type membershipConfig struct {
-	Source, ClusterID, Namespace, ServiceName string
-	ProbeInterval, ProbeTimeout               time.Duration
-	FailureThreshold, Workers                 int
+	Source, ClusterID, Namespace, ServiceName, HeadlessServiceName string
+	ProbeInterval, ProbeTimeout                                    time.Duration
+	FailureThreshold, Workers                                      int
 }
 
 type membershipRuntime struct {
@@ -29,7 +29,7 @@ type membershipRuntime struct {
 }
 
 func membershipConfigFromEnvironment() (membershipConfig, error) {
-	config := membershipConfig{Source: environmentOr("COORDINATOR_MEMBERSHIP_SOURCE", "static"), ClusterID: strings.TrimSpace(os.Getenv("CLUSTER_ID")), Namespace: strings.TrimSpace(os.Getenv("POD_NAMESPACE")), ServiceName: environmentOr("ZONE_DISCOVERY_SERVICE", "zone-discovery")}
+	config := membershipConfig{Source: environmentOr("COORDINATOR_MEMBERSHIP_SOURCE", "static"), ClusterID: strings.TrimSpace(os.Getenv("CLUSTER_ID")), Namespace: strings.TrimSpace(os.Getenv("POD_NAMESPACE")), ServiceName: environmentOr("ZONE_DISCOVERY_SERVICE", "zone-discovery"), HeadlessServiceName: environmentOr("ZONE_HEADLESS_SERVICE", "zone-headless")}
 	if config.Source != "static" && config.Source != "kubernetes" {
 		return config, errors.New("COORDINATOR_MEMBERSHIP_SOURCE must be static or kubernetes")
 	}
@@ -50,8 +50,8 @@ func membershipConfigFromEnvironment() (membershipConfig, error) {
 	if err != nil || config.Workers <= 0 {
 		return config, errors.New("invalid ZONE_PROBE_WORKERS")
 	}
-	if config.Source == "kubernetes" && (config.ClusterID == "" || config.Namespace == "" || config.ServiceName == "") {
-		return config, errors.New("Kubernetes membership requires cluster, namespace and discovery service")
+	if config.Source == "kubernetes" && (config.ClusterID == "" || config.Namespace == "" || config.ServiceName == "" || config.HeadlessServiceName == "") {
+		return config, errors.New("Kubernetes membership requires cluster, namespace and discovery services")
 	}
 	return config, nil
 }
@@ -82,7 +82,7 @@ func startMembership(ctx context.Context, routePublisher *publisher.Publisher, z
 	if err != nil {
 		return nil, err
 	}
-	source, err := membership.NewKubernetesSource(client, config.Namespace, config.ServiceName, config.ClusterID, controller)
+	source, err := membership.NewKubernetesSource(client, config.Namespace, config.ServiceName, config.HeadlessServiceName, config.ClusterID, controller)
 	if err != nil {
 		return nil, err
 	}

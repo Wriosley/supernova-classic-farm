@@ -40,19 +40,20 @@ type ObservationSink interface {
 }
 
 type KubernetesSource struct {
-	client      kubernetes.Interface
-	namespace   string
-	serviceName string
-	clusterID   string
-	sink        ObservationSink
-	ready       chan struct{}
+	client              kubernetes.Interface
+	namespace           string
+	serviceName         string
+	headlessServiceName string
+	clusterID           string
+	sink                ObservationSink
+	ready               chan struct{}
 }
 
-func NewKubernetesSource(client kubernetes.Interface, namespace, serviceName, clusterID string, sink ObservationSink) (*KubernetesSource, error) {
-	if client == nil || sink == nil || strings.TrimSpace(namespace) == "" || strings.TrimSpace(serviceName) == "" || strings.TrimSpace(clusterID) == "" {
+func NewKubernetesSource(client kubernetes.Interface, namespace, serviceName, headlessServiceName, clusterID string, sink ObservationSink) (*KubernetesSource, error) {
+	if client == nil || sink == nil || strings.TrimSpace(namespace) == "" || strings.TrimSpace(serviceName) == "" || strings.TrimSpace(headlessServiceName) == "" || strings.TrimSpace(clusterID) == "" {
 		return nil, errors.New("complete Kubernetes Zone discovery configuration is required")
 	}
-	return &KubernetesSource{client: client, namespace: namespace, serviceName: serviceName, clusterID: clusterID, sink: sink, ready: make(chan struct{})}, nil
+	return &KubernetesSource{client: client, namespace: namespace, serviceName: serviceName, headlessServiceName: headlessServiceName, clusterID: clusterID, sink: sink, ready: make(chan struct{})}, nil
 }
 
 func (source *KubernetesSource) Ready() <-chan struct{} { return source.ready }
@@ -146,7 +147,7 @@ func (source *KubernetesSource) reconcileSlice(slice *discoveryv1.EndpointSlice,
 		source.sink.UpsertEndpoint(EndpointObservation{
 			Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), ResourceVersion: slice.ResourceVersion,
 			ClusterID: source.clusterID, StatefulSetName: statefulSet, Ordinal: ordinal,
-			Endpoint:      (&url.URL{Scheme: "http", Host: net.JoinHostPort(endpoint.Addresses[0], strconv.Itoa(int(port)))}).String(),
+			Endpoint:      (&url.URL{Scheme: "http", Host: net.JoinHostPort(pod.Name+"."+source.headlessServiceName+"."+pod.Namespace+".svc.cluster.local", strconv.Itoa(int(port)))}).String(),
 			EndpointReady: ready, PodPhase: string(pod.Status.Phase), Deleting: pod.DeletionTimestamp != nil,
 		})
 	}
