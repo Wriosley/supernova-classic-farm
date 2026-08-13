@@ -2,6 +2,10 @@ package rpcauth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -10,9 +14,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 const testMethod = "/classicfarm.rpc.v1.GameCommandService/ExecutePlayerCommand"
+const testStreamMethod = "/classicfarm.coordinator.v1.CoordinatorService/WatchRoutes"
 
 var testKey = []byte("phase-one-test-hmac-key-32-bytes-minimum")
 
@@ -155,6 +161,117 @@ func TestLoadKeyFromEnvRequiresStrongKey(t *testing.T) {
 	if err != nil || string(key) != string(testKey) {
 		t.Fatalf("LoadKeyFromEnv() = %q, %v", key, err)
 	}
+}
+
+func TestStreamInterceptorsAuthenticateAllowedCallers(t *testing.T) {
+	for _, caller := range []string{"gate", "info", "zone-a"} {
+		t.Run(caller, func(t *testing.T) {
+			now := time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC)
+			client, err := NewClientStreamInterceptor(ClientConfig{
+				Service: caller, Key: testKey, Now: func() time.Time { return now },
+				Nonce: func() (string, error) { return callerNonce(caller), nil },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			server, err := NewServerStreamInterceptor(ServerConfig{
+				Key: testKey, Now: func() time.Time { return now },
+				AllowedCallers: map[string][]string{testStreamMethod: {"gate", "info", "zone-a"}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			listener := bufconn.Listen(1 << 20)
+			grpcServer := grpc.NewServer(grpc.StreamInterceptor(server))
+			service := &grpc.ServiceDesc{ServiceName: "classicfarm.coordinator.v1.CoordinatorService", HandlerType: (*streamTestService)(nil),
+				Streams: []grpc.StreamDesc{{StreamName: "WatchRoutes", Handler: func(_ any, stream grpc.ServerStream) error {
+					return stream.SendMsg(&rpcv1.ExecutePlayerCommandResponse{})
+				}, ServerStreams: true, ClientStreams: true}}}
+			grpcServer.RegisterService(service, struct{}{})
+			go func() { _ = grpcServer.Serve(listener) }()
+			defer grpcServer.Stop()
+			conn, err := grpc.DialContext(context.Background(), "bufnet",
+				grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
+				grpc.WithInsecure(), grpc.WithStreamInterceptor(client))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			stream, err := conn.NewStream(context.Background(), &grpc.StreamDesc{ServerStreams: true, ClientStreams: true}, testStreamMethod)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := stream.RecvMsg(&rpcv1.ExecutePlayerCommandResponse{}); err != nil {
+				t.Fatalf("valid stream rejected: %v", err)
+			}
+		})
+	}
+}
+
+func TestServerStreamInterceptorRejectsAuthenticationFailuresAndReplay(t *testing.T) {
+	now := time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC)
+	server, err := NewServerStreamInterceptor(ServerConfig{Key: testKey,
+		AllowedCallers: map[string][]string{testStreamMethod: {"gate"}}, Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := func(any, grpc.ServerStream) error { return nil }
+	valid := signedStreamIncomingContext(t, now, "gate", "60112233445566778899aabbccddeeff", testKey)
+	info := &grpc.StreamServerInfo{FullMethod: testStreamMethod}
+	if err := server(nil, &contextServerStream{ctx: valid}, info, handler); err != nil {
+		t.Fatalf("valid stream rejected: %v", err)
+	}
+	if err := server(nil, &contextServerStream{ctx: valid}, info, handler); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("replay code=%v", status.Code(err))
+	}
+	for name, ctx := range map[string]context.Context{
+		"missing metadata": context.Background(),
+		"wrong key":        signedStreamIncomingContext(t, now, "gate", "70112233445566778899aabbccddeeff", []byte("wrong-test-hmac-key-32-bytes-minimum")),
+		"expired":          signedStreamIncomingContext(t, now.Add(-DefaultClockWindow-time.Millisecond), "gate", "80112233445566778899aabbccddeeff", testKey),
+		"not allowed":      signedStreamIncomingContext(t, now, "info", "90112233445566778899aabbccddeeff", testKey),
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := server(nil, &contextServerStream{ctx: ctx}, info, handler)
+			if status.Code(err) != codes.Unauthenticated && status.Code(err) != codes.PermissionDenied {
+				t.Fatalf("code=%v err=%v", status.Code(err), err)
+			}
+		})
+	}
+}
+
+type contextServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+type streamTestService interface{}
+
+func (s *contextServerStream) Context() context.Context { return s.ctx }
+
+func signedStreamIncomingContext(t *testing.T, now time.Time, service, nonce string, key []byte) context.Context {
+	t.Helper()
+	bodyHash := hexSHA256(nil)
+	timestamp := strconv.FormatInt(now.UTC().UnixMilli(), 10)
+	md := metadata.Pairs(CallerServiceMetadata, service, TimestampMetadata, timestamp,
+		NonceMetadata, nonce, BodySHA256Metadata, bodyHash,
+		SignatureMetadata, sign(key, service, testStreamMethod, timestamp, nonce, bodyHash))
+	return metadata.NewIncomingContext(context.Background(), md)
+}
+
+func callerNonce(caller string) string {
+	switch caller {
+	case "gate":
+		return "a0112233445566778899aabbccddeeff"
+	case "info":
+		return "b0112233445566778899aabbccddeeff"
+	default:
+		return "c0112233445566778899aabbccddeeff"
+	}
+}
+
+func hexSHA256(body []byte) string {
+	digest := sha256.Sum256(body)
+	return hex.EncodeToString(digest[:])
 }
 
 func signedIncomingContext(

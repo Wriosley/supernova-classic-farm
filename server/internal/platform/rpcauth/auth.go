@@ -62,6 +62,14 @@ type replayCache struct {
 	expirations replayExpiryHeap
 }
 
+type serverVerifier struct {
+	key     []byte
+	allowed map[string]map[string]struct{}
+	now     func() time.Time
+	window  time.Duration
+	replays *replayCache
+}
+
 type replayExpiry struct {
 	key       string
 	expiresAt time.Time
@@ -78,20 +86,9 @@ func LoadKeyFromEnv() ([]byte, error) {
 }
 
 func NewClientUnaryInterceptor(cfg ClientConfig) (grpc.UnaryClientInterceptor, error) {
-	if !servicePattern.MatchString(cfg.Service) {
-		return nil, errors.New("caller service identity is invalid")
-	}
-	if err := validateKey(cfg.Key); err != nil {
+	service, key, now, nonce, err := clientSigner(cfg)
+	if err != nil {
 		return nil, err
-	}
-	key := append([]byte(nil), cfg.Key...)
-	now := cfg.Now
-	if now == nil {
-		now = time.Now
-	}
-	nonce := cfg.Nonce
-	if nonce == nil {
-		nonce = randomNonce
 	}
 	return func(
 		ctx context.Context,
@@ -114,22 +111,102 @@ func NewClientUnaryInterceptor(cfg ClientConfig) (grpc.UnaryClientInterceptor, e
 			return status.Error(codes.Internal, "create internal RPC nonce")
 		}
 		timestamp := strconv.FormatInt(now().UTC().UnixMilli(), 10)
-		signature := sign(key, cfg.Service, method, timestamp, requestNonce, bodyHash)
-		outgoing, _ := metadata.FromOutgoingContext(ctx)
-		outgoing = outgoing.Copy()
-		outgoing.Set(CallerServiceMetadata, cfg.Service)
-		outgoing.Set(TimestampMetadata, timestamp)
-		outgoing.Set(NonceMetadata, requestNonce)
-		outgoing.Set(BodySHA256Metadata, bodyHash)
-		outgoing.Set(SignatureMetadata, signature)
+		outgoing := signedMetadataContext(ctx, service, key, method, timestamp, requestNonce, bodyHash)
 		return invoker(
-			metadata.NewOutgoingContext(ctx, outgoing),
+			outgoing,
 			method, req, reply, cc, opts...,
 		)
 	}, nil
 }
 
+func NewClientStreamInterceptor(cfg ClientConfig) (grpc.StreamClientInterceptor, error) {
+	service, key, now, nonce, err := clientSigner(cfg)
+	if err != nil {
+		return nil, err
+	}
+	emptyHash := hashBytes(nil)
+	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string,
+		streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		requestNonce, nonceErr := nonce()
+		if nonceErr != nil || !noncePattern.MatchString(requestNonce) {
+			return nil, status.Error(codes.Internal, "create internal RPC nonce")
+		}
+		timestamp := strconv.FormatInt(now().UTC().UnixMilli(), 10)
+		return streamer(signedMetadataContext(ctx, service, key, method, timestamp, requestNonce, emptyHash), desc, cc, method, opts...)
+	}, nil
+}
+
 func NewServerUnaryInterceptor(cfg ServerConfig) (grpc.UnaryServerInterceptor, error) {
+	verifier, err := newServerVerifier(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(
+		ctx context.Context,
+		req any,
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (any, error) {
+		message, ok := req.(proto.Message)
+		if !ok {
+			return nil, unauthenticated()
+		}
+		actualBodyHash, err := deterministicBodyHash(message)
+		if err != nil {
+			return nil, unauthenticated()
+		}
+		if err := verifier.verify(ctx, info.FullMethod, actualBodyHash); err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}, nil
+}
+
+func NewServerStreamInterceptor(cfg ServerConfig) (grpc.StreamServerInterceptor, error) {
+	verifier, err := newServerVerifier(cfg)
+	if err != nil {
+		return nil, err
+	}
+	emptyHash := hashBytes(nil)
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if err := verifier.verify(stream.Context(), info.FullMethod, emptyHash); err != nil {
+			return err
+		}
+		return handler(srv, stream)
+	}, nil
+}
+
+func clientSigner(cfg ClientConfig) (string, []byte, func() time.Time, func() (string, error), error) {
+	if !servicePattern.MatchString(cfg.Service) {
+		return "", nil, nil, nil, errors.New("caller service identity is invalid")
+	}
+	if err := validateKey(cfg.Key); err != nil {
+		return "", nil, nil, nil, err
+	}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	nonce := cfg.Nonce
+	if nonce == nil {
+		nonce = randomNonce
+	}
+	return cfg.Service, append([]byte(nil), cfg.Key...), now, nonce, nil
+}
+
+func signedMetadataContext(ctx context.Context, service string, key []byte, method, timestamp, nonce, bodyHash string) context.Context {
+	outgoing, _ := metadata.FromOutgoingContext(ctx)
+	outgoing = outgoing.Copy()
+	outgoing.Set(CallerServiceMetadata, service)
+	outgoing.Set(TimestampMetadata, timestamp)
+	outgoing.Set(NonceMetadata, nonce)
+	outgoing.Set(BodySHA256Metadata, bodyHash)
+	outgoing.Set(SignatureMetadata, sign(key, service, method, timestamp, nonce, bodyHash))
+	return metadata.NewOutgoingContext(ctx, outgoing)
+}
+
+func newServerVerifier(cfg ServerConfig) (*serverVerifier, error) {
 	if err := validateKey(cfg.Key); err != nil {
 		return nil, err
 	}
@@ -149,7 +226,6 @@ func NewServerUnaryInterceptor(cfg ServerConfig) (grpc.UnaryServerInterceptor, e
 			allowed[method][service] = struct{}{}
 		}
 	}
-	key := append([]byte(nil), cfg.Key...)
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
@@ -161,72 +237,60 @@ func NewServerUnaryInterceptor(cfg ServerConfig) (grpc.UnaryServerInterceptor, e
 	if window <= 0 {
 		return nil, errors.New("internal RPC clock window must be positive")
 	}
-	replays := &replayCache{entries: make(map[string]time.Time)}
+	return &serverVerifier{key: append([]byte(nil), cfg.Key...), allowed: allowed, now: now, window: window, replays: &replayCache{entries: make(map[string]time.Time)}}, nil
+}
 
-	return func(
-		ctx context.Context,
-		req any,
-		info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler,
-	) (any, error) {
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return nil, unauthenticated()
-		}
-		caller, ok := one(md, CallerServiceMetadata)
-		if !ok || !servicePattern.MatchString(caller) {
-			return nil, unauthenticated()
-		}
-		callers, methodAllowed := allowed[info.FullMethod]
-		if _, callerAllowed := callers[caller]; !methodAllowed || !callerAllowed {
-			return nil, status.Error(codes.PermissionDenied, "internal RPC caller is not allowed")
-		}
-		timestamp, ok := one(md, TimestampMetadata)
-		if !ok {
-			return nil, unauthenticated()
-		}
-		timestampMS, err := strconv.ParseInt(timestamp, 10, 64)
-		if err != nil {
-			return nil, unauthenticated()
-		}
-		current := now().UTC()
-		signedAt := time.UnixMilli(timestampMS).UTC()
-		if delta := current.Sub(signedAt); delta < -window || delta > window {
-			return nil, unauthenticated()
-		}
-		nonce, ok := one(md, NonceMetadata)
-		if !ok || !noncePattern.MatchString(nonce) {
-			return nil, unauthenticated()
-		}
-		suppliedBodyHash, ok := one(md, BodySHA256Metadata)
-		if !ok {
-			return nil, unauthenticated()
-		}
-		message, ok := req.(proto.Message)
-		if !ok {
-			return nil, unauthenticated()
-		}
-		actualBodyHash, err := deterministicBodyHash(message)
-		if err != nil || !equalHex(actualBodyHash, suppliedBodyHash, sha256.Size) {
-			return nil, unauthenticated()
-		}
-		suppliedSignature, ok := one(md, SignatureMetadata)
-		if !ok {
-			return nil, unauthenticated()
-		}
-		expectedSignature := sign(
-			key, caller, info.FullMethod, timestamp, nonce, actualBodyHash,
-		)
-		if !equalHex(expectedSignature, suppliedSignature, sha256.Size) {
-			return nil, unauthenticated()
-		}
-		if !replays.admit(
-			caller+"\x00"+nonce, current, signedAt.Add(window),
-		) {
-			return nil, unauthenticated()
-		}
-		return handler(ctx, req)
-	}, nil
+func (v *serverVerifier) verify(ctx context.Context, method, actualBodyHash string) error {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return unauthenticated()
+	}
+	caller, ok := one(md, CallerServiceMetadata)
+	if !ok || !servicePattern.MatchString(caller) {
+		return unauthenticated()
+	}
+	callers, methodAllowed := v.allowed[method]
+	if _, callerAllowed := callers[caller]; !methodAllowed || !callerAllowed {
+		return status.Error(codes.PermissionDenied, "internal RPC caller is not allowed")
+	}
+	timestamp, ok := one(md, TimestampMetadata)
+	if !ok {
+		return unauthenticated()
+	}
+	timestampMS, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return unauthenticated()
+	}
+	current := v.now().UTC()
+	signedAt := time.UnixMilli(timestampMS).UTC()
+	if delta := current.Sub(signedAt); delta < -v.window || delta > v.window {
+		return unauthenticated()
+	}
+	nonce, ok := one(md, NonceMetadata)
+	if !ok || !noncePattern.MatchString(nonce) {
+		return unauthenticated()
+	}
+	suppliedBodyHash, ok := one(md, BodySHA256Metadata)
+	if !ok || !equalHex(actualBodyHash, suppliedBodyHash, sha256.Size) {
+		return unauthenticated()
+	}
+	suppliedSignature, ok := one(md, SignatureMetadata)
+	if !ok {
+		return unauthenticated()
+	}
+	expected := sign(v.key, caller, method, timestamp, nonce, actualBodyHash)
+	if !equalHex(expected, suppliedSignature, sha256.Size) {
+		return unauthenticated()
+	}
+	if !v.replays.admit(caller+"\x00"+nonce, current, signedAt.Add(v.window)) {
+		return unauthenticated()
+	}
+	return nil
+}
+
+func hashBytes(body []byte) string {
+	digest := sha256.Sum256(body)
+	return hex.EncodeToString(digest[:])
 }
 
 func deterministicBodyHash(message proto.Message) (string, error) {

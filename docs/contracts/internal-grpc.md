@@ -12,8 +12,9 @@ related:
 
 # Internal gRPC Contract V1
 
-All game-internal calls are unary gRPC. Login public HTTP, ticket consumption
-and Coordinator routing HTTP are outside this migration. The accepted service
+Game-internal business calls are unary gRPC. Coordinator `WatchRoutes` is a
+bidirectional control-plane stream; Login public HTTP and ticket consumption
+remain outside this contract. The accepted service
 and message definitions are generated from:
 
 - `classicfarm/v1/friend/friend.proto`;
@@ -38,6 +39,13 @@ most 30 seconds of clock skew, rejects a reused nonce during that window,
 verifies the body hash, and compares signatures in constant time. Authentication
 metadata and secrets are never logged. The shared key comes only from a local
 environment variable or Kubernetes Secret.
+
+For a streaming RPC, the client signs stream establishment once using the same
+metadata tuple with SHA-256 of an empty body. The server applies the same
+allowlist, clock-window, nonce-replay and signature checks before invoking the
+stream handler. This does not provide per-message HMAC: `WatchRoutes` separately
+validates its first Subscribe message, subscriber identity and subsequent
+Ack/Pong state machine.
 
 ## Deadlines
 
