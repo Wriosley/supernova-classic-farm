@@ -189,6 +189,57 @@ func TestTaskStoresClaimRetryAndCompleteExactTask(t *testing.T) {
 	}
 }
 
+func TestTaskStoresFailExactRunningTask(t *testing.T) {
+	tests := []struct {
+		name string
+		new  func(t *testing.T) TaskStore
+	}{
+		{name: "memory", new: func(t *testing.T) TaskStore {
+			store, err := NewMemoryTaskStore()
+			if err != nil {
+				t.Fatal(err)
+			}
+			return store
+		}},
+		{name: "tcaplus", new: func(t *testing.T) TaskStore {
+			store, err := NewTcaplusTaskStore(testtcaplus.New(), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return store
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := test.new(t)
+			created, _, err := store.UpsertPlanned(ctx, rebalanceTask(45, "zone-a", "zone-b", 9))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Fail(ctx, 45, created.TaskID, "ROUTE_CONFLICT"); !errors.Is(err, ErrTaskConflict) {
+				t.Fatalf("Fail PLANNED error = %v, want ErrTaskConflict", err)
+			}
+			if _, err := store.Claim(ctx, 45, created.TaskID); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Fail(ctx, 45, []byte("wrong-task-id"), "ROUTE_CONFLICT"); !errors.Is(err, ErrTaskConflict) {
+				t.Fatalf("stale Fail error = %v, want ErrTaskConflict", err)
+			}
+			if err := store.Fail(ctx, 45, created.TaskID, "ROUTE_CONFLICT"); err != nil {
+				t.Fatalf("Fail: %v", err)
+			}
+			failed, found, err := store.Get(ctx, 45)
+			if err != nil || !found || failed.Status != StatusCancelled || failed.LastErrorCode != "ROUTE_CONFLICT" {
+				t.Fatalf("failed task = (%+v, %t, %v)", failed, found, err)
+			}
+			if err := store.Fail(ctx, 45, created.TaskID, "ROUTE_CONFLICT"); err != nil {
+				t.Fatalf("Fail replay: %v", err)
+			}
+		})
+	}
+}
+
 func TestTcaplusTaskLifecycleRetriesStaleRecordVersion(t *testing.T) {
 	ctx := context.Background()
 	client := &oneStaleUpdateClient{Client: testtcaplus.New()}

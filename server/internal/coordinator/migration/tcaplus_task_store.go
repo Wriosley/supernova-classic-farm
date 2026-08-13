@@ -191,6 +191,28 @@ func (s *TcaplusTaskStore) Complete(ctx context.Context, shardID uint32, taskID 
 	return ErrTaskCASConflict
 }
 
+func (s *TcaplusTaskStore) Fail(ctx context.Context, shardID uint32, taskID []byte, code string) error {
+	for attempt := 0; attempt < maxCASAttempts; attempt++ {
+		current, version, found, err := s.load(ctx, shardID)
+		if err != nil {
+			return err
+		}
+		next, changed, err := resolveFail(current, found, taskID, code, nowUnixMilli())
+		if err != nil || !changed {
+			return err
+		}
+		err = s.client.DoUpdate(taskRecord(next), &option.PBOpt{Ctx: ctx, Version: version}, s.zoneID)
+		if isCASConflict(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("fail migration task %d: %w", shardID, err)
+		}
+		return nil
+	}
+	return ErrTaskCASConflict
+}
+
 func (s *TcaplusTaskStore) load(ctx context.Context, shardID uint32) (Task, int32, bool, error) {
 	record := &tcaplusv1.MigrationTask{LogicalShardId: shardID}
 	opt := &option.PBOpt{Ctx: ctx}

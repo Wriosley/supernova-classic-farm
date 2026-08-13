@@ -125,3 +125,17 @@ func (s *MemoryTaskStore) Complete(ctx context.Context, shardID uint32, taskID [
 	}
 	return err
 }
+
+func (s *MemoryTaskStore) Fail(ctx context.Context, shardID uint32, taskID []byte, code string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, found := s.tasks[shardID]
+	next, changed, err := resolveFail(current, found, taskID, code, nowUnixMilli())
+	if err == nil && changed {
+		s.tasks[shardID] = next
+	}
+	return err
+}

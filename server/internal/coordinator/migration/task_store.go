@@ -66,6 +66,7 @@ type TaskStore interface {
 	Cancel(context.Context, uint32, []byte, string) error
 	Claim(context.Context, uint32, []byte) (Task, error)
 	Retry(context.Context, uint32, []byte, uint32, int64, string) error
+	Fail(context.Context, uint32, []byte, string) error
 	Complete(context.Context, uint32, []byte) error
 }
 
@@ -105,6 +106,21 @@ func resolveComplete(task Task, found bool, taskID []byte, nowMS int64) (Task, b
 		return Task{}, false, ErrTaskConflict
 	}
 	task.Status, task.RetryAtMS, task.LastErrorCode = StatusCompleted, 0, ""
+	task.UpdatedAtMS = nowMS
+	return cloneTask(task), true, nil
+}
+
+func resolveFail(task Task, found bool, taskID []byte, code string, nowMS int64) (Task, bool, error) {
+	if !found || !bytes.Equal(task.TaskID, taskID) || strings.TrimSpace(code) == "" {
+		return Task{}, false, ErrTaskConflict
+	}
+	if task.Status == StatusCancelled && task.LastErrorCode == code {
+		return cloneTask(task), false, nil
+	}
+	if task.Status != StatusRunning {
+		return Task{}, false, ErrTaskConflict
+	}
+	task.Status, task.LastErrorCode, task.RetryAtMS = StatusCancelled, code, 0
 	task.UpdatedAtMS = nowMS
 	return cloneTask(task), true, nil
 }
