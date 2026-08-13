@@ -119,6 +119,31 @@ func TestControllerPodReplacementDoesNotCompareDifferentResourceVersionDomains(t
 	}
 }
 
+func TestControllerIgnoresStaleEndpointEventAndContinues(t *testing.T) {
+	logical := "d859cea1-ac5b-5524-bffa-4e542301cd95"
+	prober := &sequenceProber{results: []ProbeResult{{LogicalZoneID: logical, IncarnationID: "0d5e7eca-86e2-438f-aaac-2ac588c0a1f5", Endpoint: "http://10.0.0.8:8082", Live: true}}}
+	publisher := &recordingPublisher{batches: make(chan *coordinatorv1.AvailabilityBatch, 8)}
+	controller, _ := NewController(nil, NewRegistry(time.Now), prober, publisher, ControllerConfig{ProbeInterval: time.Hour, ProbeTimeout: time.Second, FailureThreshold: 3, Workers: 1})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- controller.Run(ctx) }()
+	current := testEndpointObservation()
+	current.ResourceVersion = "100"
+	controller.UpsertEndpoint(current)
+	waitAvailability(t, publisher.batches, coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY)
+	stale := current
+	stale.ResourceVersion = "99"
+	stale.EndpointReady = false
+	controller.UpsertEndpoint(stale)
+	time.Sleep(20 * time.Millisecond)
+	select {
+	case err := <-result:
+		t.Fatalf("controller exited on stale event: %v", err)
+	default:
+	}
+}
+
 func testEndpointObservation() EndpointObservation {
 	return EndpointObservation{Namespace: "classic-farm", PodName: "zone-pool-0", PodUID: "uid", ResourceVersion: "10", ClusterID: "classic-farm-local", StatefulSetName: "zone-pool", Ordinal: 0, Endpoint: "http://10.0.0.8:8082", EndpointReady: true, PodPhase: "Running"}
 }

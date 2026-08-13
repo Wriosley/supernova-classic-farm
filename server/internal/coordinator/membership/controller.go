@@ -197,6 +197,9 @@ func (controller *Controller) applyFailure(endpoint EndpointObservation, termina
 
 func (controller *Controller) apply(member Member) error {
 	snapshot, changed, err := controller.registry.Apply(Observation(member))
+	if errors.Is(err, ErrStaleObservation) || errors.Is(err, ErrIdentityConflict) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

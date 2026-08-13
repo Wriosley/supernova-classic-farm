@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -89,7 +90,11 @@ func startMembership(ctx context.Context, routePublisher *publisher.Publisher, z
 	if err := controller.SetSource(source); err != nil {
 		return nil, err
 	}
-	go func() { _ = controller.Run(ctx) }()
+	go func() {
+		if runErr := controller.Run(ctx); runErr != nil && ctx.Err() == nil {
+			slog.Error("membership controller stopped", "error", runErr)
+		}
+	}()
 	return &membershipRuntime{ready: source.Ready(), registry: registry}, nil
 }
 
