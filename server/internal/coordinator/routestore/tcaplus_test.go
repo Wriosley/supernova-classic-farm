@@ -195,6 +195,44 @@ func TestTcaplusStoreLoadRecoversRouteBeforeMetaFinalize(t *testing.T) {
 	}
 }
 
+func TestTcaplusStoreLoadUsesTraversalRecords(t *testing.T) {
+	client := &countingClient{TcaplusClient: testtcaplus.New()}
+	store := newTestTcaplusStore(t, client)
+	if _, _, err := store.BootstrapIfEmpty(context.Background(), testSnapshot(t)); err != nil {
+		t.Fatal(err)
+	}
+	client.reset()
+	if _, err := store.Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if client.traversals != 1 || client.metaGets != 1 || client.routeGets != 0 {
+		t.Fatalf("load calls traversals=%d meta_gets=%d route_gets=%d", client.traversals, client.metaGets, client.routeGets)
+	}
+}
+
+func TestTcaplusStoreLoadReadsOnlyPendingTarget(t *testing.T) {
+	failing := &failUpdateClient{Client: testtcaplus.New()}
+	client := &countingClient{TcaplusClient: failing}
+	store := newTestTcaplusStore(t, client)
+	loaded, _, err := store.BootstrapIfEmpty(context.Background(), testSnapshot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	failing.updates = 0
+	failing.failAt = 2
+	if _, err := store.CommitPreparing(context.Background(), nextPreparing(loaded.Entries[42]), 1); err == nil {
+		t.Fatal("expected injected route update failure")
+	}
+	failing.failAt = 0
+	client.reset()
+	if _, err := store.Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if client.routeGets != 1 {
+		t.Fatalf("pending recovery route gets=%d want=1", client.routeGets)
+	}
+}
+
 func TestTcaplusStoreRejectsConflictingOrIncompletePending(t *testing.T) {
 	t.Run("route conflicts with pending target", func(t *testing.T) {
 		client, store, prepared := bootstrappedFailingStore(t)
@@ -266,6 +304,34 @@ type insertCountingClient struct {
 	*testtcaplus.Client
 	routeInserts int
 	metaInserts  int
+}
+
+type countingClient struct {
+	TcaplusClient
+	traversals int
+	metaGets   int
+	routeGets  int
+}
+
+func (c *countingClient) DoGet(message proto.Message, opt *option.PBOpt, zones ...uint32) error {
+	switch message.(type) {
+	case *tcaplusv1.ShardMapMeta:
+		c.metaGets++
+	case *tcaplusv1.ShardRoute:
+		c.routeGets++
+	}
+	return c.TcaplusClient.DoGet(message, opt, zones...)
+}
+
+func (c *countingClient) Traverse(message proto.Message) ([]proto.Message, error) {
+	c.traversals++
+	return c.TcaplusClient.Traverse(message)
+}
+
+func (c *countingClient) reset() {
+	c.traversals = 0
+	c.metaGets = 0
+	c.routeGets = 0
 }
 
 func (c *insertCountingClient) DoInsert(message proto.Message, opt *option.PBOpt, zones ...uint32) error {

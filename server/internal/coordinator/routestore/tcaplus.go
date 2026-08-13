@@ -40,7 +40,7 @@ func (s *TcaplusStore) Load(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	routes, versions, routesFound, err := s.loadRoutes(ctx)
+	routes, routesFound, err := s.loadRoutes(ctx)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -51,14 +51,14 @@ func (s *TcaplusStore) Load(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("%w: metadata and routes are not both present", ErrRouteStoreCorrupt)
 	}
 	if meta.HasPendingCommit {
-		if err := s.recoverPending(ctx, meta, metaVersion, routes, versions); err != nil {
+		if err := s.recoverPending(ctx, meta, metaVersion); err != nil {
 			return Snapshot{}, err
 		}
 		meta, _, found, err = s.loadMeta(ctx)
 		if err != nil || !found {
 			return Snapshot{}, fmt.Errorf("reload finalized route metadata: %w", err)
 		}
-		routes, _, routesFound, err = s.loadRoutes(ctx)
+		routes, routesFound, err = s.loadRoutes(ctx)
 		if err != nil || !routesFound {
 			return Snapshot{}, fmt.Errorf("reload finalized routes: %w", err)
 		}
@@ -78,7 +78,7 @@ func (s *TcaplusStore) BootstrapIfEmpty(ctx context.Context, candidate Snapshot)
 		loaded, loadErr := s.Load(ctx)
 		return loaded, false, loadErr
 	}
-	routes, _, routesFound, err := s.loadRoutes(ctx)
+	routes, routesFound, err := s.loadRoutes(ctx)
 	if err != nil {
 		return Snapshot{}, false, err
 	}
@@ -203,15 +203,21 @@ func (s *TcaplusStore) commit(ctx context.Context, target routing.RouteEntry, ex
 	return s.Load(ctx)
 }
 
-func (s *TcaplusStore) recoverPending(ctx context.Context, meta *tcaplusv1.ShardMapMeta, metaVersion int32, routes []*tcaplusv1.ShardRoute, versions map[uint32]int32) error {
+func (s *TcaplusStore) recoverPending(ctx context.Context, meta *tcaplusv1.ShardMapMeta, metaVersion int32) error {
 	target, err := pendingRoute(meta)
 	if err != nil {
 		return err
 	}
-	if target.ShardID >= uint32(len(routes)) {
+	if target.ShardID >= routing.ShardCount {
 		return fmt.Errorf("%w: pending shard is outside route set", ErrRouteStoreCorrupt)
 	}
-	currentRecord := routes[target.ShardID]
+	currentRecord, routeVersion, found, err := s.loadRoute(ctx, target.ShardID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("%w: pending route %d is missing", ErrRouteStoreCorrupt, target.ShardID)
+	}
 	current, err := routeEntry(currentRecord)
 	if err != nil {
 		return err
@@ -226,7 +232,7 @@ func (s *TcaplusStore) recoverPending(ctx context.Context, meta *tcaplusv1.Shard
 		if !legalOld || currentRecord.CommittedMapVersion != meta.MapVersion {
 			return fmt.Errorf("%w: pending route %d conflicts with stored route", ErrRouteStoreCorrupt, target.ShardID)
 		}
-		if err := s.client.DoUpdate(targetRecord, &option.PBOpt{Ctx: ctx, Version: versions[target.ShardID]}, s.zoneID); err != nil {
+		if err := s.client.DoUpdate(targetRecord, &option.PBOpt{Ctx: ctx, Version: routeVersion}, s.zoneID); err != nil {
 			return fmt.Errorf("recover pending route row: %w", err)
 		}
 	}
@@ -267,33 +273,27 @@ func (s *TcaplusStore) loadRoute(ctx context.Context, shardID uint32) (*tcaplusv
 	return record, opt.Version, true, nil
 }
 
-func (s *TcaplusStore) loadRoutes(ctx context.Context) ([]*tcaplusv1.ShardRoute, map[uint32]int32, bool, error) {
+func (s *TcaplusStore) loadRoutes(ctx context.Context) ([]*tcaplusv1.ShardRoute, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, nil, false, err
+		return nil, false, err
 	}
 	messages, err := s.client.Traverse(&tcaplusv1.ShardRoute{})
 	if err != nil {
 		if tcaplusdb.IsNotFound(err) {
-			return nil, nil, false, nil
+			return nil, false, nil
 		}
-		return nil, nil, false, fmt.Errorf("traverse routes: %w", err)
+		return nil, false, fmt.Errorf("traverse routes: %w", err)
 	}
 	routes := make([]*tcaplusv1.ShardRoute, 0, len(messages))
-	versions := make(map[uint32]int32, len(messages))
 	for _, message := range messages {
 		record, ok := message.(*tcaplusv1.ShardRoute)
 		if !ok {
-			return nil, nil, false, fmt.Errorf("%w: route traversal returned %T", ErrRouteStoreCorrupt, message)
+			return nil, false, fmt.Errorf("%w: route traversal returned %T", ErrRouteStoreCorrupt, message)
 		}
-		loaded, version, found, loadErr := s.loadRoute(ctx, record.LogicalShardId)
-		if loadErr != nil || !found {
-			return nil, nil, false, loadErr
-		}
-		routes = append(routes, loaded)
-		versions[record.LogicalShardId] = version
+		routes = append(routes, proto.Clone(record).(*tcaplusv1.ShardRoute))
 	}
 	sort.Slice(routes, func(i, j int) bool { return routes[i].LogicalShardId < routes[j].LogicalShardId })
-	return routes, versions, true, nil
+	return routes, true, nil
 }
 
 func snapshotFromRecords(meta *tcaplusv1.ShardMapMeta, records []*tcaplusv1.ShardRoute) (Snapshot, error) {
