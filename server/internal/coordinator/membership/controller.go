@@ -116,7 +116,6 @@ func (controller *Controller) Run(ctx context.Context) error {
 			} else if event.deletion != nil {
 				if observation, ok := endpoints[event.deletion.uid]; ok {
 					delete(endpoints, event.deletion.uid)
-					observation.ResourceVersion = event.deletion.resourceVersion
 					observation.Deleting = true
 					if err := controller.applyFailure(observation, true); err != nil {
 						return err

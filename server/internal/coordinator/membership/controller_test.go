@@ -82,6 +82,43 @@ func TestControllerThirdFailureAndTerminalPodBecomeDead(t *testing.T) {
 	waitAvailability(t, publisher2.batches, coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_DEAD)
 }
 
+func TestControllerPodReplacementDoesNotCompareDifferentResourceVersionDomains(t *testing.T) {
+	logical := "d859cea1-ac5b-5524-bffa-4e542301cd95"
+	firstIncarnation := "0d5e7eca-86e2-438f-aaac-2ac588c0a1f5"
+	secondIncarnation := "66e93b70-b18f-4eac-b497-23c041623190"
+	prober := &sequenceProber{results: []ProbeResult{
+		{LogicalZoneID: logical, IncarnationID: firstIncarnation, Endpoint: "http://10.0.0.8:8082", Live: true},
+		{LogicalZoneID: logical, IncarnationID: secondIncarnation, Endpoint: "http://10.0.0.9:8082", Live: true},
+	}}
+	publisher := &recordingPublisher{batches: make(chan *coordinatorv1.AvailabilityBatch, 8)}
+	controller, err := NewController(nil, NewRegistry(time.Now), prober, publisher, ControllerConfig{ProbeInterval: time.Hour, ProbeTimeout: time.Second, FailureThreshold: 3, Workers: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- controller.Run(ctx) }()
+	old := testEndpointObservation()
+	old.ResourceVersion = "100"
+	old.PodUID = "old-uid"
+	controller.UpsertEndpoint(old)
+	waitAvailability(t, publisher.batches, coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY)
+	controller.DeletePod(old.Namespace, old.PodName, old.PodUID, "20")
+	waitAvailability(t, publisher.batches, coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_DEAD)
+	newPod := old
+	newPod.PodUID = "new-uid"
+	newPod.ResourceVersion = "101"
+	newPod.Endpoint = "http://10.0.0.9:8082"
+	controller.UpsertEndpoint(newPod)
+	waitAvailability(t, publisher.batches, coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY)
+	select {
+	case err := <-result:
+		t.Fatalf("controller exited during Pod replacement: %v", err)
+	default:
+	}
+}
+
 func testEndpointObservation() EndpointObservation {
 	return EndpointObservation{Namespace: "classic-farm", PodName: "zone-pool-0", PodUID: "uid", ResourceVersion: "10", ClusterID: "classic-farm-local", StatefulSetName: "zone-pool", Ordinal: 0, Endpoint: "http://10.0.0.8:8082", EndpointReady: true, PodPhase: "Running"}
 }
