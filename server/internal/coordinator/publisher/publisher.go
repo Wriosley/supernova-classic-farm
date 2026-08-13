@@ -7,6 +7,7 @@ import (
 
 	coordinatorv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/coordinator"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
+	"google.golang.org/protobuf/proto"
 )
 
 type SnapshotSource interface{ Snapshot() routing.Snapshot }
@@ -21,6 +22,7 @@ type Diagnostics struct {
 	QueueOverflows          uint64 `json:"queue_overflows"`
 	Resyncs                 uint64 `json:"resyncs"`
 	LastPublishedMapVersion uint64 `json:"last_published_map_version"`
+	LastAvailabilityVersion uint64 `json:"last_availability_version"`
 }
 
 type Publisher struct {
@@ -31,6 +33,7 @@ type Publisher struct {
 	closed             bool
 	overflows, resyncs uint64
 	lastMap            uint64
+	availability       *coordinatorv1.AvailabilityBatch
 }
 
 func New(source SnapshotSource, cfg Config) (*Publisher, error) {
@@ -82,6 +85,13 @@ func (p *Publisher) Register(id string, kind coordinatorv1.SubscriberKind, lastM
 			return nil, err
 		}
 		s.messages <- &coordinatorv1.WatchRoutesResponse{Payload: &coordinatorv1.WatchRoutesResponse_Snapshot{Snapshot: encoded}}
+	}
+	if p.availability != nil {
+		authoritative := proto.Clone(p.availability).(*coordinatorv1.AvailabilityBatch)
+		authoritative.PreviousAvailabilityVersion = 0
+		if !s.enqueue(&coordinatorv1.WatchRoutesResponse{Payload: &coordinatorv1.WatchRoutesResponse_AvailabilityBatch{AvailabilityBatch: authoritative}}) {
+			return nil, errors.New("subscriber queue cannot hold initial control-plane state")
+		}
 	}
 	p.sessions[id] = s
 	return s, nil
@@ -142,12 +152,27 @@ func (p *Publisher) PublishRoutes(previous, current routing.Snapshot) error {
 }
 
 func (p *Publisher) PublishAvailability(batch *coordinatorv1.AvailabilityBatch) error {
-	if batch == nil {
+	if batch == nil || batch.AvailabilityVersion <= batch.PreviousAvailabilityVersion {
 		return errors.New("availability batch is required")
 	}
-	response := &coordinatorv1.WatchRoutesResponse{Payload: &coordinatorv1.WatchRoutesResponse_AvailabilityBatch{AvailabilityBatch: batch}}
+	seen := make(map[string]struct{}, len(batch.Zones))
+	for _, zone := range batch.Zones {
+		if zone == nil || zone.LogicalZoneId == "" || zone.Availability == coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_UNSPECIFIED {
+			return errors.New("availability batch contains an invalid Zone")
+		}
+		if _, exists := seen[zone.LogicalZoneId]; exists {
+			return errors.New("availability batch contains a duplicate Zone")
+		}
+		seen[zone.LogicalZoneId] = struct{}{}
+	}
+	retained := proto.Clone(batch).(*coordinatorv1.AvailabilityBatch)
+	response := &coordinatorv1.WatchRoutesResponse{Payload: &coordinatorv1.WatchRoutesResponse_AvailabilityBatch{AvailabilityBatch: proto.Clone(batch).(*coordinatorv1.AvailabilityBatch)}}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.closed {
+		return errors.New("publisher is closed")
+	}
+	p.availability = retained
 	for id, s := range p.sessions {
 		if !s.enqueue(response) {
 			delete(p.sessions, id)
@@ -161,7 +186,11 @@ func (p *Publisher) PublishAvailability(batch *coordinatorv1.AvailabilityBatch) 
 func (p *Publisher) Diagnostics() Diagnostics {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return Diagnostics{ActiveSubscribers: len(p.sessions), QueueOverflows: p.overflows, Resyncs: p.resyncs, LastPublishedMapVersion: p.lastMap}
+	diagnostics := Diagnostics{ActiveSubscribers: len(p.sessions), QueueOverflows: p.overflows, Resyncs: p.resyncs, LastPublishedMapVersion: p.lastMap}
+	if p.availability != nil {
+		diagnostics.LastAvailabilityVersion = p.availability.AvailabilityVersion
+	}
+	return diagnostics
 }
 func (p *Publisher) Close() {
 	p.mu.Lock()

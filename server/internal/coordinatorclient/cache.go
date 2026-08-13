@@ -111,6 +111,20 @@ func (c *routeCache) applyAvailability(batch *coordinatorv1.AvailabilityBatch) e
 	if batch == nil || batch.AvailabilityVersion <= batch.PreviousAvailabilityVersion {
 		return ErrResyncRequired
 	}
+	incoming := make(map[string]coordinatorv1.ZoneAvailability, len(batch.Zones))
+	for _, entry := range batch.Zones {
+		if entry == nil || entry.LogicalZoneId == "" || entry.Availability == coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_UNSPECIFIED {
+			return ErrResyncRequired
+		}
+		if _, exists := incoming[entry.LogicalZoneId]; exists {
+			return ErrResyncRequired
+		}
+		incoming[entry.LogicalZoneId] = entry.Availability
+	}
+	if batch.PreviousAvailabilityVersion == 0 {
+		c.availability.Store(&availabilitySnapshot{version: batch.AvailabilityVersion, zones: incoming})
+		return nil
+	}
 	current := c.availability.Load()
 	currentVersion := uint64(0)
 	zones := make(map[string]coordinatorv1.ZoneAvailability)
@@ -126,11 +140,8 @@ func (c *routeCache) applyAvailability(batch *coordinatorv1.AvailabilityBatch) e
 	if batch.PreviousAvailabilityVersion != currentVersion {
 		return ErrResyncRequired
 	}
-	for _, entry := range batch.Zones {
-		if entry.LogicalZoneId == "" || entry.Availability == coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_UNSPECIFIED {
-			return ErrResyncRequired
-		}
-		zones[entry.LogicalZoneId] = entry.Availability
+	for id, state := range incoming {
+		zones[id] = state
 	}
 	c.availability.Store(&availabilitySnapshot{version: batch.AvailabilityVersion, zones: zones})
 	return nil

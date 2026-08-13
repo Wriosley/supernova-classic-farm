@@ -11,7 +11,7 @@ import (
 )
 
 func newCoordinatorGRPCServer(service coordinatorv1.CoordinatorServiceServer, key []byte) (*grpc.Server, error) {
-	callers := []string{"gate", "info", "zone-local", "zone-a", "zone-b"}
+	callers := append([]string{"gate", "info"}, rpcauth.ZoneAllowedCallers(true)...)
 	allow := map[string][]string{
 		coordinatorv1.CoordinatorService_GetRouteSnapshot_FullMethodName:  callers,
 		coordinatorv1.CoordinatorService_GetShardRoute_FullMethodName:     callers,

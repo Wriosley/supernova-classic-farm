@@ -34,6 +34,17 @@ type Controller struct {
 	runOnce   sync.Once
 }
 
+func (controller *Controller) SetSource(source Source) error {
+	if source == nil {
+		return errors.New("membership source is required")
+	}
+	if controller.source != nil {
+		return errors.New("membership source is already configured")
+	}
+	controller.source = source
+	return nil
+}
+
 type controllerEvent struct {
 	endpoint *EndpointObservation
 	deletion *podDeletion

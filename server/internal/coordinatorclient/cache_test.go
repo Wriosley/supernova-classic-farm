@@ -59,3 +59,22 @@ func TestCacheFailsClosedForPreparingAndStaleWatch(t *testing.T) {
 		t.Fatalf("stale err=%v", err)
 	}
 }
+
+func TestCacheAuthoritativeAvailabilityReplacesEvenAfterVersionReset(t *testing.T) {
+	cache := newRouteCache(time.Now, time.Minute)
+	if err := cache.applyAvailability(&coordinatorv1.AvailabilityBatch{PreviousAvailabilityVersion: 0, AvailabilityVersion: 9, Zones: []*coordinatorv1.ZoneAvailabilityEntry{
+		{LogicalZoneId: "zone-a", Availability: coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_DEAD},
+		{LogicalZoneId: "removed-zone", Availability: coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.applyAvailability(&coordinatorv1.AvailabilityBatch{PreviousAvailabilityVersion: 0, AvailabilityVersion: 1, Zones: []*coordinatorv1.ZoneAvailabilityEntry{
+		{LogicalZoneId: "zone-a", Availability: coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	got := cache.availability.Load()
+	if got.version != 1 || len(got.zones) != 1 || got.zones["zone-a"] != coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY {
+		t.Fatalf("availability=%+v", got)
+	}
+}

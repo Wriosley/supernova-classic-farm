@@ -1,0 +1,29 @@
+package main
+
+import (
+	"testing"
+	"time"
+)
+
+func TestMembershipConfigDefaultsStaticAndValidatesKubernetes(t *testing.T) {
+	t.Setenv("COORDINATOR_MEMBERSHIP_SOURCE", "")
+	config, err := membershipConfigFromEnvironment()
+	if err != nil || config.Source != "static" {
+		t.Fatalf("config=%+v err=%v", config, err)
+	}
+	t.Setenv("COORDINATOR_MEMBERSHIP_SOURCE", "kubernetes")
+	t.Setenv("CLUSTER_ID", "classic-farm-local")
+	t.Setenv("POD_NAMESPACE", "classic-farm")
+	t.Setenv("ZONE_DISCOVERY_SERVICE", "zone-discovery")
+	config, err = membershipConfigFromEnvironment()
+	if err != nil || config.ProbeInterval != 10*time.Second || config.FailureThreshold != 3 || config.Workers != 8 {
+		t.Fatalf("config=%+v err=%v", config, err)
+	}
+}
+
+func TestMembershipConfigRejectsInvalidSource(t *testing.T) {
+	t.Setenv("COORDINATOR_MEMBERSHIP_SOURCE", "automatic")
+	if _, err := membershipConfigFromEnvironment(); err == nil {
+		t.Fatal("invalid source accepted")
+	}
+}

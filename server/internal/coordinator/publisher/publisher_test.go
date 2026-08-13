@@ -95,6 +95,23 @@ func TestPublisherOverflowClosesOnlySlowSession(t *testing.T) {
 	}
 }
 
+func TestPublisherReplaysAuthoritativeAvailabilityToNewSubscriber(t *testing.T) {
+	source := &snapshotSource{snapshot: testSnapshot(t)}
+	p, _ := New(source, Config{QueueCapacity: 4})
+	defer p.Close()
+	if err := p.PublishAvailability(&coordinatorv1.AvailabilityBatch{PreviousAvailabilityVersion: 6, AvailabilityVersion: 7, Zones: []*coordinatorv1.ZoneAvailabilityEntry{{LogicalZoneId: "zone-a", Availability: coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY, IncarnationId: "inc-a"}}}); err != nil {
+		t.Fatal(err)
+	}
+	session, err := p.Register("gate-restarted", coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_GATE, source.snapshot.MapVersion, 99)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := (<-session.Messages()).GetAvailabilityBatch()
+	if batch == nil || batch.PreviousAvailabilityVersion != 0 || batch.AvailabilityVersion != 7 || len(batch.Zones) != 1 {
+		t.Fatalf("authoritative batch=%+v", batch)
+	}
+}
+
 type snapshotSource struct{ snapshot routing.Snapshot }
 
 func (s *snapshotSource) Snapshot() routing.Snapshot { return cloneSnapshot(s.snapshot) }

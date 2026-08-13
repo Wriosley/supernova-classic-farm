@@ -63,6 +63,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	membershipConfig, err := membershipConfigFromEnvironment()
+	if err != nil {
+		return err
+	}
 
 	now := time.Now().UTC()
 	routeStoreMode, err := validateRouteStoreMode(os.Getenv("COORDINATOR_ROUTE_STORE"), os.Getenv("STORAGE_MODE"))
@@ -295,6 +299,10 @@ func run() error {
 		return err
 	}
 	defer routePublisher.Close()
+	membershipRuntime, err := startMembership(ctx, routePublisher, zones, membershipConfig)
+	if err != nil {
+		return err
+	}
 	if migrations != nil {
 		migrations.routePublisher = routePublisher
 	}
@@ -357,7 +365,7 @@ func run() error {
 			}
 			return nil
 		},
-	}))
+	}, health.Check{Name: "membership", Run: membershipRuntime.Check}))
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
@@ -373,6 +381,7 @@ func run() error {
 		"routing_mode", mode,
 		"shard_count", routing.ShardCount,
 		"zone_count", len(zones),
+		"membership_source", membershipConfig.Source,
 		"lease_duration", leaseDuration.String(),
 		"consensus", false,
 		"high_availability", false,
