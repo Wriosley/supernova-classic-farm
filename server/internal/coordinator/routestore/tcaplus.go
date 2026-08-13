@@ -20,6 +20,7 @@ type TcaplusClient interface {
 	DoGet(proto.Message, *option.PBOpt, ...uint32) error
 	DoInsert(proto.Message, *option.PBOpt, ...uint32) error
 	DoUpdate(proto.Message, *option.PBOpt, ...uint32) error
+	DoDelete(proto.Message, *option.PBOpt, ...uint32) error
 	Traverse(proto.Message) ([]proto.Message, error)
 }
 
@@ -107,6 +108,27 @@ func (s *TcaplusStore) BootstrapIfEmpty(ctx context.Context, candidate Snapshot)
 	}
 	loaded, err := s.Load(ctx)
 	return loaded, err == nil, err
+}
+
+// ReinitializeBootstrap removes only the metadata commit anchor. Existing
+// ShardRoute rows remain available for BootstrapIfEmpty to CAS-overwrite, so an
+// interrupted reinitialization can be resumed. It is an explicit operational
+// action, never part of normal startup recovery.
+func (s *TcaplusStore) ReinitializeBootstrap(ctx context.Context) error {
+	meta, version, found, err := s.loadMeta(ctx)
+	if err != nil || !found {
+		return err
+	}
+	if meta.HasPendingCommit {
+		return ErrRouteConflict
+	}
+	if err := s.client.DoDelete(
+		&tcaplusv1.ShardMapMeta{MapId: shardMapMetaID},
+		&option.PBOpt{Ctx: ctx, Version: version}, s.zoneID,
+	); err != nil {
+		return fmt.Errorf("delete route bootstrap metadata: %w", err)
+	}
+	return nil
 }
 
 func (s *TcaplusStore) CommitPreparing(ctx context.Context, entry routing.RouteEntry, expected uint64) (Snapshot, error) {

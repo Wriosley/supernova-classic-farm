@@ -639,14 +639,14 @@ Expected: PASS.
 5. only after all pass, make SDK mode the kind default while retaining env
    rollback switches.
 
-- [ ] **Step 1: Render manifests**
+- [x] **Step 1: Render manifests**
 
 ```bash
 kubectl kustomize deploy/k8s >/tmp/classic-farm-rendered.yaml
 kubectl apply --dry-run=client -f /tmp/classic-farm-rendered.yaml
 ```
 
-- [ ] **Step 2: Run offline regression**
+- [x] **Step 2: Run offline regression**
 
 ```bash
 cd server
@@ -657,7 +657,7 @@ go test -race ./internal/platform/rpcauth \
 go test ./...
 ```
 
-- [ ] **Step 3: Run kind migration observation**
+- [x] **Step 3: Run kind migration observation**
 
 Observe before/after map versions and debug counters:
 
@@ -674,7 +674,7 @@ Also inject one disconnected subscriber and one deliberately slow test
 subscriber; healthy subscribers must continue, and the affected SDK must full
 resync.
 
-- [ ] **Step 4: Record evidence and update CURRENT**
+- [x] **Step 4: Record evidence and update CURRENT**
 
 Evidence must include exact commands/output, observed delivery versions,
 subscriber diagnostics, fallback behavior and explicit limitations:

@@ -72,6 +72,29 @@ func TestTcaplusStoreBootstrapReloadAndExactReplay(t *testing.T) {
 	}
 }
 
+func TestTcaplusStoreExplicitReinitializeOverwritesPriorRoutes(t *testing.T) {
+	client := testtcaplus.New()
+	store := newTestTcaplusStore(t, client)
+	initial := testSnapshot(t)
+	if _, _, err := store.BootstrapIfEmpty(context.Background(), initial); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReinitializeBootstrap(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	replacement := testSnapshot(t)
+	for index := range replacement.Entries {
+		replacement.Entries[index].OwnerEndpoint = "http://zone-reinitialized:8082"
+	}
+	loaded, created, err := store.BootstrapIfEmpty(context.Background(), replacement)
+	if err != nil || !created {
+		t.Fatalf("reinitialize created=%v err=%v", created, err)
+	}
+	if got := loaded.Entries[42].OwnerEndpoint; got != "http://zone-reinitialized:8082" {
+		t.Fatalf("route endpoint=%q", got)
+	}
+}
+
 func TestTcaplusStoreResumesPartialBootstrap(t *testing.T) {
 	ctx := context.Background()
 	client := &insertCountingClient{Client: testtcaplus.New()}

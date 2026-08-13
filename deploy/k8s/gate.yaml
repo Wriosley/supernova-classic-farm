@@ -28,6 +28,8 @@ spec:
               value: ""
             - name: HTTP_ADDRESS
               value: 0.0.0.0:8081
+            - name: GATEWAY_ID
+              value: local-gateway
             - name: LOGIN_TICKET_CONSUME_URL
               value: http://login:8080/internal/v1/ws-tickets/consume
             - name: CLIENT_CONFIG_URL

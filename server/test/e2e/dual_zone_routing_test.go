@@ -77,6 +77,7 @@ func TestDualZoneRoutingAndCache(t *testing.T) {
 	}
 
 	before := routeLookupStats(t)
+	assertRouteSubscribers(t, 4)
 	connA := authenticateDualPlayer(t, playerA)
 	defer connA.CloseNow()
 	connB := authenticateDualPlayer(t, playerB)
@@ -101,6 +102,10 @@ func TestDualZoneRoutingAndCache(t *testing.T) {
 		t.Fatalf("player A purchase failed: %+v", bought)
 	}
 	assertInitialSnapshot(t, connB, playerB.id, "zone-b-isolated")
+	afterNormal := routeLookupStats(t)
+	if afterNormal.Shard != before.Shard {
+		t.Fatalf("normal SDK route hit unexpectedly used Coordinator single-Shard HTTP lookup: before=%+v after=%+v", before, afterNormal)
+	}
 
 	migrated := moveShard(t, migrationPlayer.route.ShardID, "zone-b", http.StatusOK)
 	if migrated.OwnerZoneID != "zone-b" || migrated.OwnerEpoch != "2" ||
@@ -118,14 +123,11 @@ func TestDualZoneRoutingAndCache(t *testing.T) {
 		activeMoved.State != "ACTIVE" {
 		t.Fatalf("unexpected active-player migrated route: %+v", activeMoved)
 	}
-	assertSnapshotState(
+	assertSnapshotStateEventually(
 		t, connA, playerA.id, "active-player-migrated", 2, 1, 8,
 	)
 
 	after := routeLookupStats(t)
-	if after.Shard < before.Shard+2 {
-		t.Fatalf("stale route refresh count mismatch: before=%+v after=%+v", before, after)
-	}
 	t.Logf("DUAL_ZONE zone_a_player=%d shard=%d zone_b_player=%d shard=%d migrated_player=%d migrated_shard=%d migrated_epoch=2 snapshot_lookups=%d shard_lookups=%d",
 		playerA.id, playerA.route.ShardID, playerB.id, playerB.route.ShardID,
 		migrationPlayer.id, migrationPlayer.route.ShardID,
@@ -452,6 +454,44 @@ func assertSnapshotState(
 	}
 }
 
+func assertSnapshotStateEventually(
+	t *testing.T,
+	conn *websocket.Conn,
+	playerID uint64,
+	requestID string,
+	ownerEpoch uint64,
+	playerSeq uint64,
+	coinBalance int64,
+) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for attempt := 1; ; attempt++ {
+		writeEnvelope(t, conn, &wsv1.WsEnvelope{
+			ProtocolVersion: 1, MessageKind: wsv1.MessageKind_REQUEST,
+			Action:         wsv1.Action_GET_PLAYER_SNAPSHOT,
+			RequestId:      requestID + "-" + strconv.Itoa(attempt),
+			TargetPlayerId: playerID,
+			Payload: &wsv1.WsEnvelope_GetPlayerSnapshotRequest{
+				GetPlayerSnapshotRequest: &wsv1.GetPlayerSnapshotRequest{},
+			},
+		})
+		response := readEnvelope(t, conn)
+		snapshot := response.GetGetPlayerSnapshotResponse().GetSnapshot()
+		if response.GetError() == nil &&
+			response.GetStateVersion().GetOwnerEpoch() == ownerEpoch &&
+			response.GetStateVersion().GetPlayerSeq() == playerSeq &&
+			snapshot.GetPlayerId() == playerID &&
+			snapshot.GetCoinBalance() == coinBalance {
+			t.Logf("active route delivered after %d attempt(s)", attempt)
+			return
+		}
+		if response.GetError().GetCode() != wsv1.ErrorCode_SERVICE_UNAVAILABLE || time.Now().After(deadline) {
+			t.Fatalf("active route did not arrive for player %d: %+v", playerID, response)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 type movedRoute struct {
 	OwnerZoneID string `json:"owner_zone_id"`
 	OwnerEpoch  string `json:"owner_epoch"`
@@ -620,6 +660,30 @@ func assertDirectZoneRejected(
 type lookupStats struct {
 	Snapshot uint64 `json:"snapshot"`
 	Shard    uint64 `json:"shard"`
+}
+
+type subscriberStats struct {
+	ActiveSubscribers       int    `json:"active_subscribers"`
+	LastPublishedMapVersion uint64 `json:"last_published_map_version"`
+}
+
+func assertRouteSubscribers(t *testing.T, want int) {
+	t.Helper()
+	response, err := http.Get("http://127.0.0.1:8083/internal/v1/debug/route-subscribers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("route subscriber diagnostics status=%d", response.StatusCode)
+	}
+	var stats subscriberStats
+	if err := json.NewDecoder(response.Body).Decode(&stats); err != nil {
+		t.Fatal(err)
+	}
+	if stats.ActiveSubscribers != want {
+		t.Fatalf("route subscriber count=%d want=%d diagnostics=%+v", stats.ActiveSubscribers, want, stats)
+	}
 }
 
 func routeLookupStats(t *testing.T) lookupStats {

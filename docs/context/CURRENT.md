@@ -629,6 +629,11 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
   all three crash-window recovery tests), the Zone
   `ExecuteFriendAction`/`ApplyVisitorAction` RPC wiring, Gate routing and
   the minimal H5 steal button.
+- `../evidence/2026-08-13-coordinator-sdk-route-publish.md` records the Phase
+  03 authenticated Watch publisher/shared SDK rollout, four live subscribers,
+  Coordinator restart recovery, explicit 4096-row endpoint reinitialize and a
+  passing kind dual-Zone active-migration E2E. Gate/Info/Zone now default to
+  the SDK in kind while retaining HTTP/poll rollback switches.
 
 ## Next actions
 

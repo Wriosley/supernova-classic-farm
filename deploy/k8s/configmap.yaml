@@ -9,8 +9,14 @@ data:
   STORAGE_MODE: tcaplus
   INTERNAL_NETWORK_MODE: kubernetes
   ROUTING_MODE: static-dual-zone
-  COORDINATOR_ROUTE_STORE: legacy-fence
+  COORDINATOR_ROUTE_STORE: tcaplus
+  COORDINATOR_ROUTE_REINITIALIZE: "false"
   COORDINATOR_URL: http://coordinator:8083
+  COORDINATOR_RPC_URL: http://coordinator:8083
+  GATE_ROUTE_SOURCE: coordinator-sdk
+  INFO_ROUTE_SOURCE: coordinator-sdk
+  ZONE_ROUTE_SOURCE: coordinator-sdk
+  ZONE_ROUTE_VERIFY_INTERVAL: 5m
   FRIEND_RPC_URL: http://friend:8085
   INFO_RPC_URL: http://info:8086
   MAIL_RPC_URL: http://mail:8087

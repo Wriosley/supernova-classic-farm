@@ -222,6 +222,11 @@ Successful commit allocates exactly `expected+1`, stores it in
   candidate; Coordinator must not become Ready before that succeeds;
 - once metadata exists, routes are committed Current and bootstrap must never
   guess, overwrite or recompute them;
+- replacing a committed environment is an explicit non-production
+  reinitialize operation, not normal startup: remove only the Meta commit
+  anchor, CAS-overwrite all 4096 existing Route rows, then commit fresh Meta;
+  reject pending commits and require consumers to restart because same-version
+  route identity changes must fail closed;
 - both complete: return the stored snapshot with `created=false`;
 - only one table exists, wrong row count, duplicate/out-of-order Shard IDs, or
   incompatible algorithm metadata: return `ErrRouteStoreCorrupt`;

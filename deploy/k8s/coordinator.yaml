@@ -23,6 +23,8 @@ spec:
                 name: classic-farm-runtime
             - secretRef:
                 name: classic-farm-tcaplus
+            - secretRef:
+                name: classic-farm-internal-rpc
           env:
             - name: COORDINATOR_PORT
               value: ""
@@ -43,7 +45,10 @@ spec:
             httpGet:
               path: /readyz
               port: http
-            failureThreshold: 60
+            # A deliberate 4096-row Tcaplus bootstrap/reinitialize is
+            # rate-limited and may take several minutes. Normal starts become
+            # ready immediately after loading the committed snapshot.
+            failureThreshold: 1800
             periodSeconds: 2
           readinessProbe:
             httpGet:

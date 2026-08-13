@@ -29,6 +29,8 @@ spec:
               value: ""
             - name: HTTP_ADDRESS
               value: 0.0.0.0:8086
+            - name: INFO_INSTANCE_ID
+              value: info-local
           ports:
             - name: http
               containerPort: 8086

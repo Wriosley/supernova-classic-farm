@@ -31,6 +31,8 @@ spec:
           env:
             - name: OWNER_ZONE_ID
               value: zone-a
+            - name: ZONE_INSTANCE_ID
+              value: zone-a
             - name: ZONE_HTTP_ADDRESS
               value: 0.0.0.0:8082
             - name: GATE_RPC_URL
@@ -94,6 +96,8 @@ spec:
                 name: classic-farm-internal-rpc
           env:
             - name: OWNER_ZONE_ID
+              value: zone-b
+            - name: ZONE_INSTANCE_ID
               value: zone-b
             - name: ZONE_HTTP_ADDRESS
               value: 0.0.0.0:8082

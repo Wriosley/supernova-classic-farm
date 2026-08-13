@@ -147,6 +147,15 @@ func run() error {
 				if configErr != nil {
 					return configErr
 				}
+				if environmentOr("COORDINATOR_ROUTE_REINITIALIZE", "false") == "true" {
+					if environmentOr("APP_ENV", "development") == "production" {
+						return errors.New("COORDINATOR_ROUTE_REINITIALIZE is forbidden in production")
+					}
+					if resetErr := durableStore.ReinitializeBootstrap(context.Background()); resetErr != nil {
+						return fmt.Errorf("reinitialize durable route bootstrap: %w", resetErr)
+					}
+					logger.Warn("durable route bootstrap metadata removed for explicit reinitialization")
+				}
 				bootstrapTimeout, timeoutErr := routeBootstrapTimeoutFromEnvironment()
 				if timeoutErr != nil {
 					return timeoutErr

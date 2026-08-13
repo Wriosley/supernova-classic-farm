@@ -17,10 +17,10 @@ type Config struct {
 	Now           func() time.Time
 }
 type Diagnostics struct {
-	ActiveSubscribers       int
-	QueueOverflows          uint64
-	Resyncs                 uint64
-	LastPublishedMapVersion uint64
+	ActiveSubscribers       int    `json:"active_subscribers"`
+	QueueOverflows          uint64 `json:"queue_overflows"`
+	Resyncs                 uint64 `json:"resyncs"`
+	LastPublishedMapVersion uint64 `json:"last_published_map_version"`
 }
 
 type Publisher struct {
