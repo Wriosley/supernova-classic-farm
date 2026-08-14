@@ -15,9 +15,11 @@ import (
 )
 
 const (
-	relayStatusPending   uint32 = 1
-	relayStatusDelivered uint32 = 3
-	defaultRelayInterval        = 2 * time.Second
+	relayStatusPending          uint32 = 1
+	relayStatusDelivered        uint32 = 3
+	defaultRelayInterval               = 2 * time.Second
+	defaultVisibilityAttempts          = 50
+	defaultVisibilityRetryDelay        = 10 * time.Millisecond
 )
 
 // Store is the durable PlayerOutbox dependency of the Zone relay.
@@ -56,13 +58,15 @@ type ShardOwner interface {
 
 // Relay delivers pending CREATE_GIFT_MAIL Outbox rows to MailSvr.
 type Relay struct {
-	store    Store
-	mail     GiftMailCreator
-	owner    ShardOwner
-	now      func() time.Time
-	logger   *slog.Logger
-	interval time.Duration
-	wake     chan []byte
+	store                Store
+	mail                 GiftMailCreator
+	owner                ShardOwner
+	now                  func() time.Time
+	logger               *slog.Logger
+	interval             time.Duration
+	wake                 chan []byte
+	visibilityAttempts   int
+	visibilityRetryDelay time.Duration
 }
 
 func NewRelay(
@@ -80,6 +84,8 @@ func NewRelay(
 	return &Relay{
 		store: store, mail: mail, owner: owner, now: now, logger: logger,
 		interval: defaultRelayInterval, wake: make(chan []byte, 1),
+		visibilityAttempts:   defaultVisibilityAttempts,
+		visibilityRetryDelay: defaultVisibilityRetryDelay,
 	}, nil
 }
 
@@ -105,7 +111,7 @@ func (r *Relay) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case eventID := <-r.wake:
-			if err := r.RelayOne(ctx, eventID); err != nil {
+			if err := r.relayNotified(ctx, eventID); err != nil {
 				r.logger.Error("immediate outbox relay failed", "error", err)
 			}
 		case <-ticker.C:
@@ -114,6 +120,26 @@ func (r *Relay) Run(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (r *Relay) relayNotified(ctx context.Context, eventID []byte) error {
+	for attempt := 0; attempt < r.visibilityAttempts; attempt++ {
+		err := r.RelayOne(ctx, eventID)
+		if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		if attempt+1 == r.visibilityAttempts {
+			return err
+		}
+		timer := time.NewTimer(r.visibilityRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil
 }
 
 func (r *Relay) RelayDue(ctx context.Context) error {

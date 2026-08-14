@@ -124,6 +124,12 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   delivers to MailSvr `CreateGiftMail` with `source_event_id` dedup +
   fail-open Info red-dot. Evidence:
   `../evidence/2026-08-12-friend-gift-outbox.md`.
+- Friend-gift delivery now wakes the owning Zone Relay by durable Outbox event
+  ID after the command commit; the 2-second full-table scan remains recovery
+  only. The direct Tcaplus read retries a bounded 500 ms only while an inserted
+  row is temporarily not visible. A live single sample reduced post-response
+  mail red-dot latency from 2.779 s to 1.160 s; this is not a percentile claim.
+  Evidence: `../evidence/2026-08-14-friend-action-mail-red-dot-latency.md`.
 - Final delivery sprint **04-3C mail claim Saga** is complete: MailSvr
   orchestrates `BeginClaim → Zone ApplyMailReward → CompleteClaim`; Player
   Actor grants attachments all-or-nothing with sync SaveCAS

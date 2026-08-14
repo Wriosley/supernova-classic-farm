@@ -76,6 +76,56 @@ func TestRelayNotifyDeliversBeforeTicker(t *testing.T) {
 	}
 }
 
+func TestRelayNotifyRetriesUntilInsertedRowIsVisible(t *testing.T) {
+	base := NewMemoryStore()
+	eventID := bytes.Repeat([]byte{3}, 16)
+	payload, _ := proto.Marshal(&eventv1.CreateGiftMailV1{
+		SenderPlayerId: 1, RecipientPlayerId: 2, CropItemId: 1002, Quantity: 1,
+	})
+	base.Put(&tcaplusv1.PlayerOutbox{
+		EventId: eventID, LogicalShardId: 1,
+		EventType: uint32(datav1.OutboxEventType_CREATE_GIFT_MAIL),
+		Payload:   payload, RelayStatus: relayStatusPending, NextAttemptAtMs: 1,
+	})
+	store := &temporarilyInvisibleStore{MemoryStore: base, invisibleGets: 2}
+	called := make(chan struct{}, 1)
+	relay, err := NewRelay(store, &fakeGiftMail{called: called}, alwaysOwner{}, func() time.Time {
+		return time.UnixMilli(200)
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay.interval = time.Hour
+	relay.visibilityRetryDelay = time.Millisecond
+	relay.visibilityAttempts = 3
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go relay.Run(ctx)
+	relay.Notify(eventID)
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("notify did not retry until the durable row became visible")
+	}
+	if store.getCalls != 3 {
+		t.Fatalf("get calls=%d, want 3", store.getCalls)
+	}
+}
+
+type temporarilyInvisibleStore struct {
+	*MemoryStore
+	invisibleGets int
+	getCalls      int
+}
+
+func (s *temporarilyInvisibleStore) GetByID(ctx context.Context, eventID []byte) (*tcaplusv1.PlayerOutbox, error) {
+	s.getCalls++
+	if s.getCalls <= s.invisibleGets {
+		return nil, ErrNotFound
+	}
+	return s.MemoryStore.GetByID(ctx, eventID)
+}
+
 func TestRelayOneDeliversTargetWithoutScanning(t *testing.T) {
 	store := &countingStore{MemoryStore: NewMemoryStore()}
 	eventID := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
