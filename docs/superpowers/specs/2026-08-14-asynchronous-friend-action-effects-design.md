@@ -23,9 +23,9 @@ Visitor Checkpoint 和四次 FriendInteraction 状态 CAS。投虫、捉虫、�
 | 清理田地 | 将可清理地块变为空地 | 金币 `+1`、任务/次数 |
 
 目标是将客户端同步路径压缩为 PREPARED Outbox Insert 与 Owner Checkpoint CAS，
-Owner 提交成功后立即返回；Visitor 副作用可靠异步完成。目标指标为互动响应
-`p95 < 100ms`、Visitor 副作用到账 `p95 < 500ms`，两者均为待压测验证目标，
-不是已测结论。
+Owner 提交成功后立即返回；Visitor 副作用可靠异步完成。本阶段只跑通完整真实链路，
+分别记录一次互动响应时间与一次 Visitor 副作用到账时间。p50/p95/p99、容量、并发和
+积压阈值压测属于后续独立性能任务，不作为本次功能改造完成门槛。
 
 ## 2. 权威边界
 
@@ -162,12 +162,13 @@ OWNER/VISITOR Receipt都保存在各自 `PlayerCheckpoint.friend_receipts`，并
 
 ## 11. 过载保护
 
-指标至少包括 pending count、oldest pending age、delivery p50/p95/p99、retry count、
-worker busy ratio和Tcaplus latency/error。若积压超过配置阈值，必须在 PREPARED/Owner
-修改前返回 retryable `SYSTEM_BUSY`。已经返回成功的任务不可丢弃或取消。
+实现必须暴露 pending count、oldest pending age、retry count、worker busy ratio和
+Tcaplus latency/error等后续压测所需观测数据。若积压超过保守配置阈值，必须在
+PREPARED/Owner修改前返回 retryable `SYSTEM_BUSY`。已经返回成功的任务不可丢弃或
+取消。
 
-Worker并发、队列容量和阈值由压测确定。不得用无限 goroutine或无限数据库并发隐藏
-积压。
+本次使用有界保守默认值验证正确性；Worker并发、队列容量和生产阈值由后续独立压测
+确定。不得用无限 goroutine或无限数据库并发隐藏积压。
 
 ## 12. 兼容与上线
 
@@ -186,4 +187,7 @@ Worker并发、队列容量和阈值由压测确定。不得用无限 goroutine�
 4. Zone在每个持久化边界崩溃后都能收敛。
 5. 正常运行不依赖频繁全表扫描。
 6. Actor已激活时Visitor路径只有内存Receipt查询与一次Checkpoint CAS。
-7. 性能报告分别给出响应与Visitor到账的p50/p95/p99，未达100ms时保留真实结论。
+7. 真机完整链路至少成功执行一次，并分别记录单次响应时间和单次Visitor效果到账
+   时间；结果只作为本次样本，不外推为p50/p95/p99。
+8. p50/p95/p99、容量上限、并发配置与积压阈值另立性能计划和证据，不阻塞本次功能
+   改造验收。
