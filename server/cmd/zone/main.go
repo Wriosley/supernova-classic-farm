@@ -327,6 +327,7 @@ func main() {
 	interactionReconciler.WithActionSaga(actionSaga)
 	go runInteractionReconcileLoop(ctx, interactionReconciler, logger)
 
+	var giftNotifier giftOutboxNotifier
 	if tcaplusClient != nil {
 		mailURL := strings.TrimSpace(os.Getenv("MAIL_RPC_URL"))
 		if mailURL == "" {
@@ -351,6 +352,7 @@ func main() {
 			if relayErr != nil {
 				log.Fatal(relayErr)
 			}
+			giftNotifier = relay
 			go relay.Run(ctx)
 			logger.Info("gift Outbox relay started", "mail_rpc_url", mailURL)
 		}
@@ -399,12 +401,11 @@ func main() {
 		grpc.MaxSendMsgSize(128<<10),
 	)
 	defer grpcServer.Stop()
-	rpcv1.RegisterGameCommandServiceServer(
-		grpcServer,
-		newGameCommandRPCServer(
-			runtime, authorization, gates, time.Now, gatewayID, logger,
-		),
+	gameCommandServer := newGameCommandRPCServer(
+		runtime, authorization, gates, time.Now, gatewayID, logger,
 	)
+	gameCommandServer.withGiftOutboxNotifier(giftNotifier)
+	rpcv1.RegisterGameCommandServiceServer(grpcServer, gameCommandServer)
 	rpcv1.RegisterPlayerSocialServiceServer(
 		grpcServer,
 		newPlayerSocialRPCServer(runtime, authorization, gates, time.Now),

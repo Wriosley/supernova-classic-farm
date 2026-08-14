@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -11,6 +12,42 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+type recordingGiftNotifier struct{ eventIDs [][]byte }
+
+func (n *recordingGiftNotifier) Notify(eventID []byte) {
+	n.eventIDs = append(n.eventIDs, append([]byte(nil), eventID...))
+}
+
+func TestNotifyGiftOutboxFromSuccessfulResponse(t *testing.T) {
+	eventID := bytes.Repeat([]byte{7}, 16)
+	notifier := &recordingGiftNotifier{}
+	notifyGiftOutbox(notifier, &wsv1.WsEnvelope{
+		Action: wsv1.Action_SEND_FRIEND_GIFT,
+		Payload: &wsv1.WsEnvelope_SendFriendGiftResponse{
+			SendFriendGiftResponse: &wsv1.SendFriendGiftResponse{OutboxEventId: eventID},
+		},
+	})
+	if len(notifier.eventIDs) != 1 || !bytes.Equal(notifier.eventIDs[0], eventID) {
+		t.Fatalf("notifications=%x", notifier.eventIDs)
+	}
+}
+
+func TestNotifyGiftOutboxIgnoresFailedOrEmptyResponse(t *testing.T) {
+	notifier := &recordingGiftNotifier{}
+	notifyGiftOutbox(notifier, &wsv1.WsEnvelope{
+		Action: wsv1.Action_SEND_FRIEND_GIFT,
+		Error:  &wsv1.Error{Code: wsv1.ErrorCode_INSUFFICIENT_ITEM_QUANTITY},
+		Payload: &wsv1.WsEnvelope_SendFriendGiftResponse{
+			SendFriendGiftResponse: &wsv1.SendFriendGiftResponse{OutboxEventId: bytes.Repeat([]byte{8}, 16)},
+		},
+	})
+	notifyGiftOutbox(notifier, &wsv1.WsEnvelope{Action: wsv1.Action_SEND_FRIEND_GIFT})
+	notifyGiftOutbox(nil, &wsv1.WsEnvelope{Action: wsv1.Action_SEND_FRIEND_GIFT})
+	if len(notifier.eventIDs) != 0 {
+		t.Fatalf("notifications=%x", notifier.eventIDs)
+	}
+}
 
 func TestGameCommandRPCServerReturnsSnapshot(t *testing.T) {
 	runtime := player.NewRuntime()
