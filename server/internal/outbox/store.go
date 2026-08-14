@@ -31,6 +31,17 @@ func NewTcaplusStore(client tcaplusClient, zoneID uint32) (*TcaplusStore, error)
 	return &TcaplusStore{client: client, zoneID: zoneID}, nil
 }
 
+func (s *TcaplusStore) GetByID(ctx context.Context, eventID []byte) (*tcaplusv1.PlayerOutbox, error) {
+	record := &tcaplusv1.PlayerOutbox{EventId: append([]byte(nil), eventID...)}
+	if err := s.client.DoGet(record, &option.PBOpt{Ctx: ctx}, s.zoneID); err != nil {
+		if tcaplusdb.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get PlayerOutbox: %w", err)
+	}
+	return record, nil
+}
+
 func (s *TcaplusStore) ListPending(ctx context.Context) ([]*tcaplusv1.PlayerOutbox, error) {
 	_ = ctx
 	rows, err := s.client.Traverse(&tcaplusv1.PlayerOutbox{})
@@ -92,6 +103,14 @@ func (s *MemoryStore) Put(row *tcaplusv1.PlayerOutbox) {
 	defer s.mu.Unlock()
 	key := string(row.EventId)
 	s.rows[key] = proto.Clone(row).(*tcaplusv1.PlayerOutbox)
+}
+
+func (s *MemoryStore) GetByID(_ context.Context, eventID []byte) (*tcaplusv1.PlayerOutbox, error) {
+	row, ok := s.Get(eventID)
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return row, nil
 }
 
 func (s *MemoryStore) ListPending(_ context.Context) ([]*tcaplusv1.PlayerOutbox, error) {

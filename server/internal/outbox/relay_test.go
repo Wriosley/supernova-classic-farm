@@ -32,6 +32,47 @@ type alwaysOwner struct{}
 
 func (alwaysOwner) OwnsLogicalShard(uint32) bool { return true }
 
+func TestRelayOneDeliversTargetWithoutScanning(t *testing.T) {
+	store := &countingStore{MemoryStore: NewMemoryStore()}
+	eventID := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+	payload, _ := proto.Marshal(&eventv1.CreateGiftMailV1{
+		SenderPlayerId: 1, RecipientPlayerId: 2, CropItemId: 1002, Quantity: 1,
+	})
+	store.Put(&tcaplusv1.PlayerOutbox{
+		EventId: eventID, LogicalShardId: 1,
+		EventType: uint32(datav1.OutboxEventType_CREATE_GIFT_MAIL),
+		Payload:   payload, RelayStatus: relayStatusPending, NextAttemptAtMs: 1,
+	})
+	relay, err := NewRelay(store, &fakeGiftMail{}, alwaysOwner{}, func() time.Time {
+		return time.UnixMilli(200)
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := relay.RelayOne(context.Background(), eventID); err != nil {
+		t.Fatal(err)
+	}
+	if store.getCalls != 1 || store.listCalls != 0 {
+		t.Fatalf("get=%d list=%d", store.getCalls, store.listCalls)
+	}
+}
+
+type countingStore struct {
+	*MemoryStore
+	getCalls  int
+	listCalls int
+}
+
+func (s *countingStore) GetByID(ctx context.Context, eventID []byte) (*tcaplusv1.PlayerOutbox, error) {
+	s.getCalls++
+	return s.MemoryStore.GetByID(ctx, eventID)
+}
+
+func (s *countingStore) ListPending(ctx context.Context) ([]*tcaplusv1.PlayerOutbox, error) {
+	s.listCalls++
+	return s.MemoryStore.ListPending(ctx)
+}
+
 func TestRelayDeliversGiftAndMarksDone(t *testing.T) {
 	store := NewMemoryStore()
 	payload, _ := proto.MarshalOptions{Deterministic: true}.Marshal(&eventv1.CreateGiftMailV1{
@@ -41,7 +82,7 @@ func TestRelayDeliversGiftAndMarksDone(t *testing.T) {
 	eventID := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 	store.Put(&tcaplusv1.PlayerOutbox{
 		EventId: eventID, AggregatePlayerId: 1, LogicalShardId: 1,
-		EventType: uint32(datav1.OutboxEventType_CREATE_GIFT_MAIL),
+		EventType:            uint32(datav1.OutboxEventType_CREATE_GIFT_MAIL),
 		EventContractVersion: 1, Payload: payload, RelayStatus: relayStatusPending,
 		NextAttemptAtMs: 1,
 	})
@@ -82,7 +123,7 @@ func TestRelayKeepsPendingWhenMailFails(t *testing.T) {
 	store.Put(&tcaplusv1.PlayerOutbox{
 		EventId: eventID, AggregatePlayerId: 1, LogicalShardId: 1,
 		EventType: uint32(datav1.OutboxEventType_CREATE_GIFT_MAIL),
-		Payload: payload, RelayStatus: relayStatusPending, NextAttemptAtMs: 1,
+		Payload:   payload, RelayStatus: relayStatusPending, NextAttemptAtMs: 1,
 	})
 	mail := &fakeGiftMail{fail: errors.New("mail down")}
 	relay, err := NewRelay(store, mail, alwaysOwner{}, time.Now, nil)

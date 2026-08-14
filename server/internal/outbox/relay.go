@@ -22,8 +22,26 @@ const (
 
 // Store is the durable PlayerOutbox dependency of the Zone relay.
 type Store interface {
+	GetByID(ctx context.Context, eventID []byte) (*tcaplusv1.PlayerOutbox, error)
 	ListPending(ctx context.Context) ([]*tcaplusv1.PlayerOutbox, error)
 	MarkDelivered(ctx context.Context, eventID []byte, deliveredAtMS int64) error
+}
+
+func (r *Relay) RelayOne(ctx context.Context, eventID []byte) error {
+	row, err := r.store.GetByID(ctx, eventID)
+	if err != nil {
+		return err
+	}
+	if row == nil || row.RelayStatus == relayStatusDelivered {
+		return nil
+	}
+	if r.owner != nil && !r.owner.OwnsLogicalShard(row.LogicalShardId) {
+		return nil
+	}
+	if row.NextAttemptAtMs > r.now().UnixMilli() {
+		return nil
+	}
+	return r.deliverOne(ctx, row)
 }
 
 // GiftMailCreator is MailSvr CreateGiftMail.
