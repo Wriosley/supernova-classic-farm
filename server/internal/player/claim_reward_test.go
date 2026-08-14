@@ -44,7 +44,7 @@ func TestClaimRewardCreditsInventoryActivatesNextChapterAndReplays(t *testing.T)
 	store := &recordingCheckpointStore{state: claimableRewardState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	request := claimRewardRequest(
@@ -101,7 +101,7 @@ func TestClaimRewardFullInventoryCreatesOneDeterministicOutbox(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	request := claimRewardRequest(
@@ -191,7 +191,7 @@ func TestClaimRewardRejectsWrongOrIncompleteChapter(t *testing.T) {
 			store := &recordingCheckpointStore{state: state}
 			runtime := NewRuntime()
 			runtime.store = store
-			runtime.now = func() time.Time { return now }
+			runtime.SetNow(func() time.Time { return now })
 			defer runtime.Close()
 
 			requestIDs := []string{

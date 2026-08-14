@@ -591,8 +591,7 @@ func TestRuntimeCreatesInitialCheckpointOnFirstActivation(t *testing.T) {
 	}
 	defer runtime.Close()
 	fixedNow := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
-	runtime.now = func() time.Time { return fixedNow }
-
+	runtime.SetNow(func() time.Time { return fixedNow })
 	a, err := runtime.actorFor(context.Background(), playerID, LocalOwnerEpoch)
 	if err != nil {
 		t.Fatal(err)
@@ -745,10 +744,9 @@ func TestRuntimeReconcilesAmbiguousInitialCheckpointCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer runtime.Close()
-	runtime.now = func() time.Time {
+	runtime.SetNow(func() time.Time {
 		return time.UnixMilli(expected.CreatedAtMs).UTC()
-	}
-
+	})
 	a, err := runtime.actorFor(context.Background(), playerID, LocalOwnerEpoch)
 	if err != nil {
 		t.Fatal(err)

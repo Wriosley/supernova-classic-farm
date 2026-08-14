@@ -5,6 +5,7 @@ import { PlotState } from '../gen/classicfarm/v1/ws/plot/plot_state_pb'
 import type { FarmActionRequest } from '../lib/farm-actions'
 import { matureCropSprite } from '../lib/crop-art'
 import type { DeployedPet } from '../lib/pet-art'
+import type { PlotFloat } from '../lib/plot-floats'
 import FarmPetBadge from './FarmPetBadge.vue'
 
 import plotEmpty from '../../../frontend/src/assets/art/runtime/plots/empty.png'
@@ -25,14 +26,15 @@ const props = defineProps<{
   cropCatalog: CropCatalogEntryView[]
   connected: boolean
   busyAction?: FarmActionRequest
-  actionMessage: string
-  actionError: string
   nowMs: bigint
   activePet?: DeployedPet
+  plotFloats?: PlotFloat[]
+  visitors?: string[]
 }>()
 
 const emit = defineEmits<{
   action: [request: FarmActionRequest]
+  plotFeedback: [plotId: number, text: string]
   openShop: []
   openPet: []
   reloadCatalog: []
@@ -40,7 +42,6 @@ const emit = defineEmits<{
 
 const selectedTool = ref<FarmTool>('hand')
 const selectedSeedCropId = ref(0)
-const localMessage = ref('')
 
 const plots = computed(() => [...(props.snapshot?.plots ?? [])].sort((a, b) => a.plotId - b.plotId))
 const inventory = computed(() => {
@@ -90,6 +91,10 @@ watch(
 
 function cropNameById(cropId: number): string {
   return props.cropCatalog.find((crop) => crop.cropId === cropId)?.name ?? `作物#${cropId}`
+}
+
+function floatsFor(plotId: number): PlotFloat[] {
+  return (props.plotFloats ?? []).filter((float) => float.plotId === plotId)
 }
 
 // maturity_seconds arrives as uint64, so it is a BigInt: mixing it into the
@@ -177,12 +182,15 @@ function targetAction(plot: PlotView): FarmActionRequest | undefined {
       if (plot.plotState === PlotState.EMPTY && seed && seedQuantity.value > 0) {
         return { action: 'plant', plotId: plot.plotId, seedItemId: seed.seedItemId }
       }
-      localMessage.value =
+      emit(
+        'plotFeedback',
+        plot.plotId,
         plot.plotState !== PlotState.EMPTY
           ? '种子只能用于空地。'
           : seed
             ? '仓库里没有所选种子。'
-            : '仓库里没有可用种子。'
+            : '仓库里没有可用种子。',
+      )
       return undefined
     }
     case 'fertilizer':
@@ -193,33 +201,39 @@ function targetAction(plot: PlotView): FarmActionRequest | undefined {
       ) {
         return { action: 'fertilize', plotId: plot.plotId }
       }
-      localMessage.value =
+      emit(
+        'plotFeedback',
+        plot.plotId,
         plot.plotState !== PlotState.GROWING
           ? '肥料只能用于成长中的作物。'
           : plot.fertilizerEffect
             ? '该地块已有肥料效果。'
-            : '仓库里没有肥料。'
+            : '仓库里没有肥料。',
+      )
       return undefined
     case 'catch':
       if (plot.plotState === PlotState.GROWING && plot.pestEffect) {
         return { action: 'catch', plotId: plot.plotId }
       }
-      localMessage.value =
+      emit(
+        'plotFeedback',
+        plot.plotId,
         plot.plotState !== PlotState.GROWING
           ? '只能对成长中的作物使用杀虫剂。'
-          : '这块地没有害虫。'
+          : '这块地没有害虫。',
+      )
       return undefined
     case 'hand':
       if (plot.plotState === PlotState.MATURE) {
         return { action: 'harvest', plotId: plot.plotId }
       }
-      localMessage.value = '手只能收获已经成熟的作物。'
+      emit('plotFeedback', plot.plotId, '还不能收获。')
       return undefined
     case 'shovel':
       if (plot.plotState === PlotState.NEED_CLEANUP) {
         return { action: 'clean', plotId: plot.plotId }
       }
-      localMessage.value = '铲子只能清理收获后的地块。'
+      emit('plotFeedback', plot.plotId, '还不能清理。')
       return undefined
   }
 }
@@ -245,37 +259,35 @@ function isValidTarget(plot: PlotView): boolean {
 
 function clickPlot(plot: PlotView): void {
   if (!props.connected || props.busyAction) {
-    localMessage.value = props.connected ? '上一项操作仍在处理中。' : 'WebSocket 尚未连接。'
+    emit(
+      'plotFeedback',
+      plot.plotId,
+      props.connected ? '上一项操作仍在处理中。' : '实时连接已断开。',
+    )
     return
   }
   const request = targetAction(plot)
   if (request) {
-    localMessage.value = ''
     emit('action', request)
   }
 }
 
 function selectTool(tool: FarmTool): void {
   selectedTool.value = tool
-  localMessage.value = ''
 }
 
 function selectSeed(crop: CropCatalogEntryView): void {
   selectedSeedCropId.value = crop.cropId
   selectedTool.value = 'seed'
-  localMessage.value = ''
 }
 </script>
 
 <template>
   <section class="farm-stage" aria-label="我的农场">
-    <p v-if="actionError" class="action-notice error-banner" role="alert">{{ actionError }}</p>
-    <p v-else-if="localMessage" class="action-notice tool-feedback" role="status">
-      {{ localMessage }}
-    </p>
-    <p v-else-if="actionMessage" class="action-notice success-banner" role="status">
-      {{ actionMessage }}
-    </p>
+    <aside v-if="visitors?.length" class="farm-visitors" aria-live="polite">
+      <strong>访客</strong>
+      <span v-for="visitor in visitors" :key="visitor">{{ visitor }} 进入农场</span>
+    </aside>
 
     <div class="farm-yard">
       <div class="plots-grid" :data-tool="selectedTool">
@@ -316,6 +328,23 @@ function selectSeed(crop: CropCatalogEntryView): void {
             <small>{{ plotMeta(plot) }}</small>
           </span>
           <span v-if="busyAction?.plotId === plot.plotId" class="plot-busy">处理中…</span>
+          <span
+            v-if="plot.plotState === PlotState.MATURE || floatsFor(plot.plotId).length"
+            class="plot-floats"
+            aria-hidden="true"
+          >
+            <span v-if="plot.plotState === PlotState.MATURE" class="plot-float persistent">
+              可以收获
+            </span>
+            <span
+              v-for="float in floatsFor(plot.plotId)"
+              :key="float.id"
+              class="plot-float"
+              :class="float.tone"
+            >
+              {{ float.text }}
+            </span>
+          </span>
         </button>
       </div>
 
@@ -385,6 +414,24 @@ function selectSeed(crop: CropCatalogEntryView): void {
 </template>
 
 <style scoped>
+.farm-visitors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  padding: 0.45rem 0.7rem;
+  border: 2px solid #71895e;
+  border-radius: 0.75rem;
+  background: #f4f8e8;
+  color: #24361f;
+  font-size: 0.78rem;
+}
+
+.farm-visitors span {
+  padding-left: 0.55rem;
+  border-left: 1px solid #a9ba92;
+}
+
 .farm-stage {
   display: grid;
   gap: 0.6rem;

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -60,10 +61,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	mode, zones, err := routingConfigurationFromEnvironment()
+	mode, placementZones, err := routingConfigurationFromEnvironment()
 	if err != nil {
 		return err
 	}
+	// New Shards only ever land on the placement Zones, but a Shard already
+	// migrated onto a pooled Zone must still resolve to a configured owner when
+	// routes hydrate from Fences, so every reachable Zone joins the known set.
+	zones := append(slices.Clone(placementZones), extraMoveTargetsFromEnvironment()...)
 	membershipConfig, err := membershipConfigFromEnvironment()
 	if err != nil {
 		return err
@@ -88,7 +93,7 @@ func run() error {
 	if workerConfig.Enabled && (routeStoreMode != routeStoreTcaplus || strings.TrimSpace(os.Getenv("STORAGE_MODE")) != "tcaplus") {
 		return errors.New("enabled migration worker requires STORAGE_MODE=tcaplus and COORDINATOR_ROUTE_STORE=tcaplus")
 	}
-	routes, err := routing.NewStaticMap(now, leaseDuration, zones)
+	routes, err := routing.NewStaticMap(now, leaseDuration, placementZones)
 	if err != nil {
 		return err
 	}
@@ -384,6 +389,13 @@ func run() error {
 			"GET /internal/v1/migrations",
 			migrations.listOpen,
 		)
+		// Only abandon is exposed: the migration worker owns forward progress and
+		// retries on its own, while continueMigration drives the superseded
+		// synchronous flow whose Zone calls predate the transition contract.
+		mux.HandleFunc(
+			"POST /internal/v1/shards/{shard_id}/migration/abandon",
+			migrations.abandonMigration,
+		)
 	}
 	mux.HandleFunc("GET /internal/v1/debug/route-subscribers", subscriberDiagnosticsHandler(routePublisher))
 	mux.Handle("/", health.NewHandler(health.Check{
@@ -504,6 +516,17 @@ func routingConfigurationFromEnvironment() (
 	default:
 		return "", nil, fmt.Errorf("unsupported ROUTING_MODE %q", mode)
 	}
+}
+
+func extraMoveTargetsFromEnvironment() []routing.ZoneCandidate {
+	zoneCID := strings.TrimSpace(os.Getenv("ZONE_C_ID"))
+	if zoneCID == "" {
+		return nil
+	}
+	return []routing.ZoneCandidate{{
+		ZoneID:   zoneCID,
+		Endpoint: environmentOr("ZONE_C_ENDPOINT", "http://zone-pool-0.zone-headless.classic-farm.svc.cluster.local:8082"),
+	}}
 }
 
 func environmentOr(key, fallback string) string {

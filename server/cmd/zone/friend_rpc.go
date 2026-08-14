@@ -14,6 +14,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // visitorZoneRPCServer implements VisitorZoneService: it runs on the
@@ -25,35 +26,30 @@ type visitorZoneRPCServer struct {
 	rpcv1.UnimplementedVisitorZoneServiceServer
 
 	visits        *visit.Service
+	owner         interaction.OwnerFarmClient
 	authorization ownerAuthorization
 	ownZoneID     string
 
-	// runtime and steal are nil-safe: a Zone that has not wired the Phase 5
-	// interaction Saga (see main.go) simply reports every
-	// ExecuteFriendAction as SERVICE_UNAVAILABLE rather than panicking.
+	// runtime applies visitor-side coin effects after owner ApplyVisitorAction
+	// succeeds on the direct friend-action path.
 	runtime *player.Runtime
-	steal   *interaction.StealSaga
-	action  *interaction.ActionSaga
 }
 
 func newVisitorZoneRPCServer(
-	visits *visit.Service, authorization ownerAuthorization, ownZoneID string,
+	visits *visit.Service,
+	owner interaction.OwnerFarmClient,
+	authorization ownerAuthorization,
+	ownZoneID string,
 ) *visitorZoneRPCServer {
-	return &visitorZoneRPCServer{visits: visits, authorization: authorization, ownZoneID: ownZoneID}
+	return &visitorZoneRPCServer{
+		visits: visits, owner: owner, authorization: authorization, ownZoneID: ownZoneID,
+	}
 }
 
-// withStealSaga wires the Phase 5 STEAL_FRIEND_CROP interaction Saga onto
-// an already-constructed visitorZoneRPCServer; main.go calls this once the
-// Zone's interaction Store/Saga are ready.
-func (s *visitorZoneRPCServer) withStealSaga(runtime *player.Runtime, saga *interaction.StealSaga) {
+// withRuntime wires the Player Runtime needed for visitor coin side effects
+// after a successful owner ApplyVisitorAction.
+func (s *visitorZoneRPCServer) withRuntime(runtime *player.Runtime) {
 	s.runtime = runtime
-	s.steal = saga
-}
-
-func (s *visitorZoneRPCServer) withFriendSagas(
-	runtime *player.Runtime, steal *interaction.StealSaga, action *interaction.ActionSaga,
-) {
-	s.runtime, s.steal, s.action = runtime, steal, action
 }
 
 func (s *visitorZoneRPCServer) authorizeCaller(callerPlayerID uint64) error {
@@ -122,11 +118,9 @@ func (s *visitorZoneRPCServer) ExitFriendFarm(
 	return &rpcv1.ExitFriendFarmResponse{Error: wsErr}, nil
 }
 
-// ExecuteFriendAction drives the Phase 5 interaction Saga for the caller's
-// (visitor) side. Only STEAL_FRIEND_CROP is implemented; every other
-// FriendInteractionAction (pest apply/catch, help clean — Phase 6) is
-// rejected with UNKNOWN_ACTION rather than left Unimplemented, since the
-// request shape itself is already valid RPC input.
+// ExecuteFriendAction handles visitor-side friend actions by calling owner
+// ApplyVisitorAction directly (no FriendInteraction Saga), then applying
+// visitor coin side effects on this Zone.
 func (s *visitorZoneRPCServer) ExecuteFriendAction(
 	ctx context.Context, request *rpcv1.ExecuteFriendActionRequest,
 ) (*rpcv1.ExecuteFriendActionResponse, error) {
@@ -142,82 +136,80 @@ func (s *visitorZoneRPCServer) ExecuteFriendAction(
 	default:
 		return &rpcv1.ExecuteFriendActionResponse{Error: &wsv1.Error{Code: wsv1.ErrorCode_UNKNOWN_ACTION}}, nil
 	}
-	if request.Action != datav1.FriendInteractionAction_STEAL_FRIEND_CROP && s.action == nil {
-		return &rpcv1.ExecuteFriendActionResponse{Error: &wsv1.Error{Code: wsv1.ErrorCode_UNKNOWN_ACTION}}, nil
-	}
 	if request.Action == datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND && request.GetPestId() == 0 {
 		return nil, status.Error(codes.InvalidArgument, "apply pest requires pest_id")
 	}
+	if request.Action == datav1.FriendInteractionAction_STEAL_FRIEND_CROP &&
+		(request.GetExpectedCropItemId() == 0 || len(request.GetFarmViewEpoch()) != 16) {
+		return nil, status.Error(codes.InvalidArgument, "steal requires expected_crop_item_id and farm_view_epoch")
+	}
 	if err := s.authorizeCaller(request.CallerPlayerId); err != nil {
 		return nil, err
-	}
-	if s.runtime == nil || s.steal == nil {
-		return nil, status.Error(codes.Unavailable, "friend interaction Saga is unavailable")
 	}
 	interactionID, parseErr := interaction.ParseInteractionID(request.RequestId)
 	if parseErr != nil {
 		return nil, status.Error(codes.InvalidArgument, "request_id must be a UUID")
 	}
+	return s.executeFriendActionDirect(ctx, request, interactionID)
+}
+
+func (s *visitorZoneRPCServer) executeFriendActionDirect(
+	ctx context.Context,
+	request *rpcv1.ExecuteFriendActionRequest,
+	interactionID []byte,
+) (*rpcv1.ExecuteFriendActionResponse, error) {
+	if s.owner == nil {
+		return nil, status.Error(codes.Unavailable, "owner farm client is unavailable")
+	}
+	if s.runtime == nil {
+		return nil, status.Error(codes.Unavailable, "player runtime is unavailable")
+	}
 	entry, ok := s.authorization.Entry(routing.ShardForPlayer(request.CallerPlayerId))
 	if !ok {
 		return nil, status.Error(codes.Unavailable, "ownership is unavailable")
 	}
-	var response *wsv1.FriendActionResponse
-	var err error
-	if request.Action == datav1.FriendInteractionAction_STEAL_FRIEND_CROP {
-		if request.GetExpectedCropItemId() == 0 || len(request.GetFarmViewEpoch()) != 16 {
-			return nil, status.Error(codes.InvalidArgument, "steal requires expected_crop_item_id and farm_view_epoch")
-		}
-		response, err = s.steal.Execute(ctx, interaction.StealRequest{
-			InteractionID: interactionID, VisitorPlayerID: request.CallerPlayerId,
-			VisitorOwnerEpoch: entry.OwnerEpoch, OwnerPlayerID: request.OwnerPlayerId,
-			VisitID: request.VisitId, PlotID: request.PlotId,
-			CropItemID: request.GetExpectedCropItemId(), Quantity: 1,
-			FarmViewEpoch: request.GetFarmViewEpoch(), FarmViewSeq: request.GetFarmViewSeq(),
-		}, time.Now())
-	} else {
-		if s.action == nil {
-			return nil, status.Error(codes.Unavailable, "friend action Saga is unavailable")
-		}
-		response, err = s.action.Execute(ctx, interaction.ActionRequest{
-			InteractionID: interactionID, VisitorPlayerID: request.CallerPlayerId,
-			VisitorOwnerEpoch: entry.OwnerEpoch, OwnerPlayerID: request.OwnerPlayerId,
-			VisitID: request.VisitId, Action: request.Action, PlotID: request.PlotId,
-			PestID: request.GetPestId(),
-		}, time.Now())
-	}
-	if wsErr, ok := stealSagaWsError(err); ok {
-		return &rpcv1.ExecuteFriendActionResponse{Error: wsErr}, nil
-	}
+	ownerResp, err := s.owner.ApplyVisitorAction(ctx, &rpcv1.ApplyVisitorActionRequest{
+		OwnerPlayerId: request.OwnerPlayerId, VisitorPlayerId: request.CallerPlayerId,
+		VisitId: request.VisitId, InteractionId: interactionID,
+		Action: request.Action, PlotId: request.PlotId, PestId: request.PestId,
+		ExpectedCropItemId: request.GetExpectedCropItemId(),
+		FarmViewEpoch:      request.GetFarmViewEpoch(),
+		FarmViewSeq:        request.GetFarmViewSeq(),
+	})
 	if err != nil {
 		if errors.Is(err, player.ErrNotOwner) {
 			return nil, status.Error(codes.FailedPrecondition, "not shard owner")
 		}
 		return nil, status.Error(codes.Internal, "execute friend action failed")
 	}
-	return &rpcv1.ExecuteFriendActionResponse{Result: response}, nil
-}
-
-// stealSagaWsError classifies an interaction.StealSaga error into the
-// stable, client-facing ws.Error the caller's WsEnvelope should carry, per
-// docs/contracts/idempotency-and-errors.md. Every other error (mailbox
-// failure, Tcaplus I/O, an unconverged Saga) is a transport/internal
-// failure the RPC layer surfaces as codes.Internal instead.
-func stealSagaWsError(err error) (*wsv1.Error, bool) {
-	if err == nil {
-		return nil, false
+	if wsErr := ownerResp.GetError(); wsErr != nil {
+		return &rpcv1.ExecuteFriendActionResponse{Error: wsErr}, nil
 	}
-	var aborted *interaction.AbortedError
-	switch {
-	case errors.As(err, &aborted):
-		return &wsv1.Error{Code: aborted.Code}, true
-	case errors.Is(err, interaction.ErrDigestConflict):
-		return &wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT}, true
-	case errors.Is(err, interaction.ErrOutcomeUnknown):
-		return &wsv1.Error{Code: wsv1.ErrorCode_INTERACTION_OUTCOME_UNKNOWN, Retryable: true}, true
-	default:
-		return nil, false
+	ownerPayload := ownerResp.GetResultPayload()
+	visitorResult, _, sideErr := s.runtime.ApplyVisitorFriendSideEffect(
+		ctx, request.CallerPlayerId, entry.OwnerEpoch, interactionID, request.Action, ownerPayload,
+	)
+	if sideErr != nil {
+		if errors.Is(sideErr, player.ErrNotOwner) {
+			return nil, status.Error(codes.FailedPrecondition, "not shard owner")
+		}
+		return nil, status.Error(codes.Internal, "apply visitor friend side effect failed")
 	}
+	result := &wsv1.FriendActionResponse{}
+	if visitorResult != nil {
+		result = proto.Clone(visitorResult).(*wsv1.FriendActionResponse)
+	}
+	if result.InteractionId == nil {
+		result.InteractionId = append([]byte(nil), interactionID...)
+	}
+	if len(ownerPayload) > 0 && result.StealGuard == nil {
+		ownerDecoded := &wsv1.FriendActionResponse{}
+		if unmarshalErr := proto.Unmarshal(ownerPayload, ownerDecoded); unmarshalErr == nil {
+			result.StealGuard = ownerDecoded.StealGuard
+		}
+	}
+	result.FarmPatch = ownerResp.GetFarmPatch()
+	return &rpcv1.ExecuteFriendActionResponse{Result: result}, nil
 }
 
 // ownerFarmRPCServer implements OwnerFarmService: it runs on the owner's
@@ -418,26 +410,27 @@ func (s *ownerFarmRPCServer) ApplyVisitorAction(
 
 	var payload, digest []byte
 	var farmPatch *wsv1.FarmViewPatch
+	var alreadyApplied bool
 	var applyErr error
 	switch request.Action {
 	case datav1.FriendInteractionAction_STEAL_FRIEND_CROP:
-		payload, digest, farmPatch, _, applyErr = s.runtime.ApplyStealOnOwner(
+		payload, digest, farmPatch, alreadyApplied, applyErr = s.runtime.ApplyStealOnOwner(
 			ctx, request.OwnerPlayerId, request.OwnerRoute.OwnerEpoch, request.VisitorPlayerId,
 			request.InteractionId, request.PlotId,
 			request.GetExpectedCropItemId(), request.GetFarmViewEpoch(), request.GetFarmViewSeq(),
 		)
 	case datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND:
-		payload, digest, farmPatch, _, applyErr = s.runtime.ApplyApplyPestOnOwner(
+		payload, digest, farmPatch, alreadyApplied, applyErr = s.runtime.ApplyApplyPestOnOwner(
 			ctx, request.OwnerPlayerId, request.OwnerRoute.OwnerEpoch, request.VisitorPlayerId,
 			request.InteractionId, request.PlotId, request.GetPestId(),
 		)
 	case datav1.FriendInteractionAction_CATCH_PEST_FOR_FRIEND:
-		payload, digest, farmPatch, _, applyErr = s.runtime.ApplyCatchPestOnOwner(
+		payload, digest, farmPatch, alreadyApplied, applyErr = s.runtime.ApplyCatchPestOnOwner(
 			ctx, request.OwnerPlayerId, request.OwnerRoute.OwnerEpoch, request.VisitorPlayerId,
 			request.InteractionId, request.PlotId,
 		)
 	case datav1.FriendInteractionAction_HELP_CLEAN_FRIEND_PLOT:
-		payload, digest, farmPatch, _, applyErr = s.runtime.ApplyHelpCleanOnOwner(
+		payload, digest, farmPatch, alreadyApplied, applyErr = s.runtime.ApplyHelpCleanOnOwner(
 			ctx, request.OwnerPlayerId, request.OwnerRoute.OwnerEpoch, request.VisitorPlayerId,
 			request.InteractionId, request.PlotId,
 		)
@@ -456,6 +449,26 @@ func (s *ownerFarmRPCServer) ApplyVisitorAction(
 	case applyErr != nil:
 		return nil, status.Error(codes.Internal, "apply visitor action failed")
 	default:
+		if request.Action == datav1.FriendInteractionAction_STEAL_FRIEND_CROP && !alreadyApplied {
+			result := &wsv1.FriendActionResponse{}
+			if err := proto.Unmarshal(payload, result); err == nil {
+				visitorPlayerID := request.VisitorPlayerId
+				plotID := request.PlotId
+				cropItemID := request.ExpectedCropItemId
+				quantity := uint32(1)
+				guardTriggered := result.GetStealGuard().GetGuardTriggered()
+				guardPenalty := result.GetStealGuard().GetGuardPenaltyConfigured()
+				s.owner.PublishFarmEvent(ctx, request.OwnerPlayerId, &wsv1.FarmPresencePush{
+					Kind:            wsv1.FarmPresenceKind_FARM_CROP_STOLEN,
+					VisitorPlayerId: &visitorPlayerID,
+					PlotId:          &plotID,
+					CropItemId:      &cropItemID,
+					Quantity:        &quantity,
+					GuardTriggered:  &guardTriggered,
+					GuardPenalty:    &guardPenalty,
+				})
+			}
+		}
 		return &rpcv1.ApplyVisitorActionResponse{
 			ResultDigestSha256: digest, ResultPayload: payload, FarmPatch: farmPatch,
 		}, nil

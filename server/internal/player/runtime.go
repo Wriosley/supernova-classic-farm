@@ -36,7 +36,11 @@ const (
 	actorLifecycleReady
 	actorLifecycleFailed
 	actorLifecycleClosing
+	actorLifecycleEvicting
 )
+
+var errActorGone = errors.New("player actor is leaving")
+
 
 // FarmViewDispatcher 接收 Actor mailbox 内已构造好的公开农场 Patch。
 // 生产实现是 farmview.Dispatcher；业务路径不得查询访客或调用 Gate Push。
@@ -49,6 +53,16 @@ type FarmViewDispatcher interface {
 // Failures must not roll back Actor authority.
 type StealableNotifier interface {
 	NotifyOwnerPlotStealable(ctx context.Context, ownerPlayerID uint64, plotID uint32, notificationID string) error
+}
+
+// PlayerPresence reports whether a player still has a live Gate connection.
+type PlayerPresence interface {
+	Has(playerID uint64) bool
+}
+
+// FarmObservers reports whether an owner's farm currently has live visitors.
+type FarmObservers interface {
+	HasVisitors(ownerPlayerID uint64, now time.Time) bool
 }
 
 type runtimeActor struct {
@@ -74,6 +88,14 @@ type runtimeActor struct {
 	// checkpoint.
 	farmViewEpoch []byte
 	farmViewSeq   uint64
+
+	// tickGeneration invalidates stale heap entries when a deadline is
+	// rescheduled or cancelled. It is not persisted.
+	tickGeneration atomic.Uint64
+
+	// lastAccessAtMS is the last admitted external request/visit time.
+	// Scheduler ticks must not update it. Units: Unix milliseconds.
+	lastAccessAtMS atomic.Int64
 }
 
 type DrainedPlayer struct {
@@ -93,13 +115,17 @@ type Runtime struct {
 	farmView      FarmViewDispatcher
 	stealable     StealableNotifier
 	accountNamer  AccountNamer
+	presence      PlayerPresence
+	observers     FarmObservers
 	config        atomic.Pointer[ConfigSnapshot]
-	now           func() time.Time
-	randBPS       func() uint32 // 可注入；返回值会对 10000 取模用于护主判定
+	now           atomic.Value // stores func() time.Time
+	randBPS       func() uint32 // 可注入；返回值会对 10000 取模（旧护主概率路径）
+	randIntn      func(n int) int // 可注入；返回 [0,n)；护主罚款与投虫金币
 	backgroundCtx context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 	shardLocks    [routing.ShardCount]sync.RWMutex
+	deadlines     *actorDeadlineBook
 }
 
 func NewRuntime() *Runtime {
@@ -107,13 +133,14 @@ func NewRuntime() *Runtime {
 	runtime := &Runtime{
 		actors:        make(map[uint64]*runtimeActor),
 		dirtyRevision: make(map[uint64]uint64),
-		now:           time.Now,
 		backgroundCtx: ctx,
 		cancel:        cancel,
+		deadlines:     newActorDeadlineBook(),
 	}
+	runtime.SetNow(time.Now)
 	runtime.config.Store(NewDevelopmentConfigSnapshot())
 	runtime.wg.Add(1)
-	go runtime.runMaturityScheduler(ctx)
+	go runtime.runDeadlineScheduler(ctx)
 	return runtime
 }
 
@@ -126,72 +153,6 @@ func NewRuntimeWithStore(store CheckpointStore) (*Runtime, error) {
 	runtime.wg.Add(1)
 	go runtime.runDirtyFlusher(runtime.backgroundCtx)
 	return runtime, nil
-}
-
-func (r *Runtime) runMaturityScheduler(ctx context.Context) {
-	defer r.wg.Done()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			_ = r.materializeOnlineMaturities(ctx)
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (r *Runtime) materializeOnlineMaturities(ctx context.Context) error {
-	r.mu.Lock()
-	playerIDs := make([]uint64, 0, len(r.actors))
-	for playerID := range r.actors {
-		playerIDs = append(playerIDs, playerID)
-	}
-	r.mu.Unlock()
-	sort.Slice(playerIDs, func(i, j int) bool { return playerIDs[i] < playerIDs[j] })
-	for _, playerID := range playerIDs {
-		shardID := routing.ShardForPlayer(playerID)
-		r.shardLocks[shardID].RLock()
-		r.mu.Lock()
-		a := r.actors[playerID]
-		r.mu.Unlock()
-		if a == nil {
-			r.shardLocks[shardID].RUnlock()
-			continue
-		}
-		if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
-			r.shardLocks[shardID].RUnlock()
-			continue
-		}
-		var events []MaturityEvent
-		var revision uint64
-		var maturityErr error
-		if err := a.mailbox.Do(ctx, func() {
-			if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
-				return
-			}
-			events, maturityErr = a.state.materializeDueMaturities(r.now())
-			revision = a.state.CheckpointRevision
-		}); err != nil {
-			r.shardLocks[shardID].RUnlock()
-			return fmt.Errorf("schedule maturity for player %d: %w", playerID, err)
-		}
-		if maturityErr != nil {
-			r.shardLocks[shardID].RUnlock()
-			return fmt.Errorf("materialize maturity for player %d: %w", playerID, maturityErr)
-		}
-		if len(events) > 0 {
-			r.markDirty(playerID, revision)
-			if err := r.forwardMaturityEvents(ctx, events); err != nil {
-				r.shardLocks[shardID].RUnlock()
-				return err
-			}
-			r.publishFarmViewChanges(ctx, a, playerID, DomainChangesFromPlotIDs(maturedPlotIDs(events)))
-		}
-		r.shardLocks[shardID].RUnlock()
-	}
-	return nil
 }
 
 func (r *Runtime) ReplaceConfig(snapshot *ConfigSnapshot) error {
@@ -208,6 +169,22 @@ func (r *Runtime) ReplaceConfig(snapshot *ConfigSnapshot) error {
 // steal interaction) without duplicating Runtime's config storage.
 func (r *Runtime) CurrentConfig() *ConfigSnapshot {
 	return r.config.Load()
+}
+
+// SetNow replaces the Runtime clock. Safe for concurrent use by the deadline
+// scheduler and tests that inject fixed time.
+func (r *Runtime) SetNow(fn func() time.Time) {
+	if fn == nil {
+		fn = time.Now
+	}
+	r.now.Store(fn)
+}
+
+func (r *Runtime) currentTime() time.Time {
+	if fn, ok := r.now.Load().(func() time.Time); ok && fn != nil {
+		return fn()
+	}
+	return time.Now()
 }
 
 func (r *Runtime) SetPushForwarder(forwarder PushForwarder) error {
@@ -246,6 +223,18 @@ type AccountNamer interface {
 func (r *Runtime) SetAccountNamer(namer AccountNamer) {
 	r.mu.Lock()
 	r.accountNamer = namer
+	r.mu.Unlock()
+}
+
+func (r *Runtime) SetPlayerPresence(presence PlayerPresence) {
+	r.mu.Lock()
+	r.presence = presence
+	r.mu.Unlock()
+}
+
+func (r *Runtime) SetFarmObservers(observers FarmObservers) {
+	r.mu.Lock()
+	r.observers = observers
 	r.mu.Unlock()
 }
 
@@ -373,27 +362,38 @@ func (r *Runtime) actorFor(
 	playerID uint64,
 	ownerEpoch uint64,
 ) (*runtimeActor, error) {
-	if err := r.errIfClosed(); err != nil {
-		return nil, err
-	}
-	a, err := r.getOrCreateLoadingActor(playerID, ownerEpoch)
-	if err != nil {
-		return nil, err
-	}
-	if err := r.waitForActorReady(ctx, a); err != nil {
-		return nil, err
-	}
-	if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
-		err := a.getActivationErr()
-		if err == nil {
-			err = errors.New("player actor activation failed")
+	for {
+		if err := r.errIfClosed(); err != nil {
+			return nil, err
 		}
-		return nil, err
+		a, err := r.getOrCreateLoadingActor(playerID, ownerEpoch)
+		if err != nil {
+			return nil, err
+		}
+		if err := r.waitForActorReady(ctx, a); err != nil {
+			if errors.Is(err, errActorGone) {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(2 * time.Millisecond):
+				}
+				continue
+			}
+			return nil, err
+		}
+		if a.lifecycle.Load() != actorLifecycleReady || a.state == nil {
+			err := a.getActivationErr()
+			if err == nil {
+				err = errors.New("player actor activation failed")
+			}
+			return nil, err
+		}
+		if a.state.OwnerEpoch != ownerEpoch {
+			return nil, ErrNotOwner
+		}
+		a.touchAccess(r.currentTime())
+		return a, nil
 	}
-	if a.state.OwnerEpoch != ownerEpoch {
-		return nil, ErrNotOwner
-	}
-	return a, nil
 }
 
 func (r *Runtime) errIfClosed() error {
@@ -446,6 +446,8 @@ func (r *Runtime) waitForActorReady(ctx context.Context, a *runtimeActor) error 
 			return errors.New("player actor activation failed")
 		case actorLifecycleClosing:
 			return ErrRuntimeClosed
+		case actorLifecycleEvicting:
+			return errActorGone
 		}
 		// Loading: queue behind the activation job on the same mailbox, then
 		// re-check lifecycle (activation may have failed after the barrier).
@@ -460,6 +462,8 @@ func (r *Runtime) waitForActorReady(ctx context.Context, a *runtimeActor) error 
 				return errors.New("player actor activation failed")
 			case actorLifecycleClosing:
 				return ErrRuntimeClosed
+			case actorLifecycleEvicting:
+				return errActorGone
 			}
 			return err
 		}
@@ -530,7 +534,7 @@ func (r *Runtime) activateActor(a *runtimeActor, playerID, ownerEpoch uint64) {
 		}
 		state.OwnerEpoch = ownerEpoch
 		state.CheckpointRevision++
-		state.UpdatedAtMS = r.now().UTC().UnixMilli()
+		state.UpdatedAtMS = r.currentTime().UTC().UnixMilli()
 	}
 	if state.ensureInitialPlots() {
 		if state.CheckpointRevision == math.MaxUint64 {
@@ -538,9 +542,9 @@ func (r *Runtime) activateActor(a *runtimeActor, playerID, ownerEpoch uint64) {
 			return
 		}
 		state.CheckpointRevision++
-		state.UpdatedAtMS = r.now().UTC().UnixMilli()
+		state.UpdatedAtMS = r.currentTime().UTC().UnixMilli()
 	}
-	if _, err := state.materializeDueMaturities(r.now()); err != nil {
+	if _, err := state.materializeDueMaturities(r.currentTime()); err != nil {
 		fail(fmt.Errorf("activate player maturity: %w", err))
 		return
 	}
@@ -553,10 +557,12 @@ func (r *Runtime) activateActor(a *runtimeActor, playerID, ownerEpoch uint64) {
 	a.persistedRevision = persistedRevision
 	a.persistedToken = persistedToken
 	a.farmViewEpoch = farmViewEpoch
+	a.touchAccess(r.currentTime())
 	a.lifecycle.Store(actorLifecycleReady)
 	if state.CheckpointRevision > persistedRevision {
 		r.markDirty(playerID, state.CheckpointRevision)
 	}
+	r.refreshActorDeadline(playerID, a)
 }
 
 // createInitialPlayerCheckpoint 仅在 Load 明确 NotFound 时调用。
@@ -569,7 +575,7 @@ func (r *Runtime) createInitialPlayerCheckpoint(
 	if !ok || creator == nil {
 		return nil, 0, nil, ErrInitialCheckpointUnsupported
 	}
-	checkpoint := NewInitialCheckpoint(playerID, r.now().UTC())
+	checkpoint := NewInitialCheckpoint(playerID, r.currentTime().UTC())
 	checkpoint.OwnerEpoch = ownerEpoch
 	result, err := creator.CreateInitial(ctx, checkpoint)
 	// 创建响应丢失等不确定结果：先对账 Load，内容一致则按已应用恢复。
@@ -617,6 +623,7 @@ func (r *Runtime) removeActorIfSame(playerID uint64, a *runtimeActor) {
 	if r.actors[playerID] == a {
 		delete(r.actors, playerID)
 		delete(r.dirtyRevision, playerID)
+		r.cancelActorDeadline(playerID)
 	}
 	r.mu.Unlock()
 	if a.loadCancel != nil {
@@ -642,7 +649,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	shardID := routing.ShardForPlayer(request.TargetPlayerId)
 	r.shardLocks[shardID].RLock()
 	defer r.shardLocks[shardID].RUnlock()
-	serverNow := r.now()
+	serverNow := r.currentTime()
 	config := r.config.Load()
 	if config == nil {
 		return nil, errors.New("Zone configuration is unavailable")
@@ -893,6 +900,7 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	// DomainChanges 已在 mailbox 内收集：成熟地块 + 成功业务报告的地块。
 	// 失败/重放命令返回空变化，不会产生错误的公开事件。
 	r.publishFarmViewChanges(ctx, a, callerPlayerID, domainChanges)
+	r.refreshActorDeadline(callerPlayerID, a)
 	return response, nil
 }
 
@@ -977,7 +985,7 @@ func (r *Runtime) DrainShardForMigration(
 				checkpointErr = ErrNotOwner
 				return
 			}
-			_, checkpointErr = a.state.materializeDueMaturities(r.now())
+			_, checkpointErr = a.state.materializeDueMaturities(r.currentTime())
 			if checkpointErr != nil {
 				return
 			}
@@ -1039,6 +1047,7 @@ func (r *Runtime) DrainShardForMigration(
 		if current := r.actors[playerID]; current != nil {
 			delete(r.actors, playerID)
 			delete(r.dirtyRevision, playerID)
+			r.cancelActorDeadline(playerID)
 		}
 	}
 	r.mu.Unlock()
@@ -1126,7 +1135,7 @@ func (r *Runtime) PrepareShardForMigration(
 		expectedRevision := state.CheckpointRevision
 		state.OwnerEpoch = ownerEpoch
 		state.CheckpointRevision++
-		state.UpdatedAtMS = r.now().UTC().UnixMilli()
+		state.UpdatedAtMS = r.currentTime().UTC().UnixMilli()
 		checkpoint, err := state.Checkpoint()
 		if err != nil {
 			return fmt.Errorf("build migrated player %d checkpoint: %w", item.PlayerID, err)

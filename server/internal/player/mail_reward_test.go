@@ -12,11 +12,13 @@ func TestApplyMailRewardAllOrNothingAndReplay(t *testing.T) {
 	const playerID = uint64(42)
 	now := time.Date(2026, 8, 12, 15, 0, 0, 0, time.UTC)
 	state := NewDevelopmentState(playerID)
+	state.CreatedAtMS = now.UnixMilli()
+	state.UpdatedAtMS = now.UnixMilli()
 	state.Inventory = map[uint32]uint32{1002: 1}
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	claimID := make([]byte, 16)
@@ -58,11 +60,13 @@ func TestApplyMailRewardCapacity(t *testing.T) {
 	const playerID = uint64(9)
 	now := time.Date(2026, 8, 12, 16, 0, 0, 0, time.UTC)
 	state := NewDevelopmentState(playerID)
+	state.CreatedAtMS = now.UnixMilli()
+	state.UpdatedAtMS = now.UnixMilli()
 	state.Inventory = map[uint32]uint32{1002: inventoryStackLimit}
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	claimID := make([]byte, 16)

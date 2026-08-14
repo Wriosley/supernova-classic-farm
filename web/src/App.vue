@@ -43,12 +43,14 @@ import { mutationResponsePatch } from './lib/mutation-response'
 import { FarmWebSocket } from './lib/ws'
 import type { FarmAction, FarmActionRequest } from './lib/farm-actions'
 import { panelKickers, panelTitles, type PanelId } from './lib/panels'
+import { usePlotFloats } from './lib/plot-floats'
 import {
   captureInviteFriendCodeFromLocation,
   clearPendingFriendCode,
   loadPendingFriendCode,
 } from './lib/friend-invite'
 import AccountPanel from './components/AccountPanel.vue'
+import CompendiumPanel from './components/CompendiumPanel.vue'
 import FarmDashboard from './components/FarmDashboard.vue'
 import type { DeployedPet } from './lib/pet-art'
 import FriendFarmDashboard from './components/FriendFarmDashboard.vue'
@@ -172,7 +174,15 @@ const visitError = ref('')
 const stealBusyPlotId = ref<number>()
 const stealError = ref('')
 const stealMessage = ref('')
-const presenceNotice = ref('')
+const { floats: farmFloats, pushFloat: pushFarmFloat } = usePlotFloats()
+const {
+  floats: visitFloats,
+  pushFloat: pushVisitFloat,
+  clearFloats: clearVisitFloats,
+} = usePlotFloats()
+const farmVisitorEntries = ref<
+  Map<string, { playerId?: bigint; accountName?: string }>
+>(new Map())
 const petPanel = ref<PetPanelView | null>(null)
 const petBusyBuyId = ref<number | null>(null)
 const petBusyDeployId = ref<number | null>(null)
@@ -180,6 +190,8 @@ const petBusyBuyFood = ref(false)
 const petBusyFeed = ref(false)
 const petError = ref('')
 const petMessage = ref('')
+const petFloatText = ref('')
+let petFloatTimer: ReturnType<typeof setTimeout> | undefined
 const mailRedDot = ref(false)
 const friendFarmRedDots = ref<Set<string>>(new Set())
 const activePanel = ref<PanelId | null>(null)
@@ -198,10 +210,12 @@ const giftBusy = ref(false)
 const giftError = ref('')
 const giftMessage = ref('')
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
-let presenceNoticeTimer: ReturnType<typeof setTimeout> | undefined
 
 socket.setConnectionHandler((value) => {
   connected.value = value
+  if (!value) {
+    farmVisitorEntries.value = new Map()
+  }
 })
 socket.setPlayerStateChangedHandler(handlePlayerStateChanged)
 socket.setFarmPresenceChangedHandler(handleFarmPresenceChanged)
@@ -278,6 +292,11 @@ function togglePanel(panel: PanelId): void {
     case 'shop':
       void reloadCatalog()
       break
+    case 'compendium':
+      if (cropCatalog.value.length === 0) {
+        void reloadCatalog()
+      }
+      break
   }
 }
 const inventoryMap = computed(() => {
@@ -309,7 +328,22 @@ const visitOwnerLabel = computed(() => {
   const friend = friends.value.find((entry) => entry.playerId === ownerId)
   return friend?.accountName || `player ${ownerId.toString()}`
 })
-const visitNotice = computed(() => stealMessage.value || presenceNotice.value)
+function farmVisitorLabel(playerId?: bigint, accountName?: string): string {
+  const friend = playerId
+    ? friends.value.find((entry) => entry.playerId === playerId)
+    : undefined
+  return (
+    accountName ||
+    friend?.accountName ||
+    (playerId ? `玩家 ${playerId.toString()}` : '一位好友')
+  )
+}
+
+const farmVisitors = computed(() =>
+  [...farmVisitorEntries.value.values()]
+    .map((entry) => farmVisitorLabel(entry.playerId, entry.accountName))
+    .sort(),
+)
 
 function stepState(step: Phase): 'done' | 'active' | 'waiting' {
   const index = steps.indexOf(step)
@@ -370,11 +404,7 @@ function clearResult(): void {
   visitId.value = undefined
   visitSnapshot.value = undefined
   visitError.value = ''
-  presenceNotice.value = ''
-  if (presenceNoticeTimer) {
-    clearTimeout(presenceNoticeTimer)
-    presenceNoticeTimer = undefined
-  }
+  farmVisitorEntries.value = new Map()
 }
 
 function applyPatch(current: PlayerSnapshot, patch: PlayerStatePatch): PlayerSnapshot {
@@ -1035,6 +1065,7 @@ function clearVisit(): void {
   stealBusyPlotId.value = undefined
   stealError.value = ''
   stealMessage.value = ''
+  clearVisitFloats()
 }
 
 async function sendVisitHeartbeat(): Promise<void> {
@@ -1148,6 +1179,7 @@ async function runFriendAction(
   stealBusyPlotId.value = plotId
   stealError.value = ''
   stealMessage.value = ''
+  const coinsBefore = Number(snapshot.value?.coinBalance ?? 0n)
   try {
     let response: WsEnvelope
     let expectedCase:
@@ -1156,6 +1188,8 @@ async function runFriendAction(
       | 'catchPestForFriendResponse'
       | 'helpCleanFriendPlotResponse'
     let successMessage: string
+    let floatText: string
+    let floatTone: 'success' | 'error' = 'success'
     switch (action) {
       case 'steal': {
         const plot = visitSnapshot.value?.plots.find((entry) => entry.plotId === plotId)
@@ -1177,6 +1211,7 @@ async function runFriendAction(
         )
         expectedCase = 'stealFriendCropResponse'
         successMessage = `偷菜成功，获得 ${cropName} ×1。`
+        floatText = `+${cropName} ×1`
         break
       }
       case 'pest':
@@ -1189,16 +1224,19 @@ async function runFriendAction(
         )
         expectedCase = 'applyPestToFriendResponse'
         successMessage = '投虫成功。'
+        floatText = '投虫成功'
         break
       case 'catch':
         response = await socket.catchPestForFriend(playerId, ownerId, id, plotId)
         expectedCase = 'catchPestForFriendResponse'
         successMessage = '捉虫成功。'
+        floatText = '捉虫成功'
         break
       case 'clean':
         response = await socket.helpCleanFriendPlot(playerId, ownerId, id, plotId)
         expectedCase = 'helpCleanFriendPlotResponse'
         successMessage = '已帮好友清理地块。'
+        floatText = '已清理'
         break
     }
     setServerClock(response.serverTimeMs)
@@ -1220,22 +1258,55 @@ async function runFriendAction(
     if (currentSnapshot && patch) {
       snapshot.value = applyPatch(currentSnapshot, patch)
     }
+    const coinsAfter = Number(snapshot.value?.coinBalance ?? coinsBefore)
+    const coinDelta = coinsAfter - coinsBefore
+
     if (action === 'steal') {
       const guard = response.payload.value.stealGuard
       if (guard?.guardTriggered) {
-        const penalty = guard.guardPenaltyApplied
-        successMessage =
-          penalty > 0n
-            ? `${successMessage} 但你偷菜被狗咬了，被罚款 ${penalty} 金币。`
-            : successMessage
+        const penalty = Number(guard.guardPenaltyApplied ?? 0n)
+        if (penalty > 0) {
+          successMessage = `${successMessage} 但你偷菜被狗咬了，被罚款 ${penalty} 金币。`
+          pushPetFloat(`你被狗咬了，-${penalty}金币`)
+          pushVisitFloat(plotId, `你被狗咬了，-${penalty}金币`, 'error')
+        }
       }
+      pushVisitFloat(plotId, floatText)
+    } else if (action === 'catch' || action === 'clean') {
+      floatText = '做好事奖励你+1金币'
+      successMessage = `${successMessage} ${floatText}`
+      pushVisitFloat(plotId, floatText)
+    } else if (action === 'pest') {
+      if (coinDelta >= 0) {
+        floatText = `风险与机遇并存，+${coinDelta}金币`
+        floatTone = 'success'
+      } else {
+        floatText = `你真是太坏了${coinDelta}金币。`
+        floatTone = 'error'
+      }
+      successMessage = `${successMessage} ${floatText}`
+      pushVisitFloat(plotId, floatText, floatTone)
+    } else {
+      pushVisitFloat(plotId, floatText)
     }
     stealMessage.value = successMessage
   } catch (error) {
     stealError.value = error instanceof Error ? error.message : String(error)
+    pushVisitFloat(plotId, '操作失败', 'error')
   } finally {
     stealBusyPlotId.value = undefined
   }
+}
+
+function pushPetFloat(text: string): void {
+  petFloatText.value = text
+  if (petFloatTimer !== undefined) {
+    clearTimeout(petFloatTimer)
+  }
+  petFloatTimer = setTimeout(() => {
+    petFloatText.value = ''
+    petFloatTimer = undefined
+  }, 1800)
 }
 
 function stealFriendCrop(plotId: number): Promise<void> {
@@ -1318,6 +1389,23 @@ function actionSuccessMessage(action: FarmAction, response: WsEnvelope): string 
       return '地块清理完成，服务端单玩家闭环已完成。'
     case 'catch':
       return '捉虫成功，作物继续成长。'
+  }
+}
+
+function farmActionFloatText(action: FarmAction, response: WsEnvelope): string {
+  switch (action) {
+    case 'plant':
+      return '已种下'
+    case 'fertilize':
+      return '施肥成功'
+    case 'harvest':
+      return `+${response.payload.case === 'harvestResponse' ? response.payload.value.harvestedQuantity : 0} 个`
+    case 'clean':
+      return '已清理'
+    case 'catch':
+      return '捉虫成功'
+    default:
+      return ''
   }
 }
 
@@ -1422,8 +1510,14 @@ async function runFarmAction(request: FarmActionRequest): Promise<void> {
     }
     await acceptMutationResponse(response)
     actionMessage.value = actionSuccessMessage(action, response)
+    if (plotId) {
+      pushFarmFloat(plotId, farmActionFloatText(action, response))
+    }
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
+    if (plotId) {
+      pushFarmFloat(plotId, '操作失败', 'error')
+    }
   } finally {
     busyAction.value = undefined
   }
@@ -1472,19 +1566,35 @@ function handleFarmPresenceChanged(envelope: WsEnvelope): void {
     return
   }
   const push = envelope.payload.value
-  const who = push.visitorAccountName || '一位好友'
-  presenceNotice.value =
-    push.kind === FarmPresenceKind.FARM_VISITOR_ENTERED
-      ? `${who} 进入了你的农场。`
-      : push.kind === FarmPresenceKind.FARM_VISITOR_LEFT
-        ? `${who} 离开了你的农场。`
-        : ''
-  if (presenceNoticeTimer) {
-    clearTimeout(presenceNoticeTimer)
+  const visitorID = push.visitorPlayerId
+  const visitorKey = visitorID?.toString() || push.visitorAccountName || 'unknown'
+  const who = farmVisitorLabel(visitorID, push.visitorAccountName)
+
+  if (push.kind === FarmPresenceKind.FARM_CROP_STOLEN && push.plotId) {
+    const cropName =
+      cropCatalog.value.find((entry) => entry.cropItemId === push.cropItemId)?.name ||
+      `作物#${push.cropItemId ?? 0}`
+    const quantity = push.quantity ?? 1
+    pushFarmFloat(
+      push.plotId,
+      push.guardTriggered
+        ? `${who}偷了${quantity}个${cropName}，被狗咬了扣除金币`
+        : `${who}偷了${quantity}个${cropName}`,
+      push.guardTriggered ? 'error' : 'success',
+    )
+    return
   }
-  presenceNoticeTimer = setTimeout(() => {
-    presenceNotice.value = ''
-  }, 5000)
+
+  const next = new Map(farmVisitorEntries.value)
+  if (push.kind === FarmPresenceKind.FARM_VISITOR_ENTERED) {
+    next.set(visitorKey, {
+      playerId: visitorID,
+      accountName: push.visitorAccountName,
+    })
+  } else if (push.kind === FarmPresenceKind.FARM_VISITOR_LEFT) {
+    next.delete(visitorKey)
+  }
+  farmVisitorEntries.value = next
 }
 
 function handleRedDotChanged(envelope: WsEnvelope): void {
@@ -1762,7 +1872,7 @@ function describeAuthError(error: unknown): string {
     case HttpErrorCode.INVALID_CREDENTIALS:
       return '密码错误'
     case HttpErrorCode.INVALID_ARGUMENT:
-      return '账号需为 3-32 位小写字母、数字或下划线，密码至少 12 位'
+      return '账号需为 3-32 位小写字母、数字或下划线，密码至少 6 位'
     case HttpErrorCode.RATE_LIMITED:
       return '尝试过于频繁，请稍后再试'
     case HttpErrorCode.CSRF_REJECTED:
@@ -1945,9 +2055,6 @@ onBeforeUnmount(() => {
   if (clockTimer) {
     clearInterval(clockTimer)
   }
-  if (presenceNoticeTimer) {
-    clearTimeout(presenceNoticeTimer)
-  }
   tearDownRealtime()
 })
 </script>
@@ -1976,9 +2083,9 @@ onBeforeUnmount(() => {
             v-model="password"
             autocomplete="current-password"
             type="password"
-            minlength="12"
+            minlength="6"
             maxlength="128"
-            placeholder="至少 12 个字符"
+            placeholder="至少 6 个字符"
             required
           />
         </label>
@@ -2002,7 +2109,6 @@ onBeforeUnmount(() => {
       :mail-red-dot="mailRedDot"
       :friend-red-dot="friendRedDot"
       @select="togglePanel"
-      @open-profile="profileOpen = true"
     />
 
     <p v-if="shellNotice" class="shell-notice" role="status">
@@ -2024,13 +2130,13 @@ onBeforeUnmount(() => {
       :connected="connected"
       :busy="visitBusy"
       :steal-busy-plot-id="stealBusyPlotId"
-      :notice="visitNotice"
-      :error="visitError || stealError"
       :now-ms="nowMs"
+      :plot-floats="visitFloats"
       @steal="stealFriendCrop"
       @pest="applyPestToFriend"
       @catch="catchPestForFriend"
       @clean="helpCleanFriendPlot"
+      @plot-feedback="(plotId, text) => pushVisitFloat(plotId, text, 'error')"
       @exit="exitFriendFarm"
       @open-profile="profileOpen = true"
     />
@@ -2040,11 +2146,12 @@ onBeforeUnmount(() => {
       :crop-catalog="cropCatalog"
       :connected="connected"
       :busy-action="busyAction"
-      :action-message="actionMessage"
-      :action-error="actionError"
       :now-ms="nowMs"
       :active-pet="activePet"
+      :plot-floats="farmFloats"
+      :visitors="farmVisitors"
       @action="runFarmAction"
+      @plot-feedback="(plotId, text) => pushFarmFloat(plotId, text, 'error')"
       @open-shop="togglePanel('shop')"
       @open-pet="togglePanel('pet')"
       @reload-catalog="reloadCatalog"
@@ -2104,6 +2211,7 @@ onBeforeUnmount(() => {
         :busy-feed="petBusyFeed"
         :error="petError"
         :message="petMessage"
+        :float-text="petFloatText"
         @buy-pet="buyPet"
         @deploy-pet="deployPet"
         @buy-food="buyPetFood"
@@ -2113,12 +2221,24 @@ onBeforeUnmount(() => {
     </GameDrawer>
 
     <GameDrawer
+      :open="activePanel === 'compendium'"
+      :title="panelTitles.compendium"
+      :kicker="panelKickers.compendium"
+      @close="activePanel = null"
+    >
+      <CompendiumPanel
+        :career="snapshot?.career"
+        :catalog="cropCatalog"
+        :compendium="snapshot?.cropCompendium"
+      />
+    </GameDrawer>
+
+    <GameDrawer
       :open="activePanel === 'friends'"
       :title="panelTitles.friends"
       :kicker="panelKickers.friends"
       @close="activePanel = null"
     >
-      <p v-if="presenceNotice" class="success-banner">{{ presenceNotice }}</p>
       <FriendsPanel
         :friends="friends"
         :connected="connected"
@@ -2196,12 +2316,12 @@ onBeforeUnmount(() => {
     </GameDrawer>
 
     <PlayerProfileModal
-      :open="profileOpen"
-      :title="visiting ? `${visitOwnerLabel} 的资料` : `${session?.accountName || '我'} 的资料`"
-      :career="visiting ? visitSnapshot?.career : snapshot?.career"
+      :open="profileOpen && visiting"
+      :title="`${visitOwnerLabel} 的资料`"
+      :career="visitSnapshot?.career"
       :catalog="cropCatalog"
-      :compendium="visiting ? null : snapshot?.cropCompendium"
-      :show-compendium="!visiting"
+      :compendium="visitSnapshot?.cropCompendium"
+      :owner-label="visitOwnerLabel"
       @close="profileOpen = false"
     />
     <FriendGiftPanel

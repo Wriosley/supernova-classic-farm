@@ -11,6 +11,7 @@ const props = defineProps<{
   busyFeed: boolean
   error: string
   message: string
+  floatText?: string
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +63,7 @@ function formatBps(bps: number): string {
 
     <p v-if="error" class="pet-panel__error">{{ error }}</p>
     <p v-else-if="message" class="pet-panel__message">{{ message }}</p>
+    <p v-if="floatText" class="pet-panel__float" aria-live="polite">{{ floatText }}</p>
 
     <ul v-if="panel" class="pet-list">
       <li v-for="pet in panel.pets" :key="pet.petId" class="pet-item">
@@ -149,6 +151,29 @@ function formatBps(bps: number): string {
 .pet-panel__message {
   margin: 0;
   color: #027a48;
+}
+
+.pet-panel__float {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.95rem;
+  font-weight: 600;
+  animation: pet-float-rise 1.8s ease-out both;
+}
+
+@keyframes pet-float-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.85rem);
+  }
 }
 
 .pet-list {

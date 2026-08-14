@@ -35,6 +35,7 @@ func (f *fakeSnapshotBuilder) BuildPublicFarmSnapshot(
 type publishedPresence struct {
 	ownerPlayerID uint64
 	kind          wsv1.FarmPresenceKind
+	presence      *wsv1.FarmPresencePush
 }
 
 type fakePresencePublisher struct {
@@ -47,7 +48,11 @@ func (f *fakePresencePublisher) PublishFarmPresence(
 ) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.published = append(f.published, publishedPresence{ownerPlayerID: ownerPlayerID, kind: presence.GetKind()})
+	f.published = append(f.published, publishedPresence{
+		ownerPlayerID: ownerPlayerID,
+		kind:          presence.GetKind(),
+		presence:      presence,
+	})
 	return nil
 }
 
@@ -109,6 +114,8 @@ func TestOwnerServiceEnterVisitorPublishesEnteredOnce(t *testing.T) {
 	}
 	if got := presence.snapshot(); len(got) != 1 || got[0].kind != wsv1.FarmPresenceKind_FARM_VISITOR_ENTERED {
 		t.Fatalf("expected one ENTERED presence push, got %+v", got)
+	} else if got[0].presence.GetVisitorPlayerId() != 2 {
+		t.Fatalf("ENTERED visitor_player_id = %d, want 2", got[0].presence.GetVisitorPlayerId())
 	}
 
 	// A retry with the same request_id must not publish a second ENTERED tip.
@@ -117,6 +124,36 @@ func TestOwnerServiceEnterVisitorPublishesEnteredOnce(t *testing.T) {
 	}
 	if got := presence.snapshot(); len(got) != 1 {
 		t.Fatalf("expected retry to skip a duplicate ENTERED push, got %+v", got)
+	}
+}
+
+func TestOwnerServicePublishesFarmInteractionEvent(t *testing.T) {
+	presence := &fakePresencePublisher{}
+	svc := newTestOwnerService(t, &fakeSnapshotBuilder{}, presence, time.Now)
+	visitorID := uint64(9)
+	plotID := uint32(3)
+	cropItemID := uint32(1002)
+	quantity := uint32(1)
+	guardTriggered := true
+
+	svc.PublishFarmEvent(context.Background(), 7, &wsv1.FarmPresencePush{
+		Kind:            wsv1.FarmPresenceKind_FARM_CROP_STOLEN,
+		VisitorPlayerId: &visitorID,
+		PlotId:          &plotID,
+		CropItemId:      &cropItemID,
+		Quantity:        &quantity,
+		GuardTriggered:  &guardTriggered,
+	})
+
+	got := presence.snapshot()
+	if len(got) != 1 || got[0].ownerPlayerID != 7 {
+		t.Fatalf("published = %+v", got)
+	}
+	event := got[0].presence
+	if event.GetOwnerPlayerId() != 7 || event.GetVisitorPlayerId() != 9 ||
+		event.GetPlotId() != 3 || event.GetCropItemId() != 1002 ||
+		event.GetQuantity() != 1 || !event.GetGuardTriggered() {
+		t.Fatalf("farm interaction event = %+v", event)
 	}
 }
 

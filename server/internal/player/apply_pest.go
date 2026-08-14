@@ -36,7 +36,7 @@ func (r *Runtime) ApplyApplyPestOnOwner(
 	if err != nil {
 		return nil, nil, nil, false, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepApplyPestOnOwner, interactionID)
 	var mutated bool
 	var applyErr error
@@ -113,6 +113,7 @@ func (r *Runtime) ApplyApplyPestOnOwner(
 	if !owedChanges.Empty() {
 		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, owedChanges)
 	}
+	r.refreshActorDeadline(ownerID, a)
 	return resultPayload, resultDigest, farmPatch, alreadyApplied, nil
 }
 

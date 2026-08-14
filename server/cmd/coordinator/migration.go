@@ -12,6 +12,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -219,8 +221,8 @@ func (h *migrationHandler) moveDurable(w http.ResponseWriter, r *http.Request, s
 				writeMigrationError(w, http.StatusServiceUnavailable, "TARGET_NOT_READY")
 				return
 			}
-			if err := h.callZoneControl(r, entry.OwnerEndpoint, shardID, "drain", entry.OwnerEpoch); err != nil {
-				h.resumeZone(r, entry.OwnerEndpoint, shardID, entry.OwnerEpoch)
+			if err := h.callZoneControl(r, entry.OwnerEndpoint, shardID, "drain", entry.OwnerEpoch, ""); err != nil {
+				h.resumeZone(r, entry.OwnerEndpoint, shardID, entry.OwnerEpoch, "")
 				writeMigrationError(w, http.StatusConflict, "DRAIN_REJECTED")
 				return
 			}
@@ -349,7 +351,7 @@ func (h *migrationHandler) inspect(w http.ResponseWriter, r *http.Request) {
 		writeMigrationError(w, http.StatusBadRequest, "INVALID_SHARD_ID")
 		return
 	}
-	progress := h.progress[shardID]
+	progress := h.forgetSettledProgress(r.Context(), shardID)
 	response := migrationInspectResponse{
 		ShardID: shardID,
 		Route:   routeJSON(entry),
@@ -389,9 +391,97 @@ func (h *migrationHandler) inspect(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 	}
+	response.Task = h.taskView(r.Context(), shardID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+// forgetSettledProgress drops the in-process copy once the durable row is gone,
+// because the migration worker settles migrations without going through this
+// handler and a leftover copy would report a long-finished step forever.
+func (h *migrationHandler) forgetSettledProgress(
+	ctx context.Context,
+	shardID uint32,
+) *migrationProgress {
+	progress := h.progress[shardID]
+	if progress == nil || (h.db == nil && h.tcaplus == nil) {
+		return progress
+	}
+	var found bool
+	var err error
+	if h.tcaplus != nil {
+		_, found, err = h.tcaplus.LoadProgress(ctx, shardID)
+	} else {
+		_, found, err = routing.LoadMigrationProgress(ctx, h.db, shardID)
+	}
+	if err != nil || found {
+		return progress
+	}
+	h.locks[shardID].Lock()
+	defer h.locks[shardID].Unlock()
+	h.progress[shardID] = nil
+	return nil
+}
+
+// openTaskItems lists queued Shards the in-process progress map does not know
+// about, so a task stalled before its first persisted boundary stays visible.
+func (h *migrationHandler) openTaskItems(
+	ctx context.Context,
+	existing []migrationInspectResponse,
+) []migrationInspectResponse {
+	if h.tasks == nil {
+		return nil
+	}
+	tasks, err := h.tasks.LoadOpen(ctx)
+	if err != nil {
+		return nil
+	}
+	items := make([]migrationInspectResponse, 0, len(tasks))
+	for _, task := range tasks {
+		if slices.ContainsFunc(existing, func(item migrationInspectResponse) bool {
+			return item.ShardID == task.ShardID
+		}) {
+			continue
+		}
+		entry, entryErr := h.routes.Entry(task.ShardID)
+		if entryErr != nil {
+			continue
+		}
+		items = append(items, migrationInspectResponse{
+			ShardID:      task.ShardID,
+			SourceZoneID: task.SourceZoneID,
+			TargetZoneID: task.TargetZoneID,
+			Route:        routeJSON(entry),
+			Task:         h.taskView(ctx, task.ShardID),
+		})
+	}
+	return items
+}
+
+// taskView surfaces the queued task behind a Shard, including the failure code
+// the worker recorded on its last attempt.
+func (h *migrationHandler) taskView(
+	ctx context.Context,
+	shardID uint32,
+) *taskView {
+	if h.tasks == nil {
+		return nil
+	}
+	task, found, err := h.tasks.Get(ctx, shardID)
+	if err != nil || !found {
+		return nil
+	}
+	return &taskView{
+		TaskID:        hex.EncodeToString(task.TaskID),
+		Status:        string(task.Status),
+		Reason:        string(task.Reason),
+		Attempt:       task.Attempt,
+		RetryAtMS:     task.RetryAtMS,
+		LastErrorCode: task.LastErrorCode,
+		SourceZoneID:  task.SourceZoneID,
+		TargetZoneID:  task.TargetZoneID,
+	}
 }
 
 func (h *migrationHandler) listOpen(w http.ResponseWriter, r *http.Request) {
@@ -400,7 +490,8 @@ func (h *migrationHandler) listOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]migrationInspectResponse, 0)
-	for shardID, progress := range h.progress {
+	for shardID := range h.progress {
+		progress := h.forgetSettledProgress(r.Context(), uint32(shardID))
 		if progress == nil {
 			continue
 		}
@@ -417,8 +508,11 @@ func (h *migrationHandler) listOpen(w http.ResponseWriter, r *http.Request) {
 			TargetZoneID:       progress.Prepared.OwnerZoneID,
 			PreparedOwnerEpoch: strconv.FormatUint(progress.Prepared.OwnerEpoch, 10),
 			Route:              routeJSON(entry),
+			Task:               h.taskView(r.Context(), uint32(shardID)),
 		})
 	}
+	items = append(items, h.openTaskItems(r.Context(), items)...)
+	sort.Slice(items, func(i, j int) bool { return items[i].ShardID < items[j].ShardID })
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(struct {
@@ -496,7 +590,8 @@ func (h *migrationHandler) abandonDurable(w http.ResponseWriter, r *http.Request
 		writeMigrationError(w, http.StatusConflict, "ABANDON_FAILED")
 		return
 	}
-	h.resumeZone(r, progress.Source.OwnerEndpoint, shardID, progress.Source.OwnerEpoch)
+	h.resumeZone(r, progress.Source.OwnerEndpoint, shardID,
+		progress.Source.OwnerEpoch, progress.Prepared.TransitionID)
 	h.progress[shardID] = nil
 	writeMigrationRoute(w, source)
 }
@@ -568,6 +663,7 @@ func (h *migrationHandler) abandonMigration(
 	h.routes.NoteConsumedEpoch(shardID, progress.Prepared.OwnerEpoch)
 	h.resumeZone(
 		r, progress.Source.OwnerEndpoint, shardID, progress.Source.OwnerEpoch,
+		progress.Prepared.TransitionID,
 	)
 	h.progress[shardID] = nil
 	writeMigrationRoute(w, source)
@@ -604,9 +700,9 @@ func (h *migrationHandler) moveMemory(
 		return
 	}
 	if err := h.callZoneControl(
-		r, current.OwnerEndpoint, shardID, "drain", current.OwnerEpoch,
+		r, current.OwnerEndpoint, shardID, "drain", current.OwnerEpoch, "",
 	); err != nil {
-		h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch)
+		h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch, "")
 		writeMigrationError(w, http.StatusConflict, "DRAIN_REJECTED")
 		return
 	}
@@ -615,7 +711,7 @@ func (h *migrationHandler) moveMemory(
 		shardID, target.ZoneID, target.Endpoint, now, h.leaseDuration,
 	)
 	if err != nil {
-		h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch)
+		h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch, "")
 		writeMigrationError(w, http.StatusConflict, "PREPARE_FAILED")
 		return
 	}
@@ -676,9 +772,9 @@ func (h *migrationHandler) moveMySQL(
 			return
 		}
 		if err := h.callZoneControl(
-			r, current.OwnerEndpoint, shardID, "drain", current.OwnerEpoch,
+			r, current.OwnerEndpoint, shardID, "drain", current.OwnerEpoch, "",
 		); err != nil {
-			h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch)
+			h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch, "")
 			writeMigrationError(w, http.StatusConflict, "DRAIN_REJECTED")
 			return
 		}
@@ -703,7 +799,7 @@ func (h *migrationHandler) moveMySQL(
 			shardID, target.ZoneID, target.Endpoint, now, h.leaseDuration,
 		)
 		if prepareErr != nil {
-			h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch)
+			h.resumeZone(r, current.OwnerEndpoint, shardID, current.OwnerEpoch, "")
 			writeMigrationError(w, http.StatusConflict, "PREPARE_FAILED")
 			return
 		}
@@ -872,14 +968,15 @@ func (h *migrationHandler) callZoneControl(
 	shardID uint32,
 	action string,
 	ownerEpoch uint64,
+	transitionID string,
 ) error {
-	var body io.Reader
-	if action == "drain" {
-		encoded, _ := json.Marshal(struct {
-			OwnerEpoch string `json:"owner_epoch"`
-		}{OwnerEpoch: strconv.FormatUint(ownerEpoch, 10)})
-		body = bytes.NewReader(encoded)
-	}
+	// Zone lifecycle endpoints key every drain on a transition, so both fields
+	// are mandatory on drain and resume alike.
+	encoded, _ := json.Marshal(struct {
+		OwnerEpoch   string `json:"owner_epoch"`
+		TransitionID string `json:"transition_id"`
+	}{strconv.FormatUint(ownerEpoch, 10), transitionID})
+	body := bytes.NewReader(encoded)
 	req, err := http.NewRequestWithContext(
 		request.Context(), http.MethodPost,
 		endpoint+"/internal/v1/shards/"+
@@ -908,12 +1005,17 @@ func (h *migrationHandler) resumeZone(
 	endpoint string,
 	shardID uint32,
 	ownerEpoch uint64,
+	transitionID string,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = h.callZoneControl(
-		request.Clone(ctx), endpoint, shardID, "resume", ownerEpoch,
-	)
+	if err := h.callZoneControl(
+		request.Clone(ctx), endpoint, shardID, "resume", ownerEpoch, transitionID,
+	); err != nil {
+		slog.Warn("resume drained Source Zone",
+			"shard_id", shardID, "owner_epoch", ownerEpoch,
+			"transition_id", transitionID, "error", err)
+	}
 }
 
 func (h *migrationHandler) completeZoneDrain(
@@ -1069,6 +1171,18 @@ type migrationInspectResponse struct {
 	TargetZoneID       string    `json:"target_zone_id,omitempty"`
 	PreparedOwnerEpoch string    `json:"prepared_owner_epoch,omitempty"`
 	Route              routeView `json:"route"`
+	Task               *taskView `json:"task,omitempty"`
+}
+
+type taskView struct {
+	TaskID        string `json:"task_id"`
+	Status        string `json:"status"`
+	Reason        string `json:"reason,omitempty"`
+	Attempt       uint32 `json:"attempt"`
+	RetryAtMS     int64  `json:"retry_at_ms,omitempty"`
+	LastErrorCode string `json:"last_error_code,omitempty"`
+	SourceZoneID  string `json:"source_zone_id,omitempty"`
+	TargetZoneID  string `json:"target_zone_id,omitempty"`
 }
 
 type routeView struct {

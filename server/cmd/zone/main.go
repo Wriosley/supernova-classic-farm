@@ -14,7 +14,6 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/connection"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinatorclient"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/farmview"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/interaction"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/outbox"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
@@ -30,10 +29,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/zoneidentity"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 )
-
-const interactionReconcileInterval = 5 * time.Second
 
 const (
 	defaultListenAddress = "127.0.0.1:8082"
@@ -71,20 +67,6 @@ func main() {
 	gatewayID := environmentOr("GATEWAY_ID", "local-gateway")
 
 	var runtime *player.Runtime
-	// interactionStore backs the Phase 5 friend-interaction Saga
-	// (STEAL_FRIEND_CROP): a durable Tcaplus-backed store when this Zone
-	// already opened Tcaplus for its own checkpoint storage, or an
-	// in-memory store for development/MySQL modes so the Zone still starts
-	// without requiring Tcaplus solely for friend interactions.
-	var interactionStore interaction.Store
-	// interactionScanner is interactionStore's underlying concrete type,
-	// kept separately because Traverse is not part of the interaction.Store
-	// interface: both *interaction.TcaplusStore's client and
-	// *interaction.MemoryStore support it, letting the Reconciler's ticker
-	// run in every storage mode.
-	var interactionScanner interface {
-		Traverse(proto.Message) ([]proto.Message, error)
-	}
 	var tcaplusClient *tcaplusdb.Client
 	var tcaplusZoneID uint32
 	storageMode := strings.TrimSpace(os.Getenv("STORAGE_MODE"))
@@ -152,17 +134,10 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		interactionStore, err = interaction.NewTcaplusStore(client, config.ZoneID)
-		if err != nil {
-			log.Fatal(err)
-		}
-		interactionScanner = client
 		runtime.SetAccountNamer(accountNameLookup{client: client, zoneID: config.ZoneID})
 		logger.Info("using pure Tcaplus Player checkpoint store")
 	} else if dsn == "" {
 		runtime = player.NewRuntime()
-		memoryInteractions := interaction.NewMemoryStore()
-		interactionStore, interactionScanner = memoryInteractions, memoryInteractions
 		logger.Warn("using development-only lazy in-memory player state")
 	} else {
 		db, openErr := database.OpenMySQL(context.Background(), dsn)
@@ -176,8 +151,6 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		memoryInteractions := interaction.NewMemoryStore()
-		interactionStore, interactionScanner = memoryInteractions, memoryInteractions
 		logger.Info("using MySQL Player checkpoint store")
 	}
 	var pushForwarder *player.GRPCPushForwarder
@@ -275,6 +248,9 @@ func main() {
 
 	connectionRegistry := connection.NewRegistry()
 	go runConnectionEvictionLoop(ctx, connectionRegistry, logger)
+	runtime.SetPlayerPresence(connectionRegistry)
+	runtime.SetFarmObservers(ownerFarmService)
+	go runActorIdleEvictionLoop(ctx, runtime, logger)
 
 	farmViewBroadcaster, err := farmview.NewBroadcaster(pushForwarder, ownerFarmService, connectionRegistry)
 	if err != nil {
@@ -305,27 +281,6 @@ func main() {
 	}
 	defer infoNotifier.Close()
 	runtime.SetStealableNotifier(infoNotifier)
-
-	// Phase 5: the STEAL_FRIEND_CROP interaction Saga. ownerFarmClient
-	// already implements interaction.OwnerFarmClient (its
-	// ApplyVisitorAction resolves the owner's route itself), and *Runtime
-	// already implements interaction.VisitorSteps, so both wire in
-	// directly with no adapter.
-	stealSaga, err := interaction.NewStealSaga(interactionStore, runtime, ownerFarmClient)
-	if err != nil {
-		log.Fatal(err)
-	}
-	actionSaga, err := interaction.NewActionSaga(interactionStore, runtime, ownerFarmClient)
-	if err != nil {
-		log.Fatal(err)
-	}
-	stealResolver := newZoneStealResolver(runtime, authorization)
-	interactionReconciler, err := interaction.NewReconciler(interactionStore, stealSaga, stealResolver, interactionScanner)
-	if err != nil {
-		log.Fatal(err)
-	}
-	interactionReconciler.WithActionSaga(actionSaga)
-	go runInteractionReconcileLoop(ctx, interactionReconciler, logger)
 
 	var giftNotifier giftOutboxNotifier
 	if tcaplusClient != nil {
@@ -410,8 +365,8 @@ func main() {
 		grpcServer,
 		newPlayerSocialRPCServer(runtime, authorization, gates, time.Now),
 	)
-	visitorZoneServer := newVisitorZoneRPCServer(visitorService, authorization, ownerZoneID)
-	visitorZoneServer.withFriendSagas(runtime, stealSaga, actionSaga)
+	visitorZoneServer := newVisitorZoneRPCServer(visitorService, ownerFarmClient, authorization, ownerZoneID)
+	visitorZoneServer.withRuntime(runtime)
 	rpcv1.RegisterVisitorZoneServiceServer(grpcServer, visitorZoneServer)
 	ownerFarmServer := newOwnerFarmRPCServer(ownerFarmService, authorization, gates, time.Now)
 	ownerFarmServer.withRuntime(runtime)
@@ -562,24 +517,8 @@ func sameDurableRoutes(a, b routing.Snapshot) bool {
 	return true
 }
 
-// runInteractionReconcileLoop drives the Phase 5 friend-interaction
-// Reconciler every interactionReconcileInterval, exactly like
-// cmd/friend's runReconcileLoop drives the friend-link Saga's Reconciler.
-func runInteractionReconcileLoop(ctx context.Context, reconciler *interaction.Reconciler, logger *slog.Logger) {
-	ticker := time.NewTicker(interactionReconcileInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := reconciler.ReconcileDue(ctx, time.Now()); err != nil {
-				logger.Error("friend interaction Saga reconcile failed", "error", err)
-			}
-		}
-	}
-}
-
+// runConnectionEvictionLoop sweeps expired connection leases every five
+// seconds until ctx is cancelled.
 func runConnectionEvictionLoop(ctx context.Context, registry *connection.Registry, logger *slog.Logger) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -591,6 +530,21 @@ func runConnectionEvictionLoop(ctx context.Context, registry *connection.Registr
 			removed := registry.EvictExpired(time.Now())
 			if len(removed) > 0 {
 				logger.Debug("evicted expired player connections", "count", len(removed))
+			}
+		}
+	}
+}
+
+func runActorIdleEvictionLoop(ctx context.Context, runtime *player.Runtime, logger *slog.Logger) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := runtime.EvictIdleActors(ctx, time.Now()); err != nil {
+				logger.Error("idle actor eviction failed", "error", err)
 			}
 		}
 	}

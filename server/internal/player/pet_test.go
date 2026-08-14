@@ -197,7 +197,7 @@ func TestDeployPetSwitchKeepsFoodTimer(t *testing.T) {
 	const playerID = uint64(45)
 	fixed := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return fixed }
+	runtime.SetNow(func() time.Time { return fixed })
 	defer runtime.Close()
 
 	// 激活 Actor 并补充金币，以便买下两只宠物。
@@ -285,7 +285,7 @@ func TestBuyPetFoodAndFeedExtendsActiveUntil(t *testing.T) {
 	const playerID = uint64(47)
 	fixed := time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return fixed }
+	runtime.SetNow(func() time.Time { return fixed })
 	defer runtime.Close()
 
 	buyFood, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, petRequest(

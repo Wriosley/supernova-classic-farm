@@ -454,7 +454,8 @@ func (r *Runtime) feedPet(
 	}, true
 }
 
-// evaluateStealGuard 在合法偷菜 apply 内执行一次护主判定；结果必须冻结进 receipt。
+// evaluateStealGuard 在合法偷菜 apply 内冻结护主结果：出战宠物一律 100% 触发，
+// 罚款金额随机 1~10 并写入 GuardPenaltyConfigured，重试不得重新抽取。
 func (r *Runtime) evaluateStealGuard(state *State, config *ConfigSnapshot, nowMS int64) *wsv1.StealGuardOutcome {
 	outcome := &wsv1.StealGuardOutcome{}
 	pet := state.PetState
@@ -467,15 +468,10 @@ func (r *Runtime) evaluateStealGuard(state *State, config *ConfigSnapshot, nowMS
 	}
 	outcome.PetId = pet.ActivePetId
 	outcome.PetConfigVersion = petCfg.ConfigVersion
-	outcome.GuardProbabilityBps = petCfg.GuardProbabilityBPS
-	outcome.GuardPenaltyConfigured = petCfg.GuardPenaltyCoins
-	if !petFoodActive(pet, nowMS) {
-		return outcome
-	}
-	outcome.FoodActive = true
-	if r.rollBPS() < petCfg.GuardProbabilityBPS {
-		outcome.GuardTriggered = true
-	}
+	outcome.GuardProbabilityBps = 10000
+	outcome.FoodActive = petFoodActive(pet, nowMS)
+	outcome.GuardTriggered = true
+	outcome.GuardPenaltyConfigured = int64(r.rollIntn(10) + 1)
 	return outcome
 }
 
@@ -484,6 +480,17 @@ func (r *Runtime) rollBPS() uint32 {
 		return r.randBPS() % 10000
 	}
 	return uint32(time.Now().UnixNano() % 10000)
+}
+
+// rollIntn 返回 [0, n)。n<=0 时返回 0。
+func (r *Runtime) rollIntn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	if r != nil && r.randIntn != nil {
+		return r.randIntn(n)
+	}
+	return int(time.Now().UnixNano() % int64(n))
 }
 
 func buyPetFingerprint(callerPlayerID uint64, request *wsv1.WsEnvelope, buy *wsv1.BuyPetRequest) [sha256.Size]byte {

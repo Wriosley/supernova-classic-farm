@@ -30,7 +30,7 @@ func TestApplyFriendTaskCreditMigratesCreditsAndFlushesSynchronously(t *testing.
 	store := &recordingCheckpointStore{state: friendTaskState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	relationID := relationIDFixture(0xAB)
@@ -78,7 +78,7 @@ func TestApplyFriendTaskCreditIsIdempotentOnRetry(t *testing.T) {
 	store := &recordingCheckpointStore{state: friendTaskState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	relationID := relationIDFixture(0xCD)
@@ -115,7 +115,7 @@ func TestApplyFriendTaskCreditRejectsInvalidRelationID(t *testing.T) {
 	store := &recordingCheckpointStore{state: friendTaskState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	if _, _, err := runtime.ApplyFriendTaskCredit(
@@ -134,7 +134,7 @@ func TestApplyFriendTaskCreditWithoutTargetTaskStillCreditsReceipt(t *testing.T)
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	relationID := relationIDFixture(0xEF)

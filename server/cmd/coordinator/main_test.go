@@ -46,10 +46,22 @@ func TestRoutingConfigurationFromEnvironment(t *testing.T) {
 	t.Setenv("ZONE_A_ENDPOINT", "http://127.0.0.1:9082")
 	t.Setenv("ZONE_B_ID", "zone-west")
 	t.Setenv("ZONE_B_ENDPOINT", "http://127.0.0.1:9084")
+	t.Setenv("ZONE_C_ID", "")
 	mode, zones, err = routingConfigurationFromEnvironment()
 	if err != nil || mode != routingModeStaticDualZone || len(zones) != 2 ||
 		zones[0].ZoneID != "zone-east" || zones[1].ZoneID != "zone-west" {
 		t.Fatalf("dual routing config = %q, %+v, %v", mode, zones, err)
+	}
+
+	t.Setenv("ZONE_C_ID", "zone-pool-uuid")
+	t.Setenv("ZONE_C_ENDPOINT", "http://zone-pool-0:8082")
+	extras := extraMoveTargetsFromEnvironment()
+	if len(extras) != 1 || extras[0].ZoneID != "zone-pool-uuid" || extras[0].Endpoint != "http://zone-pool-0:8082" {
+		t.Fatalf("extra move targets = %+v", extras)
+	}
+	mode, zones, err = routingConfigurationFromEnvironment()
+	if err != nil || len(zones) != 2 {
+		t.Fatalf("ZONE_C must not expand placement zones: %q %+v %v", mode, zones, err)
 	}
 
 	t.Setenv("ROUTING_MODE", "unknown")

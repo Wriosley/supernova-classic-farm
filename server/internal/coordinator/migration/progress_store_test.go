@@ -119,6 +119,35 @@ func TestProgressStoreRestartLoadCompleteAndAbandon(t *testing.T) {
 	}
 }
 
+func TestAbandonedProgressStopsBlockingTheNextMigration(t *testing.T) {
+	ctx := context.Background()
+	backend := newMemoryProgressBackend()
+	store, _ := NewProgressStore(backend)
+	first := sampleProgress(StepSourceDraining)
+	if err := store.Create(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Abandon(ctx, first); err != nil {
+		t.Fatalf("Abandon: %v", err)
+	}
+	if _, found, err := store.Get(ctx, first.ShardID); err != nil || found {
+		t.Fatalf("Get after Abandon = (%t, %v), want not found", found, err)
+	}
+
+	// A retargeted migration must be able to claim the same Shard afterwards.
+	retried := sampleProgress(StepSourceDraining)
+	retried.TransitionID = "44444444-4444-4444-8444-444444444444"
+	retried.Prepared.TransitionID = retried.TransitionID
+	retried.Prepared.OwnerEndpoint = "http://zone-b.internal:8082"
+	if err := store.Create(ctx, retried); err != nil {
+		t.Fatalf("Create after Abandon: %v", err)
+	}
+	loaded, found, err := store.Get(ctx, retried.ShardID)
+	if err != nil || !found || loaded.TransitionID != retried.TransitionID {
+		t.Fatalf("Get = (%+v, %t, %v)", loaded, found, err)
+	}
+}
+
 func sampleProgress(step Step) Progress {
 	updated := time.UnixMilli(1000).UTC()
 	return Progress{

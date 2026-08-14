@@ -74,7 +74,7 @@ func TestSellCropQuantityCompletesChapterAndPersists(t *testing.T) {
 	store := &recordingCheckpointStore{state: harvestedSellState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	request := sellQuantityRequest(
@@ -134,7 +134,7 @@ func TestSellAllResolvesFirstQuantityAndReplaysIt(t *testing.T) {
 	store := &recordingCheckpointStore{state: harvestedSellState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	request := sellAllRequest(
@@ -198,7 +198,7 @@ func TestSellCropRejectsPriceInventoryAndUnknownItems(t *testing.T) {
 			store := &recordingCheckpointStore{state: harvestedSellState(42, now)}
 			runtime := NewRuntime()
 			runtime.store = store
-			runtime.now = func() time.Time { return now }
+			runtime.SetNow(func() time.Time { return now })
 			defer runtime.Close()
 
 			response, err := runtime.Handle(

@@ -14,7 +14,7 @@ func TestBuildPublicFarmSnapshotStripsPrivateFieldsAndSetsSeqZero(t *testing.T) 
 	const ownerID = uint64(7)
 	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	snapshot, err := runtime.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch)
@@ -45,7 +45,7 @@ func TestBuildPublicFarmSnapshotEpochRotatesOnEachActorIncarnation(t *testing.T)
 	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 
 	first := NewRuntime()
-	first.now = func() time.Time { return now }
+	first.SetNow(func() time.Time { return now })
 	snapshot1, err := first.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch)
 	if err != nil {
 		t.Fatalf("first BuildPublicFarmSnapshot: %v", err)
@@ -63,7 +63,7 @@ func TestBuildPublicFarmSnapshotEpochRotatesOnEachActorIncarnation(t *testing.T)
 	// A brand new Runtime simulates a Zone restart: the Actor map is empty,
 	// so the next activation is a new incarnation and must mint a new epoch.
 	second := NewRuntime()
-	second.now = func() time.Time { return now }
+	second.SetNow(func() time.Time { return now })
 	defer second.Close()
 	snapshot2, err := second.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch)
 	if err != nil {
@@ -78,7 +78,7 @@ func TestBuildPublicFarmSnapshotRejectsMismatchedOwnerEpoch(t *testing.T) {
 	const ownerID = uint64(11)
 	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	if _, err := runtime.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch); err != nil {
@@ -101,7 +101,7 @@ func TestBuildPublicFarmSnapshotExposesDeployedPetOnly(t *testing.T) {
 	const ownerID = uint64(17)
 	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	empty, err := runtime.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch)

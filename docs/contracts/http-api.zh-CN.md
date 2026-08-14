@@ -53,7 +53,7 @@ related:
 | 请求/Ticket 签发 ID | `string` | 规范小写 UUID |
 | 账号名 | `string` | 3–32 个小写 ASCII 字符；首字符为 `a-z`，其余为 `a-z`、`0-9` 或 `_` |
 
-密码为 12–128 个 Unicode Scalar Value，不得 Trim 或 Unicode Normalize，只能通过密码校验器比较。拒绝 NUL 和无效 UTF-8。
+密码为 6–128 个 Unicode Scalar Value，不得 Trim 或 Unicode Normalize，只能通过密码校验器比较。拒绝 NUL 和无效 UTF-8。
 
 ### 2.3 关联 ID
 

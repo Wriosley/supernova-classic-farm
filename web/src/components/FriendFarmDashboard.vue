@@ -8,6 +8,7 @@ import type {
 import { PlotState } from '../gen/classicfarm/v1/ws/plot/plot_state_pb'
 import { matureCropSprite } from '../lib/crop-art'
 import { deployedPetFromPublic } from '../lib/pet-art'
+import type { PlotFloat } from '../lib/plot-floats'
 import FarmPetBadge from './FarmPetBadge.vue'
 
 import plotEmpty from '../../../frontend/src/assets/art/runtime/plots/empty.png'
@@ -29,9 +30,8 @@ const props = defineProps<{
   connected: boolean
   busy: boolean
   stealBusyPlotId?: number
-  notice: string
-  error: string
   nowMs: bigint
+  plotFloats?: PlotFloat[]
 }>()
 
 const emit = defineEmits<{
@@ -39,6 +39,7 @@ const emit = defineEmits<{
   pest: [plotId: number]
   catch: [plotId: number]
   clean: [plotId: number]
+  plotFeedback: [plotId: number, text: string]
   exit: []
   openProfile: []
 }>()
@@ -59,6 +60,10 @@ const toolOptions: Array<{ id: VisitTool; label: string; icon: string; hint: str
 
 function cropNameById(cropId: number): string {
   return props.cropCatalog.find((crop) => crop.cropId === cropId)?.name ?? `作物#${cropId}`
+}
+
+function floatsFor(plotId: number): PlotFloat[] {
+  return (props.plotFloats ?? []).filter((float) => float.plotId === plotId)
 }
 
 function canApplyPest(plot: PublicPlotView): boolean {
@@ -160,9 +165,27 @@ function plotMeta(plot: PublicPlotView): string {
 
 function clickPlot(plot: PublicPlotView): void {
   if (!props.connected || props.busy || props.stealBusyPlotId !== undefined) {
+    emit(
+      'plotFeedback',
+      plot.plotId,
+      props.connected ? '上一项操作仍在处理中。' : '实时连接已断开。',
+    )
     return
   }
   if (!isValidTarget(plot)) {
+    const text =
+      selectedTool.value === 'pest'
+        ? plot.plotState !== PlotState.GROWING
+          ? '只能对成长中的作物投虫。'
+          : '这块地已经有害虫。'
+        : selectedTool.value === 'catch'
+          ? plot.plotState !== PlotState.GROWING
+            ? '只能给成长中的作物捉虫。'
+            : '这块地没有害虫。'
+          : selectedTool.value === 'steal'
+            ? '这块地现在不能偷。'
+            : '这块地现在不能清理。'
+    emit('plotFeedback', plot.plotId, text)
     return
   }
   switch (selectedTool.value) {
@@ -187,23 +210,15 @@ function clickPlot(plot: PublicPlotView): void {
     <header class="farm-toolbar">
       <div>
         <p class="eyebrow">FRIEND FARM · PUBLIC PLOTS</p>
-        <h2>
-          <button type="button" class="owner-name" @click="emit('openProfile')">
-            {{ ownerLabel }}
-          </button>
-          的农场
-        </h2>
+        <h2>{{ ownerLabel }} 的农场</h2>
       </div>
-      <button type="button" class="primary" :disabled="busy" @click="emit('exit')">
-        离开农场
-      </button>
+      <div class="farm-toolbar__actions">
+        <button type="button" @click="emit('openProfile')">查看好友资料</button>
+        <button type="button" class="primary" :disabled="busy" @click="emit('exit')">
+          离开农场
+        </button>
+      </div>
     </header>
-
-    <p v-if="error" class="action-notice error-banner" role="alert">{{ error }}</p>
-    <p v-else-if="notice" class="action-notice success-banner" role="status">{{ notice }}</p>
-    <p v-else class="action-notice tool-feedback" role="status">
-      选择工具后点击地块：投虫 / 捉虫 / 偷菜 / 帮忙清理。
-    </p>
 
     <nav class="toolbelt game-panel" aria-label="串门工具栏">
       <div>
@@ -254,7 +269,6 @@ function clickPlot(plot: PublicPlotView): void {
                 valid: connected && !busy && stealBusyPlotId === undefined && isValidTarget(plot),
                 invalid: connected && !isValidTarget(plot),
               }"
-              :disabled="!isValidTarget(plot) || busy || stealBusyPlotId !== undefined"
               :aria-label="`好友地块 ${plot.plotId}，${plotPresentation(plot).label}`"
               @click="clickPlot(plot)"
             >
@@ -277,6 +291,16 @@ function clickPlot(plot: PublicPlotView): void {
                 <small>{{ plotMeta(plot) }}</small>
               </span>
               <span v-if="stealBusyPlotId === plot.plotId" class="plot-busy">处理中…</span>
+              <span v-if="floatsFor(plot.plotId).length" class="plot-floats" aria-hidden="true">
+                <span
+                  v-for="float in floatsFor(plot.plotId)"
+                  :key="float.id"
+                  class="plot-float"
+                  :class="float.tone"
+                >
+                  {{ float.text }}
+                </span>
+              </span>
             </button>
           </div>
           <p v-else class="empty-state">好友农场快照尚未加载。</p>
@@ -290,6 +314,12 @@ function clickPlot(plot: PublicPlotView): void {
 <style scoped>
 .friend-farm-dashboard .farm-layout {
   grid-template-columns: 1fr;
+}
+
+.farm-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .farm-yard {

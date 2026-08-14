@@ -29,8 +29,6 @@ function mountVisit(pet?: {
       cropCatalog: [],
       connected: true,
       busy: false,
-      notice: '',
-      error: '',
       nowMs: now,
     } as never,
   })
@@ -55,5 +53,15 @@ describe('friend farm pet badge', () => {
     expect(pet.find('.farm-pet__breed').text()).toBe('田园犬')
     expect(pet.find('.farm-pet__status').text()).toBe('田园犬护卫中（时间：00:01:05）')
     expect(pet.find('.farm-pet__art').attributes('src')).toContain('village-dog.png')
+  })
+})
+
+describe('friend farm plot feedback', () => {
+  it('emits a plot float message when the selected action cannot target the plot', async () => {
+    const wrapper = mountVisit()
+    await wrapper.find('.plot-tile').trigger('click')
+
+    expect(wrapper.find('.action-notice').exists()).toBe(false)
+    expect(wrapper.emitted('plotFeedback')).toEqual([[1, '这块地现在不能偷。']])
   })
 })

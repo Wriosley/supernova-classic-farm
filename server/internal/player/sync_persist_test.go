@@ -37,7 +37,7 @@ func (s *flakyCheckpointStore) SaveCAS(
 func flakyRuntime(store CheckpointStore, now time.Time) *Runtime {
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	return runtime
 }
 

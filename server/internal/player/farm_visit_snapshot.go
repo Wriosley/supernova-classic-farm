@@ -42,7 +42,7 @@ func (r *Runtime) BuildPublicFarmSnapshot(
 	shardID := routing.ShardForPlayer(ownerPlayerID)
 	r.shardLocks[shardID].RLock()
 	defer r.shardLocks[shardID].RUnlock()
-	serverNow := r.now()
+	serverNow := r.currentTime()
 	a, err := r.actorFor(ctx, ownerPlayerID, ownerEpoch)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func (r *Runtime) BuildPublicFarmSnapshot(
 		}
 		snapshot = publicFarmSnapshot(
 			ownerPlayerID, a.farmViewEpoch, a.farmViewSeq, a.state.Plots, careerView(a.state),
-			a.state.PetState, r.config.Load(),
+			compendiumView(a.state), a.state.PetState, r.config.Load(),
 		)
 	})
 	if err != nil {
@@ -78,6 +78,7 @@ func (r *Runtime) BuildPublicFarmSnapshot(
 	if len(maturityEvents) > 0 {
 		_ = r.forwardMaturityEvents(ctx, maturityEvents)
 	}
+	r.refreshActorDeadline(ownerPlayerID, a)
 	return snapshot, nil
 }
 
@@ -92,6 +93,7 @@ func publicFarmSnapshot(
 	farmViewSeq uint64,
 	plots map[uint32]*Plot,
 	career *wsv1.PlayerCareerView,
+	compendium *wsv1.CropCompendiumView,
 	pet *datav1.PetStateRecord,
 	config *ConfigSnapshot,
 ) *wsv1.FarmVisitSnapshot {
@@ -107,15 +109,19 @@ func publicFarmSnapshot(
 	if career == nil {
 		career = &wsv1.PlayerCareerView{}
 	}
+	if compendium == nil {
+		compendium = &wsv1.CropCompendiumView{}
+	}
 	return &wsv1.FarmVisitSnapshot{
 		OwnerPlayerId: ownerPlayerID,
 		Version: &wsv1.FarmViewVersion{
 			FarmViewEpoch: append([]byte(nil), farmViewEpoch...),
 			FarmViewSeq:   farmViewSeq,
 		},
-		Plots:  views,
-		Career: career,
-		Pet:    publicPetView(pet, config),
+		Plots:          views,
+		Career:         career,
+		CropCompendium: compendium,
+		Pet:            publicPetView(pet, config),
 	}
 }
 

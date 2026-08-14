@@ -64,8 +64,8 @@ func (h *lifecycleHandler) drain(w http.ResponseWriter, r *http.Request) {
 
 	h.gates.locks[shardID].Lock()
 	defer h.gates.locks[shardID].Unlock()
-	if existing := h.drainTransition[shardID]; existing != "" &&
-		(existing != request.TransitionID || h.drainEpoch[shardID] != ownerEpoch) {
+	existing := h.drainTransition[shardID]
+	if existing != "" && h.drainEpoch[shardID] != ownerEpoch {
 		writeError(w, http.StatusConflict, "DRAIN_TRANSITION_CONFLICT")
 		return
 	}
@@ -74,7 +74,11 @@ func (h *lifecycleHandler) drain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "NOT_OWNER")
 		return
 	}
-	if h.drainEpoch[shardID] != ownerEpoch {
+	// A different transition within the same owner generation means the
+	// Coordinator abandoned the previous one before the Fence advanced. Taking
+	// the marker over keeps the Shard drained, whereas refusing would leave it
+	// drained and unmovable until this process restarts.
+	if h.drainEpoch[shardID] != ownerEpoch || existing != request.TransitionID {
 		h.drainCompleted[shardID] = false
 		h.drainManifests[shardID] = nil
 		h.drainEpoch[shardID] = ownerEpoch

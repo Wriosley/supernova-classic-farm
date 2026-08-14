@@ -108,7 +108,7 @@ func TestActorActivationMaterializesOfflineMaturityAndFlushesIt(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return plantedAt.Add(101 * time.Second) }
+	runtime.SetNow(func() time.Time { return plantedAt.Add(101 * time.Second) })
 	defer runtime.Close()
 
 	response, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
@@ -136,7 +136,6 @@ func TestActorActivationMaterializesOfflineMaturityAndFlushesIt(t *testing.T) {
 func TestOnlineSchedulerMaterializesDuePlot(t *testing.T) {
 	const playerID = uint64(42)
 	plantedAt := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
-	currentTime := plantedAt
 	state := NewDevelopmentState(playerID)
 	state.CreatedAtMS = plantedAt.UnixMilli()
 	state.UpdatedAtMS = plantedAt.UnixMilli()
@@ -149,7 +148,7 @@ func TestOnlineSchedulerMaterializesDuePlot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime.now = func() time.Time { return currentTime }
+	runtime.SetNow(func() time.Time { return plantedAt })
 	var pushes []*wsv1.WsEnvelope
 	if err := runtime.SetPushForwarder(pushForwarderFunc(func(_ context.Context, envelope *wsv1.WsEnvelope) error {
 		pushes = append(pushes, envelope)
@@ -163,10 +162,8 @@ func TestOnlineSchedulerMaterializesDuePlot(t *testing.T) {
 		snapshotRequest(playerID, "activate-growing")); err != nil {
 		t.Fatal(err)
 	}
-	currentTime = plantedAt.Add(101 * time.Second)
-	if err := runtime.materializeOnlineMaturities(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	runtime.SetNow(func() time.Time { return plantedAt.Add(101 * time.Second) })
+	runtime.fireDueDeadlines(context.Background())
 	response, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
 		snapshotRequest(playerID, "after-online-maturity"))
 	if err != nil {

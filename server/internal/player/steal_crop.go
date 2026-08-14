@@ -65,7 +65,7 @@ func (r *Runtime) ReserveSteal(
 	if err != nil {
 		return false, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepReserveSteal, interactionID)
 	var mailboxErr error
 	if execErr := a.mailbox.Do(ctx, func() {
@@ -207,7 +207,7 @@ func (r *Runtime) ApplyStealOnOwner(
 	if err != nil {
 		return nil, nil, nil, false, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepApplyStealOnOwner, interactionID)
 
 	var mutated bool
@@ -283,6 +283,7 @@ func (r *Runtime) ApplyStealOnOwner(
 	if !owedChanges.Empty() {
 		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, owedChanges)
 	}
+	r.refreshActorDeadline(ownerID, a)
 	return resultPayload, resultDigest, farmPatch, alreadyApplied, nil
 }
 
@@ -318,7 +319,7 @@ func (r *Runtime) CommitSteal(
 	if err != nil {
 		return nil, false, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepCommitSteal, interactionID)
 
 	var mutated bool
@@ -492,7 +493,7 @@ func (r *Runtime) ReleaseSteal(
 	if err != nil {
 		return err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepReleaseSteal, interactionID)
 	if execErr := a.mailbox.Do(ctx, func() {
 		for _, reservation := range a.state.FriendReservations {

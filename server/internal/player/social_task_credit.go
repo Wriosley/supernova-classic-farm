@@ -50,7 +50,7 @@ func (r *Runtime) ApplyFriendTaskCredit(
 	if err != nil {
 		return false, 0, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepFriendTaskCredit, relationID)
 	var mailboxErr error
 	if err := a.mailbox.Do(ctx, func() {

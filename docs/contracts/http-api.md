@@ -52,7 +52,7 @@ The four security objects are distinct:
 | request/ticket issue ID | `string` | Canonical lowercase UUID |
 | account name | `string` | 3–32 lowercase ASCII characters; first is `a-z`, remaining are `a-z`, `0-9`, or `_` |
 
-Passwords are 12–128 Unicode scalar values, MUST NOT be trimmed or Unicode-normalized, and MUST be compared only through the password verifier. NUL and invalid UTF-8 are rejected.
+Passwords are 6–128 Unicode scalar values, MUST NOT be trimmed or Unicode-normalized, and MUST be compared only through the password verifier. NUL and invalid UTF-8 are rejected.
 
 ### 2.3 Correlation
 

@@ -65,6 +65,12 @@ func (store *DurableProgressStore) Get(ctx context.Context, shardID uint32) (Pro
 	if err != nil || !found {
 		return Progress{}, found, err
 	}
+	// Backends keep terminal rows behind as history, so only an OPEN row
+	// describes an in-flight migration. Reporting an ABANDONED row here would
+	// make every freshly planned task for the Shard conflict forever.
+	if row.Status != routing.MigrationStatusOpen {
+		return Progress{}, false, nil
+	}
 	progress, err := progressFromRecord(row)
 	return progress, err == nil, err
 }

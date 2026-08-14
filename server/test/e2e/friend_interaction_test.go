@@ -36,6 +36,45 @@ type friendPlayer struct {
 	conn     *websocket.Conn
 }
 
+// TestFriendGiftRedDotLatency measures the two user-visible boundaries of the
+// durable gift path: sender acknowledgement and recipient red-dot push.
+func TestFriendGiftRedDotLatency(t *testing.T) {
+	if os.Getenv("E2E_RUN") != "1" || os.Getenv("E2E_SUITE") != "friend-gift-latency" {
+		t.Skip("set E2E_RUN=1 E2E_SUITE=friend-gift-latency")
+	}
+	sender := loginFriendPlayer(t, os.Getenv("E2E_GIFT_SENDER_ACCOUNT"))
+	recipient := loginFriendPlayer(t, os.Getenv("E2E_GIFT_RECIPIENT_ACCOUNT"))
+	sender.conn = authenticateFriendPlayer(t, sender)
+	recipient.conn = authenticateFriendPlayer(t, recipient)
+	t.Cleanup(func() {
+		_ = sender.conn.Close(websocket.StatusNormalClosure, "done")
+		_ = recipient.conn.Close(websocket.StatusNormalClosure, "done")
+	})
+	loadOwnSnapshot(t, sender)
+	loadOwnSnapshot(t, recipient)
+
+	requestID := newUUID(t)
+	started := time.Now()
+	writeEnvelope(t, sender.conn, &wsv1.WsEnvelope{
+		ProtocolVersion: 1, MessageKind: wsv1.MessageKind_REQUEST,
+		Action: wsv1.Action_SEND_FRIEND_GIFT, RequestId: requestID, TargetPlayerId: sender.id,
+		Payload: &wsv1.WsEnvelope_SendFriendGiftRequest{SendFriendGiftRequest: &wsv1.SendFriendGiftRequest{
+			RecipientPlayerId: recipient.id, CropItemId: 1002, Quantity: 1,
+		}},
+	})
+	response := readMatchingResponse(t, sender.conn, requestID, friendInteractionTimeout)
+	if response.GetError() != nil {
+		t.Fatalf("SEND_FRIEND_GIFT failed: %+v", response)
+	}
+	ackAt := time.Now()
+	push := readMatchingPush(t, recipient.conn, wsv1.Action_RED_DOT_CHANGED, 10*time.Second)
+	if push.GetRedDotChangedPush().GetCategory() != wsv1.RedDotCategory_RED_DOT_CATEGORY_MAIL {
+		t.Fatalf("unexpected red dot: %+v", push)
+	}
+	t.Logf("SEND_FRIEND_GIFT response latency=%s red-dot latency=%s post-response=%s",
+		ackAt.Sub(started), time.Since(started), time.Since(ackAt))
+}
+
 // TestFriendInteraction covers acceptance checklist §6 through a three-client
 // WebSocket session against a live dual-Zone + FriendSvr stack:
 // friend link, dual visit + presence, pest/catch/steal/help-clean, view sync,
@@ -122,10 +161,12 @@ func TestFriendInteraction(t *testing.T) {
 	if cropItemID == 0 {
 		t.Fatal("visit snapshot missing crop_item_id for steal plot")
 	}
+	stealStarted := time.Now()
 	stealResponse := stealFriendCrop(
 		t, visitorA, owner.id, visitA.GetVisitId(), friendPlotID,
 		cropItemID, visitSnap.GetVersion().GetFarmViewEpoch(), visitSnap.GetVersion().GetFarmViewSeq(),
 	)
+	t.Logf("STEAL_FRIEND_CROP end-to-end latency=%s", time.Since(stealStarted))
 	if stealResponse.GetVisitorPatch() == nil {
 		t.Fatalf("steal missing visitor patch: %+v", stealResponse)
 	}

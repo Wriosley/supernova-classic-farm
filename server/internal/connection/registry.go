@@ -119,6 +119,13 @@ func (r *Registry) List(playerID uint64) []PlayerConnection {
 	return out
 }
 
+// Has reports whether playerID currently has at least one registered connection.
+func (r *Registry) Has(playerID uint64) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.players[playerID]) > 0
+}
+
 // EvictExpired removes leases that are not strictly after now.
 func (r *Registry) EvictExpired(now time.Time) []PlayerConnection {
 	r.mu.Lock()

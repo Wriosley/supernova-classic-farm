@@ -82,18 +82,6 @@ button:disabled {
   padding: 0.3rem 0.3rem 0;
 }
 
-button.owner-name {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  font-weight: 800;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
 .sell-crop-picker {
   display: grid;
   gap: 0.35rem;
@@ -325,6 +313,71 @@ button.owner-name {
   color: white;
   font-size: 0.68rem;
   transform: translate(-50%, -50%);
+}
+
+.plot-floats {
+  position: absolute;
+  inset: 38% 0 auto;
+  z-index: 6;
+  display: grid;
+  gap: 0.1rem;
+  justify-items: center;
+  pointer-events: none;
+}
+
+.plot-float {
+  padding: 0.1rem 0.35rem;
+  border-radius: 99rem;
+  background: rgb(36 54 31 / 82%);
+  color: #f6ffe8;
+  font-size: 0.62rem;
+  font-weight: 900;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgb(28 44 22 / 75%);
+  animation: plot-float-rise 1.6s ease-out forwards;
+}
+
+.plot-float.error {
+  background: rgb(126 48 40 / 88%);
+}
+
+.plot-float.persistent {
+  background: rgb(72 112 56 / 90%);
+  animation: none;
+}
+
+@keyframes plot-float-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0.4rem) scale(0.9);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-1.6rem) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plot-float {
+    animation: plot-float-fade 1.6s ease-out forwards;
+  }
+
+  @keyframes plot-float-fade {
+    0%,
+    70% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+    }
+  }
 }
 
 .plot-stage {

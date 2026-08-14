@@ -10,7 +10,6 @@ import (
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/interaction"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
@@ -69,17 +68,6 @@ func newStealOwnerRuntime(t *testing.T, ownerID uint64, plotID uint32) *player.R
 	return runtime
 }
 
-func newStealVisitorRuntime(t *testing.T, visitorID uint64) *player.Runtime {
-	t.Helper()
-	state := player.NewDevelopmentState(visitorID)
-	runtime, err := player.NewRuntimeWithStore(&stealTestCheckpointStore{state: state})
-	if err != nil {
-		t.Fatalf("NewRuntimeWithStore: %v", err)
-	}
-	t.Cleanup(runtime.Close)
-	return runtime
-}
-
 type noopPresencePublisher struct{}
 
 func (noopPresencePublisher) PublishFarmPresence(context.Context, uint64, *wsv1.FarmPresencePush) error {
@@ -110,14 +98,13 @@ func localOwnerRoute(ownerID uint64) *rpcv1.CommittedRoute {
 	}
 }
 
-// TestZoneStealFriendCropEndToEnd exercises the full Phase 5 wiring this
-// package owns: ExecuteFriendAction (visitor Zone) driving the interaction
-// Saga, which calls ApplyVisitorAction (owner Zone) to mutate the owner's
-// plot, and back to CommitSteal crediting the visitor's inventory.
+// TestZoneStealFriendCropEndToEnd exercises visitor ExecuteFriendAction
+// calling owner ApplyVisitorAction directly: owner plot is mutated and the
+// visitor receives success without a FriendInteraction Saga or visitor
+// inventory credit on this path.
 func TestZoneStealFriendCropEndToEnd(t *testing.T) {
 	const ownerID, visitorID, plotID = uint64(201), uint64(202), uint32(1)
 	ownerRuntime := newStealOwnerRuntime(t, ownerID, plotID)
-	visitorRuntime := newStealVisitorRuntime(t, visitorID)
 
 	ownerService, err := visit.NewOwnerService(ownerRuntime, noopPresencePublisher{}, time.Now)
 	if err != nil {
@@ -135,12 +122,9 @@ func TestZoneStealFriendCropEndToEnd(t *testing.T) {
 	ownerFarmServer.withRuntime(ownerRuntime)
 	ownerClient := &loopbackOwnerFarmClient{server: ownerFarmServer, route: localOwnerRoute(ownerID)}
 
-	stealSaga, err := interaction.NewStealSaga(interaction.NewMemoryStore(), visitorRuntime, ownerClient)
-	if err != nil {
-		t.Fatalf("NewStealSaga: %v", err)
-	}
-	visitorZoneServer := newVisitorZoneRPCServer(nil, localAuthorization{}, routing.DefaultZoneID)
-	visitorZoneServer.withStealSaga(visitorRuntime, stealSaga)
+	visitorRuntime := newStealOwnerRuntime(t, visitorID, plotID) // any durable visitor state
+	visitorZoneServer := newVisitorZoneRPCServer(nil, ownerClient, localAuthorization{}, routing.DefaultZoneID)
+	visitorZoneServer.withRuntime(visitorRuntime)
 
 	snap, err := ownerRuntime.BuildPublicFarmSnapshot(ctx, ownerID, player.LocalOwnerEpoch)
 	if err != nil {
@@ -161,8 +145,11 @@ func TestZoneStealFriendCropEndToEnd(t *testing.T) {
 	if response.GetError() != nil {
 		t.Fatalf("ExecuteFriendAction returned domain error: %+v", response.GetError())
 	}
-	if response.GetResult().GetVisitorPatch().GetInventoryUpserts()[0].GetQuantity() != 1 {
-		t.Fatalf("expected visitor inventory patch quantity=1, got %+v", response.GetResult().GetVisitorPatch())
+	if response.GetResult() == nil || len(response.GetResult().GetInteractionId()) != 16 {
+		t.Fatalf("expected steal result with interaction_id, got %+v", response.GetResult())
+	}
+	if response.GetResult().GetFarmPatch() == nil {
+		t.Fatal("expected owner farm_patch on successful steal")
 	}
 
 	// Retrying the identical request_id must replay without mutating again.
@@ -175,23 +162,35 @@ func TestZoneStealFriendCropEndToEnd(t *testing.T) {
 	}
 }
 
-func TestZoneStealFriendCropRejectsUnsupportedAction(t *testing.T) {
-	visitorZoneServer := newVisitorZoneRPCServer(nil, localAuthorization{}, routing.DefaultZoneID)
-	response, err := visitorZoneServer.ExecuteFriendAction(context.Background(), &rpcv1.ExecuteFriendActionRequest{
+func TestZoneFriendActionRequiresPestIDForApplyPest(t *testing.T) {
+	visitorZoneServer := newVisitorZoneRPCServer(nil, stubOwnerFarmClient{}, localAuthorization{}, routing.DefaultZoneID)
+	runtime := player.NewRuntime()
+	t.Cleanup(runtime.Close)
+	visitorZoneServer.withRuntime(runtime)
+	_, err := visitorZoneServer.ExecuteFriendAction(context.Background(), &rpcv1.ExecuteFriendActionRequest{
 		CallerPlayerId: 1, OwnerPlayerId: 2, VisitId: make([]byte, 16),
 		GateId: "local-gateway", RequestId: "00112233-4455-6677-8899-aabbccddeeff",
 		Action: datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND, PlotId: 1,
 	})
-	if err != nil {
-		t.Fatalf("ExecuteFriendAction: %v", err)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status = %v, want InvalidArgument", status.Code(err))
 	}
-	if response.GetError().GetCode() != wsv1.ErrorCode_UNKNOWN_ACTION {
-		t.Fatalf("expected UNKNOWN_ACTION, got %+v", response.GetError())
+}
+
+func TestZoneFriendActionUnavailableWithoutRuntime(t *testing.T) {
+	visitorZoneServer := newVisitorZoneRPCServer(nil, stubOwnerFarmClient{}, localAuthorization{}, routing.DefaultZoneID)
+	_, err := visitorZoneServer.ExecuteFriendAction(context.Background(), &rpcv1.ExecuteFriendActionRequest{
+		CallerPlayerId: 1, OwnerPlayerId: 2, VisitId: make([]byte, 16),
+		GateId: "local-gateway", RequestId: "00112233-4455-6677-8899-aabbccddeeff",
+		Action: datav1.FriendInteractionAction_CATCH_PEST_FOR_FRIEND, PlotId: 1,
+	})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("status = %v, want Unavailable", status.Code(err))
 	}
 }
 
 func TestZoneStealFriendCropRejectsInvalidArgs(t *testing.T) {
-	visitorZoneServer := newVisitorZoneRPCServer(nil, localAuthorization{}, routing.DefaultZoneID)
+	visitorZoneServer := newVisitorZoneRPCServer(nil, stubOwnerFarmClient{}, localAuthorization{}, routing.DefaultZoneID)
 	tests := []*rpcv1.ExecuteFriendActionRequest{
 		nil,
 		{CallerPlayerId: 0, OwnerPlayerId: 2, VisitId: make([]byte, 16), GateId: "g", RequestId: "r", PlotId: 1},
@@ -208,12 +207,13 @@ func TestZoneStealFriendCropRejectsInvalidArgs(t *testing.T) {
 	}
 }
 
-func TestZoneStealFriendCropUnavailableWithoutSagaWiring(t *testing.T) {
-	visitorZoneServer := newVisitorZoneRPCServer(nil, localAuthorization{}, routing.DefaultZoneID)
+func TestZoneStealFriendCropUnavailableWithoutOwnerClient(t *testing.T) {
+	visitorZoneServer := newVisitorZoneRPCServer(nil, nil, localAuthorization{}, routing.DefaultZoneID)
 	_, err := visitorZoneServer.ExecuteFriendAction(context.Background(), &rpcv1.ExecuteFriendActionRequest{
 		CallerPlayerId: 1, OwnerPlayerId: 2, VisitId: make([]byte, 16),
 		GateId: "local-gateway", RequestId: "00112233-4455-6677-8899-aabbccddeeff",
 		Action: datav1.FriendInteractionAction_STEAL_FRIEND_CROP, PlotId: 1,
+		ExpectedCropItemId: 4001, FarmViewEpoch: make([]byte, 16),
 	})
 	if status.Code(err) != codes.Unavailable {
 		t.Fatalf("status = %v, want Unavailable", status.Code(err))

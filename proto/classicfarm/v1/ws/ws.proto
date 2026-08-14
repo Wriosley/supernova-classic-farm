@@ -523,9 +523,11 @@ message FarmVisitSnapshot {
   uint64 owner_player_id = 1;
   FarmViewVersion version = 2;
   repeated PublicPlotView plots = 3;
-  // 访客可见的公开生涯；不含私有图鉴。
+  // 访客可见的公开生涯。
   PlayerCareerView career = 4;
   PublicPetView pet = 5;
+  // 访客可见的图鉴解锁列表；只含已点亮 crop_id，不含其它私有进度。
+  CropCompendiumView crop_compendium = 6;
 }
 
 message FarmViewPatch {
@@ -538,12 +540,19 @@ enum FarmPresenceKind {
   FARM_PRESENCE_KIND_UNSPECIFIED = 0;
   FARM_VISITOR_ENTERED = 1;
   FARM_VISITOR_LEFT = 2;
+  FARM_CROP_STOLEN = 3;
 }
 
 message FarmPresencePush {
   uint64 owner_player_id = 1;
   FarmPresenceKind kind = 2;
   optional string visitor_account_name = 3;
+  optional uint64 visitor_player_id = 4;
+  optional uint32 plot_id = 5;
+  optional uint32 crop_item_id = 6;
+  optional uint32 quantity = 7;
+  optional bool guard_triggered = 8;
+  optional int64 guard_penalty = 9;
 }
 
 enum RedDotCategory {

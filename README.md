@@ -89,6 +89,75 @@ Kubernetes 最小集群的构建、Secret、部署和排错命令见：
 docs/study/tasks/18-Kubernetes固定双Zone部署入门/00-固定双Zone集群部署与查看.md
 ```
 
+### 本机 H5 连接 kind 集群
+
+当 Go 后端运行在本机 kind 集群、H5 使用 `npm run dev` 在宿主机运行时，
+Vite 需要两条独立的本机转发：`/v1` HTTP 请求发往 Login，`/ws`
+WebSocket 请求发往 Gate。
+
+先确认集群和服务可用：
+
+```bash
+kubectl config current-context
+kubectl -n classic-farm get pods
+kubectl -n classic-farm get service login gate
+```
+
+保持第一个终端运行，将 Login HTTP 转发到 `.env` 默认使用的 `18080`：
+
+```bash
+kubectl -n classic-farm port-forward service/login 18080:8080
+```
+
+保持第二个终端运行，将 Gate WebSocket 转发到 `.env` 默认使用的
+`8081`：
+
+```bash
+kubectl -n classic-farm port-forward service/gate 8081:8081
+```
+
+仓库根目录 `.env` 应包含与上述端口一致的配置：
+
+```dotenv
+LOGIN_PORT=18080
+GATE_PORT=8081
+```
+
+第三个终端启动 H5：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+浏览器访问 `http://localhost:5173`。可以先验证 HTTP 转发：
+
+```bash
+curl -i -H 'Origin: http://localhost:5173' \
+  http://127.0.0.1:18080/v1/auth/csrf
+```
+
+返回 `HTTP/1.1 200 OK` 表示 Login HTTP 路径可用。WebSocket 由浏览器经
+Vite 的 `/ws` 代理访问 `127.0.0.1:8081`；不需要转发 Coordinator，也
+不应让浏览器直接连接 Zone。
+
+两条 `kubectl port-forward` 都是前台长驻进程，任意一个终端退出都会
+中断对应连接。常见错误含义：
+
+- `/v1/auth/csrf` 出现 `ECONNREFUSED 127.0.0.1:18080`：Login 转发未运行；
+- Vite 出现 `ws proxy error` 或 `ECONNREFUSED 127.0.0.1:8081`：Gate
+  WebSocket 转发未运行；
+- 提示 `address already in use`：对应端口已有进程监听，先验证现有转发，
+  不要重复启动；
+- WebSocket 在认证前以 `1006` 关闭：优先检查 `8081` 转发以及 Gate Pod
+  是否 Ready。
+
+如果 H5 部署在另一台服务器上，应在那台服务器上配置可访问集群的
+`kubectl`/kubeconfig，并在那里运行上述转发和 Vite；这只是开发方式。
+长期对外部署应改用 Ingress 或受控的反向代理，而不是长期依赖
+`kubectl port-forward`。
+
 MySQL 仅作为保留的基线和回退路径。需要运行该基线时，启动 MySQL
 并应用迁移：
 

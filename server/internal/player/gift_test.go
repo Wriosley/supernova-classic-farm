@@ -29,7 +29,7 @@ func TestSendFriendGiftDeductsAndWritesOutbox(t *testing.T) {
 	store := &recordingCheckpointStore{state: harvestedSellState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	requestID := "11111111-1111-4111-8111-111111111111"
@@ -83,7 +83,7 @@ func TestSendFriendGiftRejectsSelfAndNonCrop(t *testing.T) {
 	store := &recordingCheckpointStore{state: harvestedSellState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	self := giftRequest(playerID, playerID, "22222222-2222-4222-8222-222222222222", 1002, 1)
@@ -105,7 +105,7 @@ func TestSendFriendGiftRequestIDConflict(t *testing.T) {
 	store := &recordingCheckpointStore{state: harvestedSellState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	requestID := "44444444-4444-4444-8444-444444444444"

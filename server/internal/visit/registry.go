@@ -185,6 +185,22 @@ func (r *Registry) ListVisitors(owner uint64) []VisitRecord {
 	return result
 }
 
+// HasVisitors reports whether owner currently has at least one unexpired visit.
+func (r *Registry) HasVisitors(ownerPlayerID uint64, now time.Time) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ow := r.owners[ownerPlayerID]
+	if ow == nil {
+		return false
+	}
+	for _, record := range ow.byVisitor {
+		if record.ExpiresAt.After(now) {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Registry) lookupLocked(owner, visitor uint64, visitID []byte) (*VisitRecord, *ownerVisits) {
 	ow := r.owners[owner]
 	if ow == nil {

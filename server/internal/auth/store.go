@@ -119,7 +119,7 @@ func ValidateCredentials(name, password string) bool {
 		return false
 	}
 	count := utf8.RuneCountInString(password)
-	return count >= 12 && count <= 128 && !containsNUL(password)
+	return count >= 6 && count <= 128 && !containsNUL(password)
 }
 
 func containsNUL(value string) bool {

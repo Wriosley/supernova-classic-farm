@@ -12,7 +12,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [panel: PanelId]
-  openProfile: []
 }>()
 
 function redDot(panel: PanelId): boolean {
@@ -30,9 +29,7 @@ function redDot(panel: PanelId): boolean {
 <template>
   <header class="top-nav">
     <div class="top-nav__identity">
-      <button type="button" class="top-nav__name" @click="emit('openProfile')">
-        {{ accountName || '玩家' }}
-      </button>
+      <span class="top-nav__name">{{ accountName || '玩家' }}</span>
       <span class="top-nav__wallet">
         <img class="pixel-art" :src="coinIcon" alt="" />
         <strong>{{ coinBalance?.toString() ?? '—' }}</strong>
@@ -80,14 +77,9 @@ function redDot(panel: PanelId): boolean {
 }
 
 .top-nav__name {
-  padding: 0;
-  border: none;
-  background: transparent;
   color: #24361f;
   font-size: 1rem;
   font-weight: 800;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
 }
 
 .top-nav__wallet {

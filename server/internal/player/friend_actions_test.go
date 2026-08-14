@@ -70,7 +70,8 @@ func TestApplyPestSuccessReplayAndAlreadyPresent(t *testing.T) {
 	state.Plots[1] = friendGrowingPlotAt(1, now)
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
-	runtime.store, runtime.now = store, func() time.Time { return now }
+	runtime.store = store
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	id := interactionIDFixture(0x41)
@@ -110,7 +111,8 @@ func TestCatchOwnPestForbidden(t *testing.T) {
 	}
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
-	runtime.store, runtime.now = store, func() time.Time { return now }
+	runtime.store = store
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 	if _, _, _, _, err := runtime.ApplyCatchPestOnOwner(
 		context.Background(), ownerID, LocalOwnerEpoch, visitorID,
@@ -129,7 +131,8 @@ func TestHelpCleanSuccessAndApplyPestTaskOnce(t *testing.T) {
 	ownerState.Plots[1] = &Plot{ID: 1, State: plotv1.PlotState_NEED_CLEANUP}
 	ownerStore := &recordingCheckpointStore{state: ownerState}
 	ownerRuntime := NewRuntime()
-	ownerRuntime.store, ownerRuntime.now = ownerStore, func() time.Time { return now }
+	ownerRuntime.store = ownerStore
+	ownerRuntime.SetNow(func() time.Time { return now })
 	defer ownerRuntime.Close()
 	if _, _, _, _, err := ownerRuntime.ApplyHelpCleanOnOwner(
 		context.Background(), 11, LocalOwnerEpoch, 7, interactionIDFixture(0x61), 1,
@@ -144,7 +147,8 @@ func TestHelpCleanSuccessAndApplyPestTaskOnce(t *testing.T) {
 	visitorState.Tasks = []Task{{ID: applyPestTaskID, Target: 1}}
 	visitorStore := &recordingCheckpointStore{state: visitorState}
 	visitorRuntime := NewRuntime()
-	visitorRuntime.store, visitorRuntime.now = visitorStore, func() time.Time { return now }
+	visitorRuntime.store = visitorStore
+	visitorRuntime.SetNow(func() time.Time { return now })
 	defer visitorRuntime.Close()
 	id := interactionIDFixture(0x62)
 	action := datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND

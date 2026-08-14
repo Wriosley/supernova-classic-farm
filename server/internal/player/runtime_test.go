@@ -187,8 +187,7 @@ func TestHandleReturnsCorrelatedInitialSnapshot(t *testing.T) {
 	runtime := NewRuntime()
 	defer runtime.Close()
 	fixedTime := time.UnixMilli(1_753_888_000_123)
-	runtime.now = func() time.Time { return fixedTime }
-
+	runtime.SetNow(func() time.Time { return fixedTime })
 	response, err := runtime.Handle(context.Background(), 42, LocalOwnerEpoch, snapshotRequest(42, "request-42"))
 	if err != nil {
 		t.Fatalf("Handle() error = %v", err)
@@ -522,9 +521,9 @@ func TestBuySeedsIsIdempotentAndFlushesCheckpointCAS(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time {
+	runtime.SetNow(func() time.Time {
 		return fixedNow
-	}
+	})
 	defer runtime.Close()
 
 	requestID := "00112233-4455-6677-8899-aabbccddeeff"
@@ -674,7 +673,7 @@ func TestPlantIsIdempotentAndBatchesWithBuyInOneCheckpoint(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return fixedNow }
+	runtime.SetNow(func() time.Time { return fixedNow })
 	defer runtime.Close()
 
 	if _, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
@@ -740,7 +739,7 @@ func TestPlantFreezesStealFieldsAndRoundTripsThroughCheckpoint(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return fixedNow }
+	runtime.SetNow(func() time.Time { return fixedNow })
 	defer runtime.Close()
 
 	response, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
@@ -805,7 +804,7 @@ func TestApplyFertilizerSettlesOldRateAndPersistsEffect(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return fixedNow }
+	runtime.SetNow(func() time.Time { return fixedNow })
 	defer runtime.Close()
 
 	if _, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,

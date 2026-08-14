@@ -97,7 +97,7 @@ func TestReserveStealAppendsReservationAndIsIdempotent(t *testing.T) {
 	store := &recordingCheckpointStore{state: developmentStateAt(visitorID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	interactionID := interactionIDFixture(0x01)
@@ -138,7 +138,7 @@ func TestReserveStealRejectsConflictingRetry(t *testing.T) {
 	store := &recordingCheckpointStore{state: developmentStateAt(visitorID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	interactionID := interactionIDFixture(0x02)
@@ -160,7 +160,7 @@ func TestReserveStealRejectsOverStackLimit(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	if _, err := runtime.ReserveSteal(
@@ -184,7 +184,7 @@ func TestReserveStealRejectsOverTypeLimitConsideringLiveReservations(t *testing.
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	// One free type slot remains; a live reservation for a brand-new item
@@ -208,7 +208,7 @@ func TestApplyStealOnOwnerMutatesOnceAndDedupesRetry(t *testing.T) {
 	store := &recordingCheckpointStore{state: ownerStateWithMaturePlot(ownerID, plotID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	interactionID := interactionIDFixture(0x10)
@@ -279,7 +279,7 @@ func TestApplyStealOnOwnerRejectsWhenNotStealableWithoutMutating(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	_, _, _, _, err := applySteal(t, runtime, ownerID, 99, interactionIDFixture(0x11), plotID, 4001)
@@ -300,7 +300,7 @@ func TestApplyStealOnOwnerConcurrentVisitorsRespectMaxStealTimes(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	for i, fill := range []byte{0x20, 0x21} {
@@ -332,7 +332,7 @@ func TestCommitStealCreditsInventoryAndTaskExactlyOnce(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	interactionID := interactionIDFixture(0x30)
@@ -391,7 +391,7 @@ func TestCommitStealRejectsWithoutMatchingReservation(t *testing.T) {
 	store := &recordingCheckpointStore{state: visitorStateWithStealTask(visitorID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	if _, _, err := runtime.CommitSteal(
@@ -410,7 +410,7 @@ func TestReleaseStealReleasesLiveReservationIdempotently(t *testing.T) {
 	store := &recordingCheckpointStore{state: developmentStateAt(visitorID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	interactionID := interactionIDFixture(0x50)
@@ -458,7 +458,7 @@ func TestOrdinaryCommandRemainsAsyncDirtyAfterSyncInteraction(t *testing.T) {
 	store := &recordingCheckpointStore{state: developmentStateAt(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	if _, err := runtime.ReserveSteal(

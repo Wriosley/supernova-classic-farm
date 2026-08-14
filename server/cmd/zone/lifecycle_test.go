@@ -76,7 +76,7 @@ func TestLifecycleRefusesShardWithActiveActorAndRollsBackDrain(t *testing.T) {
 	}
 }
 
-func TestLifecycleDrainIsIdempotentOnlyForSameTransition(t *testing.T) {
+func TestLifecycleDrainIsIdempotentAndAdoptsRetargetedTransition(t *testing.T) {
 	now := time.Date(2026, 8, 13, 16, 0, 0, 0, time.UTC)
 	runtime := player.NewRuntime()
 	defer runtime.Close()
@@ -91,10 +91,40 @@ func TestLifecycleDrainIsIdempotentOnlyForSameTransition(t *testing.T) {
 			t.Fatalf("same-transition drain %d status=%d body=%s", attempt, response.Code, response.Body.String())
 		}
 	}
+
+	// A Coordinator that died between drain and drain-complete retries under a
+	// new transition; the stale marker must not wedge the Shard.
 	response := httptest.NewRecorder()
 	handler.drain(response, lifecycleRequest(http.MethodPost, shardID, "drain", `{"owner_epoch":"1","transition_id":"move-2"}`))
+	if response.Code != http.StatusOK {
+		t.Fatalf("retargeted drain status=%d body=%s", response.Code, response.Body.String())
+	}
+	if handler.drainTransition[shardID] != "move-2" {
+		t.Fatalf("drain transition = %q, want move-2", handler.drainTransition[shardID])
+	}
+	response = httptest.NewRecorder()
+	handler.resume(response, lifecycleRequest(http.MethodPost, shardID, "resume", `{"owner_epoch":"1","transition_id":"move-1"}`))
 	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "DRAIN_TRANSITION_CONFLICT") {
-		t.Fatalf("different-transition drain status=%d body=%s", response.Code, response.Body.String())
+		t.Fatalf("superseded resume status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestLifecycleDrainRefusesDifferentOwnerGeneration(t *testing.T) {
+	now := time.Date(2026, 8, 13, 16, 0, 0, 0, time.UTC)
+	runtime := player.NewRuntime()
+	defer runtime.Close()
+	table, routes := zoneAuthorizationFixture(t, now, "zone-a")
+	_, shardID := zonePlayer(t, routes, "zone-a", nil)
+	handler := &lifecycleHandler{runtime: runtime, authorization: table, gates: &shardExecutionGates{}, now: func() time.Time { return now }}
+	response := httptest.NewRecorder()
+	handler.drain(response, lifecycleRequest(http.MethodPost, shardID, "drain", `{"owner_epoch":"1","transition_id":"move-1"}`))
+	if response.Code != http.StatusOK {
+		t.Fatalf("drain status=%d body=%s", response.Code, response.Body.String())
+	}
+	response = httptest.NewRecorder()
+	handler.drain(response, lifecycleRequest(http.MethodPost, shardID, "drain", `{"owner_epoch":"2","transition_id":"move-2"}`))
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "DRAIN_TRANSITION_CONFLICT") {
+		t.Fatalf("cross-generation drain status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

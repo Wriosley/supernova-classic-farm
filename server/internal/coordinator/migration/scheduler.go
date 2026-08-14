@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ type Scheduler struct {
 	limits          Limits
 	now             func() time.Time
 	shutdownTimeout time.Duration
+	logger          *slog.Logger
 
 	mu       sync.Mutex
 	active   map[uint32]struct{}
@@ -44,7 +46,17 @@ func NewScheduler(store TaskStore, executor TaskExecutor, limits Limits) (*Sched
 		return nil, errors.New("migration scheduler limits must be positive")
 	}
 	return &Scheduler{store: store, executor: executor, limits: limits, now: time.Now, shutdownTimeout: 10 * time.Second,
+		logger: slog.New(slog.DiscardHandler),
 		active: make(map[uint32]struct{}), sources: make(map[string]int), targets: make(map[string]int)}, nil
+}
+
+// SetLogger reports every task outcome that would otherwise only survive as the
+// last_error_code column of a MigrationTask row.
+func (scheduler *Scheduler) SetLogger(logger *slog.Logger) {
+	if logger == nil {
+		return
+	}
+	scheduler.logger = logger
 }
 
 func (scheduler *Scheduler) Run(ctx context.Context) error {
@@ -140,18 +152,34 @@ func (scheduler *Scheduler) execute(ctx context.Context, task Task) {
 	defer scheduler.release(task)
 	err := scheduler.executor.Execute(ctx, task.ShardID, task.TaskID)
 	if err == nil {
-		_ = scheduler.store.Complete(context.WithoutCancel(ctx), task.ShardID, task.TaskID)
+		if completeErr := scheduler.store.Complete(context.WithoutCancel(ctx), task.ShardID, task.TaskID); completeErr != nil {
+			scheduler.logger.Error("persist migration task completion", "shard_id", task.ShardID, "error", completeErr)
+			return
+		}
+		scheduler.logger.Info("migration task completed", "shard_id", task.ShardID,
+			"source_zone_id", task.SourceZoneID, "target_zone_id", task.TargetZoneID)
 		return
 	}
 	code, permanent := schedulerErrorCode(err)
 	persistCtx := context.WithoutCancel(ctx)
 	if permanent {
-		_ = scheduler.store.Fail(persistCtx, task.ShardID, task.TaskID, code)
+		scheduler.logger.Error("migration task failed permanently", "shard_id", task.ShardID,
+			"source_zone_id", task.SourceZoneID, "target_zone_id", task.TargetZoneID,
+			"attempt", task.Attempt, "code", code, "error", err)
+		if failErr := scheduler.store.Fail(persistCtx, task.ShardID, task.TaskID, code); failErr != nil {
+			scheduler.logger.Error("persist migration task failure", "shard_id", task.ShardID, "error", failErr)
+		}
 		return
 	}
 	attempt := task.Attempt + 1
-	retryAt := scheduler.now().UTC().Add(retryDelay(attempt, task.ShardID)).UnixMilli()
-	_ = scheduler.store.Retry(persistCtx, task.ShardID, task.TaskID, attempt, retryAt, code)
+	delay := retryDelay(attempt, task.ShardID)
+	retryAt := scheduler.now().UTC().Add(delay).UnixMilli()
+	scheduler.logger.Warn("migration task attempt failed; scheduling retry", "shard_id", task.ShardID,
+		"source_zone_id", task.SourceZoneID, "target_zone_id", task.TargetZoneID,
+		"attempt", attempt, "retry_in", delay.String(), "code", code, "error", err)
+	if retryErr := scheduler.store.Retry(persistCtx, task.ShardID, task.TaskID, attempt, retryAt, code); retryErr != nil {
+		scheduler.logger.Error("persist migration task retry", "shard_id", task.ShardID, "error", retryErr)
+	}
 }
 
 func retryDelay(attempt uint32, shardID uint32) time.Duration {

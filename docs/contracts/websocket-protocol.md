@@ -517,8 +517,12 @@ the visitor patch; the independent farm-view version orders the owner patch.
 `interaction_id` is the request UUID encoded as 16 raw bytes.
 
 `FARM_VIEW_CHANGED` is sent only to Gates with active visits for that owner.
-`FARM_PRESENCE_CHANGED` is sent to the owner and carries ENTERED/LEFT; visitor
-account name is optional according to owner privacy configuration.
+`FARM_PRESENCE_CHANGED` is sent only to the owner. ENTERED/LEFT carry the
+visitor player ID so the client can maintain a live visitor bar. CROP_STOLEN
+also carries the affected plot, crop item, quantity and frozen guard outcome so
+the owner can render the interaction on that plot. Account name remains
+optional; clients may resolve a mutual friend's display name from their friend
+list.
 
 ## 16. Validation checklist
 

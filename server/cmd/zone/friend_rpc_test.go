@@ -53,7 +53,7 @@ func newTestVisitorZoneRPCServer(t *testing.T) *visitorZoneRPCServer {
 	if err != nil {
 		t.Fatalf("visit.NewService: %v", err)
 	}
-	return newVisitorZoneRPCServer(svc, localAuthorization{}, routing.DefaultZoneID)
+	return newVisitorZoneRPCServer(svc, stubOwnerFarmClient{}, localAuthorization{}, routing.DefaultZoneID)
 }
 
 func TestVisitorZoneRPCServerEnterRejectsInvalidArgs(t *testing.T) {
@@ -76,7 +76,7 @@ func TestVisitorZoneRPCServerEnterRejectsNonOwner(t *testing.T) {
 	// localAuthorization always maps every Shard to this Zone in "local"
 	// mode, so exercise the rejection path with an authorization stub that
 	// reports a foreign owner for every Shard instead.
-	foreign := newVisitorZoneRPCServer(mustVisitService(t), foreignAuthorization{}, routing.DefaultZoneID)
+	foreign := newVisitorZoneRPCServer(mustVisitService(t), stubOwnerFarmClient{}, foreignAuthorization{}, routing.DefaultZoneID)
 	_, err := foreign.EnterFriendFarm(context.Background(), &rpcv1.EnterFriendFarmRequest{
 		CallerPlayerId: 1, OwnerPlayerId: 2, GateId: "local-gateway", RequestId: "req-1",
 	})

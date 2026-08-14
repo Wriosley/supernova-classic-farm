@@ -61,7 +61,7 @@ func (r *Runtime) ApplyMailReward(
 	if err != nil {
 		return empty, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepApplyMailReward, claimID)
 	var result ApplyMailRewardResult
 	var mailboxErr error

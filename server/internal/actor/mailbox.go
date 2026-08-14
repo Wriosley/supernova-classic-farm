@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 )
 
 var ErrClosed = errors.New("actor mailbox closed")
@@ -24,6 +25,7 @@ type Mailbox struct {
 	closed    chan struct{}
 	mu        sync.RWMutex
 	isClosed  bool
+	inflight  atomic.Int32 // queued + running admitted jobs
 }
 
 func NewMailbox(queueSize int) *Mailbox {
@@ -47,7 +49,13 @@ func (m *Mailbox) loop() {
 		}
 		j.run()
 		close(j.done)
+		m.inflight.Add(-1)
 	}
+}
+
+// Idle reports whether the mailbox has no queued or running work.
+func (m *Mailbox) Idle() bool {
+	return m.inflight.Load() == 0
 }
 
 // Submit enqueues fn without waiting for it to finish. Once admitted, fn always
@@ -62,6 +70,7 @@ func (m *Mailbox) Submit(fn func()) error {
 	}
 	select {
 	case m.jobs <- j:
+		m.inflight.Add(1)
 		return nil
 	default:
 		return errMailboxFull
@@ -79,6 +88,7 @@ func (m *Mailbox) Do(ctx context.Context, fn func()) error {
 	}
 	select {
 	case m.jobs <- j:
+		m.inflight.Add(1)
 		m.mu.RUnlock()
 	case <-ctx.Done():
 		m.mu.RUnlock()

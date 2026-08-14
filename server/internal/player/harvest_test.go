@@ -52,7 +52,7 @@ func TestHarvestIsIdempotentAndPersistsNeedCleanup(t *testing.T) {
 	store := &recordingCheckpointStore{state: matureHarvestState(playerID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	request := harvestRequest(playerID, "00112233-4455-6677-8899-aabbccddee21", 1)
@@ -129,7 +129,7 @@ func TestHarvestInventoryLimitFailuresAreAtomic(t *testing.T) {
 			store := &recordingCheckpointStore{state: state}
 			runtime := NewRuntime()
 			runtime.store = store
-			runtime.now = func() time.Time { return now }
+			runtime.SetNow(func() time.Time { return now })
 			defer runtime.Close()
 
 			requestID := []string{

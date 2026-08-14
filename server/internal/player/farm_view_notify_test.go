@@ -131,7 +131,7 @@ func TestHarvestAndCleanPlotEachBumpFarmViewSeqOnce(t *testing.T) {
 	fixedNow := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
 	broadcaster := newRecordingFarmViewBroadcaster()
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return fixedNow }
+	runtime.SetNow(func() time.Time { return fixedNow })
 	defer runtime.Close()
 	if err := runtime.SetFarmViewDispatcher(broadcaster); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestHarvestAndCleanPlotEachBumpFarmViewSeqOnce(t *testing.T) {
 	broadcaster.waitForCall(t)
 
 	// Fast-forward past maturity so HARVEST succeeds against a MATURE plot.
-	runtime.now = func() time.Time { return fixedNow.Add(200 * time.Second) }
+	runtime.SetNow(func() time.Time { return fixedNow.Add(200 * time.Second) })
 	harvestResponse, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
 		&wsv1.WsEnvelope{
 			ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,

@@ -68,8 +68,6 @@ function mountFarm(
       },
       cropCatalog,
       connected: true,
-      actionMessage: '',
-      actionError: '',
       nowMs: now,
       activePet,
     } as never,
@@ -99,6 +97,46 @@ describe('farm plots', () => {
     expect(cropOf(3)).toContain('watermelon-mature')
     // An unmapped crop id must still render something instead of a blank plot.
     expect(cropOf(7)).toContain('demo-mature')
+  })
+
+  it('keeps a harvest tip visible on every mature plot', () => {
+    const wrapper = mountFarm()
+    const maturePlots = wrapper
+      .findAll('.plot-tile')
+      .filter((_, index) => plots[index].plotState === PlotState.MATURE)
+
+    expect(maturePlots.length).toBeGreaterThan(0)
+    expect(maturePlots.every((plot) => plot.find('.plot-float.persistent').text() === '可以收获')).toBe(
+      true,
+    )
+  })
+
+  it('emits plot feedback instead of a banner when the selected tool is invalid', async () => {
+    const wrapper = mountFarm()
+    await wrapper.findAll('.plot-tile')[0].trigger('click')
+
+    expect(wrapper.find('.action-notice').exists()).toBe(false)
+    expect(wrapper.emitted('plotFeedback')).toEqual([[1, '还不能收获。']])
+  })
+
+  it('renders the current visitor bar', () => {
+    const wrapper = mount(FarmDashboard, {
+      props: {
+        snapshot: {
+          playerId: 7n,
+          coinBalance: 29n,
+          inventory: [],
+          plots,
+          currentChapter: { chapterId: 1, status: 1, tasks: [] },
+        },
+        cropCatalog,
+        connected: true,
+        nowMs: now,
+        visitors: ['alice'],
+      } as never,
+    })
+
+    expect(wrapper.find('.farm-visitors').text()).toContain('alice 进入农场')
   })
 })
 

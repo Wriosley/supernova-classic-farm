@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-13
+updated: 2026-08-14
 ---
 
 # Current Handoff
@@ -19,6 +19,18 @@ V3 is the only current production-target strategy. A new AI should read, in orde
 Do not resume V1 or V2 as the implementation target. Do not read every ADR as if all decisions were simultaneously active. The ADR directory preserves how the design evolved; current truth comes from this handoff, the current architecture, and the accepted ADRs that the current architecture explicitly references.
 
 ## Snapshot at handoff
+
+- Steal (`STEAL_FRIEND_CROP`) is on the **direct visitor→owner success
+  path** (no steal FriendInteraction Saga / reconciler). Pest/catch/help
+  still use ActionSaga. Evidence:
+  `../evidence/2026-08-14-steal-direct-success-path.md`.
+
+- Actor idle eviction **phase 1** is implemented: Actor-owned maturity
+  deadlines replace the Runtime one-second full scan; idle Actors with no
+  owner connection, no live visitors, idle mailbox, and no external access
+  for 3 minutes are SaveCAS'd then removed; Zone sweeps every 10s. Redis
+  offline maturity wake, TimerSvr, and QuerySvr remain phase 2/3. Evidence:
+  `../evidence/2026-08-13-actor-idle-eviction-local-tick.md`.
 
 - Final delivery sprint **07/06 normal migration worker** has passed its
   offline implementation gate through Tasks 1–5, a successful live Tcaplus
@@ -41,9 +53,7 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   maintains an in-process open-task index. A development/E2E-only persisted-
   boundary crash hook and reusable matrix runner are present; production
   rejects crash injection. No new Tcaplus table or field is required. The focused
-  Coordinator/Zone/Player/migration race suite passes; the full Player package
-  still has a pre-existing mail-reward fixture whose injected clock predates
-  `NewDevelopmentState` and is outside this phase. Evidence:
+  Coordinator/Zone/Player/migration race suite passes. Evidence:
   `../evidence/2026-08-13-normal-migration-worker.md`.
 
 - The next implementation target is final delivery sprint **07/07 Zone failure
@@ -209,6 +219,14 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   `expected_crop_item_id` + farm-view version; FriendInteraction persists
   crop/qty; same visitor once per crop round; H5 sends plot `crop_item_id`.
   Evidence: `../evidence/2026-08-12-multi-crop-steal.md`.
+- Steal (`STEAL_FRIEND_CROP`) now uses a **direct visitor→owner success
+  path**: visitor Zone validates the request and calls owner
+  `ApplyVisitorAction`; owner mutates via `ApplyStealOnOwner` and returns
+  `ResultPayload`/`FarmPatch` immediately. Steal no longer creates or
+  reconciles a `FriendInteraction` Saga row, and no longer waits on
+  visitor reservation/commit. Pest / catch-pest / help-clean remain on
+  `ActionSaga` and are unchanged by this cutover. Evidence:
+  `../evidence/2026-08-14-steal-direct-success-path.md`.
 - Farm visits return a public snapshot on `ENTER_FRIEND_FARM` and now also
   receive incremental `FarmViewPatch` pushes: public plot mutations (plant,
   fertilize, harvest, clean, natural maturity) report `DomainChanges`, bump
@@ -217,23 +235,15 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   Gate to the owner plus every currently registered visitor. H5 replaces the
   full snapshot on an epoch change or a seq gap and merges in place on
   `seq == local + 1`.
-- The cross-Actor `FriendInteraction` Saga is live for `STEAL_FRIEND_CROP`
-  (pest/catch-pest/help-clean remain Phase 6, on the same infrastructure):
-  `PLANT` freezes `steal_quantity`/`max_steal_times`/`protected_owner_yield`
-  alongside `base_yield`; `player.CanSteal` gates the public `can_steal`
-  flag; `player.Runtime` exposes synchronous, mailbox-serialized
-  `ReserveSteal`/`ApplyStealOnOwner`/`CommitSteal`/`ReleaseSteal` steps that
-  flush immediately instead of joining the async Dirty batch; a new
-  `server/internal/interaction` package drives the
-  `INIT -> VISITOR_RESERVED -> OWNER_APPLIED -> VISITOR_COMMITTED ->
-  COMPLETED` (or `-> RELEASING -> ABORTED`) state machine against a Tcaplus
-  (or in-memory dev) `FriendInteraction` store with per-step CAS, and each
-  Zone runs a 5-second reconciler ticker that resumes any interaction whose
-  `retry_at_ms` is due, recovering all three crash windows. Gate and H5
-  route `STEAL_FRIEND_CROP` the same way as the other visit actions; H5
-  merges the returned `visitor_patch` optimistically (no `state_version` on
-  `FriendActionResponse` by frozen contract) and relies on the independent
-  `FarmViewPatch` push for the owner's plot update.
+- Historical note: the cross-Actor `FriendInteraction` Saga was previously
+  live for `STEAL_FRIEND_CROP` (`INIT → … → COMPLETED` with a 5s reconciler).
+  That steal recovery path is retired; `ReserveSteal`/`CommitSteal`/
+  `ReleaseSteal` remain in `player.Runtime` for compatibility and for
+  pest/catch/help ActionSaga steps that still share the package. Gate and
+  H5 still route `STEAL_FRIEND_CROP` like other visit actions; after the
+  direct path, H5 should treat steal success from owner result +
+  `FarmViewPatch` rather than expecting an immediate visitor inventory
+  patch on this hop.
 - Final delivery sprint **07/01 Coordinator contract baseline** is complete:
   existing route records gained additive assignment-version/endpoint fields;
   the generated Coordinator unary/Watch/failure-evidence gRPC contract and
@@ -310,10 +320,10 @@ Important rules already recorded in the business architecture:
 - Friend phases 0–5 are accepted: contracts, internal gRPC/HMAC migration,
   FriendSvr share-code/relation/list Saga, Zone `ApplyFriendTaskCredit`,
   farm-visit sessions (`ENTER`/`HEARTBEAT`/`EXIT_FRIEND_FARM` plus a
-  one-shot public snapshot), incremental public-Patch broadcast and the
-  cross-Actor `FriendInteraction` Saga for `STEAL_FRIEND_CROP` are
-  implemented. Pest/catch-pest/help-clean interactions remain unimplemented
-  (Phase 6).
+  one-shot public snapshot), and incremental public-Patch broadcast. Steal
+  still uses the existing FriendInteraction Saga today; a separate plan now
+  targets a direct visitor→owner success path for steal only. Pest/catch-pest/
+  help-clean still use ActionSaga / remain the Phase 6 follow-on track.
 
 ## Current architecture and decision map
 

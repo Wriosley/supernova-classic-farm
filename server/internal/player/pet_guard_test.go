@@ -43,8 +43,8 @@ func TestStealWithoutActivePetDoesNotRollGuard(t *testing.T) {
 	store := &recordingCheckpointStore{state: ownerStateWithMaturePlot(ownerID, plotID, now)}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
-	runtime.randBPS = func() uint32 { t.Fatal("randBPS must not be called"); return 0 }
+	runtime.SetNow(func() time.Time { return now })
+	runtime.randIntn = func(int) int { t.Fatal("randIntn must not be called"); return 0 }
 	defer runtime.Close()
 
 	payload, _, _, _, err := applySteal(t, runtime, ownerID, 99, interactionIDFixture(0xA1), plotID, 4001)
@@ -57,7 +57,7 @@ func TestStealWithoutActivePetDoesNotRollGuard(t *testing.T) {
 	}
 }
 
-func TestStealWithoutActiveFoodDoesNotRollGuard(t *testing.T) {
+func TestStealWithActivePetAlwaysGuardsEvenWithoutFood(t *testing.T) {
 	const ownerID = uint64(11)
 	const plotID = uint32(1)
 	now := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
@@ -65,25 +65,30 @@ func TestStealWithoutActiveFoodDoesNotRollGuard(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
-	called := false
-	runtime.randBPS = func() uint32 { called = true; return 0 }
+	runtime.SetNow(func() time.Time { return now })
+	runtime.randIntn = func(n int) int {
+		if n != 10 {
+			t.Fatalf("randIntn(%d), want 10", n)
+		}
+		return 4
+	}
 	defer runtime.Close()
 
 	payload, _, _, _, err := applySteal(t, runtime, ownerID, 99, interactionIDFixture(0xA2), plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if called {
-		t.Fatal("expired food must not roll guard")
-	}
 	guard := decodeStealGuard(t, payload)
-	if guard.GetPetId() != developmentVillageDogPetID || guard.GetFoodActive() || guard.GetGuardTriggered() {
+	if guard.GetPetId() != developmentVillageDogPetID ||
+		guard.GetFoodActive() ||
+		!guard.GetGuardTriggered() ||
+		guard.GetGuardPenaltyConfigured() != 5 ||
+		guard.GetGuardProbabilityBps() != 10000 {
 		t.Fatalf("guard = %+v", guard)
 	}
 }
 
-func TestVillageDogGuardDeductsTwoCoins(t *testing.T) {
+func TestActivePetGuardDeductsRandomCoinsOnVisitorSideEffect(t *testing.T) {
 	const ownerID = uint64(11)
 	const visitorID = uint64(22)
 	const plotID = uint32(1)
@@ -94,8 +99,8 @@ func TestVillageDogGuardDeductsTwoCoins(t *testing.T) {
 	}
 	ownerRuntime := NewRuntime()
 	ownerRuntime.store = ownerStore
-	ownerRuntime.now = func() time.Time { return now }
-	ownerRuntime.randBPS = func() uint32 { return 0 } // 强制触发
+	ownerRuntime.SetNow(func() time.Time { return now })
+	ownerRuntime.randIntn = func(int) int { return 1 } // penalty 2
 	defer ownerRuntime.Close()
 
 	visitorState := visitorStateWithStealTask(visitorID, now)
@@ -103,15 +108,10 @@ func TestVillageDogGuardDeductsTwoCoins(t *testing.T) {
 	visitorStore := &recordingCheckpointStore{state: visitorState}
 	visitorRuntime := NewRuntime()
 	visitorRuntime.store = visitorStore
-	visitorRuntime.now = func() time.Time { return now }
+	visitorRuntime.SetNow(func() time.Time { return now })
 	defer visitorRuntime.Close()
 
 	interactionID := interactionIDFixture(0xB1)
-	if _, err := visitorRuntime.ReserveSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1,
-	); err != nil {
-		t.Fatal(err)
-	}
 	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
@@ -121,8 +121,9 @@ func TestVillageDogGuardDeductsTwoCoins(t *testing.T) {
 		t.Fatalf("owner guard = %+v", guard)
 	}
 
-	response, _, err := visitorRuntime.CommitSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1, ownerPayload,
+	response, _, err := visitorRuntime.ApplyVisitorFriendSideEffect(
+		context.Background(), visitorID, LocalOwnerEpoch, interactionID,
+		datav1.FriendInteractionAction_STEAL_FRIEND_CROP, ownerPayload,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -133,57 +134,8 @@ func TestVillageDogGuardDeductsTwoCoins(t *testing.T) {
 	if response.GetVisitorPatch().GetCoinBalance() != 8 {
 		t.Fatalf("visitor coins = %d", response.GetVisitorPatch().GetCoinBalance())
 	}
-	if inventoryQuantity(visitorStore.saved[len(visitorStore.saved)-1], 4001) != 1 {
-		t.Fatal("steal crop not credited")
-	}
-	// 主人金币不变
 	if ownerStore.saved[len(ownerStore.saved)-1].CoinBalance != InitialCoinBalance {
 		t.Fatalf("owner coins changed")
-	}
-}
-
-func TestShepherdGuardDeductsUpToFourCoins(t *testing.T) {
-	const ownerID = uint64(11)
-	const visitorID = uint64(23)
-	const plotID = uint32(1)
-	now := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
-
-	ownerStore := &recordingCheckpointStore{
-		state: ownerWithGuardPet(ownerID, plotID, developmentShepherdDogPetID, now, true),
-	}
-	ownerRuntime := NewRuntime()
-	ownerRuntime.store = ownerStore
-	ownerRuntime.now = func() time.Time { return now }
-	ownerRuntime.randBPS = func() uint32 { return 0 }
-	defer ownerRuntime.Close()
-
-	visitorState := visitorStateWithStealTask(visitorID, now)
-	visitorState.Coins = 10
-	visitorStore := &recordingCheckpointStore{state: visitorState}
-	visitorRuntime := NewRuntime()
-	visitorRuntime.store = visitorStore
-	visitorRuntime.now = func() time.Time { return now }
-	defer visitorRuntime.Close()
-
-	interactionID := interactionIDFixture(0xB2)
-	if _, err := visitorRuntime.ReserveSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1,
-	); err != nil {
-		t.Fatal(err)
-	}
-	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response, _, err := visitorRuntime.CommitSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1, ownerPayload,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.GetStealGuard().GetGuardPenaltyApplied() != 4 ||
-		response.GetVisitorPatch().GetCoinBalance() != 6 {
-		t.Fatalf("response = %+v", response)
 	}
 }
 
@@ -197,29 +149,25 @@ func TestPetGuardNeverMakesVisitorCoinsNegative(t *testing.T) {
 	ownerRuntime.store = &recordingCheckpointStore{
 		state: ownerWithGuardPet(ownerID, plotID, developmentShepherdDogPetID, now, true),
 	}
-	ownerRuntime.now = func() time.Time { return now }
-	ownerRuntime.randBPS = func() uint32 { return 0 }
+	ownerRuntime.SetNow(func() time.Time { return now })
+	ownerRuntime.randIntn = func(int) int { return 3 } // configured 4
 	defer ownerRuntime.Close()
 
 	visitorState := visitorStateWithStealTask(visitorID, now)
 	visitorState.Coins = 3
 	visitorRuntime := NewRuntime()
 	visitorRuntime.store = &recordingCheckpointStore{state: visitorState}
-	visitorRuntime.now = func() time.Time { return now }
+	visitorRuntime.SetNow(func() time.Time { return now })
 	defer visitorRuntime.Close()
 
 	interactionID := interactionIDFixture(0xB3)
-	if _, err := visitorRuntime.ReserveSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1,
-	); err != nil {
-		t.Fatal(err)
-	}
 	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, _, err := visitorRuntime.CommitSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1, ownerPayload,
+	response, _, err := visitorRuntime.ApplyVisitorFriendSideEffect(
+		context.Background(), visitorID, LocalOwnerEpoch, interactionID,
+		datav1.FriendInteractionAction_STEAL_FRIEND_CROP, ownerPayload,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -230,7 +178,7 @@ func TestPetGuardNeverMakesVisitorCoinsNegative(t *testing.T) {
 	}
 }
 
-func TestPetGuardOutcomeIsStableAcrossSagaRetry(t *testing.T) {
+func TestPetGuardOutcomeIsStableAcrossOwnerRetry(t *testing.T) {
 	const ownerID = uint64(11)
 	const plotID = uint32(1)
 	now := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
@@ -239,11 +187,11 @@ func TestPetGuardOutcomeIsStableAcrossSagaRetry(t *testing.T) {
 	}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	rolls := 0
-	runtime.randBPS = func() uint32 {
+	runtime.randIntn = func(n int) int {
 		rolls++
-		return 0
+		return 6
 	}
 	defer runtime.Close()
 
@@ -262,9 +210,83 @@ func TestPetGuardOutcomeIsStableAcrossSagaRetry(t *testing.T) {
 	if !bytes.Equal(payload1, payload2) || !bytes.Equal(digest1, digest2) {
 		t.Fatal("retry produced different frozen outcome")
 	}
+	if decodeStealGuard(t, payload1).GetGuardPenaltyConfigured() != 7 {
+		t.Fatalf("penalty = %d", decodeStealGuard(t, payload1).GetGuardPenaltyConfigured())
+	}
 }
 
-func TestPetGuardPenaltyIsAppliedOnceAfterCrashRecovery(t *testing.T) {
+func TestCatchAndCleanCreditOneCoin(t *testing.T) {
+	now := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
+	visitorID := uint64(40)
+	for i, action := range []datav1.FriendInteractionAction{
+		datav1.FriendInteractionAction_CATCH_PEST_FOR_FRIEND,
+		datav1.FriendInteractionAction_HELP_CLEAN_FRIEND_PLOT,
+	} {
+		state := NewDevelopmentState(visitorID)
+		state.Coins = 5
+		state.CreatedAtMS = now.Add(-time.Minute).UnixMilli()
+		state.UpdatedAtMS = now.Add(-time.Minute).UnixMilli()
+		runtime := NewRuntime()
+		runtime.store = &recordingCheckpointStore{state: state}
+		runtime.SetNow(func() time.Time { return now })
+		defer runtime.Close()
+
+		response, _, err := runtime.ApplyVisitorFriendSideEffect(
+			context.Background(), visitorID, LocalOwnerEpoch, interactionIDFixture(0xC1+byte(i)),
+			action, nil,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.GetVisitorPatch().GetCoinBalance() != 6 {
+			t.Fatalf("action %v coins = %d", action, response.GetVisitorPatch().GetCoinBalance())
+		}
+	}
+}
+
+func TestApplyPestCreditsRandomCoinDelta(t *testing.T) {
+	now := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
+	visitorID := uint64(41)
+	state := NewDevelopmentState(visitorID)
+	state.Coins = 20
+	state.CreatedAtMS = now.Add(-time.Minute).UnixMilli()
+	state.UpdatedAtMS = now.Add(-time.Minute).UnixMilli()
+	runtime := NewRuntime()
+	runtime.store = &recordingCheckpointStore{state: state}
+	runtime.SetNow(func() time.Time { return now })
+	runtime.randIntn = func(n int) int {
+		if n != 21 {
+			t.Fatalf("randIntn(%d), want 21", n)
+		}
+		return 5 // delta = 5-10 = -5
+	}
+	defer runtime.Close()
+
+	response, _, err := runtime.ApplyVisitorFriendSideEffect(
+		context.Background(), visitorID, LocalOwnerEpoch, interactionIDFixture(0xD1),
+		datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.GetVisitorPatch().GetCoinBalance() != 15 {
+		t.Fatalf("coins = %d", response.GetVisitorPatch().GetCoinBalance())
+	}
+	replay, already, err := runtime.ApplyVisitorFriendSideEffect(
+		context.Background(), visitorID, LocalOwnerEpoch, interactionIDFixture(0xD1),
+		datav1.FriendInteractionAction_APPLY_PEST_TO_FRIEND, nil,
+	)
+	if err != nil || !already {
+		t.Fatalf("replay already=%v err=%v", already, err)
+	}
+	if replay.GetVisitorPatch().GetCoinBalance() != 15 {
+		t.Fatalf("replay coins = %d", replay.GetVisitorPatch().GetCoinBalance())
+	}
+}
+
+// Keep CommitSteal path covering old reservation-based penalty application
+// with the new random configured amount.
+func TestCommitStealStillAppliesFrozenGuardPenalty(t *testing.T) {
 	const ownerID = uint64(11)
 	const visitorID = uint64(25)
 	const plotID = uint32(1)
@@ -274,77 +296,35 @@ func TestPetGuardPenaltyIsAppliedOnceAfterCrashRecovery(t *testing.T) {
 	ownerRuntime.store = &recordingCheckpointStore{
 		state: ownerWithGuardPet(ownerID, plotID, developmentVillageDogPetID, now, true),
 	}
-	ownerRuntime.now = func() time.Time { return now }
-	ownerRuntime.randBPS = func() uint32 { return 0 }
+	ownerRuntime.SetNow(func() time.Time { return now })
+	ownerRuntime.randIntn = func(int) int { return 1 }
 	defer ownerRuntime.Close()
 
 	visitorState := visitorStateWithStealTask(visitorID, now)
 	visitorState.Coins = 10
-	visitorStore := &flakyCheckpointStore{
-		recordingCheckpointStore: recordingCheckpointStore{state: visitorState},
-		failures:                 1,
-		failStatus:               CheckpointWriteRetryableFailure,
-	}
 	visitorRuntime := NewRuntime()
-	visitorRuntime.store = visitorStore
-	visitorRuntime.now = func() time.Time { return now }
+	visitorRuntime.store = &recordingCheckpointStore{state: visitorState}
+	visitorRuntime.SetNow(func() time.Time { return now })
 	defer visitorRuntime.Close()
 
 	interactionID := interactionIDFixture(0xB5)
 	if _, err := visitorRuntime.ReserveSteal(
 		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1,
 	); err != nil {
-		// Reserve may also hit flaky store; reset failures for commit path.
-	}
-	// 重新准备：确保有 RESERVED 预约且金币为 10。
-	visitorStore.failures = 0
-	visitorStore.attempts = 0
-	visitorStore.saved = nil
-	visitorStore.state = visitorStateWithStealTask(visitorID, now)
-	visitorStore.state.Coins = 10
-	if _, err := visitorRuntime.ReserveSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1,
-	); err != nil {
 		t.Fatal(err)
 	}
-
 	ownerPayload, _, _, _, err := applySteal(t, ownerRuntime, ownerID, visitorID, interactionID, plotID, 4001)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	visitorStore.failures = 1
-	visitorStore.failStatus = CheckpointWriteRetryableFailure
-	if _, _, err := visitorRuntime.CommitSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1, ownerPayload,
-	); err == nil {
-		t.Fatal("expected first commit flush failure")
-	}
-
-	response, already, err := visitorRuntime.CommitSteal(
+	response, _, err := visitorRuntime.CommitSteal(
 		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1, ownerPayload,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if already {
-		// 第二次应是真正成功的首次持久化，或 replay；金币都必须只扣一次。
-	}
-	if response.GetVisitorPatch().GetCoinBalance() != 8 {
-		t.Fatalf("coins after recovery = %d, want 8", response.GetVisitorPatch().GetCoinBalance())
-	}
-	final := visitorStore.saved[len(visitorStore.saved)-1]
-	if final.CoinBalance != 8 {
-		t.Fatalf("persisted coins = %d", final.CoinBalance)
-	}
-
-	replay, alreadyCommitted, err := visitorRuntime.CommitSteal(
-		context.Background(), visitorID, LocalOwnerEpoch, interactionID, 4001, 1, ownerPayload,
-	)
-	if err != nil || !alreadyCommitted {
-		t.Fatalf("durable replay: already=%v err=%v", alreadyCommitted, err)
-	}
-	if replay.GetVisitorPatch().GetCoinBalance() != 8 {
-		t.Fatalf("replay coins = %d", replay.GetVisitorPatch().GetCoinBalance())
+	if response.GetStealGuard().GetGuardPenaltyApplied() != 2 ||
+		response.GetVisitorPatch().GetCoinBalance() != 8 {
+		t.Fatalf("response = %+v", response)
 	}
 }

@@ -70,7 +70,7 @@ func (r *Runtime) ReserveActionChance(
 	if err != nil {
 		return false, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepReserveFriendAction, interactionID)
 	var mailboxErr error
 	var mutated bool
@@ -145,7 +145,7 @@ func (r *Runtime) CommitActionChance(
 	if err != nil {
 		return nil, false, err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepCommitFriendAction, interactionID)
 	var mutated bool
 	var commitErr error
@@ -246,7 +246,7 @@ func (r *Runtime) ReleaseActionChance(
 	if err != nil {
 		return err
 	}
-	now := r.now().UTC()
+	now := r.currentTime().UTC()
 	stepKey := syncStepKey(syncStepReleaseFriendAction, interactionID)
 	if err := a.mailbox.Do(ctx, func() {
 		for _, reservation := range a.state.FriendReservations {

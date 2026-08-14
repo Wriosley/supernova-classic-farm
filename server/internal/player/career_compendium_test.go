@@ -47,7 +47,7 @@ func TestHarvestCareerAndCompendium(t *testing.T) {
 	const playerID = uint64(50)
 	fixed := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return fixed }
+	runtime.SetNow(func() time.Time { return fixed })
 	defer runtime.Close()
 
 	if _, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch,
@@ -58,7 +58,7 @@ func TestHarvestCareerAndCompendium(t *testing.T) {
 		plantRequest(playerID, "00112233-4455-6677-8899-aabbccddee71", 1, developmentSeedItemID)); err != nil {
 		t.Fatal(err)
 	}
-	runtime.now = func() time.Time { return fixed.Add(200 * time.Second) }
+	runtime.SetNow(func() time.Time { return fixed.Add(200 * time.Second) })
 	harvest, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,
 		Action: wsv1.Action_HARVEST, RequestId: "00112233-4455-6677-8899-aabbccddee72",
@@ -107,7 +107,7 @@ func TestHarvestAfterStealCountsNetQuantity(t *testing.T) {
 	store := &recordingCheckpointStore{state: state}
 	runtime := NewRuntime()
 	runtime.store = store
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	response, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, &wsv1.WsEnvelope{
@@ -138,13 +138,13 @@ func TestStealCareerDoesNotUnlockCompendium(t *testing.T) {
 
 	ownerRuntime := NewRuntime()
 	ownerRuntime.store = &recordingCheckpointStore{state: ownerStateWithMaturePlot(ownerID, plotID, now)}
-	ownerRuntime.now = func() time.Time { return now }
+	ownerRuntime.SetNow(func() time.Time { return now })
 	defer ownerRuntime.Close()
 
 	visitorState := visitorStateWithStealTask(visitorID, now)
 	visitorRuntime := NewRuntime()
 	visitorRuntime.store = &recordingCheckpointStore{state: visitorState}
-	visitorRuntime.now = func() time.Time { return now }
+	visitorRuntime.SetNow(func() time.Time { return now })
 	defer visitorRuntime.Close()
 
 	interactionID := interactionIDFixture(0xC1)
@@ -178,7 +178,7 @@ func TestStealCareerDoesNotUnlockCompendium(t *testing.T) {
 	}
 }
 
-func TestPublicFarmSnapshotIncludesCareerNotCompendium(t *testing.T) {
+func TestPublicFarmSnapshotIncludesCareerAndCompendium(t *testing.T) {
 	const ownerID = uint64(70)
 	now := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
 	state := developmentStateAt(ownerID, now)
@@ -186,7 +186,7 @@ func TestPublicFarmSnapshotIncludesCareerNotCompendium(t *testing.T) {
 	state.CropCompendium = &datav1.CropCompendiumRecord{UnlockedCropIds: []uint32{2001}}
 	runtime := NewRuntime()
 	runtime.store = &recordingCheckpointStore{state: state}
-	runtime.now = func() time.Time { return now }
+	runtime.SetNow(func() time.Time { return now })
 	defer runtime.Close()
 
 	snapshot, err := runtime.BuildPublicFarmSnapshot(context.Background(), ownerID, LocalOwnerEpoch)
@@ -197,7 +197,12 @@ func TestPublicFarmSnapshotIncludesCareerNotCompendium(t *testing.T) {
 		snapshot.GetCareer().GetTotalStolenCropQuantity() != 2 {
 		t.Fatalf("public career = %+v", snapshot.GetCareer())
 	}
-	// FarmVisitSnapshot has no CropCompendium field — private only via PlayerSnapshot.
+	// Visitors may read the unlocked crop list, and nothing else from the
+	// owner's private compendium record.
+	unlocked := snapshot.GetCropCompendium().GetUnlockedCropIds()
+	if len(unlocked) != 1 || unlocked[0] != 2001 {
+		t.Fatalf("public compendium = %+v", snapshot.GetCropCompendium())
+	}
 	private := state.Snapshot()
 	if private.GetCropCompendium().GetUnlockedCropIds()[0] != 2001 {
 		t.Fatalf("private snapshot missing compendium")
@@ -208,7 +213,7 @@ func TestMultiCropBuyPlantHarvestSell(t *testing.T) {
 	const playerID = uint64(80)
 	fixed := time.Date(2026, 8, 11, 8, 0, 0, 0, time.UTC)
 	runtime := NewRuntime()
-	runtime.now = func() time.Time { return fixed }
+	runtime.SetNow(func() time.Time { return fixed })
 	defer runtime.Close()
 
 	shop, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, &wsv1.WsEnvelope{
@@ -244,9 +249,9 @@ func TestMultiCropBuyPlantHarvestSell(t *testing.T) {
 		if err != nil || plantResp.GetError() != nil {
 			t.Fatalf("plant %s: %+v err=%v", def.Name, plantResp, err)
 		}
-		runtime.now = func() time.Time {
+		runtime.SetNow(func() time.Time {
 			return fixed.Add(time.Duration(def.MaturityScaled9/1_000_000_000+5) * time.Second)
-		}
+		})
 		harvestResp, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, &wsv1.WsEnvelope{
 			ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_REQUEST,
 			Action: wsv1.Action_HARVEST, RequestId: requestIDFor(0xC0 + byte(i)),
@@ -273,7 +278,7 @@ func TestMultiCropBuyPlantHarvestSell(t *testing.T) {
 		if err != nil || sellResp.GetError() != nil {
 			t.Fatalf("sell %s: %+v err=%v", def.Name, sellResp, err)
 		}
-		runtime.now = func() time.Time { return fixed }
+		runtime.SetNow(func() time.Time { return fixed })
 	}
 	runtime.mu.Lock()
 	compendium := runtime.actors[playerID].state.CropCompendium

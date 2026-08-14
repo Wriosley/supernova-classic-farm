@@ -76,6 +76,7 @@ func (o *OwnerService) EnterVisitor(
 	if newlyCreated {
 		_ = o.presence.PublishFarmPresence(ctx, ownerPlayerID, &wsv1.FarmPresencePush{
 			OwnerPlayerId: ownerPlayerID, Kind: wsv1.FarmPresenceKind_FARM_VISITOR_ENTERED,
+			VisitorPlayerId: &visitorPlayerID,
 		})
 	}
 	return visitID, expiresAt.UnixMilli(), snapshot, nil, nil
@@ -114,8 +115,24 @@ func (o *OwnerService) ExitVisitor(
 	}
 	_ = o.presence.PublishFarmPresence(ctx, ownerPlayerID, &wsv1.FarmPresencePush{
 		OwnerPlayerId: ownerPlayerID, Kind: wsv1.FarmPresenceKind_FARM_VISITOR_LEFT,
+		VisitorPlayerId: &visitorPlayerID,
 	})
 	return nil, nil
+}
+
+// PublishFarmEvent sends an owner-facing, best-effort farm interaction tip.
+// Durable game state is already committed before callers invoke this method;
+// dropping the UI tip must never roll back or fail the interaction.
+func (o *OwnerService) PublishFarmEvent(
+	ctx context.Context,
+	ownerPlayerID uint64,
+	event *wsv1.FarmPresencePush,
+) {
+	if event == nil {
+		return
+	}
+	event.OwnerPlayerId = ownerPlayerID
+	_ = o.presence.PublishFarmPresence(ctx, ownerPlayerID, event)
 }
 
 // GetPublicFarmSnapshot requires an unexpired visit lease (Validate does not
@@ -168,6 +185,11 @@ func (o *OwnerService) ListVisitors(ownerPlayerID uint64) []VisitRecord {
 	return o.registry.ListVisitors(ownerPlayerID)
 }
 
+// HasVisitors reports whether owner currently has at least one unexpired visit.
+func (o *OwnerService) HasVisitors(ownerPlayerID uint64, now time.Time) bool {
+	return o.registry.HasVisitors(ownerPlayerID, now)
+}
+
 // RunEvictionLoop sweeps expired visits every five seconds and pushes a LEFT
 // tip for each one, until ctx is cancelled. Callers should run it in its own
 // goroutine for the lifetime of the Zone process.
@@ -186,8 +208,10 @@ func (o *OwnerService) RunEvictionLoop(ctx context.Context) {
 
 func (o *OwnerService) evictExpired(ctx context.Context) {
 	for _, record := range o.registry.EvictExpired(o.now()) {
+		visitorPlayerID := record.VisitorPlayerID
 		_ = o.presence.PublishFarmPresence(ctx, record.OwnerPlayerID, &wsv1.FarmPresencePush{
 			OwnerPlayerId: record.OwnerPlayerID, Kind: wsv1.FarmPresenceKind_FARM_VISITOR_LEFT,
+			VisitorPlayerId: &visitorPlayerID,
 		})
 	}
 }

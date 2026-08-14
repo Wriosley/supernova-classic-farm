@@ -104,6 +104,7 @@ func startMigrationWorker(
 	if err != nil {
 		return err
 	}
+	scheduler.SetLogger(logger)
 	go func() {
 		if runErr := scheduler.Run(ctx); runErr != nil && ctx.Err() == nil {
 			logger.Error("migration worker stopped", "error", runErr)
@@ -133,8 +134,8 @@ func (lifecycle *httpZoneLifecycle) Drain(ctx context.Context, source routing.Ro
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return nil, fmt.Errorf("Zone drain-complete returned %s", response.Status)
+		return nil, fmt.Errorf("Zone drain-complete returned %s %s",
+			response.Status, zoneErrorCode(response.Body))
 	}
 	var result struct {
 		ShardID    uint32            `json:"shard_id"`
@@ -208,13 +209,27 @@ func (lifecycle *httpZoneLifecycle) post(ctx context.Context, endpoint string, s
 		return err
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 	for _, status := range accepted {
 		if response.StatusCode == status {
+			_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 			return nil
 		}
 	}
-	return fmt.Errorf("Zone %s returned %s", action, response.Status)
+	return fmt.Errorf("Zone %s returned %s %s",
+		action, response.Status, zoneErrorCode(response.Body))
+}
+
+// zoneErrorCode extracts the Zone's rejection code so a retry log names the
+// failing precondition instead of an ambiguous status line.
+func zoneErrorCode(body io.Reader) string {
+	var payload struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(io.LimitReader(body, 4096)).Decode(&payload); err != nil ||
+		strings.TrimSpace(payload.Code) == "" {
+		return "UNKNOWN_CODE"
+	}
+	return payload.Code
 }
 
 func (lifecycle *httpZoneLifecycle) postResponse(ctx context.Context, endpoint string, shardID uint32, action string, body []byte) (*http.Response, error) {

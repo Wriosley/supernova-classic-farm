@@ -429,6 +429,7 @@ const (
 	FarmPresenceKind_FARM_PRESENCE_KIND_UNSPECIFIED FarmPresenceKind = 0
 	FarmPresenceKind_FARM_VISITOR_ENTERED           FarmPresenceKind = 1
 	FarmPresenceKind_FARM_VISITOR_LEFT              FarmPresenceKind = 2
+	FarmPresenceKind_FARM_CROP_STOLEN               FarmPresenceKind = 3
 )
 
 // Enum value maps for FarmPresenceKind.
@@ -437,11 +438,13 @@ var (
 		0: "FARM_PRESENCE_KIND_UNSPECIFIED",
 		1: "FARM_VISITOR_ENTERED",
 		2: "FARM_VISITOR_LEFT",
+		3: "FARM_CROP_STOLEN",
 	}
 	FarmPresenceKind_value = map[string]int32{
 		"FARM_PRESENCE_KIND_UNSPECIFIED": 0,
 		"FARM_VISITOR_ENTERED":           1,
 		"FARM_VISITOR_LEFT":              2,
+		"FARM_CROP_STOLEN":               3,
 	}
 )
 
@@ -5042,11 +5045,13 @@ type FarmVisitSnapshot struct {
 	OwnerPlayerId uint64                 `protobuf:"varint,1,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
 	Version       *FarmViewVersion       `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	Plots         []*PublicPlotView      `protobuf:"bytes,3,rep,name=plots,proto3" json:"plots,omitempty"`
-	// 访客可见的公开生涯；不含私有图鉴。
-	Career        *PlayerCareerView `protobuf:"bytes,4,opt,name=career,proto3" json:"career,omitempty"`
-	Pet           *PublicPetView    `protobuf:"bytes,5,opt,name=pet,proto3" json:"pet,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 访客可见的公开生涯。
+	Career *PlayerCareerView `protobuf:"bytes,4,opt,name=career,proto3" json:"career,omitempty"`
+	Pet    *PublicPetView    `protobuf:"bytes,5,opt,name=pet,proto3" json:"pet,omitempty"`
+	// 访客可见的图鉴解锁列表；只含已点亮 crop_id，不含其它私有进度。
+	CropCompendium *CropCompendiumView `protobuf:"bytes,6,opt,name=crop_compendium,json=cropCompendium,proto3" json:"crop_compendium,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *FarmVisitSnapshot) Reset() {
@@ -5110,6 +5115,13 @@ func (x *FarmVisitSnapshot) GetCareer() *PlayerCareerView {
 func (x *FarmVisitSnapshot) GetPet() *PublicPetView {
 	if x != nil {
 		return x.Pet
+	}
+	return nil
+}
+
+func (x *FarmVisitSnapshot) GetCropCompendium() *CropCompendiumView {
+	if x != nil {
+		return x.CropCompendium
 	}
 	return nil
 }
@@ -5179,6 +5191,12 @@ type FarmPresencePush struct {
 	OwnerPlayerId      uint64                 `protobuf:"varint,1,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
 	Kind               FarmPresenceKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=classicfarm.ws.v1.FarmPresenceKind" json:"kind,omitempty"`
 	VisitorAccountName *string                `protobuf:"bytes,3,opt,name=visitor_account_name,json=visitorAccountName,proto3,oneof" json:"visitor_account_name,omitempty"`
+	VisitorPlayerId    *uint64                `protobuf:"varint,4,opt,name=visitor_player_id,json=visitorPlayerId,proto3,oneof" json:"visitor_player_id,omitempty"`
+	PlotId             *uint32                `protobuf:"varint,5,opt,name=plot_id,json=plotId,proto3,oneof" json:"plot_id,omitempty"`
+	CropItemId         *uint32                `protobuf:"varint,6,opt,name=crop_item_id,json=cropItemId,proto3,oneof" json:"crop_item_id,omitempty"`
+	Quantity           *uint32                `protobuf:"varint,7,opt,name=quantity,proto3,oneof" json:"quantity,omitempty"`
+	GuardTriggered     *bool                  `protobuf:"varint,8,opt,name=guard_triggered,json=guardTriggered,proto3,oneof" json:"guard_triggered,omitempty"`
+	GuardPenalty       *int64                 `protobuf:"varint,9,opt,name=guard_penalty,json=guardPenalty,proto3,oneof" json:"guard_penalty,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -5232,6 +5250,48 @@ func (x *FarmPresencePush) GetVisitorAccountName() string {
 		return *x.VisitorAccountName
 	}
 	return ""
+}
+
+func (x *FarmPresencePush) GetVisitorPlayerId() uint64 {
+	if x != nil && x.VisitorPlayerId != nil {
+		return *x.VisitorPlayerId
+	}
+	return 0
+}
+
+func (x *FarmPresencePush) GetPlotId() uint32 {
+	if x != nil && x.PlotId != nil {
+		return *x.PlotId
+	}
+	return 0
+}
+
+func (x *FarmPresencePush) GetCropItemId() uint32 {
+	if x != nil && x.CropItemId != nil {
+		return *x.CropItemId
+	}
+	return 0
+}
+
+func (x *FarmPresencePush) GetQuantity() uint32 {
+	if x != nil && x.Quantity != nil {
+		return *x.Quantity
+	}
+	return 0
+}
+
+func (x *FarmPresencePush) GetGuardTriggered() bool {
+	if x != nil && x.GuardTriggered != nil {
+		return *x.GuardTriggered
+	}
+	return false
+}
+
+func (x *FarmPresencePush) GetGuardPenalty() int64 {
+	if x != nil && x.GuardPenalty != nil {
+		return *x.GuardPenalty
+	}
+	return 0
 }
 
 // RedDotChangedPush is unversioned; H5 clears locally on click. Loss is OK.
@@ -7913,22 +7973,37 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\rPublicPetView\x12\"\n" +
 	"\ractive_pet_id\x18\x01 \x01(\rR\vactivePetId\x12\x19\n" +
 	"\bpet_name\x18\x02 \x01(\tR\apetName\x12/\n" +
-	"\x14food_active_until_ms\x18\x03 \x01(\x03R\x11foodActiveUntilMs\"\xa3\x02\n" +
+	"\x14food_active_until_ms\x18\x03 \x01(\x03R\x11foodActiveUntilMs\"\xf3\x02\n" +
 	"\x11FarmVisitSnapshot\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x12<\n" +
 	"\aversion\x18\x02 \x01(\v2\".classicfarm.ws.v1.FarmViewVersionR\aversion\x127\n" +
 	"\x05plots\x18\x03 \x03(\v2!.classicfarm.ws.v1.PublicPlotViewR\x05plots\x12;\n" +
 	"\x06career\x18\x04 \x01(\v2#.classicfarm.ws.v1.PlayerCareerViewR\x06career\x122\n" +
-	"\x03pet\x18\x05 \x01(\v2 .classicfarm.ws.v1.PublicPetViewR\x03pet\"\xbb\x01\n" +
+	"\x03pet\x18\x05 \x01(\v2 .classicfarm.ws.v1.PublicPetViewR\x03pet\x12N\n" +
+	"\x0fcrop_compendium\x18\x06 \x01(\v2%.classicfarm.ws.v1.CropCompendiumViewR\x0ecropCompendium\"\xbb\x01\n" +
 	"\rFarmViewPatch\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x12<\n" +
 	"\aversion\x18\x02 \x01(\v2\".classicfarm.ws.v1.FarmViewVersionR\aversion\x12D\n" +
-	"\fplot_upserts\x18\x03 \x03(\v2!.classicfarm.ws.v1.PublicPlotViewR\vplotUpserts\"\xc3\x01\n" +
+	"\fplot_upserts\x18\x03 \x03(\v2!.classicfarm.ws.v1.PublicPlotViewR\vplotUpserts\"\x98\x04\n" +
 	"\x10FarmPresencePush\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x127\n" +
 	"\x04kind\x18\x02 \x01(\x0e2#.classicfarm.ws.v1.FarmPresenceKindR\x04kind\x125\n" +
-	"\x14visitor_account_name\x18\x03 \x01(\tH\x00R\x12visitorAccountName\x88\x01\x01B\x17\n" +
-	"\x15_visitor_account_name\"\x81\x02\n" +
+	"\x14visitor_account_name\x18\x03 \x01(\tH\x00R\x12visitorAccountName\x88\x01\x01\x12/\n" +
+	"\x11visitor_player_id\x18\x04 \x01(\x04H\x01R\x0fvisitorPlayerId\x88\x01\x01\x12\x1c\n" +
+	"\aplot_id\x18\x05 \x01(\rH\x02R\x06plotId\x88\x01\x01\x12%\n" +
+	"\fcrop_item_id\x18\x06 \x01(\rH\x03R\n" +
+	"cropItemId\x88\x01\x01\x12\x1f\n" +
+	"\bquantity\x18\a \x01(\rH\x04R\bquantity\x88\x01\x01\x12,\n" +
+	"\x0fguard_triggered\x18\b \x01(\bH\x05R\x0eguardTriggered\x88\x01\x01\x12(\n" +
+	"\rguard_penalty\x18\t \x01(\x03H\x06R\fguardPenalty\x88\x01\x01B\x17\n" +
+	"\x15_visitor_account_nameB\x14\n" +
+	"\x12_visitor_player_idB\n" +
+	"\n" +
+	"\b_plot_idB\x0f\n" +
+	"\r_crop_item_idB\v\n" +
+	"\t_quantityB\x12\n" +
+	"\x10_guard_triggeredB\x10\n" +
+	"\x0e_guard_penalty\"\x81\x02\n" +
 	"\x11RedDotChangedPush\x12'\n" +
 	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12=\n" +
 	"\bcategory\x18\x02 \x01(\x0e2!.classicfarm.ws.v1.RedDotCategoryR\bcategory\x12@\n" +
@@ -8206,11 +8281,12 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\rPET_NOT_FOUND\x10\xa0\x06\x12\x16\n" +
 	"\x11PET_ALREADY_OWNED\x10\xa1\x06\x12\x12\n" +
 	"\rPET_NOT_OWNED\x10\xa2\x06\x12\x11\n" +
-	"\fPET_DISABLED\x10\xa3\x06*g\n" +
+	"\fPET_DISABLED\x10\xa3\x06*}\n" +
 	"\x10FarmPresenceKind\x12\"\n" +
 	"\x1eFARM_PRESENCE_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14FARM_VISITOR_ENTERED\x10\x01\x12\x15\n" +
-	"\x11FARM_VISITOR_LEFT\x10\x02*o\n" +
+	"\x11FARM_VISITOR_LEFT\x10\x02\x12\x14\n" +
+	"\x10FARM_CROP_STOLEN\x10\x03*o\n" +
 	"\x0eRedDotCategory\x12 \n" +
 	"\x1cRED_DOT_CATEGORY_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15RED_DOT_CATEGORY_MAIL\x10\x01\x12 \n" +
@@ -8461,37 +8537,38 @@ var file_classicfarm_v1_ws_ws_proto_depIdxs = []int32{
 	57,  // 113: classicfarm.ws.v1.FarmVisitSnapshot.plots:type_name -> classicfarm.ws.v1.PublicPlotView
 	21,  // 114: classicfarm.ws.v1.FarmVisitSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
 	58,  // 115: classicfarm.ws.v1.FarmVisitSnapshot.pet:type_name -> classicfarm.ws.v1.PublicPetView
-	56,  // 116: classicfarm.ws.v1.FarmViewPatch.version:type_name -> classicfarm.ws.v1.FarmViewVersion
-	57,  // 117: classicfarm.ws.v1.FarmViewPatch.plot_upserts:type_name -> classicfarm.ws.v1.PublicPlotView
-	3,   // 118: classicfarm.ws.v1.FarmPresencePush.kind:type_name -> classicfarm.ws.v1.FarmPresenceKind
-	4,   // 119: classicfarm.ws.v1.RedDotChangedPush.category:type_name -> classicfarm.ws.v1.RedDotCategory
-	5,   // 120: classicfarm.ws.v1.RedDotChangedPush.operation:type_name -> classicfarm.ws.v1.RedDotOperation
-	59,  // 121: classicfarm.ws.v1.EnterFriendFarmResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
-	29,  // 122: classicfarm.ws.v1.FriendActionResponse.visitor_patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	60,  // 123: classicfarm.ws.v1.FriendActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
-	74,  // 124: classicfarm.ws.v1.FriendActionResponse.steal_guard:type_name -> classicfarm.ws.v1.StealGuardOutcome
-	75,  // 125: classicfarm.ws.v1.PetPanelView.pets:type_name -> classicfarm.ws.v1.PetShopEntryView
-	76,  // 126: classicfarm.ws.v1.PetPanelView.pet_food:type_name -> classicfarm.ws.v1.PetFoodShopView
-	77,  // 127: classicfarm.ws.v1.GetPetPanelResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 128: classicfarm.ws.v1.BuyPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 129: classicfarm.ws.v1.BuyPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 130: classicfarm.ws.v1.DeployPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 131: classicfarm.ws.v1.DeployPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 132: classicfarm.ws.v1.BuyPetFoodResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 133: classicfarm.ws.v1.BuyPetFoodResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 134: classicfarm.ws.v1.FeedPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 135: classicfarm.ws.v1.FeedPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 136: classicfarm.ws.v1.SendFriendGiftResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	24,  // 137: classicfarm.ws.v1.ClaimMailResponse.items_added:type_name -> classicfarm.ws.v1.ItemStackView
-	29,  // 138: classicfarm.ws.v1.ClaimMailResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	6,   // 139: classicfarm.ws.v1.MailView.kind:type_name -> classicfarm.ws.v1.MailKind
-	92,  // 140: classicfarm.ws.v1.MailView.attachments:type_name -> classicfarm.ws.v1.MailAttachmentView
-	93,  // 141: classicfarm.ws.v1.OpenMailboxResponse.mails:type_name -> classicfarm.ws.v1.MailView
-	142, // [142:142] is the sub-list for method output_type
-	142, // [142:142] is the sub-list for method input_type
-	142, // [142:142] is the sub-list for extension type_name
-	142, // [142:142] is the sub-list for extension extendee
-	0,   // [0:142] is the sub-list for field type_name
+	22,  // 116: classicfarm.ws.v1.FarmVisitSnapshot.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
+	56,  // 117: classicfarm.ws.v1.FarmViewPatch.version:type_name -> classicfarm.ws.v1.FarmViewVersion
+	57,  // 118: classicfarm.ws.v1.FarmViewPatch.plot_upserts:type_name -> classicfarm.ws.v1.PublicPlotView
+	3,   // 119: classicfarm.ws.v1.FarmPresencePush.kind:type_name -> classicfarm.ws.v1.FarmPresenceKind
+	4,   // 120: classicfarm.ws.v1.RedDotChangedPush.category:type_name -> classicfarm.ws.v1.RedDotCategory
+	5,   // 121: classicfarm.ws.v1.RedDotChangedPush.operation:type_name -> classicfarm.ws.v1.RedDotOperation
+	59,  // 122: classicfarm.ws.v1.EnterFriendFarmResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
+	29,  // 123: classicfarm.ws.v1.FriendActionResponse.visitor_patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	60,  // 124: classicfarm.ws.v1.FriendActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
+	74,  // 125: classicfarm.ws.v1.FriendActionResponse.steal_guard:type_name -> classicfarm.ws.v1.StealGuardOutcome
+	75,  // 126: classicfarm.ws.v1.PetPanelView.pets:type_name -> classicfarm.ws.v1.PetShopEntryView
+	76,  // 127: classicfarm.ws.v1.PetPanelView.pet_food:type_name -> classicfarm.ws.v1.PetFoodShopView
+	77,  // 128: classicfarm.ws.v1.GetPetPanelResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 129: classicfarm.ws.v1.BuyPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 130: classicfarm.ws.v1.BuyPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 131: classicfarm.ws.v1.DeployPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 132: classicfarm.ws.v1.DeployPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 133: classicfarm.ws.v1.BuyPetFoodResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 134: classicfarm.ws.v1.BuyPetFoodResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 135: classicfarm.ws.v1.FeedPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 136: classicfarm.ws.v1.FeedPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 137: classicfarm.ws.v1.SendFriendGiftResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	24,  // 138: classicfarm.ws.v1.ClaimMailResponse.items_added:type_name -> classicfarm.ws.v1.ItemStackView
+	29,  // 139: classicfarm.ws.v1.ClaimMailResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	6,   // 140: classicfarm.ws.v1.MailView.kind:type_name -> classicfarm.ws.v1.MailKind
+	92,  // 141: classicfarm.ws.v1.MailView.attachments:type_name -> classicfarm.ws.v1.MailAttachmentView
+	93,  // 142: classicfarm.ws.v1.OpenMailboxResponse.mails:type_name -> classicfarm.ws.v1.MailView
+	143, // [143:143] is the sub-list for method output_type
+	143, // [143:143] is the sub-list for method input_type
+	143, // [143:143] is the sub-list for extension type_name
+	143, // [143:143] is the sub-list for extension extendee
+	0,   // [0:143] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_ws_ws_proto_init() }

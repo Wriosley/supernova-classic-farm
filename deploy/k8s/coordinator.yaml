@@ -43,6 +43,16 @@ spec:
               value: zone-b
             - name: ZONE_B_ENDPOINT
               value: http://zone-b:8082
+            - name: ZONE_C_ID
+              value: d859cea1-ac5b-5524-bffa-4e542301cd95
+            - name: ZONE_C_ENDPOINT
+              value: http://zone-pool-0.zone-headless.classic-farm.svc.cluster.local:8082
+            - name: COORDINATOR_MEMBERSHIP_SOURCE
+              value: kubernetes
+            - name: COORDINATOR_MIGRATION_WORKER_ENABLED
+              value: "1"
+            - name: COORDINATOR_PLANNER_ENABLED
+              value: "0"
           ports:
             - name: http
               containerPort: 8083

@@ -2,6 +2,7 @@ export type PanelId =
   | 'account'
   | 'shop'
   | 'pet'
+  | 'compendium'
   | 'friends'
   | 'mailbox'
   | 'tasks'
@@ -11,6 +12,7 @@ export const panelTitles: Record<PanelId, string> = {
   account: '账号',
   shop: '商店',
   pet: '宠物',
+  compendium: '图鉴',
   friends: '好友',
   mailbox: '邮箱',
   tasks: '任务',
@@ -21,6 +23,7 @@ export const panelKickers: Record<PanelId, string> = {
   account: 'SESSION & DIAGNOSTICS',
   shop: 'SHOP',
   pet: 'PET',
+  compendium: 'COMPENDIUM',
   friends: 'FRIENDS',
   mailbox: 'MAILBOX',
   tasks: 'CHAPTER',
@@ -31,6 +34,7 @@ export const panelOrder: PanelId[] = [
   'account',
   'shop',
   'pet',
+  'compendium',
   'friends',
   'mailbox',
   'tasks',
