@@ -1,6 +1,7 @@
 package outbox
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -14,14 +15,21 @@ import (
 )
 
 type fakeGiftMail struct {
-	calls int
-	fail  error
+	calls  int
+	fail   error
+	called chan struct{}
 }
 
 func (f *fakeGiftMail) CreateGiftMail(
 	_ context.Context, request *mailv1.CreateGiftMailRequest,
 ) (*mailv1.CreateGiftMailResponse, error) {
 	f.calls++
+	if f.called != nil {
+		select {
+		case f.called <- struct{}{}:
+		default:
+		}
+	}
 	if f.fail != nil {
 		return nil, f.fail
 	}
@@ -31,6 +39,42 @@ func (f *fakeGiftMail) CreateGiftMail(
 type alwaysOwner struct{}
 
 func (alwaysOwner) OwnsLogicalShard(uint32) bool { return true }
+
+func TestRelayNotifyDeliversBeforeTicker(t *testing.T) {
+	store := NewMemoryStore()
+	eventID := bytes.Repeat([]byte{2}, 16)
+	payload, _ := proto.Marshal(&eventv1.CreateGiftMailV1{
+		SenderPlayerId: 1, RecipientPlayerId: 2, CropItemId: 1002, Quantity: 1,
+	})
+	store.Put(&tcaplusv1.PlayerOutbox{
+		EventId: eventID, LogicalShardId: 1,
+		EventType: uint32(datav1.OutboxEventType_CREATE_GIFT_MAIL),
+		Payload:   payload, RelayStatus: relayStatusPending, NextAttemptAtMs: 1,
+	})
+	called := make(chan struct{}, 1)
+	relay, err := NewRelay(store, &fakeGiftMail{called: called}, alwaysOwner{}, func() time.Time {
+		return time.UnixMilli(200)
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay.interval = time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { relay.Run(ctx); close(done) }()
+	relay.Notify(eventID)
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("notify did not deliver before ticker")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("relay did not stop")
+	}
+}
 
 func TestRelayOneDeliversTargetWithoutScanning(t *testing.T) {
 	store := &countingStore{MemoryStore: NewMemoryStore()}

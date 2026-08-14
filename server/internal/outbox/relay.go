@@ -62,6 +62,7 @@ type Relay struct {
 	now      func() time.Time
 	logger   *slog.Logger
 	interval time.Duration
+	wake     chan []byte
 }
 
 func NewRelay(
@@ -78,8 +79,22 @@ func NewRelay(
 	}
 	return &Relay{
 		store: store, mail: mail, owner: owner, now: now, logger: logger,
-		interval: defaultRelayInterval,
+		interval: defaultRelayInterval, wake: make(chan []byte, 1),
 	}, nil
+}
+
+// Notify hints that one durable Outbox event is ready for immediate relay.
+// It never blocks: PlayerOutbox remains authoritative and the periodic scan
+// recovers a dropped hint.
+func (r *Relay) Notify(eventID []byte) {
+	if r == nil || len(eventID) == 0 {
+		return
+	}
+	id := append([]byte(nil), eventID...)
+	select {
+	case r.wake <- id:
+	default:
+	}
 }
 
 func (r *Relay) Run(ctx context.Context) {
@@ -89,6 +104,10 @@ func (r *Relay) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case eventID := <-r.wake:
+			if err := r.RelayOne(ctx, eventID); err != nil {
+				r.logger.Error("immediate outbox relay failed", "error", err)
+			}
 		case <-ticker.C:
 			if err := r.RelayDue(ctx); err != nil {
 				r.logger.Error("outbox relay failed", "error", err)
