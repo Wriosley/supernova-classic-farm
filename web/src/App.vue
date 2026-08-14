@@ -174,6 +174,14 @@ const visitError = ref('')
 const stealBusyPlotId = ref<number>()
 const stealError = ref('')
 const stealMessage = ref('')
+// stolenRounds maps owner+plot to the crop item this visitor already stole
+// there. PublicPlotView.can_steal is plot-level (steal_count vs
+// max_steal_times across every visitor), but the owner Actor additionally
+// refuses a second steal from the same crop round by the same visitor. That
+// condition is per-visitor and therefore absent from a projection shared by
+// all visitors, so without tracking it locally the "可偷" badge keeps
+// inviting a steal the server always rejects.
+const stolenRounds = ref<Map<string, number>>(new Map())
 const { floats: farmFloats, pushFloat: pushFarmFloat } = usePlotFloats()
 const {
   floats: visitFloats,
@@ -405,6 +413,7 @@ function clearResult(): void {
   visitSnapshot.value = undefined
   visitError.value = ''
   farmVisitorEntries.value = new Map()
+  stolenRounds.value = new Map()
 }
 
 function applyPatch(current: PlayerSnapshot, patch: PlayerStatePatch): PlayerSnapshot {
@@ -1164,8 +1173,9 @@ const DEVELOPMENT_PEST_ID = 1
 
 // runFriendAction is shared by steal / apply-pest / catch-pest / help-clean:
 // apply visitor_patch from the RPC response (no state_version on
-// FriendActionResponse — see stealFriendCrop comment), ignore farm_patch
-// (FARM_VIEW_CHANGED push owns that), and surface a short notice.
+// FriendActionResponse — see stealFriendCrop comment), fold farm_patch into
+// the visited farm so the plot redraws on the response instead of waiting for
+// the FARM_VIEW_CHANGED push, and surface a short notice.
 async function runFriendAction(
   plotId: number,
   action: 'steal' | 'pest' | 'catch' | 'clean',
@@ -1180,6 +1190,7 @@ async function runFriendAction(
   stealError.value = ''
   stealMessage.value = ''
   const coinsBefore = Number(snapshot.value?.coinBalance ?? 0n)
+  let failureFloat = '操作失败'
   try {
     let response: WsEnvelope
     let expectedCase:
@@ -1241,6 +1252,13 @@ async function runFriendAction(
     }
     setServerClock(response.serverTimeMs)
     if (response.error) {
+      if (action === 'steal' && response.error.code === ErrorCode.STEAL_NOT_AVAILABLE) {
+        // The badge said the plot was stealable, so the refusal is the
+        // per-visitor rule the public view cannot express: this visitor
+        // already took their unit from this crop round.
+        markStolenRound(ownerId, plotId)
+        failureFloat = '偷过了不能再投了哦'
+      }
       if (
         action === 'steal' &&
         (response.error.code === ErrorCode.STEAL_NOT_AVAILABLE ||
@@ -1258,10 +1276,15 @@ async function runFriendAction(
     if (currentSnapshot && patch) {
       snapshot.value = applyPatch(currentSnapshot, patch)
     }
+    const farmPatch = response.payload.value.farmPatch
+    if (farmPatch) {
+      mergeVisitedFarmPatch(farmPatch)
+    }
     const coinsAfter = Number(snapshot.value?.coinBalance ?? coinsBefore)
     const coinDelta = coinsAfter - coinsBefore
 
     if (action === 'steal') {
+      markStolenRound(ownerId, plotId)
       const guard = response.payload.value.stealGuard
       if (guard?.guardTriggered) {
         const penalty = Number(guard.guardPenaltyApplied ?? 0n)
@@ -1292,11 +1315,44 @@ async function runFriendAction(
     stealMessage.value = successMessage
   } catch (error) {
     stealError.value = error instanceof Error ? error.message : String(error)
-    pushVisitFloat(plotId, '操作失败', 'error')
+    pushVisitFloat(plotId, failureFloat, 'error')
   } finally {
     stealBusyPlotId.value = undefined
   }
 }
+
+function stealRoundKey(ownerId: bigint, plotId: number): string {
+  return `${ownerId}:${plotId}`
+}
+
+function markStolenRound(ownerId: bigint, plotId: number): void {
+  const cropItemId = visitSnapshot.value?.plots.find((plot) => plot.plotId === plotId)?.cropItemId
+  if (!cropItemId) {
+    return
+  }
+  const next = new Map(stolenRounds.value)
+  next.set(stealRoundKey(ownerId, plotId), cropItemId)
+  stolenRounds.value = next
+}
+
+// stolenPlotIds narrows stolenRounds to the plots still holding the very batch
+// this visitor stole from. A replanted plot restarts at steal_count 0, and a
+// different crop is a new round outright, so either check alone retires a
+// stale record without needing the server to echo per-visitor state.
+const stolenPlotIds = computed(() => {
+  const ownerId = visitOwnerId.value
+  const plots = visitSnapshot.value?.plots
+  if (ownerId === undefined || !plots) {
+    return []
+  }
+  return plots
+    .filter(
+      (plot) =>
+        plot.stealCount > 0 &&
+        stolenRounds.value.get(stealRoundKey(ownerId, plot.plotId)) === plot.cropItemId,
+    )
+    .map((plot) => plot.plotId)
+})
 
 function pushPetFloat(text: string): void {
   petFloatText.value = text
@@ -1636,13 +1692,6 @@ function handleRedDotChanged(envelope: WsEnvelope): void {
   friendFarmRedDots.value = next
 }
 
-// handleFarmViewChanged applies an incremental FarmViewPatch to the friend
-// farm currently being visited. The public farm version is independent from
-// the visitor's own (owner_epoch, player_seq): an epoch change means the
-// owner Actor rotated (restart/migration/re-created), so the only correct
-// recovery is a fresh ENTER_FRIEND_FARM full snapshot; a seq gap (missed or
-// out-of-order Push) recovers the same way, while a same-or-older seq is a
-// harmless duplicate that is simply ignored.
 function handleFarmViewChanged(envelope: WsEnvelope): void {
   if (envelope.payload.case !== 'farmViewChangedPush') {
     return
@@ -1652,6 +1701,20 @@ function handleFarmViewChanged(envelope: WsEnvelope): void {
     refreshOwnFarmOnVisitorChange(patch)
     return
   }
+  mergeVisitedFarmPatch(patch)
+}
+
+// mergeVisitedFarmPatch applies an incremental FarmViewPatch to the friend
+// farm currently being visited. The public farm version is independent from
+// the visitor's own (owner_epoch, player_seq): an epoch change means the
+// owner Actor rotated (restart/migration/re-created), so the only correct
+// recovery is a fresh ENTER_FRIEND_FARM full snapshot; a seq gap (missed or
+// out-of-order Push) recovers the same way, while a same-or-older seq is a
+// harmless duplicate that is simply ignored. Both the broadcast push and the
+// farm_patch returned by this client's own friend action land here, and they
+// carry the same seq, so whichever arrives second is dropped as a duplicate
+// rather than mistaken for a gap.
+function mergeVisitedFarmPatch(patch: FarmViewPatch): void {
   const ownerId = visitOwnerId.value
   if (ownerId === undefined || patch.ownerPlayerId !== ownerId) {
     return
@@ -2132,6 +2195,7 @@ onBeforeUnmount(() => {
       :steal-busy-plot-id="stealBusyPlotId"
       :now-ms="nowMs"
       :plot-floats="visitFloats"
+      :stolen-plot-ids="stolenPlotIds"
       @steal="stealFriendCrop"
       @pest="applyPestToFriend"
       @catch="catchPestForFriend"

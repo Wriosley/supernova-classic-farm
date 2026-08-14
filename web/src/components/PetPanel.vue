@@ -46,10 +46,6 @@ const satietyLabel = computed(() => {
   const until = props.panel?.foodActiveUntilMs ?? 0n
   return until > props.nowMs ? '充足' : '饥饿'
 })
-
-function formatBps(bps: number): string {
-  return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`
-}
 </script>
 
 <template>
@@ -70,8 +66,8 @@ function formatBps(bps: number): string {
         <div class="pet-item__body">
           <strong>{{ pet.name }}</strong>
           <p>价格：{{ pet.priceCoins }}金币</p>
-          <p>护主概率：{{ formatBps(pet.guardProbabilityBps) }}</p>
-          <p>触发罚款：{{ pet.guardPenaltyCoins }}金币</p>
+          <p>护主概率：100%</p>
+          <p>触发罚款：随机 1~10 金币</p>
         </div>
         <div class="pet-item__actions">
           <button

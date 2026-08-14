@@ -32,6 +32,7 @@ const props = defineProps<{
   stealBusyPlotId?: number
   nowMs: bigint
   plotFloats?: PlotFloat[]
+  stolenPlotIds?: number[]
 }>()
 
 const emit = defineEmits<{
@@ -78,6 +79,17 @@ function canHelpClean(plot: PublicPlotView): boolean {
   return plot.plotState === PlotState.NEED_CLEANUP
 }
 
+// can_steal only reports whether the batch still has a stealable unit left for
+// visitors at large; the owner Actor separately allows each visitor one unit
+// per crop round, which the parent tracks per plot.
+function alreadyStolen(plot: PublicPlotView): boolean {
+  return (props.stolenPlotIds ?? []).includes(plot.plotId)
+}
+
+function canStealNow(plot: PublicPlotView): boolean {
+  return plot.canSteal && !alreadyStolen(plot)
+}
+
 function isValidTarget(plot: PublicPlotView): boolean {
   switch (selectedTool.value) {
     case 'pest':
@@ -85,7 +97,7 @@ function isValidTarget(plot: PublicPlotView): boolean {
     case 'catch':
       return canCatchPest(plot)
     case 'steal':
-      return plot.canSteal
+      return canStealNow(plot)
     case 'clean':
       return canHelpClean(plot)
   }
@@ -109,7 +121,7 @@ function plotPresentation(plot: PublicPlotView) {
       }
     case PlotState.MATURE:
       return {
-        label: plot.canSteal ? `${name}可偷` : `${name}已成熟`,
+        label: canStealNow(plot) ? `${name}可偷` : `${name}已成熟`,
         base: plotMature,
         crop: matureCropSprite(plot.cropId),
       }
@@ -148,7 +160,7 @@ function plotMeta(plot: PublicPlotView): string {
     const seconds = estimatedSeconds(plot)
     parts.push(seconds > 0 ? `成熟倒计时：${formatCountdown(seconds)}` : '即将成熟')
   } else if (plot.plotState === PlotState.MATURE) {
-    parts.push(plot.canSteal ? '可偷' : '本批作物不可偷')
+    parts.push(alreadyStolen(plot) ? '你已偷过这批' : plot.canSteal ? '可偷' : '本批作物不可偷')
   } else if (plot.plotState === PlotState.NEED_CLEANUP) {
     parts.push('已收获，待清理')
   } else {
@@ -183,7 +195,9 @@ function clickPlot(plot: PublicPlotView): void {
             ? '只能给成长中的作物捉虫。'
             : '这块地没有害虫。'
           : selectedTool.value === 'steal'
-            ? '这块地现在不能偷。'
+            ? alreadyStolen(plot)
+              ? '偷过了不能再投了哦'
+              : '这块地现在不能偷。'
             : '这块地现在不能清理。'
     emit('plotFeedback', plot.plotId, text)
     return
@@ -274,7 +288,7 @@ function clickPlot(plot: PublicPlotView): void {
             >
               <span class="plot-number">
                 PLOT {{ String(plot.plotId).padStart(2, '0') }}
-                <em v-if="plot.canSteal" class="steal-badge">可偷</em>
+                <em v-if="canStealNow(plot)" class="steal-badge">可偷</em>
                 <em v-else-if="plot.pestActive" class="steal-badge pest-badge">有虫</em>
               </span>
               <span class="plot-stage" :data-state="plot.plotState">

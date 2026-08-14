@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,7 @@ func TestRoutingConfigurationFromEnvironment(t *testing.T) {
 
 	t.Setenv("ZONE_C_ID", "zone-pool-uuid")
 	t.Setenv("ZONE_C_ENDPOINT", "http://zone-pool-0:8082")
+	t.Setenv("ZONE_POOL_REPLICAS", "")
 	extras := extraMoveTargetsFromEnvironment()
 	if len(extras) != 1 || extras[0].ZoneID != "zone-pool-uuid" || extras[0].Endpoint != "http://zone-pool-0:8082" {
 		t.Fatalf("extra move targets = %+v", extras)
@@ -62,6 +64,20 @@ func TestRoutingConfigurationFromEnvironment(t *testing.T) {
 	mode, zones, err = routingConfigurationFromEnvironment()
 	if err != nil || len(zones) != 2 {
 		t.Fatalf("ZONE_C must not expand placement zones: %q %+v %v", mode, zones, err)
+	}
+
+	t.Setenv("ZONE_C_ID", "")
+	t.Setenv("ZONE_POOL_REPLICAS", "2")
+	t.Setenv("CLUSTER_ID", "classic-farm-local")
+	t.Setenv("POD_NAMESPACE", "classic-farm")
+	t.Setenv("ZONE_STATEFULSET_NAME", "zone-pool")
+	t.Setenv("ZONE_HEADLESS_SERVICE", "zone-headless")
+	extras = extraMoveTargetsFromEnvironment()
+	if len(extras) != 2 {
+		t.Fatalf("pool extras = %+v", extras)
+	}
+	if extras[0].ZoneID == extras[1].ZoneID || !strings.Contains(extras[0].Endpoint, "zone-pool-") {
+		t.Fatalf("derived pool extras = %+v", extras)
 	}
 
 	t.Setenv("ROUTING_MODE", "unknown")

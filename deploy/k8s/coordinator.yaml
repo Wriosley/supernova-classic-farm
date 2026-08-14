@@ -47,6 +47,14 @@ spec:
               value: d859cea1-ac5b-5524-bffa-4e542301cd95
             - name: ZONE_C_ENDPOINT
               value: http://zone-pool-0.zone-headless.classic-farm.svc.cluster.local:8082
+            - name: ZONE_POOL_REPLICAS
+              value: "4"
+            - name: ZONE_STATEFULSET_NAME
+              value: zone-pool
+            - name: CLUSTER_ID
+              value: classic-farm-local
+            - name: ZONE_HEADLESS_SERVICE
+              value: zone-headless
             - name: COORDINATOR_MEMBERSHIP_SOURCE
               value: kubernetes
             - name: COORDINATOR_MIGRATION_WORKER_ENABLED

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/zoneidentity"
 )
 
 const defaultLeaseDuration = 30 * time.Second
@@ -518,15 +520,52 @@ func routingConfigurationFromEnvironment() (
 	}
 }
 
+// extraMoveTargetsFromEnvironment returns Zones that may already own Shards
+// after migration, without joining the static placement set. Prefer deriving
+// the whole zone-pool topology from ZONE_POOL_REPLICAS so scaling the
+// StatefulSet does not require a matching ZONE_C/D/E list.
 func extraMoveTargetsFromEnvironment() []routing.ZoneCandidate {
-	zoneCID := strings.TrimSpace(os.Getenv("ZONE_C_ID"))
-	if zoneCID == "" {
+	byID := make(map[string]routing.ZoneCandidate)
+	if zoneCID := strings.TrimSpace(os.Getenv("ZONE_C_ID")); zoneCID != "" {
+		byID[zoneCID] = routing.ZoneCandidate{
+			ZoneID:   zoneCID,
+			Endpoint: environmentOr("ZONE_C_ENDPOINT", "http://zone-pool-0.zone-headless.classic-farm.svc.cluster.local:8082"),
+		}
+	}
+	replicas, err := strconv.Atoi(strings.TrimSpace(os.Getenv("ZONE_POOL_REPLICAS")))
+	if err != nil || replicas <= 0 {
+		return mapValues(byID)
+	}
+	clusterID := environmentOr("CLUSTER_ID", "classic-farm-local")
+	namespace := environmentOr("POD_NAMESPACE", "classic-farm")
+	statefulSet := environmentOr("ZONE_STATEFULSET_NAME", "zone-pool")
+	headless := environmentOr("ZONE_HEADLESS_SERVICE", "zone-headless")
+	for ordinal := 0; ordinal < replicas; ordinal++ {
+		zoneID, deriveErr := zoneidentity.DeriveLogicalID(clusterID, namespace, statefulSet, ordinal)
+		if deriveErr != nil {
+			continue
+		}
+		endpoint := fmt.Sprintf(
+			"http://%s-%d.%s.%s.svc.cluster.local:8082",
+			statefulSet, ordinal, headless, namespace,
+		)
+		byID[zoneID] = routing.ZoneCandidate{ZoneID: zoneID, Endpoint: endpoint}
+	}
+	return mapValues(byID)
+}
+
+func mapValues(byID map[string]routing.ZoneCandidate) []routing.ZoneCandidate {
+	if len(byID) == 0 {
 		return nil
 	}
-	return []routing.ZoneCandidate{{
-		ZoneID:   zoneCID,
-		Endpoint: environmentOr("ZONE_C_ENDPOINT", "http://zone-pool-0.zone-headless.classic-farm.svc.cluster.local:8082"),
-	}}
+	result := make([]routing.ZoneCandidate, 0, len(byID))
+	for _, zone := range byID {
+		result = append(result, zone)
+	}
+	slices.SortFunc(result, func(left, right routing.ZoneCandidate) int {
+		return strings.Compare(left.ZoneID, right.ZoneID)
+	})
+	return result
 }
 
 func environmentOr(key, fallback string) string {
