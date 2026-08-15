@@ -12,15 +12,18 @@ const props = defineProps<{
   catalog: CropCatalogEntryView[]
   compendium?: CropCompendiumView | null
   ownerLabel?: string
+  newCropIds?: number[]
 }>()
 
 const unlocked = computed(() => new Set(props.compendium?.unlockedCropIds ?? []))
+const newCrops = computed(() => new Set(props.newCropIds ?? []))
 
 const entries = computed(() =>
   props.catalog.map((crop) => ({
     crop,
     sprite: matureCropSprite(crop.cropId),
     lit: unlocked.value.has(crop.cropId),
+    isNew: unlocked.value.has(crop.cropId) && newCrops.value.has(crop.cropId),
   })),
 )
 
@@ -46,8 +49,9 @@ const compendiumTitle = computed(() =>
         <li
           v-for="entry in entries"
           :key="entry.crop.cropId"
-          :class="{ locked: !entry.lit }"
+          :class="{ locked: !entry.lit, new: entry.isNew }"
         >
+          <span v-if="entry.isNew" class="compendium-new-dot" aria-label="新解锁" />
           <img class="pixel-art" :src="entry.sprite" alt="" />
           <strong>{{ entry.crop.name || `作物#${entry.crop.cropId}` }}</strong>
           <small>{{ entry.lit ? '已点亮' : '未解锁' }}</small>
@@ -85,6 +89,7 @@ p {
 }
 
 .compendium-grid li {
+  position: relative;
   display: grid;
   justify-items: center;
   gap: 0.15rem;
@@ -93,6 +98,22 @@ p {
   border-radius: 0.6rem;
   background: #fbfdf2;
   text-align: center;
+}
+
+.compendium-new-dot {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #d72626;
+  box-shadow: 0 0 0 1px rgb(125 15 15 / 18%);
+}
+
+.compendium-grid li.new {
+  border-color: #e95b45;
 }
 
 .compendium-grid img {

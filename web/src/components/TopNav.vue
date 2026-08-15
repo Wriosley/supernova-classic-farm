@@ -6,8 +6,9 @@ const props = defineProps<{
   accountName: string
   coinBalance?: bigint
   activePanel: PanelId | null
-  mailRedDot: boolean
+  newMailCount: number
   friendRedDot: boolean
+  compendiumRedDot: boolean
 }>()
 
 const emit = defineEmits<{
@@ -17,12 +18,18 @@ const emit = defineEmits<{
 function redDot(panel: PanelId): boolean {
   switch (panel) {
     case 'mailbox':
-      return props.mailRedDot
+      return props.newMailCount > 0
     case 'friends':
       return props.friendRedDot
+    case 'compendium':
+      return props.compendiumRedDot
     default:
       return false
   }
+}
+
+function mailBadge(): string {
+  return props.newMailCount > 99 ? '99+' : props.newMailCount.toString()
 }
 </script>
 
@@ -47,7 +54,12 @@ function redDot(panel: PanelId): boolean {
         @click="emit('select', panel)"
       >
         {{ panelTitles[panel] }}
-        <span v-if="redDot(panel)" class="red-dot" aria-label="有新消息" />
+        <span
+          v-if="panel === 'mailbox' && newMailCount > 0"
+          class="mail-count-badge"
+          :aria-label="`${newMailCount} 封新邮件`"
+        >{{ mailBadge() }}</span>
+        <span v-else-if="redDot(panel)" class="red-dot" aria-label="有新消息" />
       </button>
     </nav>
   </header>
@@ -121,5 +133,20 @@ function redDot(panel: PanelId): boolean {
   position: absolute;
   top: 0.25rem;
   right: 0.25rem;
+}
+
+.mail-count-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.25rem;
+  padding: 0.05rem 0.28rem;
+  border-radius: 999px;
+  background: #d72626;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.15rem;
+  text-align: center;
 }
 </style>

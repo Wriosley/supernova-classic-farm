@@ -11,6 +11,9 @@ const harness = vi.hoisted(() => ({
   configUrl: 'http://127.0.0.1:18080/v1/client-config',
   configSha256: new Uint8Array(32),
   sockets: [] as unknown[],
+  friends: [] as Array<Record<string, unknown>>,
+  unlockedCropIds: [] as number[],
+  unreadMailCount: 0,
 }))
 
 vi.mock('../lib/http', () => ({
@@ -102,6 +105,7 @@ vi.mock('../lib/ws', () => {
   class FarmWebSocket {
     connected = false
     private connectionHandler?: (value: boolean) => void
+    private redDotChangedHandler?: (envelope: unknown) => void
 
     constructor() {
       harness.sockets.push(this)
@@ -114,7 +118,18 @@ vi.mock('../lib/ws', () => {
     setPlayerStateChangedHandler() {}
     setFarmPresenceChangedHandler() {}
     setFarmViewChangedHandler() {}
-    setRedDotChangedHandler() {}
+    setRedDotChangedHandler(handler?: (envelope: unknown) => void) {
+      this.redDotChangedHandler = handler
+    }
+
+    emitMailCount(count: number) {
+      this.redDotChangedHandler?.({
+        payload: {
+          case: 'redDotChangedPush',
+          value: { category: 1, operation: 1, count },
+        },
+      })
+    }
 
     async connectAndAuth(
       _url: string,
@@ -149,7 +164,12 @@ vi.mock('../lib/ws', () => {
     }
 
     async requestPlayerSnapshot() {
-      return envelope('getPlayerSnapshotResponse', { snapshot })
+      return envelope('getPlayerSnapshotResponse', {
+        snapshot: {
+          ...snapshot,
+          cropCompendium: { unlockedCropIds: [...harness.unlockedCropIds] },
+        },
+      })
     }
 
     async requestShop() {
@@ -164,11 +184,37 @@ vi.mock('../lib/ws', () => {
     }
 
     async listFriends() {
-      return envelope('listFriendsResponse', { friends: [] })
+      return envelope('listFriendsResponse', { friends: harness.friends })
+    }
+
+    async enterFriendFarm() {
+      return envelope('enterFriendFarmResponse', {
+        visitId: 'visit-1',
+        snapshot: {
+          playerId: harness.playerId,
+          coinBalance: 29n,
+          inventory: [{ itemId: 1001, quantity: 2 }],
+          plots: [],
+          currentChapter: { chapterId: 1, status: 1, tasks: [] },
+          career: {},
+          cropCompendium: { unlockedCropIds: [] },
+        },
+      })
+    }
+
+    async getOfflineVisitors() {
+      return envelope('getOfflineVisitorsResponse', { visitors: [], visitorVersion: 0n, truncated: false })
+    }
+
+    async ackOfflineVisitors() {
+      return envelope('ackOfflineVisitorsResponse', { applied: true })
     }
 
     async checkMailboxIndicator() {
-      return envelope('checkMailboxIndicatorResponse', { hasUnread: false })
+      return envelope('checkMailboxIndicatorResponse', {
+        hasNewMail: harness.unreadMailCount > 0,
+        newMailCount: harness.unreadMailCount,
+      })
     }
 
     async openMailbox() {
@@ -190,6 +236,88 @@ async function signIn() {
 }
 
 describe('game shell navigation', () => {
+  it('fills the unread mail count during the first login', async () => {
+    harness.unreadMailCount = 7
+    const wrapper = await signIn()
+    const mailboxButton = wrapper
+      .findAll('.top-nav__link')
+      .find((candidate) => candidate.text().startsWith('邮箱'))
+
+    expect(mailboxButton?.find('.mail-count-badge').text()).toBe('7')
+    await mailboxButton!.trigger('click')
+    await flushPromises()
+    expect(mailboxButton?.find('.mail-count-badge').text()).toBe('7')
+    wrapper.unmount()
+    harness.unreadMailCount = 0
+  })
+
+  it('accepts an authoritative zero-count mail push', async () => {
+    harness.unreadMailCount = 1
+    const wrapper = await signIn()
+    const mailboxButton = wrapper
+      .findAll('.top-nav__link')
+      .find((candidate) => candidate.text().startsWith('邮箱'))
+    expect(mailboxButton?.find('.mail-count-badge').text()).toBe('1')
+
+    const socket = harness.sockets.at(-1) as { emitMailCount: (count: number) => void }
+    socket.emitMailCount(0)
+    await flushPromises()
+    expect(mailboxButton?.find('.mail-count-badge').exists()).toBe(false)
+
+    wrapper.unmount()
+    harness.unreadMailCount = 0
+  })
+
+  it('shows unseen compendium updates until the compendium drawer closes', async () => {
+    localStorage.setItem(
+      `classic-farm:compendium-seen:${harness.playerId.toString()}`,
+      JSON.stringify([]),
+    )
+    harness.unlockedCropIds = [2001]
+
+    const wrapper = await signIn()
+    const compendiumButton = wrapper
+      .findAll('.top-nav__link')
+      .find((candidate) => candidate.text().startsWith('图鉴'))
+
+    expect(compendiumButton?.find('.red-dot').exists()).toBe(true)
+    await compendiumButton!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.compendium-new-dot').exists()).toBe(true)
+
+    await compendiumButton!.trigger('click')
+    await flushPromises()
+    expect(compendiumButton?.find('.red-dot').exists()).toBe(false)
+    expect(
+      JSON.parse(
+        localStorage.getItem(
+          `classic-farm:compendium-seen:${harness.playerId.toString()}`,
+        ) ?? '[]',
+      ),
+    ).toEqual([2001])
+
+    wrapper.unmount()
+    harness.unlockedCropIds = []
+    localStorage.clear()
+  })
+
+  it('shows friend-farm indicators returned by the login friend query', async () => {
+    harness.friends = [{ playerId: 84n, accountName: 'test123455', mayHaveStealableCrop: true }]
+    const wrapper = await signIn()
+    const friendButton = wrapper.findAll('.top-nav__link').find((candidate) => candidate.text().startsWith('好友'))
+    expect(friendButton?.find('.red-dot').exists()).toBe(true)
+    await friendButton!.trigger('click')
+    await flushPromises()
+    expect(friendButton?.find('.red-dot').exists()).toBe(false)
+    expect(wrapper.find('.friends-list .red-dot').exists()).toBe(true)
+    const enterButton = wrapper.find('.friend-enter')
+    await enterButton.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.friends-list .red-dot').exists()).toBe(true)
+    wrapper.unmount()
+    harness.friends = []
+  })
+
   it('enters the shell after a successful handshake', async () => {
     const wrapper = await signIn()
     expect(wrapper.find('.game-shell').exists()).toBe(true)

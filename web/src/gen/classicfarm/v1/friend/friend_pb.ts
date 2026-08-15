@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file classicfarm/v1/friend/friend.proto.
  */
 export const file_classicfarm_v1_friend_friend: GenFile = /*@__PURE__*/
-  fileDesc("CiJjbGFzc2ljZmFybS92MS9mcmllbmQvZnJpZW5kLnByb3RvEhVjbGFzc2ljZmFybS5mcmllbmQudjEiMgoWQ3JlYXRlU2hhcmVDb2RlUmVxdWVzdBIYChBjYWxsZXJfcGxheWVyX2lkGAEgASgEIpEBChdDcmVhdGVTaGFyZUNvZGVSZXNwb25zZRIMCgRjb2RlGAEgASgJEhUKDWNyZWF0ZWRfYXRfbXMYAiABKAMSFQoNZXhwaXJlc19hdF9tcxgDIAEoAxIRCglzaGFyZV91cmwYBSABKAkSJwoFZXJyb3IYBCABKAsyGC5jbGFzc2ljZmFybS53cy52MS5FcnJvciJAChZSZWRlZW1TaGFyZUNvZGVSZXF1ZXN0EhgKEGNhbGxlcl9wbGF5ZXJfaWQYASABKAQSDAoEY29kZRgCIAEoCSKhAQoXUmVkZWVtU2hhcmVDb2RlUmVzcG9uc2USMQoGZnJpZW5kGAEgASgLMiEuY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLkZyaWVuZFZpZXcSEwoLcmVsYXRpb25faWQYAiABKAwSFQoNbmV3bHlfY3JlYXRlZBgDIAEoCBInCgVlcnJvchgEIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yIi4KEkxpc3RGcmllbmRzUmVxdWVzdBIYChBjYWxsZXJfcGxheWVyX2lkGAEgASgEInIKE0xpc3RGcmllbmRzUmVzcG9uc2USMgoHZnJpZW5kcxgBIAMoCzIhLmNsYXNzaWNmYXJtLmZyaWVuZC52MS5GcmllbmRWaWV3EicKBWVycm9yGAIgASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiRAoYQ2hlY2tNdXR1YWxGcmllbmRSZXF1ZXN0EhMKC3BsYXllcl9hX2lkGAEgASgEEhMKC3BsYXllcl9iX2lkGAIgASgEIoUBChlDaGVja011dHVhbEZyaWVuZFJlc3BvbnNlEhUKDW11dHVhbF9mcmllbmQYASABKAgSGAoLcmVsYXRpb25faWQYAiABKAxIAIgBARInCgVlcnJvchgDIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yQg4KDF9yZWxhdGlvbl9pZCJMCgpGcmllbmRWaWV3EhEKCXBsYXllcl9pZBgBIAEoBBIUCgxhY2NvdW50X25hbWUYAiABKAkSFQoNY3JlYXRlZF9hdF9tcxgDIAEoAzLRAwoNRnJpZW5kU2VydmljZRJwCg9DcmVhdGVTaGFyZUNvZGUSLS5jbGFzc2ljZmFybS5mcmllbmQudjEuQ3JlYXRlU2hhcmVDb2RlUmVxdWVzdBouLmNsYXNzaWNmYXJtLmZyaWVuZC52MS5DcmVhdGVTaGFyZUNvZGVSZXNwb25zZRJwCg9SZWRlZW1TaGFyZUNvZGUSLS5jbGFzc2ljZmFybS5mcmllbmQudjEuUmVkZWVtU2hhcmVDb2RlUmVxdWVzdBouLmNsYXNzaWNmYXJtLmZyaWVuZC52MS5SZWRlZW1TaGFyZUNvZGVSZXNwb25zZRJkCgtMaXN0RnJpZW5kcxIpLmNsYXNzaWNmYXJtLmZyaWVuZC52MS5MaXN0RnJpZW5kc1JlcXVlc3QaKi5jbGFzc2ljZmFybS5mcmllbmQudjEuTGlzdEZyaWVuZHNSZXNwb25zZRJ2ChFDaGVja011dHVhbEZyaWVuZBIvLmNsYXNzaWNmYXJtLmZyaWVuZC52MS5DaGVja011dHVhbEZyaWVuZFJlcXVlc3QaMC5jbGFzc2ljZmFybS5mcmllbmQudjEuQ2hlY2tNdXR1YWxGcmllbmRSZXNwb25zZUJWWlRnaXRodWIuY29tL1dyaW9zbGV5L3N1cGVybm92YS1jbGFzc2ljLWZhcm0vc2VydmVyL2dlbi9jbGFzc2ljZmFybS92MS9mcmllbmQ7ZnJpZW5kdjFiBnByb3RvMw", [file_classicfarm_v1_ws_ws]);
+  fileDesc("CiJjbGFzc2ljZmFybS92MS9mcmllbmQvZnJpZW5kLnByb3RvEhVjbGFzc2ljZmFybS5mcmllbmQudjEiMgoWQ3JlYXRlU2hhcmVDb2RlUmVxdWVzdBIYChBjYWxsZXJfcGxheWVyX2lkGAEgASgEIpEBChdDcmVhdGVTaGFyZUNvZGVSZXNwb25zZRIMCgRjb2RlGAEgASgJEhUKDWNyZWF0ZWRfYXRfbXMYAiABKAMSFQoNZXhwaXJlc19hdF9tcxgDIAEoAxIRCglzaGFyZV91cmwYBSABKAkSJwoFZXJyb3IYBCABKAsyGC5jbGFzc2ljZmFybS53cy52MS5FcnJvciJAChZSZWRlZW1TaGFyZUNvZGVSZXF1ZXN0EhgKEGNhbGxlcl9wbGF5ZXJfaWQYASABKAQSDAoEY29kZRgCIAEoCSKhAQoXUmVkZWVtU2hhcmVDb2RlUmVzcG9uc2USMQoGZnJpZW5kGAEgASgLMiEuY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLkZyaWVuZFZpZXcSEwoLcmVsYXRpb25faWQYAiABKAwSFQoNbmV3bHlfY3JlYXRlZBgDIAEoCBInCgVlcnJvchgEIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yIi4KEkxpc3RGcmllbmRzUmVxdWVzdBIYChBjYWxsZXJfcGxheWVyX2lkGAEgASgEInIKE0xpc3RGcmllbmRzUmVzcG9uc2USMgoHZnJpZW5kcxgBIAMoCzIhLmNsYXNzaWNmYXJtLmZyaWVuZC52MS5GcmllbmRWaWV3EicKBWVycm9yGAIgASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiRAoYQ2hlY2tNdXR1YWxGcmllbmRSZXF1ZXN0EhMKC3BsYXllcl9hX2lkGAEgASgEEhMKC3BsYXllcl9iX2lkGAIgASgEIoUBChlDaGVja011dHVhbEZyaWVuZFJlc3BvbnNlEhUKDW11dHVhbF9mcmllbmQYASABKAgSGAoLcmVsYXRpb25faWQYAiABKAxIAIgBARInCgVlcnJvchgDIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yQg4KDF9yZWxhdGlvbl9pZCLpAQoKRnJpZW5kVmlldxIRCglwbGF5ZXJfaWQYASABKAQSFAoMYWNjb3VudF9uYW1lGAIgASgJEhUKDWNyZWF0ZWRfYXRfbXMYAyABKAMSFgoOcHJlc2VuY2Vfa25vd24YBCABKAgSDgoGb25saW5lGAUgASgIEhcKD2xhc3Rfc2Vlbl9hdF9tcxgGIAEoAxIaChJmYXJtX3N1bW1hcnlfa25vd24YByABKAgSHQoVZWFybGllc3RfbWF0dXJlX2F0X21zGAggASgDEh8KF21heV9oYXZlX3N0ZWFsYWJsZV9jcm9wGAkgASgIIjUKGUdldE9mZmxpbmVWaXNpdG9yc1JlcXVlc3QSGAoQY2FsbGVyX3BsYXllcl9pZBgBIAEoBCKmAQoaR2V0T2ZmbGluZVZpc2l0b3JzUmVzcG9uc2USMwoIdmlzaXRvcnMYASADKAsyIS5jbGFzc2ljZmFybS5mcmllbmQudjEuRnJpZW5kVmlldxIXCg92aXNpdG9yX3ZlcnNpb24YAiABKAQSEQoJdHJ1bmNhdGVkGAMgASgIEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IiTgoZQWNrT2ZmbGluZVZpc2l0b3JzUmVxdWVzdBIYChBjYWxsZXJfcGxheWVyX2lkGAEgASgEEhcKD3Zpc2l0b3JfdmVyc2lvbhgCIAEoBCJWChpBY2tPZmZsaW5lVmlzaXRvcnNSZXNwb25zZRIPCgdhcHBsaWVkGAEgASgIEicKBWVycm9yGA8gASgLMhguY2xhc3NpY2Zhcm0ud3MudjEuRXJyb3IyxwUKDUZyaWVuZFNlcnZpY2UScAoPQ3JlYXRlU2hhcmVDb2RlEi0uY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLkNyZWF0ZVNoYXJlQ29kZVJlcXVlc3QaLi5jbGFzc2ljZmFybS5mcmllbmQudjEuQ3JlYXRlU2hhcmVDb2RlUmVzcG9uc2UScAoPUmVkZWVtU2hhcmVDb2RlEi0uY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLlJlZGVlbVNoYXJlQ29kZVJlcXVlc3QaLi5jbGFzc2ljZmFybS5mcmllbmQudjEuUmVkZWVtU2hhcmVDb2RlUmVzcG9uc2USZAoLTGlzdEZyaWVuZHMSKS5jbGFzc2ljZmFybS5mcmllbmQudjEuTGlzdEZyaWVuZHNSZXF1ZXN0GiouY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLkxpc3RGcmllbmRzUmVzcG9uc2USdgoRQ2hlY2tNdXR1YWxGcmllbmQSLy5jbGFzc2ljZmFybS5mcmllbmQudjEuQ2hlY2tNdXR1YWxGcmllbmRSZXF1ZXN0GjAuY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLkNoZWNrTXV0dWFsRnJpZW5kUmVzcG9uc2USeQoSR2V0T2ZmbGluZVZpc2l0b3JzEjAuY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLkdldE9mZmxpbmVWaXNpdG9yc1JlcXVlc3QaMS5jbGFzc2ljZmFybS5mcmllbmQudjEuR2V0T2ZmbGluZVZpc2l0b3JzUmVzcG9uc2USeQoSQWNrT2ZmbGluZVZpc2l0b3JzEjAuY2xhc3NpY2Zhcm0uZnJpZW5kLnYxLkFja09mZmxpbmVWaXNpdG9yc1JlcXVlc3QaMS5jbGFzc2ljZmFybS5mcmllbmQudjEuQWNrT2ZmbGluZVZpc2l0b3JzUmVzcG9uc2VCVlpUZ2l0aHViLmNvbS9Xcmlvc2xleS9zdXBlcm5vdmEtY2xhc3NpYy1mYXJtL3NlcnZlci9nZW4vY2xhc3NpY2Zhcm0vdjEvZnJpZW5kO2ZyaWVuZHYxYgZwcm90bzM", [file_classicfarm_v1_ws_ws]);
 
 /**
  * @generated from message classicfarm.friend.v1.CreateShareCodeRequest
@@ -231,6 +231,36 @@ export type FriendView = Message<"classicfarm.friend.v1.FriendView"> & {
    * @generated from field: int64 created_at_ms = 3;
    */
   createdAtMs: bigint;
+
+  /**
+   * @generated from field: bool presence_known = 4;
+   */
+  presenceKnown: boolean;
+
+  /**
+   * @generated from field: bool online = 5;
+   */
+  online: boolean;
+
+  /**
+   * @generated from field: int64 last_seen_at_ms = 6;
+   */
+  lastSeenAtMs: bigint;
+
+  /**
+   * @generated from field: bool farm_summary_known = 7;
+   */
+  farmSummaryKnown: boolean;
+
+  /**
+   * @generated from field: int64 earliest_mature_at_ms = 8;
+   */
+  earliestMatureAtMs: bigint;
+
+  /**
+   * @generated from field: bool may_have_stealable_crop = 9;
+   */
+  mayHaveStealableCrop: boolean;
 };
 
 /**
@@ -239,6 +269,99 @@ export type FriendView = Message<"classicfarm.friend.v1.FriendView"> & {
  */
 export const FriendViewSchema: GenMessage<FriendView> = /*@__PURE__*/
   messageDesc(file_classicfarm_v1_friend_friend, 8);
+
+/**
+ * @generated from message classicfarm.friend.v1.GetOfflineVisitorsRequest
+ */
+export type GetOfflineVisitorsRequest = Message<"classicfarm.friend.v1.GetOfflineVisitorsRequest"> & {
+  /**
+   * @generated from field: uint64 caller_player_id = 1;
+   */
+  callerPlayerId: bigint;
+};
+
+/**
+ * Describes the message classicfarm.friend.v1.GetOfflineVisitorsRequest.
+ * Use `create(GetOfflineVisitorsRequestSchema)` to create a new message.
+ */
+export const GetOfflineVisitorsRequestSchema: GenMessage<GetOfflineVisitorsRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_friend_friend, 9);
+
+/**
+ * @generated from message classicfarm.friend.v1.GetOfflineVisitorsResponse
+ */
+export type GetOfflineVisitorsResponse = Message<"classicfarm.friend.v1.GetOfflineVisitorsResponse"> & {
+  /**
+   * @generated from field: repeated classicfarm.friend.v1.FriendView visitors = 1;
+   */
+  visitors: FriendView[];
+
+  /**
+   * @generated from field: uint64 visitor_version = 2;
+   */
+  visitorVersion: bigint;
+
+  /**
+   * @generated from field: bool truncated = 3;
+   */
+  truncated: boolean;
+
+  /**
+   * @generated from field: classicfarm.ws.v1.Error error = 15;
+   */
+  error?: Error | undefined;
+};
+
+/**
+ * Describes the message classicfarm.friend.v1.GetOfflineVisitorsResponse.
+ * Use `create(GetOfflineVisitorsResponseSchema)` to create a new message.
+ */
+export const GetOfflineVisitorsResponseSchema: GenMessage<GetOfflineVisitorsResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_friend_friend, 10);
+
+/**
+ * @generated from message classicfarm.friend.v1.AckOfflineVisitorsRequest
+ */
+export type AckOfflineVisitorsRequest = Message<"classicfarm.friend.v1.AckOfflineVisitorsRequest"> & {
+  /**
+   * @generated from field: uint64 caller_player_id = 1;
+   */
+  callerPlayerId: bigint;
+
+  /**
+   * @generated from field: uint64 visitor_version = 2;
+   */
+  visitorVersion: bigint;
+};
+
+/**
+ * Describes the message classicfarm.friend.v1.AckOfflineVisitorsRequest.
+ * Use `create(AckOfflineVisitorsRequestSchema)` to create a new message.
+ */
+export const AckOfflineVisitorsRequestSchema: GenMessage<AckOfflineVisitorsRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_friend_friend, 11);
+
+/**
+ * @generated from message classicfarm.friend.v1.AckOfflineVisitorsResponse
+ */
+export type AckOfflineVisitorsResponse = Message<"classicfarm.friend.v1.AckOfflineVisitorsResponse"> & {
+  /**
+   * @generated from field: bool applied = 1;
+   */
+  applied: boolean;
+
+  /**
+   * @generated from field: classicfarm.ws.v1.Error error = 15;
+   */
+  error?: Error | undefined;
+};
+
+/**
+ * Describes the message classicfarm.friend.v1.AckOfflineVisitorsResponse.
+ * Use `create(AckOfflineVisitorsResponseSchema)` to create a new message.
+ */
+export const AckOfflineVisitorsResponseSchema: GenMessage<AckOfflineVisitorsResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_friend_friend, 12);
 
 /**
  * All calls are unary, require the internal HMAC metadata contract, and use a
@@ -278,6 +401,22 @@ export const FriendService: GenService<{
     methodKind: "unary";
     input: typeof CheckMutualFriendRequestSchema;
     output: typeof CheckMutualFriendResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.friend.v1.FriendService.GetOfflineVisitors
+   */
+  getOfflineVisitors: {
+    methodKind: "unary";
+    input: typeof GetOfflineVisitorsRequestSchema;
+    output: typeof GetOfflineVisitorsResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.friend.v1.FriendService.AckOfflineVisitors
+   */
+  ackOfflineVisitors: {
+    methodKind: "unary";
+    input: typeof AckOfflineVisitorsRequestSchema;
+    output: typeof AckOfflineVisitorsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_classicfarm_v1_friend_friend, 0);

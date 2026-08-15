@@ -86,7 +86,11 @@ async function copyShareUrl(url: string): Promise<void> {
     <h3>好友列表（{{ friends.length }}）</h3>
     <ul v-if="friends.length" class="friends-list">
       <li v-for="friend in friends" :key="friend.playerId.toString()">
-        <span>{{ friend.accountName }}</span>
+		<span>
+		  {{ friend.accountName }}
+		  <strong v-if="friend.online" class="presence presence--online">在线</strong>
+		  <span v-else class="presence presence--offline">离线</span>
+		</span>
         <div class="friend-actions">
           <button
             type="button"
@@ -121,6 +125,20 @@ async function copyShareUrl(url: string): Promise<void> {
   margin: 0;
   color: #24361f;
   font-size: 0.95rem;
+}
+
+.presence {
+  margin-left: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.presence--online {
+  color: #238636;
+  font-weight: 900;
+}
+
+.presence--offline {
+  color: #8a8f98;
 }
 
 .friends-panel__code {

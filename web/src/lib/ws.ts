@@ -413,6 +413,14 @@ export class FarmWebSocket {
     })
   }
 
+  async getOfflineVisitors(playerId: bigint): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.GET_OFFLINE_VISITORS, { case: 'getOfflineVisitorsRequest', value: {} })
+  }
+
+  async ackOfflineVisitors(playerId: bigint, visitorVersion: bigint): Promise<WsEnvelope> {
+    return this.sendGameRequest(playerId, Action.ACK_OFFLINE_VISITORS, { case: 'ackOfflineVisitorsRequest', value: { visitorVersion } })
+  }
+
   async enterFriendFarm(playerId: bigint, ownerPlayerId: bigint): Promise<WsEnvelope> {
     return this.sendGameRequest(playerId, Action.ENTER_FRIEND_FARM, {
       case: 'enterFriendFarmRequest',

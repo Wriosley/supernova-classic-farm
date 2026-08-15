@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   ClientConfigPackage,
   GatewayEndpoint,
@@ -200,8 +200,11 @@ const petError = ref('')
 const petMessage = ref('')
 const petFloatText = ref('')
 let petFloatTimer: ReturnType<typeof setTimeout> | undefined
-const mailRedDot = ref(false)
+const newMailCount = ref(0)
 const friendFarmRedDots = ref<Set<string>>(new Set())
+const friendPanelRedDot = ref(false)
+const newCompendiumCropIds = ref<Set<number>>(new Set())
+const offlineVisitorNotice = ref('')
 const activePanel = ref<PanelId | null>(null)
 const mailboxMails = ref<MailView[]>([])
 const mailboxNextPageToken = ref('')
@@ -263,7 +266,8 @@ const diagnosticFacts = computed(() => [
   { label: '库存项', value: String(snapshot.value?.inventory.length ?? 0) },
   { label: '地块', value: String(snapshot.value?.plots.length ?? 0) },
 ])
-const friendRedDot = computed(() => friendFarmRedDots.value.size > 0)
+const friendRedDot = computed(() => friendPanelRedDot.value)
+const compendiumRedDot = computed(() => newCompendiumCropIds.value.size > 0)
 // The farm stays on screen when the socket dies, so the shell must say so
 // itself; otherwise every panel just looks empty and every button dead.
 const shellNotice = computed(() => {
@@ -281,8 +285,11 @@ const shellNotice = computed(() => {
 
 function togglePanel(panel: PanelId): void {
   if (activePanel.value === panel) {
-    activePanel.value = null
+    closePanel()
     return
+  }
+  if (activePanel.value === 'compendium') {
+    acknowledgeCompendiumUpdates()
   }
   activePanel.value = panel
   switch (panel) {
@@ -290,6 +297,7 @@ function togglePanel(panel: PanelId): void {
       void openMailbox()
       break
     case 'friends':
+      friendPanelRedDot.value = false
       void loadFriends()
       break
     case 'pet':
@@ -307,6 +315,79 @@ function togglePanel(panel: PanelId): void {
       break
   }
 }
+
+function compendiumSeenStorageKey(playerId: bigint): string {
+  return `classic-farm:compendium-seen:${playerId.toString()}`
+}
+
+function storeSeenCompendium(playerId: bigint, cropIds: readonly number[]): void {
+  try {
+    localStorage.setItem(compendiumSeenStorageKey(playerId), JSON.stringify([...cropIds]))
+  } catch {
+    // A blocked/full localStorage must not prevent the player from using the game.
+  }
+}
+
+function loadSeenCompendium(playerId: bigint): Set<number> | undefined {
+  try {
+    const raw = localStorage.getItem(compendiumSeenStorageKey(playerId))
+    if (raw === null) {
+      return undefined
+    }
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed) || !parsed.every((value) => Number.isInteger(value))) {
+      return undefined
+    }
+    return new Set(parsed as number[])
+  } catch {
+    return undefined
+  }
+}
+
+function acknowledgeCompendiumUpdates(): void {
+  const current = snapshot.value
+  if (current) {
+    storeSeenCompendium(current.playerId, current.cropCompendium?.unlockedCropIds ?? [])
+  }
+  newCompendiumCropIds.value = new Set()
+}
+
+function closePanel(): void {
+  if (activePanel.value === 'compendium') {
+    acknowledgeCompendiumUpdates()
+  }
+  activePanel.value = null
+}
+
+watch(snapshot, (next, previous) => {
+  if (!next) {
+    newCompendiumCropIds.value = new Set()
+    return
+  }
+
+  const unlocked = next.cropCompendium?.unlockedCropIds ?? []
+  if (!previous || previous.playerId !== next.playerId) {
+    const seen = loadSeenCompendium(next.playerId)
+    if (seen === undefined) {
+      // The first snapshot on this browser is the baseline, not a flood of
+      // historical "new" entries introduced by this UI feature.
+      storeSeenCompendium(next.playerId, unlocked)
+      newCompendiumCropIds.value = new Set()
+      return
+    }
+    newCompendiumCropIds.value = new Set(unlocked.filter((cropId) => !seen.has(cropId)))
+    return
+  }
+
+  const previousUnlocked = new Set(previous.cropCompendium?.unlockedCropIds ?? [])
+  const newlyUnlocked = unlocked.filter((cropId) => !previousUnlocked.has(cropId))
+  if (newlyUnlocked.length > 0) {
+    newCompendiumCropIds.value = new Set([
+      ...newCompendiumCropIds.value,
+      ...newlyUnlocked,
+    ])
+  }
+})
 const inventoryMap = computed(() => {
   const map = new Map<number, number>()
   for (const item of snapshot.value?.inventory ?? []) {
@@ -381,8 +462,10 @@ function clearResult(): void {
   petPanel.value = null
   petError.value = ''
   petMessage.value = ''
-  mailRedDot.value = false
+  newMailCount.value = 0
   friendFarmRedDots.value = new Set()
+  newCompendiumCropIds.value = new Set()
+  offlineVisitorNotice.value = ''
   activePanel.value = null
   mailboxMails.value = []
   mailboxNextPageToken.value = ''
@@ -648,16 +731,6 @@ function mailItemName(itemId: number): string {
   return `物品#${itemId}`
 }
 
-function clearFriendFarmRedDot(ownerId: bigint): void {
-  const key = ownerId.toString()
-  if (!friendFarmRedDots.value.has(key)) {
-    return
-  }
-  const next = new Set(friendFarmRedDots.value)
-  next.delete(key)
-  friendFarmRedDots.value = next
-}
-
 function friendHasFarmRedDot(ownerId: bigint): boolean {
   return friendFarmRedDots.value.has(ownerId.toString())
 }
@@ -671,19 +744,21 @@ async function refreshMailRedDot(playerId: bigint): Promise<void> {
   try {
     const response = await socket.checkMailboxIndicator(playerId)
     setServerClock(response.serverTimeMs)
-    if (response.error || response.payload.case !== 'checkMailboxIndicatorResponse') {
+    if (response.error) {
+      console.warn('邮箱未读数量查询返回错误', response.error)
       return
     }
-    if (response.payload.value.hasNewMail) {
-      mailRedDot.value = true
+    if (response.payload.case !== 'checkMailboxIndicatorResponse') {
+      console.warn('邮箱未读数量查询响应类型错误', response.payload.case)
+      return
     }
+    newMailCount.value = response.payload.value.newMailCount
   } catch (error) {
     console.warn('邮箱红点查询失败', error)
   }
 }
 
 async function openMailbox(): Promise<void> {
-  mailRedDot.value = false
   activePanel.value = 'mailbox'
   mailboxFilter.value = 'all'
   mailboxError.value = ''
@@ -719,7 +794,7 @@ async function refreshMailbox(pageToken = ''): Promise<void> {
     mailboxMails.value = loadingMore
       ? [...mailboxMails.value, ...page.mails]
       : page.mails
-    mailboxNextPageToken.value = page.nextPageToken
+	mailboxNextPageToken.value = page.nextPageToken
   } catch (error) {
     mailboxError.value = error instanceof Error ? error.message : String(error)
     if (!loadingMore) {
@@ -745,6 +820,7 @@ async function markMailRead(mail: MailView): Promise<void> {
     mailboxMails.value = mailboxMails.value.map((entry) =>
       entry.mailId === mail.mailId ? { ...entry, read: true } : entry,
     )
+    newMailCount.value = Math.max(0, newMailCount.value - 1)
   } catch (error) {
     mailboxError.value = error instanceof Error ? error.message : String(error)
   }
@@ -781,6 +857,9 @@ async function claimMail(mail: MailView): Promise<void> {
         ? { ...entry, read: true, claimed: true }
         : entry,
     )
+    if (!mail.read) {
+      newMailCount.value = Math.max(0, newMailCount.value - 1)
+    }
     mailboxMessage.value = '领取成功'
   } catch (error) {
     mailboxError.value = error instanceof Error ? error.message : String(error)
@@ -889,11 +968,34 @@ async function loadFriends(): Promise<void> {
     if (response.payload.case !== 'listFriendsResponse') {
       throw new Error('好友列表响应 payload 无效')
     }
-    friends.value = response.payload.value.friends
+	    friends.value = response.payload.value.friends
+	    friendFarmRedDots.value = new Set(
+	      friends.value
+	        .filter((friend) => friend.mayHaveStealableCrop)
+	        .map((friend) => friend.playerId.toString()),
+	    )
+	    friendPanelRedDot.value =
+	      activePanel.value !== 'friends' &&
+	      friends.value.some((friend) => friend.mayHaveStealableCrop)
   } catch (error) {
     friendsError.value = error instanceof Error ? error.message : String(error)
   } finally {
     friendsBusy.value = false
+  }
+}
+
+async function loadOfflineVisitors(playerId: bigint): Promise<void> {
+  try {
+    const response = await socket.getOfflineVisitors(playerId)
+    if (response.error || response.payload.case !== 'getOfflineVisitorsResponse') return
+    const payload = response.payload.value
+    if (payload.visitors.length === 0 || payload.visitorVersion === 0n) return
+    const names = payload.visitors.map((visitor) => visitor.accountName || visitor.playerId.toString())
+    offlineVisitorNotice.value = `在你离线期间，${names.join('、')}${payload.truncated ? '等好友' : ''}访问过你的农场`
+    const ack = await socket.ackOfflineVisitors(playerId, payload.visitorVersion)
+    if (ack.error) console.warn('离线访客确认失败', ack.error)
+  } catch (error) {
+    console.warn('离线访客查询失败', error)
   }
 }
 
@@ -1115,7 +1217,6 @@ async function enterFriendFarm(ownerId: bigint): Promise<void> {
   if (!playerId || !socket.connected || visitBusy.value) {
     return
   }
-  clearFriendFarmRedDot(ownerId)
   if (visitOwnerId.value !== undefined && visitOwnerId.value !== ownerId) {
     // A visitor may only be inside one friend's farm at a time; leave the
     // previous farm before entering the newly selected one.
@@ -1674,7 +1775,9 @@ function handleRedDotChanged(envelope: WsEnvelope): void {
     return
   }
   if (push.category === RedDotCategory.MAIL) {
-    mailRedDot.value = set
+    // MailSvr now publishes an absolute unread count. SET+0 is therefore an
+    // authoritative zero, not the legacy "count unavailable" sentinel.
+    newMailCount.value = clear ? 0 : push.count
     return
   }
   const ownerId = push.sourcePlayerId
@@ -1686,8 +1789,12 @@ function handleRedDotChanged(envelope: WsEnvelope): void {
   const next = new Set(friendFarmRedDots.value)
   if (set) {
     next.add(key)
+    friendPanelRedDot.value = true
   } else {
     next.delete(key)
+    if (next.size === 0) {
+      friendPanelRedDot.value = false
+    }
   }
   friendFarmRedDots.value = next
 }
@@ -1909,13 +2016,17 @@ async function establishSnapshot(): Promise<void> {
   }
   snapshot.value = response.payload.value.snapshot
   phase.value = 'ready'
+  // Mail is the only login side load that restores a user-visible unread
+  // indicator. Run it first so catalog/friend/offline-visitor latency or a
+  // stuck optional request cannot prevent mailbox recovery.
+  await refreshMailRedDot(connection.auth.playerId)
   // The snapshot alone is enough to show the farm, so a failing side load must
   // not throw: that would drop the player into the shell with an empty seed bar
   // and an error nobody can see.
   await reloadCatalog()
   await refreshPetPanel()
   await loadFriends()
-  await refreshMailRedDot(connection.auth.playerId)
+  await loadOfflineVisitors(connection.auth.playerId)
   await redeemPendingFriendInvite()
   // Reload restores only the Session cookie; visit leases die with the old
   // WebSocket. If this tab was mid-visit, re-ENTER the remembered owner so
@@ -2169,8 +2280,9 @@ onBeforeUnmount(() => {
       :account-name="session?.accountName ?? ''"
       :coin-balance="snapshot?.coinBalance"
       :active-panel="activePanel"
-      :mail-red-dot="mailRedDot"
+      :new-mail-count="newMailCount"
       :friend-red-dot="friendRedDot"
+      :compendium-red-dot="compendiumRedDot"
       @select="togglePanel"
     />
 
@@ -2183,6 +2295,11 @@ onBeforeUnmount(() => {
 
     <p v-if="inviteNotice && signedIn" class="shell-notice" role="status">
       <span>{{ inviteNotice }}</span>
+    </p>
+
+    <p v-if="offlineVisitorNotice" class="shell-notice" role="status">
+      <span>{{ offlineVisitorNotice }}</span>
+      <button type="button" @click="offlineVisitorNotice = ''">知道了</button>
     </p>
 
     <FriendFarmDashboard
@@ -2288,12 +2405,13 @@ onBeforeUnmount(() => {
       :open="activePanel === 'compendium'"
       :title="panelTitles.compendium"
       :kicker="panelKickers.compendium"
-      @close="activePanel = null"
+      @close="closePanel"
     >
       <CompendiumPanel
         :career="snapshot?.career"
         :catalog="cropCatalog"
         :compendium="snapshot?.cropCompendium"
+        :new-crop-ids="[...newCompendiumCropIds]"
       />
     </GameDrawer>
 

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file classicfarm/v1/info/info.proto.
  */
 export const file_classicfarm_v1_info_info: GenFile = /*@__PURE__*/
-  fileDesc("Ch5jbGFzc2ljZmFybS92MS9pbmZvL2luZm8ucHJvdG8SE2NsYXNzaWNmYXJtLmluZm8udjEiQgoUU2V0TWFpbFJlZERvdFJlcXVlc3QSEQoJcGxheWVyX2lkGAEgASgEEhcKD25vdGlmaWNhdGlvbl9pZBgCIAEoCSJAChVTZXRNYWlsUmVkRG90UmVzcG9uc2USJwoFZXJyb3IYDyABKAsyGC5jbGFzc2ljZmFybS53cy52MS5FcnJvciJkCh9Ob3RpZnlPd25lclBsb3RTdGVhbGFibGVSZXF1ZXN0EhcKD293bmVyX3BsYXllcl9pZBgBIAEoBBIPCgdwbG90X2lkGAIgASgNEhcKD25vdGlmaWNhdGlvbl9pZBgDIAEoCSJLCiBOb3RpZnlPd25lclBsb3RTdGVhbGFibGVSZXNwb25zZRInCgVlcnJvchgPIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yMv8BCgtJbmZvU2VydmljZRJmCg1TZXRNYWlsUmVkRG90EikuY2xhc3NpY2Zhcm0uaW5mby52MS5TZXRNYWlsUmVkRG90UmVxdWVzdBoqLmNsYXNzaWNmYXJtLmluZm8udjEuU2V0TWFpbFJlZERvdFJlc3BvbnNlEocBChhOb3RpZnlPd25lclBsb3RTdGVhbGFibGUSNC5jbGFzc2ljZmFybS5pbmZvLnYxLk5vdGlmeU93bmVyUGxvdFN0ZWFsYWJsZVJlcXVlc3QaNS5jbGFzc2ljZmFybS5pbmZvLnYxLk5vdGlmeU93bmVyUGxvdFN0ZWFsYWJsZVJlc3BvbnNlQlJaUGdpdGh1Yi5jb20vV3Jpb3NsZXkvc3VwZXJub3ZhLWNsYXNzaWMtZmFybS9zZXJ2ZXIvZ2VuL2NsYXNzaWNmYXJtL3YxL2luZm87aW5mb3YxYgZwcm90bzM", [file_classicfarm_v1_ws_ws]);
+  fileDesc("Ch5jbGFzc2ljZmFybS92MS9pbmZvL2luZm8ucHJvdG8SE2NsYXNzaWNmYXJtLmluZm8udjEiQgoUU2V0TWFpbFJlZERvdFJlcXVlc3QSEQoJcGxheWVyX2lkGAEgASgEEhcKD25vdGlmaWNhdGlvbl9pZBgCIAEoCSJAChVTZXRNYWlsUmVkRG90UmVzcG9uc2USJwoFZXJyb3IYDyABKAsyGC5jbGFzc2ljZmFybS53cy52MS5FcnJvciJkCh9Ob3RpZnlPd25lclBsb3RTdGVhbGFibGVSZXF1ZXN0EhcKD293bmVyX3BsYXllcl9pZBgBIAEoBBIPCgdwbG90X2lkGAIgASgNEhcKD25vdGlmaWNhdGlvbl9pZBgDIAEoCSJLCiBOb3RpZnlPd25lclBsb3RTdGVhbGFibGVSZXNwb25zZRInCgVlcnJvchgPIAEoCzIYLmNsYXNzaWNmYXJtLndzLnYxLkVycm9yIsQBChNQcmVzZW5jZUxlYXNlVXBkYXRlEhEKCXBsYXllcl9pZBgBIAEoBBIOCgZvbmxpbmUYAiABKAgSFwoPb25saW5lX3VudGlsX21zGAMgASgDEhcKD2xhc3Rfc2Vlbl9hdF9tcxgEIAEoAxIXCg9sb2dpY2FsX3pvbmVfaWQYBSABKAkSFgoOaW5jYXJuYXRpb25faWQYBiABKAkSEwoLb3duZXJfZXBvY2gYByABKAQSEgoKc291cmNlX3NlcRgIIAEoBCJWChpVcGRhdGVQcmVzZW5jZUxlYXNlUmVxdWVzdBI4CgZ1cGRhdGUYASABKAsyKC5jbGFzc2ljZmFybS5pbmZvLnYxLlByZXNlbmNlTGVhc2VVcGRhdGUiLgobVXBkYXRlUHJlc2VuY2VMZWFzZVJlc3BvbnNlEg8KB2FwcGxpZWQYASABKAgiXAofQmF0Y2hSZW5ld1ByZXNlbmNlTGVhc2VzUmVxdWVzdBI5Cgd1cGRhdGVzGAEgAygLMiguY2xhc3NpY2Zhcm0uaW5mby52MS5QcmVzZW5jZUxlYXNlVXBkYXRlIjkKIEJhdGNoUmVuZXdQcmVzZW5jZUxlYXNlc1Jlc3BvbnNlEhUKDWFwcGxpZWRfY291bnQYASABKA0izQEKE0Zhcm1RdWlja0luZm9VcGRhdGUSEQoJcGxheWVyX2lkGAEgASgEEhMKC293bmVyX2Vwb2NoGAIgASgEEhsKE2NoZWNrcG9pbnRfcmV2aXNpb24YAyABKAQSGAoQaGFzX2dyb3dpbmdfY3JvcBgEIAEoCBIdChVlYXJsaWVzdF9tYXR1cmVfYXRfbXMYBSABKAMSIQoZaGFzX21hdHVyZV9jcm9wX2NhbmRpZGF0ZRgGIAEoCBIVCg11cGRhdGVkX2F0X21zGAcgASgDIlYKGlVwZGF0ZUZhcm1RdWlja0luZm9SZXF1ZXN0EjgKBnVwZGF0ZRgBIAEoCzIoLmNsYXNzaWNmYXJtLmluZm8udjEuRmFybVF1aWNrSW5mb1VwZGF0ZSIuChtVcGRhdGVGYXJtUXVpY2tJbmZvUmVzcG9uc2USDwoHYXBwbGllZBgBIAEoCCJOCh5CYXRjaEdldFBsYXllclF1aWNrSW5mb1JlcXVlc3QSEgoKcGxheWVyX2lkcxgBIAMoBBIYChB2aWV3ZXJfcGxheWVyX2lkGAIgASgEIlgKH0JhdGNoR2V0UGxheWVyUXVpY2tJbmZvUmVzcG9uc2USNQoHcGxheWVycxgBIAMoCzIkLmNsYXNzaWNmYXJtLmluZm8udjEuUGxheWVyUXVpY2tJbmZvIssCCg9QbGF5ZXJRdWlja0luZm8SEQoJcGxheWVyX2lkGAEgASgEEhYKDnByZXNlbmNlX2tub3duGAIgASgIEg4KBm9ubGluZRgDIAEoCBIXCg9vbmxpbmVfdW50aWxfbXMYBCABKAMSFwoPbGFzdF9zZWVuX2F0X21zGAUgASgDEhoKEmZhcm1fc3VtbWFyeV9rbm93bhgGIAEoCBIYChBoYXNfZ3Jvd2luZ19jcm9wGAcgASgIEh0KFWVhcmxpZXN0X21hdHVyZV9hdF9tcxgIIAEoAxIhChloYXNfbWF0dXJlX2Nyb3BfY2FuZGlkYXRlGAkgASgIEhMKC293bmVyX2Vwb2NoGAogASgEEhsKE2NoZWNrcG9pbnRfcmV2aXNpb24YCyABKAQSIQoZc2hvd19vZmZsaW5lX2Zhcm1fcmVkX2RvdBgMIAEoCCJqCh1SZWNvcmRPZmZsaW5lRmFybVZpc2l0UmVxdWVzdBIZChF2aXNpdG9yX3BsYXllcl9pZBgBIAEoBBIXCg9vd25lcl9wbGF5ZXJfaWQYAiABKAQSFQoNdmlzaXRlZF9hdF9tcxgDIAEoAyJmCh5SZWNvcmRPZmZsaW5lRmFybVZpc2l0UmVzcG9uc2USIgoacmVjb3JkZWRfZm9yX29mZmxpbmVfb3duZXIYASABKAgSIAoYc2Vlbl9jaGVja3BvaW50X3JldmlzaW9uGAIgASgEIjQKGUdldE9mZmxpbmVWaXNpdG9yc1JlcXVlc3QSFwoPb3duZXJfcGxheWVyX2lkGAEgASgEImQKGkdldE9mZmxpbmVWaXNpdG9yc1Jlc3BvbnNlEhoKEnZpc2l0b3JfcGxheWVyX2lkcxgBIAMoBBIXCg92aXNpdG9yX3ZlcnNpb24YAiABKAQSEQoJdHJ1bmNhdGVkGAMgASgIIk0KGUFja09mZmxpbmVWaXNpdG9yc1JlcXVlc3QSFwoPb3duZXJfcGxheWVyX2lkGAEgASgEEhcKD3Zpc2l0b3JfdmVyc2lvbhgCIAEoBCItChpBY2tPZmZsaW5lVmlzaXRvcnNSZXNwb25zZRIPCgdhcHBsaWVkGAEgASgIIlkKHEFwcGx5UHJpdmF0ZU1haWxFdmVudFJlcXVlc3QSEQoJcGxheWVyX2lkGAEgASgEEg8KB21haWxfaWQYAiABKAkSFQoNY3JlYXRlZF9hdF9tcxgDIAEoAyJXCh1BcHBseVByaXZhdGVNYWlsRXZlbnRSZXNwb25zZRINCgVrbm93bhgBIAEoCBIWCg5uZXdfbWFpbF9jb3VudBgCIAEoDRIPCgdhcHBsaWVkGAMgASgIInQKGlNldE1haWxib3hRdWlja0luZm9SZXF1ZXN0EhEKCXBsYXllcl9pZBgBIAEoBBIWCg5uZXdfbWFpbF9jb3VudBgCIAEoDRIRCgljdXJzb3JfbXMYAyABKAMSGAoQY2FsY3VsYXRlZF9hdF9tcxgEIAEoAyIuChtTZXRNYWlsYm94UXVpY2tJbmZvUmVzcG9uc2USDwoHYXBwbGllZBgBIAEoCCI8CiFBZHZhbmNlUHVibGljTWFpbFdhdGVybWFya1JlcXVlc3QSFwoPcHVibGlzaGVkX2F0X21zGAEgASgDIjUKIkFkdmFuY2VQdWJsaWNNYWlsV2F0ZXJtYXJrUmVzcG9uc2USDwoHYXBwbGllZBgBIAEoCCIvChpHZXRNYWlsYm94UXVpY2tJbmZvUmVxdWVzdBIRCglwbGF5ZXJfaWQYASABKAQieAobR2V0TWFpbGJveFF1aWNrSW5mb1Jlc3BvbnNlEg0KBWtub3duGAEgASgIEhYKDm5ld19tYWlsX2NvdW50GAIgASgNEhEKCWN1cnNvcl9tcxgDIAEoAxIfChdwdWJsaWNfcmVmcmVzaF9yZXF1aXJlZBgEIAEoCDL6DAoLSW5mb1NlcnZpY2USZgoNU2V0TWFpbFJlZERvdBIpLmNsYXNzaWNmYXJtLmluZm8udjEuU2V0TWFpbFJlZERvdFJlcXVlc3QaKi5jbGFzc2ljZmFybS5pbmZvLnYxLlNldE1haWxSZWREb3RSZXNwb25zZRKHAQoYTm90aWZ5T3duZXJQbG90U3RlYWxhYmxlEjQuY2xhc3NpY2Zhcm0uaW5mby52MS5Ob3RpZnlPd25lclBsb3RTdGVhbGFibGVSZXF1ZXN0GjUuY2xhc3NpY2Zhcm0uaW5mby52MS5Ob3RpZnlPd25lclBsb3RTdGVhbGFibGVSZXNwb25zZRJ4ChNVcGRhdGVQcmVzZW5jZUxlYXNlEi8uY2xhc3NpY2Zhcm0uaW5mby52MS5VcGRhdGVQcmVzZW5jZUxlYXNlUmVxdWVzdBowLmNsYXNzaWNmYXJtLmluZm8udjEuVXBkYXRlUHJlc2VuY2VMZWFzZVJlc3BvbnNlEocBChhCYXRjaFJlbmV3UHJlc2VuY2VMZWFzZXMSNC5jbGFzc2ljZmFybS5pbmZvLnYxLkJhdGNoUmVuZXdQcmVzZW5jZUxlYXNlc1JlcXVlc3QaNS5jbGFzc2ljZmFybS5pbmZvLnYxLkJhdGNoUmVuZXdQcmVzZW5jZUxlYXNlc1Jlc3BvbnNlEngKE1VwZGF0ZUZhcm1RdWlja0luZm8SLy5jbGFzc2ljZmFybS5pbmZvLnYxLlVwZGF0ZUZhcm1RdWlja0luZm9SZXF1ZXN0GjAuY2xhc3NpY2Zhcm0uaW5mby52MS5VcGRhdGVGYXJtUXVpY2tJbmZvUmVzcG9uc2UShAEKF0JhdGNoR2V0UGxheWVyUXVpY2tJbmZvEjMuY2xhc3NpY2Zhcm0uaW5mby52MS5CYXRjaEdldFBsYXllclF1aWNrSW5mb1JlcXVlc3QaNC5jbGFzc2ljZmFybS5pbmZvLnYxLkJhdGNoR2V0UGxheWVyUXVpY2tJbmZvUmVzcG9uc2USfgoVQXBwbHlQcml2YXRlTWFpbEV2ZW50EjEuY2xhc3NpY2Zhcm0uaW5mby52MS5BcHBseVByaXZhdGVNYWlsRXZlbnRSZXF1ZXN0GjIuY2xhc3NpY2Zhcm0uaW5mby52MS5BcHBseVByaXZhdGVNYWlsRXZlbnRSZXNwb25zZRJ4ChNTZXRNYWlsYm94UXVpY2tJbmZvEi8uY2xhc3NpY2Zhcm0uaW5mby52MS5TZXRNYWlsYm94UXVpY2tJbmZvUmVxdWVzdBowLmNsYXNzaWNmYXJtLmluZm8udjEuU2V0TWFpbGJveFF1aWNrSW5mb1Jlc3BvbnNlEo0BChpBZHZhbmNlUHVibGljTWFpbFdhdGVybWFyaxI2LmNsYXNzaWNmYXJtLmluZm8udjEuQWR2YW5jZVB1YmxpY01haWxXYXRlcm1hcmtSZXF1ZXN0GjcuY2xhc3NpY2Zhcm0uaW5mby52MS5BZHZhbmNlUHVibGljTWFpbFdhdGVybWFya1Jlc3BvbnNlEngKE0dldE1haWxib3hRdWlja0luZm8SLy5jbGFzc2ljZmFybS5pbmZvLnYxLkdldE1haWxib3hRdWlja0luZm9SZXF1ZXN0GjAuY2xhc3NpY2Zhcm0uaW5mby52MS5HZXRNYWlsYm94UXVpY2tJbmZvUmVzcG9uc2USgQEKFlJlY29yZE9mZmxpbmVGYXJtVmlzaXQSMi5jbGFzc2ljZmFybS5pbmZvLnYxLlJlY29yZE9mZmxpbmVGYXJtVmlzaXRSZXF1ZXN0GjMuY2xhc3NpY2Zhcm0uaW5mby52MS5SZWNvcmRPZmZsaW5lRmFybVZpc2l0UmVzcG9uc2USdQoSR2V0T2ZmbGluZVZpc2l0b3JzEi4uY2xhc3NpY2Zhcm0uaW5mby52MS5HZXRPZmZsaW5lVmlzaXRvcnNSZXF1ZXN0Gi8uY2xhc3NpY2Zhcm0uaW5mby52MS5HZXRPZmZsaW5lVmlzaXRvcnNSZXNwb25zZRJ1ChJBY2tPZmZsaW5lVmlzaXRvcnMSLi5jbGFzc2ljZmFybS5pbmZvLnYxLkFja09mZmxpbmVWaXNpdG9yc1JlcXVlc3QaLy5jbGFzc2ljZmFybS5pbmZvLnYxLkFja09mZmxpbmVWaXNpdG9yc1Jlc3BvbnNlQlJaUGdpdGh1Yi5jb20vV3Jpb3NsZXkvc3VwZXJub3ZhLWNsYXNzaWMtZmFybS9zZXJ2ZXIvZ2VuL2NsYXNzaWNmYXJtL3YxL2luZm87aW5mb3YxYgZwcm90bzM", [file_classicfarm_v1_ws_ws]);
 
 /**
  * @generated from message classicfarm.info.v1.SetMailRedDotRequest
@@ -98,6 +98,636 @@ export const NotifyOwnerPlotStealableResponseSchema: GenMessage<NotifyOwnerPlotS
   messageDesc(file_classicfarm_v1_info_info, 3);
 
 /**
+ * @generated from message classicfarm.info.v1.PresenceLeaseUpdate
+ */
+export type PresenceLeaseUpdate = Message<"classicfarm.info.v1.PresenceLeaseUpdate"> & {
+  /**
+   * @generated from field: uint64 player_id = 1;
+   */
+  playerId: bigint;
+
+  /**
+   * @generated from field: bool online = 2;
+   */
+  online: boolean;
+
+  /**
+   * @generated from field: int64 online_until_ms = 3;
+   */
+  onlineUntilMs: bigint;
+
+  /**
+   * @generated from field: int64 last_seen_at_ms = 4;
+   */
+  lastSeenAtMs: bigint;
+
+  /**
+   * @generated from field: string logical_zone_id = 5;
+   */
+  logicalZoneId: string;
+
+  /**
+   * @generated from field: string incarnation_id = 6;
+   */
+  incarnationId: string;
+
+  /**
+   * @generated from field: uint64 owner_epoch = 7;
+   */
+  ownerEpoch: bigint;
+
+  /**
+   * @generated from field: uint64 source_seq = 8;
+   */
+  sourceSeq: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.PresenceLeaseUpdate.
+ * Use `create(PresenceLeaseUpdateSchema)` to create a new message.
+ */
+export const PresenceLeaseUpdateSchema: GenMessage<PresenceLeaseUpdate> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 4);
+
+/**
+ * @generated from message classicfarm.info.v1.UpdatePresenceLeaseRequest
+ */
+export type UpdatePresenceLeaseRequest = Message<"classicfarm.info.v1.UpdatePresenceLeaseRequest"> & {
+  /**
+   * @generated from field: classicfarm.info.v1.PresenceLeaseUpdate update = 1;
+   */
+  update?: PresenceLeaseUpdate | undefined;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.UpdatePresenceLeaseRequest.
+ * Use `create(UpdatePresenceLeaseRequestSchema)` to create a new message.
+ */
+export const UpdatePresenceLeaseRequestSchema: GenMessage<UpdatePresenceLeaseRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 5);
+
+/**
+ * @generated from message classicfarm.info.v1.UpdatePresenceLeaseResponse
+ */
+export type UpdatePresenceLeaseResponse = Message<"classicfarm.info.v1.UpdatePresenceLeaseResponse"> & {
+  /**
+   * @generated from field: bool applied = 1;
+   */
+  applied: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.UpdatePresenceLeaseResponse.
+ * Use `create(UpdatePresenceLeaseResponseSchema)` to create a new message.
+ */
+export const UpdatePresenceLeaseResponseSchema: GenMessage<UpdatePresenceLeaseResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 6);
+
+/**
+ * @generated from message classicfarm.info.v1.BatchRenewPresenceLeasesRequest
+ */
+export type BatchRenewPresenceLeasesRequest = Message<"classicfarm.info.v1.BatchRenewPresenceLeasesRequest"> & {
+  /**
+   * @generated from field: repeated classicfarm.info.v1.PresenceLeaseUpdate updates = 1;
+   */
+  updates: PresenceLeaseUpdate[];
+};
+
+/**
+ * Describes the message classicfarm.info.v1.BatchRenewPresenceLeasesRequest.
+ * Use `create(BatchRenewPresenceLeasesRequestSchema)` to create a new message.
+ */
+export const BatchRenewPresenceLeasesRequestSchema: GenMessage<BatchRenewPresenceLeasesRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 7);
+
+/**
+ * @generated from message classicfarm.info.v1.BatchRenewPresenceLeasesResponse
+ */
+export type BatchRenewPresenceLeasesResponse = Message<"classicfarm.info.v1.BatchRenewPresenceLeasesResponse"> & {
+  /**
+   * @generated from field: uint32 applied_count = 1;
+   */
+  appliedCount: number;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.BatchRenewPresenceLeasesResponse.
+ * Use `create(BatchRenewPresenceLeasesResponseSchema)` to create a new message.
+ */
+export const BatchRenewPresenceLeasesResponseSchema: GenMessage<BatchRenewPresenceLeasesResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 8);
+
+/**
+ * @generated from message classicfarm.info.v1.FarmQuickInfoUpdate
+ */
+export type FarmQuickInfoUpdate = Message<"classicfarm.info.v1.FarmQuickInfoUpdate"> & {
+  /**
+   * @generated from field: uint64 player_id = 1;
+   */
+  playerId: bigint;
+
+  /**
+   * @generated from field: uint64 owner_epoch = 2;
+   */
+  ownerEpoch: bigint;
+
+  /**
+   * @generated from field: uint64 checkpoint_revision = 3;
+   */
+  checkpointRevision: bigint;
+
+  /**
+   * @generated from field: bool has_growing_crop = 4;
+   */
+  hasGrowingCrop: boolean;
+
+  /**
+   * @generated from field: int64 earliest_mature_at_ms = 5;
+   */
+  earliestMatureAtMs: bigint;
+
+  /**
+   * @generated from field: bool has_mature_crop_candidate = 6;
+   */
+  hasMatureCropCandidate: boolean;
+
+  /**
+   * @generated from field: int64 updated_at_ms = 7;
+   */
+  updatedAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.FarmQuickInfoUpdate.
+ * Use `create(FarmQuickInfoUpdateSchema)` to create a new message.
+ */
+export const FarmQuickInfoUpdateSchema: GenMessage<FarmQuickInfoUpdate> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 9);
+
+/**
+ * @generated from message classicfarm.info.v1.UpdateFarmQuickInfoRequest
+ */
+export type UpdateFarmQuickInfoRequest = Message<"classicfarm.info.v1.UpdateFarmQuickInfoRequest"> & {
+  /**
+   * @generated from field: classicfarm.info.v1.FarmQuickInfoUpdate update = 1;
+   */
+  update?: FarmQuickInfoUpdate | undefined;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.UpdateFarmQuickInfoRequest.
+ * Use `create(UpdateFarmQuickInfoRequestSchema)` to create a new message.
+ */
+export const UpdateFarmQuickInfoRequestSchema: GenMessage<UpdateFarmQuickInfoRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 10);
+
+/**
+ * @generated from message classicfarm.info.v1.UpdateFarmQuickInfoResponse
+ */
+export type UpdateFarmQuickInfoResponse = Message<"classicfarm.info.v1.UpdateFarmQuickInfoResponse"> & {
+  /**
+   * @generated from field: bool applied = 1;
+   */
+  applied: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.UpdateFarmQuickInfoResponse.
+ * Use `create(UpdateFarmQuickInfoResponseSchema)` to create a new message.
+ */
+export const UpdateFarmQuickInfoResponseSchema: GenMessage<UpdateFarmQuickInfoResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 11);
+
+/**
+ * @generated from message classicfarm.info.v1.BatchGetPlayerQuickInfoRequest
+ */
+export type BatchGetPlayerQuickInfoRequest = Message<"classicfarm.info.v1.BatchGetPlayerQuickInfoRequest"> & {
+  /**
+   * @generated from field: repeated uint64 player_ids = 1;
+   */
+  playerIds: bigint[];
+
+  /**
+   * @generated from field: uint64 viewer_player_id = 2;
+   */
+  viewerPlayerId: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.BatchGetPlayerQuickInfoRequest.
+ * Use `create(BatchGetPlayerQuickInfoRequestSchema)` to create a new message.
+ */
+export const BatchGetPlayerQuickInfoRequestSchema: GenMessage<BatchGetPlayerQuickInfoRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 12);
+
+/**
+ * @generated from message classicfarm.info.v1.BatchGetPlayerQuickInfoResponse
+ */
+export type BatchGetPlayerQuickInfoResponse = Message<"classicfarm.info.v1.BatchGetPlayerQuickInfoResponse"> & {
+  /**
+   * @generated from field: repeated classicfarm.info.v1.PlayerQuickInfo players = 1;
+   */
+  players: PlayerQuickInfo[];
+};
+
+/**
+ * Describes the message classicfarm.info.v1.BatchGetPlayerQuickInfoResponse.
+ * Use `create(BatchGetPlayerQuickInfoResponseSchema)` to create a new message.
+ */
+export const BatchGetPlayerQuickInfoResponseSchema: GenMessage<BatchGetPlayerQuickInfoResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 13);
+
+/**
+ * @generated from message classicfarm.info.v1.PlayerQuickInfo
+ */
+export type PlayerQuickInfo = Message<"classicfarm.info.v1.PlayerQuickInfo"> & {
+  /**
+   * @generated from field: uint64 player_id = 1;
+   */
+  playerId: bigint;
+
+  /**
+   * @generated from field: bool presence_known = 2;
+   */
+  presenceKnown: boolean;
+
+  /**
+   * @generated from field: bool online = 3;
+   */
+  online: boolean;
+
+  /**
+   * @generated from field: int64 online_until_ms = 4;
+   */
+  onlineUntilMs: bigint;
+
+  /**
+   * @generated from field: int64 last_seen_at_ms = 5;
+   */
+  lastSeenAtMs: bigint;
+
+  /**
+   * @generated from field: bool farm_summary_known = 6;
+   */
+  farmSummaryKnown: boolean;
+
+  /**
+   * @generated from field: bool has_growing_crop = 7;
+   */
+  hasGrowingCrop: boolean;
+
+  /**
+   * @generated from field: int64 earliest_mature_at_ms = 8;
+   */
+  earliestMatureAtMs: bigint;
+
+  /**
+   * @generated from field: bool has_mature_crop_candidate = 9;
+   */
+  hasMatureCropCandidate: boolean;
+
+  /**
+   * @generated from field: uint64 owner_epoch = 10;
+   */
+  ownerEpoch: bigint;
+
+  /**
+   * @generated from field: uint64 checkpoint_revision = 11;
+   */
+  checkpointRevision: bigint;
+
+  /**
+   * @generated from field: bool show_offline_farm_red_dot = 12;
+   */
+  showOfflineFarmRedDot: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.PlayerQuickInfo.
+ * Use `create(PlayerQuickInfoSchema)` to create a new message.
+ */
+export const PlayerQuickInfoSchema: GenMessage<PlayerQuickInfo> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 14);
+
+/**
+ * @generated from message classicfarm.info.v1.RecordOfflineFarmVisitRequest
+ */
+export type RecordOfflineFarmVisitRequest = Message<"classicfarm.info.v1.RecordOfflineFarmVisitRequest"> & {
+  /**
+   * @generated from field: uint64 visitor_player_id = 1;
+   */
+  visitorPlayerId: bigint;
+
+  /**
+   * @generated from field: uint64 owner_player_id = 2;
+   */
+  ownerPlayerId: bigint;
+
+  /**
+   * @generated from field: int64 visited_at_ms = 3;
+   */
+  visitedAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.RecordOfflineFarmVisitRequest.
+ * Use `create(RecordOfflineFarmVisitRequestSchema)` to create a new message.
+ */
+export const RecordOfflineFarmVisitRequestSchema: GenMessage<RecordOfflineFarmVisitRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 15);
+
+/**
+ * @generated from message classicfarm.info.v1.RecordOfflineFarmVisitResponse
+ */
+export type RecordOfflineFarmVisitResponse = Message<"classicfarm.info.v1.RecordOfflineFarmVisitResponse"> & {
+  /**
+   * @generated from field: bool recorded_for_offline_owner = 1;
+   */
+  recordedForOfflineOwner: boolean;
+
+  /**
+   * @generated from field: uint64 seen_checkpoint_revision = 2;
+   */
+  seenCheckpointRevision: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.RecordOfflineFarmVisitResponse.
+ * Use `create(RecordOfflineFarmVisitResponseSchema)` to create a new message.
+ */
+export const RecordOfflineFarmVisitResponseSchema: GenMessage<RecordOfflineFarmVisitResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 16);
+
+/**
+ * @generated from message classicfarm.info.v1.GetOfflineVisitorsRequest
+ */
+export type GetOfflineVisitorsRequest = Message<"classicfarm.info.v1.GetOfflineVisitorsRequest"> & {
+  /**
+   * @generated from field: uint64 owner_player_id = 1;
+   */
+  ownerPlayerId: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.GetOfflineVisitorsRequest.
+ * Use `create(GetOfflineVisitorsRequestSchema)` to create a new message.
+ */
+export const GetOfflineVisitorsRequestSchema: GenMessage<GetOfflineVisitorsRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 17);
+
+/**
+ * @generated from message classicfarm.info.v1.GetOfflineVisitorsResponse
+ */
+export type GetOfflineVisitorsResponse = Message<"classicfarm.info.v1.GetOfflineVisitorsResponse"> & {
+  /**
+   * @generated from field: repeated uint64 visitor_player_ids = 1;
+   */
+  visitorPlayerIds: bigint[];
+
+  /**
+   * @generated from field: uint64 visitor_version = 2;
+   */
+  visitorVersion: bigint;
+
+  /**
+   * @generated from field: bool truncated = 3;
+   */
+  truncated: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.GetOfflineVisitorsResponse.
+ * Use `create(GetOfflineVisitorsResponseSchema)` to create a new message.
+ */
+export const GetOfflineVisitorsResponseSchema: GenMessage<GetOfflineVisitorsResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 18);
+
+/**
+ * @generated from message classicfarm.info.v1.AckOfflineVisitorsRequest
+ */
+export type AckOfflineVisitorsRequest = Message<"classicfarm.info.v1.AckOfflineVisitorsRequest"> & {
+  /**
+   * @generated from field: uint64 owner_player_id = 1;
+   */
+  ownerPlayerId: bigint;
+
+  /**
+   * @generated from field: uint64 visitor_version = 2;
+   */
+  visitorVersion: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.AckOfflineVisitorsRequest.
+ * Use `create(AckOfflineVisitorsRequestSchema)` to create a new message.
+ */
+export const AckOfflineVisitorsRequestSchema: GenMessage<AckOfflineVisitorsRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 19);
+
+/**
+ * @generated from message classicfarm.info.v1.AckOfflineVisitorsResponse
+ */
+export type AckOfflineVisitorsResponse = Message<"classicfarm.info.v1.AckOfflineVisitorsResponse"> & {
+  /**
+   * @generated from field: bool applied = 1;
+   */
+  applied: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.AckOfflineVisitorsResponse.
+ * Use `create(AckOfflineVisitorsResponseSchema)` to create a new message.
+ */
+export const AckOfflineVisitorsResponseSchema: GenMessage<AckOfflineVisitorsResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 20);
+
+/**
+ * @generated from message classicfarm.info.v1.ApplyPrivateMailEventRequest
+ */
+export type ApplyPrivateMailEventRequest = Message<"classicfarm.info.v1.ApplyPrivateMailEventRequest"> & {
+  /**
+   * @generated from field: uint64 player_id = 1;
+   */
+  playerId: bigint;
+
+  /**
+   * @generated from field: string mail_id = 2;
+   */
+  mailId: string;
+
+  /**
+   * @generated from field: int64 created_at_ms = 3;
+   */
+  createdAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.ApplyPrivateMailEventRequest.
+ * Use `create(ApplyPrivateMailEventRequestSchema)` to create a new message.
+ */
+export const ApplyPrivateMailEventRequestSchema: GenMessage<ApplyPrivateMailEventRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 21);
+
+/**
+ * @generated from message classicfarm.info.v1.ApplyPrivateMailEventResponse
+ */
+export type ApplyPrivateMailEventResponse = Message<"classicfarm.info.v1.ApplyPrivateMailEventResponse"> & {
+  /**
+   * @generated from field: bool known = 1;
+   */
+  known: boolean;
+
+  /**
+   * @generated from field: uint32 new_mail_count = 2;
+   */
+  newMailCount: number;
+
+  /**
+   * @generated from field: bool applied = 3;
+   */
+  applied: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.ApplyPrivateMailEventResponse.
+ * Use `create(ApplyPrivateMailEventResponseSchema)` to create a new message.
+ */
+export const ApplyPrivateMailEventResponseSchema: GenMessage<ApplyPrivateMailEventResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 22);
+
+/**
+ * @generated from message classicfarm.info.v1.SetMailboxQuickInfoRequest
+ */
+export type SetMailboxQuickInfoRequest = Message<"classicfarm.info.v1.SetMailboxQuickInfoRequest"> & {
+  /**
+   * @generated from field: uint64 player_id = 1;
+   */
+  playerId: bigint;
+
+  /**
+   * @generated from field: uint32 new_mail_count = 2;
+   */
+  newMailCount: number;
+
+  /**
+   * @generated from field: int64 cursor_ms = 3;
+   */
+  cursorMs: bigint;
+
+  /**
+   * @generated from field: int64 calculated_at_ms = 4;
+   */
+  calculatedAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.SetMailboxQuickInfoRequest.
+ * Use `create(SetMailboxQuickInfoRequestSchema)` to create a new message.
+ */
+export const SetMailboxQuickInfoRequestSchema: GenMessage<SetMailboxQuickInfoRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 23);
+
+/**
+ * @generated from message classicfarm.info.v1.SetMailboxQuickInfoResponse
+ */
+export type SetMailboxQuickInfoResponse = Message<"classicfarm.info.v1.SetMailboxQuickInfoResponse"> & {
+  /**
+   * @generated from field: bool applied = 1;
+   */
+  applied: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.SetMailboxQuickInfoResponse.
+ * Use `create(SetMailboxQuickInfoResponseSchema)` to create a new message.
+ */
+export const SetMailboxQuickInfoResponseSchema: GenMessage<SetMailboxQuickInfoResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 24);
+
+/**
+ * @generated from message classicfarm.info.v1.AdvancePublicMailWatermarkRequest
+ */
+export type AdvancePublicMailWatermarkRequest = Message<"classicfarm.info.v1.AdvancePublicMailWatermarkRequest"> & {
+  /**
+   * @generated from field: int64 published_at_ms = 1;
+   */
+  publishedAtMs: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.AdvancePublicMailWatermarkRequest.
+ * Use `create(AdvancePublicMailWatermarkRequestSchema)` to create a new message.
+ */
+export const AdvancePublicMailWatermarkRequestSchema: GenMessage<AdvancePublicMailWatermarkRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 25);
+
+/**
+ * @generated from message classicfarm.info.v1.AdvancePublicMailWatermarkResponse
+ */
+export type AdvancePublicMailWatermarkResponse = Message<"classicfarm.info.v1.AdvancePublicMailWatermarkResponse"> & {
+  /**
+   * @generated from field: bool applied = 1;
+   */
+  applied: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.AdvancePublicMailWatermarkResponse.
+ * Use `create(AdvancePublicMailWatermarkResponseSchema)` to create a new message.
+ */
+export const AdvancePublicMailWatermarkResponseSchema: GenMessage<AdvancePublicMailWatermarkResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 26);
+
+/**
+ * @generated from message classicfarm.info.v1.GetMailboxQuickInfoRequest
+ */
+export type GetMailboxQuickInfoRequest = Message<"classicfarm.info.v1.GetMailboxQuickInfoRequest"> & {
+  /**
+   * @generated from field: uint64 player_id = 1;
+   */
+  playerId: bigint;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.GetMailboxQuickInfoRequest.
+ * Use `create(GetMailboxQuickInfoRequestSchema)` to create a new message.
+ */
+export const GetMailboxQuickInfoRequestSchema: GenMessage<GetMailboxQuickInfoRequest> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 27);
+
+/**
+ * @generated from message classicfarm.info.v1.GetMailboxQuickInfoResponse
+ */
+export type GetMailboxQuickInfoResponse = Message<"classicfarm.info.v1.GetMailboxQuickInfoResponse"> & {
+  /**
+   * @generated from field: bool known = 1;
+   */
+  known: boolean;
+
+  /**
+   * @generated from field: uint32 new_mail_count = 2;
+   */
+  newMailCount: number;
+
+  /**
+   * @generated from field: int64 cursor_ms = 3;
+   */
+  cursorMs: bigint;
+
+  /**
+   * @generated from field: bool public_refresh_required = 4;
+   */
+  publicRefreshRequired: boolean;
+};
+
+/**
+ * Describes the message classicfarm.info.v1.GetMailboxQuickInfoResponse.
+ * Use `create(GetMailboxQuickInfoResponseSchema)` to create a new message.
+ */
+export const GetMailboxQuickInfoResponseSchema: GenMessage<GetMailboxQuickInfoResponse> = /*@__PURE__*/
+  messageDesc(file_classicfarm_v1_info_info, 28);
+
+/**
  * InfoService is unary and requires the internal HMAC metadata contract.
  * Red-dot delivery is best-effort: failures must not roll back mail or farm
  * authority. Client deadline is two seconds.
@@ -120,6 +750,94 @@ export const InfoService: GenService<{
     methodKind: "unary";
     input: typeof NotifyOwnerPlotStealableRequestSchema;
     output: typeof NotifyOwnerPlotStealableResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.UpdatePresenceLease
+   */
+  updatePresenceLease: {
+    methodKind: "unary";
+    input: typeof UpdatePresenceLeaseRequestSchema;
+    output: typeof UpdatePresenceLeaseResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.BatchRenewPresenceLeases
+   */
+  batchRenewPresenceLeases: {
+    methodKind: "unary";
+    input: typeof BatchRenewPresenceLeasesRequestSchema;
+    output: typeof BatchRenewPresenceLeasesResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.UpdateFarmQuickInfo
+   */
+  updateFarmQuickInfo: {
+    methodKind: "unary";
+    input: typeof UpdateFarmQuickInfoRequestSchema;
+    output: typeof UpdateFarmQuickInfoResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.BatchGetPlayerQuickInfo
+   */
+  batchGetPlayerQuickInfo: {
+    methodKind: "unary";
+    input: typeof BatchGetPlayerQuickInfoRequestSchema;
+    output: typeof BatchGetPlayerQuickInfoResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.ApplyPrivateMailEvent
+   */
+  applyPrivateMailEvent: {
+    methodKind: "unary";
+    input: typeof ApplyPrivateMailEventRequestSchema;
+    output: typeof ApplyPrivateMailEventResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.SetMailboxQuickInfo
+   */
+  setMailboxQuickInfo: {
+    methodKind: "unary";
+    input: typeof SetMailboxQuickInfoRequestSchema;
+    output: typeof SetMailboxQuickInfoResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.AdvancePublicMailWatermark
+   */
+  advancePublicMailWatermark: {
+    methodKind: "unary";
+    input: typeof AdvancePublicMailWatermarkRequestSchema;
+    output: typeof AdvancePublicMailWatermarkResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.GetMailboxQuickInfo
+   */
+  getMailboxQuickInfo: {
+    methodKind: "unary";
+    input: typeof GetMailboxQuickInfoRequestSchema;
+    output: typeof GetMailboxQuickInfoResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.RecordOfflineFarmVisit
+   */
+  recordOfflineFarmVisit: {
+    methodKind: "unary";
+    input: typeof RecordOfflineFarmVisitRequestSchema;
+    output: typeof RecordOfflineFarmVisitResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.GetOfflineVisitors
+   */
+  getOfflineVisitors: {
+    methodKind: "unary";
+    input: typeof GetOfflineVisitorsRequestSchema;
+    output: typeof GetOfflineVisitorsResponseSchema;
+  },
+  /**
+   * @generated from rpc classicfarm.info.v1.InfoService.AckOfflineVisitors
+   */
+  ackOfflineVisitors: {
+    methodKind: "unary";
+    input: typeof AckOfflineVisitorsRequestSchema;
+    output: typeof AckOfflineVisitorsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_classicfarm_v1_info_info, 0);

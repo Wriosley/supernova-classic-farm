@@ -21,6 +21,8 @@ export default defineConfig(({ mode }) => {
   const loginPort = port(env.LOGIN_PORT, 8080)
   const gatePort = port(env.GATE_PORT, 8081)
   const h5Origin = env.H5_ORIGIN || `http://localhost:${webPort}`
+  const loginProxyTarget = env.LOGIN_PROXY_TARGET || `http://127.0.0.1:${loginPort}`
+  const gateProxyTarget = env.GATE_PROXY_TARGET || `ws://127.0.0.1:${gatePort}`
 
   return {
     envDir: repositoryRoot,
@@ -31,7 +33,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/v1': {
-          target: `http://127.0.0.1:${loginPort}`,
+          target: loginProxyTarget,
           changeOrigin: false,
           headers: {
             Origin: h5Origin,
@@ -40,7 +42,7 @@ export default defineConfig(({ mode }) => {
         // Gate binds and is advertised loopback-only, so a browser on another
         // host reaches it through this proxy instead of dialing it directly.
         '/ws': {
-          target: `ws://127.0.0.1:${gatePort}`,
+          target: gateProxyTarget,
           ws: true,
           changeOrigin: false,
           headers: {
