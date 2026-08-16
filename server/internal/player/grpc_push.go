@@ -121,7 +121,7 @@ func (f *GRPCPushForwarder) PublishFarmPresence(
 // single RPC.
 func (f *GRPCPushForwarder) PublishFarmViewPatch(
 	ctx context.Context,
-	gateID string,
+	gateID, _ string,
 	recipientPlayerIDs []uint64,
 	patch *wsv1.FarmViewPatch,
 ) error {
@@ -148,7 +148,7 @@ func (f *GRPCPushForwarder) PublishFarmViewPatch(
 // PublishRedDotChanged implements push.GateClient for Zone→Gate red-dot fan-out.
 func (f *GRPCPushForwarder) PublishRedDotChanged(
 	ctx context.Context,
-	gateID string,
+	gateID, _ string,
 	recipientPlayerIDs []uint64,
 	payload *push.RedDotChanged,
 ) error {

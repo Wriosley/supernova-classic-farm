@@ -20,6 +20,44 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 
 ## Snapshot at handoff
 
+- Eight-Zone pool/static A/B retirement has migrated all 4096 authoritative
+  routes to eight pool owners. At live `map_version=12317`, all routes were
+  ACTIVE and A/B each owned zero Shards before deletion. A final recovery race
+  left 13 OPEN Progress rows at TARGET_READY even though their exact target
+  ACTIVE routes were committed; Planner now recognizes complete committed-task
+  Route evidence and preserves those Tasks for idempotent Worker cleanup. The
+  Kubernetes A/B Deployments/Services were deleted, but the coordinator drain
+  snapshot still reports one stale `zone-b` progress row (`shard 1623`,
+  `TARGET_READY`, task already `CANCELLED`). Offline migration/placement and
+  complete Coordinator tests pass. Evidence:
+  `../evidence/2026-08-17-eight-zone-pool-drain-offline.md`.
+
+- Gate 三副本精确 Push 路由已完成离线主体实现：Gate 使用 StatefulSet、Pod
+  UID 实例 ID 和 `gate-N.gate-headless` 直连地址；Zone 的玩家连接及跨 Zone
+  访客租约保存 `(gate_id, gate_endpoint)`，所有 owner state/presence、好友
+  farm patch 与 red-dot fan-out 均通过按精确目标建池的 Router 发送，不再通过
+  `service/gate` 随机落 Pod。聚焦测试、Gate 测试、全 Go 编译门槛与 kustomize
+  渲染通过；Gate 零投递会显式返回 `NOT_FOUND`。尚未构建镜像/更新 kind，
+  空闲连接清理仍待补。
+  Evidence: `../evidence/2026-08-17-gate-precise-push-routing-offline.md`。
+
+- MailSvr/FriendSvr 三副本与 gRPC 客户端负载均衡已通过离线实现门槛：所有
+  Mail/Friend 调用方支持 Headless Service `dns:///` 地址并使用
+  `round_robin`；只有只读查询和幂等 Ack 对 `UNAVAILABLE` 重试一次，好友码
+  写入、邮件创建和 `ClaimMail` 禁止透明重试。Kubernetes 清单声明各 3 副本、
+  Ready-only Headless Service、`maxUnavailable: 0`、软拓扑分布及
+  `minAvailable: 2` PDB。带真实 HMAC 防重放的多后端 failover 测试连续 5 次
+  race 通过，相关包 race 回归及清单 dry-run 通过。尚未构建镜像或更新 kind，
+  三 Pod DNS/流量分布/删 Pod 实测待手工部署后完成。Evidence:
+  `../evidence/2026-08-16-mail-friend-three-replica-grpc-balancing.md`。
+
+- FriendSvr 已停止启动 5 秒一次的 `FriendLinkSaga` 全表恢复扫描，避免持续
+  Traverse 和未来三副本下的重复扫描。在线好友码兑换及 Saga 写入保持不变；
+  FriendSvr 在多行好友绑定中途故障后不再自动补偿，玩家需要重新添加好友，
+  这是明确接受的一致性降级。Reconciler 代码仅保留作手工/历史恢复工具，
+  不在生产启动路径运行。Evidence:
+  `../evidence/2026-08-16-friend-saga-scan-disabled.md`。
+
 - 两章任务与奖励已完成离线实现：新玩家配置版本提升为 2，第一章奖励改为
   10 金币、1 肥料、3 南瓜种子；第二章三个好友任务已有中文名称，奖励为
   10 金币、5 肥料、10 西瓜种子。第二章作为终章可正常领取并以 `CLAIMED`
@@ -814,6 +852,42 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
   the SDK in kind while retaining HTTP/poll rollback switches.
 
 ## Next actions
+
+The eight-pool Zone drain is currently **paused** in the live Deployment. Its
+first run found a `MigrationProgress` comparison bug caused by historical
+Source `transition_id` fields that the progress schema intentionally does not
+store. The code fix and regression tests pass offline; the live authority was
+checked after pausing at `map_version=4127` with 2015 Shards on zone-a, 2080 on
+zone-b and 1 on the pool. Next: rebuild/load Coordinator, retain both migration
+switches at `0`, then perform the controlled resume documented in
+`../plans/2026-08-17-eight-zone-pool-drain-static-zones.md`. A/B were deleted
+after `/internal/v1/zones/drain` reported `zone-a` removable and `zone-b`
+reduced to one stale progress row that then cleared.
+The first Planner-only resume also exposed a same-intent Task deduplication bug:
+restart-time map/availability observation versions must not replace or conflict
+with an otherwise identical PLANNED task. That fix and both memory/Tcaplus fake
+backend tests now pass; Coordinator must be rebuilt once more before retrying
+Planner-only recovery.
+The subsequent run also found a legitimate RUNNING task at Shard 1593 stopped
+between Claim and its first Progress write. Planner now preserves a matching
+open task instead of attempting to overwrite it; Worker owns its recovery.
+Worker resume subsequently advanced Current to map version 4319, then was
+stopped after concurrent same-table Tcaplus Traverses caused retriable SDK
+errors and startup rejected the valid Shard 1593 SOURCE_FLUSHED/source-Fence
+boundary. Route commit critical sections are now serialized and new worker
+step names are covered by Fence validation. The live Coordinator is scaled to
+zero pending rebuild; restore it to one only with the fixed image.
+The fixed image has now restored successfully at map version 4380 with 1825
+OPEN Progress rows and no Fence mismatch. Planner/Worker may resume under the
+serialized RouteStore commit critical section; A/B remain required until the
+drain endpoint reports removable.
+Later ownership reached zero on A/B and all 4096 routes became ACTIVE at map
+version 12317. Thirteen OPEN Progress tails remained at TARGET_READY (4 from
+A, 9 from B) with exact committed target ACTIVE routes. Planner preserved
+these recovered Tasks based on complete Route migration evidence instead of
+cancelling them as CURRENT_MATCHES_DESIRED. The A/B Deployments/Services were
+deleted from Kubernetes, but the coordinator drain snapshot still keeps one
+stale `zone-b` progress row visible until the migration store is cleaned up.
 
 Final delivery sprint **01**–**03**, **04-1**, **04-2**, **04-3A–F**, and
 **04-4** (code + unit tests) are done. Remaining:

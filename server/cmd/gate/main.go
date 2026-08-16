@@ -52,16 +52,18 @@ func run() error {
 		return err
 	}
 	gatewayID := envOr("GATEWAY_ID", gateway.DefaultGatewayID)
+	gateInstanceID := envOr("GATE_INSTANCE_ID", gatewayID)
+	gateEndpoint := envOr("GATE_ADVERTISED_ENDPOINT", "http://127.0.0.1:8081")
 	originPattern, err := websocketOriginPattern(envOr("H5_ORIGIN", "http://localhost:5173"))
 	if err != nil {
 		return err
 	}
-	zoneCommander, err := gateway.NewGRPCZoneCommander(rpcKey, gatewayID)
+	zoneCommander, err := gateway.NewGRPCZoneCommander(rpcKey, gateInstanceID)
 	if err != nil {
 		return err
 	}
 	defer zoneCommander.Close()
-	visitorCommander, err := gateway.NewGRPCVisitorZoneCommander(rpcKey, gatewayID)
+	visitorCommander, err := gateway.NewGRPCVisitorZoneCommander(rpcKey, gateInstanceID, gateEndpoint)
 	if err != nil {
 		return err
 	}
@@ -107,7 +109,7 @@ func run() error {
 		}
 		routes = routeCache
 	case "coordinator-sdk":
-		sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: envOr("COORDINATOR_RPC_URL", "http://127.0.0.1:8083"), SubscriberID: gatewayID, Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_GATE, HMACKey: rpcKey})
+		sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: envOr("COORDINATOR_RPC_URL", "http://127.0.0.1:8083"), SubscriberID: gateInstanceID, Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_GATE, HMACKey: rpcKey})
 		if sdkErr != nil {
 			return sdkErr
 		}
@@ -123,7 +125,7 @@ func run() error {
 	default:
 		return fmt.Errorf("unsupported GATE_ROUTE_SOURCE %q", sourceMode)
 	}
-	connectionClient, err := gateway.NewGRPCPlayerConnectionClient(rpcKey, gatewayID)
+	connectionClient, err := gateway.NewGRPCPlayerConnectionClient(rpcKey, gateInstanceID, gateEndpoint)
 	if err != nil {
 		return err
 	}
@@ -154,7 +156,7 @@ func run() error {
 	healthHandler := health.NewHandler()
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
-	pushServer, err := gateway.NewGRPCPushServer(wsHandler, gatewayID)
+	pushServer, err := gateway.NewGRPCPushServer(wsHandler, gateInstanceID)
 	if err != nil {
 		return err
 	}
@@ -185,6 +187,8 @@ func run() error {
 	logger.Info("gate listening",
 		"address", cfg.HTTPAddress,
 		"gateway_id", gatewayID,
+		"gate_instance_id", gateInstanceID,
+		"gate_endpoint", gateEndpoint,
 		"max_message_bytes", gateway.MaxMessageBytes,
 		"production_backpressure", false,
 		"distributed_connection_revocation", false,

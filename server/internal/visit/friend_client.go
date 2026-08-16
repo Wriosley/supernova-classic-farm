@@ -31,12 +31,13 @@ type FriendRPCClient struct {
 
 // NewFriendRPCClient dials FriendSvr at endpoint (default FRIEND_RPC_URL
 // convention is http://127.0.0.1:8085) using serviceName as the caller
-// identity signed into every request (e.g. "zone-local", "zone-a").
+// identity signed into every request (e.g. "zone-local", "zone-a"). A
+// dns:/// endpoint resolves every Ready FriendSvr Pod and uses round_robin.
 func NewFriendRPCClient(key []byte, serviceName, endpoint string) (*FriendRPCClient, error) {
 	if strings.TrimSpace(endpoint) == "" {
 		return nil, errors.New("FriendSvr endpoint is required")
 	}
-	target, err := rpcnet.TargetFromHTTPURL(endpoint)
+	target, err := rpcnet.TargetFromEndpoint(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid FriendSvr gRPC endpoint: %w", err)
 	}
@@ -46,10 +47,15 @@ func NewFriendRPCClient(key []byte, serviceName, endpoint string) (*FriendRPCCli
 	if err != nil {
 		return nil, err
 	}
+	balancing, err := rpcnet.RoundRobinDialOption(friendv1.FriendService_CheckMutualFriend_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := grpc.NewClient(
 		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(interceptor),
+		balancing,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(128<<10),
 			grpc.MaxCallRecvMsgSize(128<<10),

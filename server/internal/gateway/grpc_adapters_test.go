@@ -126,8 +126,8 @@ func TestGRPCPushServerValidatesRecipientAndPublishes(t *testing.T) {
 			GateId: DefaultGatewayID, RecipientPlayerId: 42, Envelope: envelope,
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("unconnected recipient status = %v", status.Code(err))
 	}
 	_, err = pushServer.PublishPlayerStateChanged(
 		context.Background(),
@@ -159,8 +159,8 @@ func TestGRPCPushServerFansFarmViewPatchOutToEveryRecipient(t *testing.T) {
 			GateId: DefaultGatewayID, RecipientPlayerIds: []uint64{7, 101}, Patch: patch,
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("unconnected recipients status = %v", status.Code(err))
 	}
 }
 

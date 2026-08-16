@@ -13,3 +13,4 @@ resources:
   - friend.yaml
   - info.yaml
   - mail.yaml
+  - mail-friend-pdb.yaml

@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	defaultPublicWebBaseURL = "http://localhost:5173"
+	defaultPublicWebBaseURL = "http://21.130.223.195:1616"
 	friendInvitePath        = "/invite/friend"
 )
 
-// LoadPublicWebBaseURL reads PUBLIC_WEB_BASE_URL, defaulting to the local Vite
-// origin. Trailing slashes are stripped so path joins stay unambiguous.
+// LoadPublicWebBaseURL reads PUBLIC_WEB_BASE_URL, defaulting to the current H5
+// host. Trailing slashes are stripped so path joins stay unambiguous.
 func LoadPublicWebBaseURL() (string, error) {
 	raw := strings.TrimSpace(os.Getenv("PUBLIC_WEB_BASE_URL"))
 	if raw == "" {

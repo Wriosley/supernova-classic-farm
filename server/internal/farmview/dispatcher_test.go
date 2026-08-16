@@ -22,7 +22,7 @@ type blockingPatchPublisher struct {
 }
 
 func (p *blockingPatchPublisher) PublishFarmViewPatch(
-	ctx context.Context, gateID string, _ []uint64, _ *wsv1.FarmViewPatch,
+	ctx context.Context, gateID, _ string, _ []uint64, _ *wsv1.FarmViewPatch,
 ) error {
 	p.mu.Lock()
 	p.calls++
@@ -188,7 +188,7 @@ type countingConcurrentPublisher struct {
 }
 
 func (p *countingConcurrentPublisher) PublishFarmViewPatch(
-	_ context.Context, _ string, _ []uint64, _ *wsv1.FarmViewPatch,
+	_ context.Context, _, _ string, _ []uint64, _ *wsv1.FarmViewPatch,
 ) error {
 	cur := p.inFlight.Add(1)
 	for {

@@ -28,7 +28,7 @@ func TestShareURLUsesFriendCodeExpirationIsIndependentOfURL(t *testing.T) {
 	}
 }
 
-func TestLoadPublicWebBaseURLDefaultsToLocalVite(t *testing.T) {
+func TestLoadPublicWebBaseURLDefaultsToCurrentH5Host(t *testing.T) {
 	t.Setenv("PUBLIC_WEB_BASE_URL", "")
 	got, err := LoadPublicWebBaseURL()
 	if err != nil {
@@ -36,6 +36,9 @@ func TestLoadPublicWebBaseURLDefaultsToLocalVite(t *testing.T) {
 	}
 	if got != defaultPublicWebBaseURL {
 		t.Fatalf("default base URL = %q, want %q", got, defaultPublicWebBaseURL)
+	}
+	if got != "http://21.130.223.195:1616" {
+		t.Fatalf("default base URL = %q, want current H5 host", got)
 	}
 }
 

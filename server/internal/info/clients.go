@@ -133,7 +133,11 @@ func NewFriendClient(key []byte, endpoint string) (*FriendClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	target, err := rpcnet.TargetFromHTTPURL(endpoint)
+	target, err := rpcnet.TargetFromEndpoint(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	balancing, err := rpcnet.RoundRobinDialOption(friendv1.FriendService_ListFriends_FullMethodName)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +145,7 @@ func NewFriendClient(key []byte, endpoint string) (*FriendClient, error) {
 		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(interceptor),
+		balancing,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(128<<10),
 			grpc.MaxCallRecvMsgSize(128<<10),

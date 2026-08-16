@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 
-	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/protocol/option"
 	"google.golang.org/protobuf/proto"
 )

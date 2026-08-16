@@ -84,6 +84,7 @@ message EnterFriendFarmRequest {
   uint64 owner_player_id = 2;
   string gate_id = 3;
   string request_id = 4;
+  string gate_endpoint = 5;
 }
 
 message EnterFriendFarmResponse {
@@ -97,6 +98,7 @@ message HeartbeatFriendFarmRequest {
   bytes visit_id = 3;
   string gate_id = 4;
   string request_id = 5;
+  string gate_endpoint = 6;
 }
 
 message HeartbeatFriendFarmResponse {
@@ -144,6 +146,7 @@ message EnterVisitorRequest {
   string gate_id = 4;
   bytes relation_id = 5;
   string request_id = 6;
+  string gate_endpoint = 7;
 }
 
 message EnterVisitorResponse {
@@ -159,6 +162,7 @@ message RefreshVisitorHeartbeatRequest {
   uint64 visitor_player_id = 3;
   bytes visit_id = 4;
   string gate_id = 5;
+  string gate_endpoint = 6;
 }
 
 message RefreshVisitorHeartbeatResponse {
@@ -259,6 +263,7 @@ message RegisterPlayerConnectionRequest {
   string connection_id = 3;
   CommittedRoute route = 4;
   int64 expires_at_ms = 5;
+  string gate_endpoint = 6;
 }
 
 message RegisterPlayerConnectionResponse {
@@ -271,6 +276,7 @@ message RefreshPlayerConnectionRequest {
   string connection_id = 3;
   CommittedRoute route = 4;
   int64 expires_at_ms = 5;
+  string gate_endpoint = 6;
 }
 
 message RefreshPlayerConnectionResponse {

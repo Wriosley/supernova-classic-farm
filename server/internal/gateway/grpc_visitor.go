@@ -39,16 +39,20 @@ type VisitorZoneClient interface {
 // for the caller's Shard, authenticating as "gate" exactly like
 // GRPCZoneCommander does for GameCommandService.
 type GRPCVisitorZoneCommander struct {
-	mu        sync.Mutex
-	conns     map[string]*grpc.ClientConn
-	clients   map[string]rpcv1.VisitorZoneServiceClient
-	dialOpts  []grpc.DialOption
-	gatewayID string
+	mu              sync.Mutex
+	conns           map[string]*grpc.ClientConn
+	clients         map[string]rpcv1.VisitorZoneServiceClient
+	dialOpts        []grpc.DialOption
+	gatewayID       string
+	gatewayEndpoint string
 }
 
-func NewGRPCVisitorZoneCommander(key []byte, gatewayID string) (*GRPCVisitorZoneCommander, error) {
+func NewGRPCVisitorZoneCommander(key []byte, gatewayID, gatewayEndpoint string) (*GRPCVisitorZoneCommander, error) {
 	if strings.TrimSpace(gatewayID) == "" {
 		gatewayID = DefaultGatewayID
+	}
+	if strings.TrimSpace(gatewayEndpoint) == "" {
+		return nil, errors.New("gate advertised endpoint is required")
 	}
 	interceptor, err := rpcauth.NewClientUnaryInterceptor(rpcauth.ClientConfig{
 		Service: "gate",
@@ -68,7 +72,7 @@ func NewGRPCVisitorZoneCommander(key []byte, gatewayID string) (*GRPCVisitorZone
 				grpc.MaxCallRecvMsgSize(128<<10),
 			),
 		},
-		gatewayID: gatewayID,
+		gatewayID: gatewayID, gatewayEndpoint: strings.TrimSpace(gatewayEndpoint),
 	}, nil
 }
 
@@ -85,7 +89,7 @@ func (z *GRPCVisitorZoneCommander) Enter(
 	}
 	response, err := client.EnterFriendFarm(ctx, &rpcv1.EnterFriendFarmRequest{
 		CallerPlayerId: caller, OwnerPlayerId: body.OwnerPlayerId,
-		GateId: z.gatewayID, RequestId: request.RequestId,
+		GateId: z.gatewayID, GateEndpoint: z.gatewayEndpoint, RequestId: request.RequestId,
 	})
 	if err != nil {
 		return nil, visitorGRPCError("EnterFriendFarm", err)
@@ -111,7 +115,7 @@ func (z *GRPCVisitorZoneCommander) Heartbeat(
 	}
 	response, err := client.HeartbeatFriendFarm(ctx, &rpcv1.HeartbeatFriendFarmRequest{
 		CallerPlayerId: caller, OwnerPlayerId: body.OwnerPlayerId, VisitId: body.VisitId,
-		GateId: z.gatewayID, RequestId: request.RequestId,
+		GateId: z.gatewayID, GateEndpoint: z.gatewayEndpoint, RequestId: request.RequestId,
 	})
 	if err != nil {
 		return nil, visitorGRPCError("HeartbeatFriendFarm", err)

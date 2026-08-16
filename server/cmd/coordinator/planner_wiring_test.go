@@ -18,8 +18,9 @@ func TestPlannerConfigDefaultsDisabledAndValidatesInterval(t *testing.T) {
 
 	t.Setenv("COORDINATOR_PLANNER_ENABLED", "1")
 	t.Setenv("COORDINATOR_PLANNER_INTERVAL", "45s")
+	t.Setenv("COORDINATOR_PLANNER_MIN_HEALTHY_ZONES", "8")
 	config, err = plannerConfigFromEnvironment()
-	if err != nil || !config.Enabled || config.Interval != 45*time.Second {
+	if err != nil || !config.Enabled || config.Interval != 45*time.Second || config.MinimumHealthy != 8 {
 		t.Fatalf("enabled config = %+v, err=%v", config, err)
 	}
 

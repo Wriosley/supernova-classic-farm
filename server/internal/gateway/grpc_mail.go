@@ -33,7 +33,7 @@ func NewGRPCMailCommander(key []byte, endpoint string) (*GRPCMailCommander, erro
 	if strings.TrimSpace(endpoint) == "" {
 		return nil, errors.New("MailSvr endpoint is required")
 	}
-	target, err := rpcnet.TargetFromHTTPURL(endpoint)
+	target, err := rpcnet.TargetFromEndpoint(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid MailSvr gRPC endpoint: %w", err)
 	}
@@ -43,10 +43,19 @@ func NewGRPCMailCommander(key []byte, endpoint string) (*GRPCMailCommander, erro
 	if err != nil {
 		return nil, err
 	}
+	balancing, err := rpcnet.RoundRobinDialOption(
+		mailv1.MailService_OpenMailbox_FullMethodName,
+		mailv1.MailService_MarkMailRead_FullMethodName,
+		mailv1.MailService_CheckMailboxIndicator_FullMethodName,
+	)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := grpc.NewClient(
 		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(interceptor),
+		balancing,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(128<<10),
 			grpc.MaxCallRecvMsgSize(128<<10),

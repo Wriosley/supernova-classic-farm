@@ -76,6 +76,26 @@ func TestProgressStoreEnforcesAdjacentTransitionsAndFrozenEvidence(t *testing.T)
 	}
 }
 
+func TestProgressStoreIgnoresUnpersistedSourceRouteHistory(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewProgressStore(newMemoryProgressBackend())
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress := sampleProgress(StepSourceDraining)
+	progress.Source.PreviousOwnerZoneID = "zone-old"
+	progress.Source.TransitionID = "99999999-9999-4999-8999-999999999999"
+	progress.Source.LeaseTerm = 27
+	progress.Manifest = Manifest{{PlayerID: 9, OwnerEpoch: 5, CheckpointRevision: 11}}
+
+	if err := store.Create(ctx, progress); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := store.Advance(ctx, progress, StepSourceFlushed); err != nil {
+		t.Fatalf("Advance after persisted round trip: %v", err)
+	}
+}
+
 func TestProgressStoreRestartLoadCompleteAndAbandon(t *testing.T) {
 	ctx := context.Background()
 	backend := newMemoryProgressBackend()

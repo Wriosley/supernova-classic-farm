@@ -31,7 +31,11 @@ func NewMailClient(key []byte, endpoint string) (*MailClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	target, err := rpcnet.TargetFromHTTPURL(endpoint)
+	target, err := rpcnet.TargetFromEndpoint(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	balancing, err := rpcnet.RoundRobinDialOption()
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +43,7 @@ func NewMailClient(key []byte, endpoint string) (*MailClient, error) {
 		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(interceptor),
+		balancing,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(128<<10),
 			grpc.MaxCallRecvMsgSize(128<<10),

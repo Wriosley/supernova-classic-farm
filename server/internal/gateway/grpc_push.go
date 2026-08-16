@@ -41,6 +41,9 @@ func (s *GRPCPushServer) PublishPlayerStateChanged(
 		request.Envelope.TargetPlayerId != request.RecipientPlayerId {
 		return nil, status.Error(codes.InvalidArgument, "invalid player push")
 	}
+	if !s.hub.HasSubscriber(request.RecipientPlayerId) {
+		return nil, status.Error(codes.NotFound, "recipient is not connected to this gate")
+	}
 	if err := s.hub.Publish(request.Envelope); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid player push")
 	}
@@ -54,9 +57,8 @@ func (s *GRPCPushServer) PublishPlayerStateChanged(
 // PublishFarmViewPatch fans one FarmViewPatch out to every recipient in the
 // request that is connected to this Gate, one PUSH envelope per recipient
 // (unlike PublishFarmPresence, which always carries exactly one recipient).
-// A recipient with no live subscription is simply not delivered to; that is
-// not an error here, since Broadcaster addresses gates by the visitor
-// registry, which can briefly lag an actual disconnect.
+// Recipients without a local subscription are skipped; if none are local the
+// RPC returns NOT_FOUND so stale lease routing is observable.
 func (s *GRPCPushServer) PublishFarmViewPatch(
 	_ context.Context,
 	request *rpcv1.PublishFarmViewPatchRequest,
@@ -69,9 +71,13 @@ func (s *GRPCPushServer) PublishFarmViewPatch(
 		return nil, status.Error(codes.InvalidArgument, "invalid farm view patch push")
 	}
 	now := time.Now().UnixMilli()
+	delivered := 0
 	for _, recipientPlayerID := range request.RecipientPlayerIds {
 		if recipientPlayerID == 0 {
 			return nil, status.Error(codes.InvalidArgument, "invalid farm view patch push")
+		}
+		if !s.hub.HasSubscriber(recipientPlayerID) {
+			continue
 		}
 		envelope := &wsv1.WsEnvelope{
 			ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_PUSH,
@@ -82,6 +88,10 @@ func (s *GRPCPushServer) PublishFarmViewPatch(
 		if err := s.hub.Publish(envelope); err != nil {
 			return nil, status.Error(codes.InvalidArgument, "invalid farm view patch push")
 		}
+		delivered++
+	}
+	if delivered == 0 {
+		return nil, status.Error(codes.NotFound, "no recipient is connected to this gate")
 	}
 	return &rpcv1.PublishFarmViewPatchResponse{}, nil
 }
@@ -95,6 +105,9 @@ func (s *GRPCPushServer) PublishFarmPresence(
 		request.Presence.OwnerPlayerId != request.RecipientPlayerId ||
 		request.Presence.Kind == wsv1.FarmPresenceKind_FARM_PRESENCE_KIND_UNSPECIFIED {
 		return nil, status.Error(codes.InvalidArgument, "invalid farm presence push")
+	}
+	if !s.hub.HasSubscriber(request.RecipientPlayerId) {
+		return nil, status.Error(codes.NotFound, "recipient is not connected to this gate")
 	}
 	envelope := &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_PUSH,
@@ -120,9 +133,13 @@ func (s *GRPCPushServer) PublishRedDotChanged(
 		return nil, status.Error(codes.InvalidArgument, "invalid red dot push")
 	}
 	now := time.Now().UnixMilli()
+	delivered := 0
 	for _, recipientPlayerID := range request.RecipientPlayerIds {
 		if recipientPlayerID == 0 {
 			return nil, status.Error(codes.InvalidArgument, "invalid red dot push")
+		}
+		if !s.hub.HasSubscriber(recipientPlayerID) {
+			continue
 		}
 		envelope := &wsv1.WsEnvelope{
 			ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_PUSH,
@@ -133,6 +150,10 @@ func (s *GRPCPushServer) PublishRedDotChanged(
 		if err := s.hub.Publish(envelope); err != nil {
 			return nil, status.Error(codes.InvalidArgument, "invalid red dot push")
 		}
+		delivered++
+	}
+	if delivered == 0 {
+		return nil, status.Error(codes.NotFound, "no recipient is connected to this gate")
 	}
 	return &rpcv1.PublishRedDotChangedResponse{}, nil
 }

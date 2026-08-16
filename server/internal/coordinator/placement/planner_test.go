@@ -83,6 +83,73 @@ func TestPlannerEightToNineCreatesOnlyDesiredDiffWithoutMutatingCurrent(t *testi
 	}
 }
 
+func TestPlannerPreservesClaimedTaskBeforeFirstProgressBoundary(t *testing.T) {
+	current := staticSnapshot(t, eightCandidates())
+	candidates := append(eightCandidates(), Candidate{LogicalZoneID: "zone-8", Endpoint: "http://zone-8:8082"})
+	desired, err := Compute(current.ShardCount, current.AssignmentAlgorithmVersion, candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shardID := uint32(0)
+	for index := range desired {
+		if desired[index].OwnerZoneID != current.Entries[index].OwnerZoneID {
+			shardID = uint32(index)
+			break
+		}
+	}
+	source := current.Entries[shardID]
+	earlierTarget := eightCandidates()[0]
+	if earlierTarget.LogicalZoneID == source.OwnerZoneID {
+		earlierTarget = eightCandidates()[1]
+	}
+	running := migration.Task{
+		ShardID: shardID, TaskID: make([]byte, 16), Reason: migration.ReasonRebalance,
+		Status: migration.StatusRunning, Priority: migration.PriorityRebalance,
+		SourceZoneID: source.OwnerZoneID, SourceEndpoint: source.OwnerEndpoint,
+		SourceOwnerEpoch: source.OwnerEpoch, SourceRouteVersion: source.RouteVersion,
+		TargetZoneID: earlierTarget.LogicalZoneID, TargetEndpoint: earlierTarget.Endpoint,
+		PlannedFromMapVersion: current.MapVersion, PlannedFromAvailabilityVersion: 8,
+		CreatedAtMS: 1, UpdatedAtMS: 1,
+	}
+	store, err := migration.NewMemoryTaskStore(running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planner, err := NewPlanner(&snapshotSource{snapshot: current}, fixedMembership{membershipSnapshot(candidates, membership.StateHealthy)}, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := planner.Reconcile(context.Background())
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.Deduplicated == 0 {
+		t.Fatalf("result = %+v, want claimed task deduplicated", result)
+	}
+	got, found, err := store.Get(context.Background(), shardID)
+	if err != nil || !found || got.Status != migration.StatusRunning || got.TargetZoneID != earlierTarget.LogicalZoneID {
+		t.Fatalf("claimed task changed = (%+v, %t, %v)", got, found, err)
+	}
+}
+
+func TestPlannerWaitsForMinimumHealthyZones(t *testing.T) {
+	current := staticSnapshot(t, eightCandidates())
+	members := membershipSnapshot(eightCandidates()[:7], membership.StateHealthy)
+	store, _ := migration.NewMemoryTaskStore()
+	planner, err := NewPlannerWithMinimum(&snapshotSource{snapshot: current}, fixedMembership{members}, store, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = planner.Reconcile(context.Background()); !errors.Is(err, ErrInsufficientHealthyZones) {
+		t.Fatalf("Reconcile error = %v", err)
+	}
+	open, _ := store.LoadOpen(context.Background())
+	if len(open) != 0 {
+		t.Fatalf("planner wrote %d premature tasks", len(open))
+	}
+}
+
 func TestPlannerNoOpAndCancelsStalePlannedTask(t *testing.T) {
 	current := staticSnapshot(t, eightCandidates())
 	stale := migration.Task{
@@ -114,6 +181,70 @@ func TestPlannerNoOpAndCancelsStalePlannedTask(t *testing.T) {
 	}
 }
 
+func TestPlannerDoesNotCancelPreparingTaskWhenTargetMatchesDesired(t *testing.T) {
+	current := staticSnapshot(t, eightCandidates())
+	const shardID = uint32(42)
+	source := current.Entries[shardID]
+	source.State = routing.RouteStatePreparing
+	current.Entries[shardID] = source
+	task := migration.Task{
+		ShardID: shardID, TaskID: make([]byte, 16), Reason: migration.ReasonDrain,
+		Status: migration.StatusPlanned, Priority: migration.PriorityDrain,
+		SourceZoneID: "zone-old", SourceEndpoint: "http://zone-old:8082",
+		SourceOwnerEpoch: 1, SourceRouteVersion: 1,
+		TargetZoneID: source.OwnerZoneID, TargetEndpoint: source.OwnerEndpoint,
+		PlannedFromMapVersion: current.MapVersion, PlannedFromAvailabilityVersion: 8,
+		CreatedAtMS: 1, UpdatedAtMS: 1,
+	}
+	store, err := migration.NewMemoryTaskStore(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planner, _ := NewPlanner(&snapshotSource{snapshot: current}, fixedMembership{membershipSnapshot(eightCandidates(), membership.StateHealthy)}, store)
+	result, err := planner.Reconcile(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := store.Get(context.Background(), shardID)
+	if err != nil || !found || got.Status != migration.StatusPlanned || result.Cancelled != 0 {
+		t.Fatalf("PREPARING task was cancelled: result=%+v task=(%+v,%t,%v)", result, got, found, err)
+	}
+}
+
+func TestPlannerPreservesCommittedActiveTaskForProgressTail(t *testing.T) {
+	current := staticSnapshot(t, eightCandidates())
+	const shardID = uint32(42)
+	active := current.Entries[shardID]
+	task := migration.Task{
+		ShardID: shardID, TaskID: make([]byte, 16), Reason: migration.ReasonDrain,
+		Status: migration.StatusPlanned, Priority: migration.PriorityDrain,
+		SourceZoneID: "zone-old", SourceEndpoint: "http://zone-old:8082",
+		SourceOwnerEpoch: active.OwnerEpoch, SourceRouteVersion: active.RouteVersion,
+		TargetZoneID: active.OwnerZoneID, TargetEndpoint: active.OwnerEndpoint,
+		PlannedFromMapVersion: current.MapVersion, PlannedFromAvailabilityVersion: 8,
+		CreatedAtMS: 1, UpdatedAtMS: 1,
+	}
+	active.OwnerEpoch = task.SourceOwnerEpoch + 1
+	active.RouteVersion = task.SourceRouteVersion + 2
+	active.PreviousOwnerZoneID = task.SourceZoneID
+	active.TransitionID = "committed-transition"
+	current.Entries[shardID] = active
+
+	store, err := migration.NewMemoryTaskStore(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planner, _ := NewPlanner(&snapshotSource{snapshot: current}, fixedMembership{membershipSnapshot(eightCandidates(), membership.StateHealthy)}, store)
+	result, err := planner.Reconcile(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := store.Get(context.Background(), shardID)
+	if err != nil || !found || got.Status != migration.StatusPlanned || result.Cancelled != 0 || result.Deduplicated == 0 {
+		t.Fatalf("committed task tail was cancelled: result=%+v task=(%+v,%t,%v)", result, got, found, err)
+	}
+}
+
 func TestPlannerSkipsShardWhoseCurrentOwnerIsUnhealthy(t *testing.T) {
 	current := staticSnapshot(t, eightCandidates())
 	members := membershipSnapshot(append(eightCandidates(), Candidate{LogicalZoneID: "zone-8", Endpoint: "http://zone-8:8082"}), membership.StateHealthy)
@@ -131,6 +262,39 @@ func TestPlannerSkipsShardWhoseCurrentOwnerIsUnhealthy(t *testing.T) {
 	}
 	if _, found, err := store.Get(context.Background(), 1); err != nil || found {
 		t.Fatalf("suspect-owner shard task found=%t err=%v", found, err)
+	}
+}
+
+func TestPlannerDrainingZoneCreatesOnlyDrainTasks(t *testing.T) {
+	candidates := eightCandidates()
+	current := staticSnapshot(t, candidates)
+	members := membershipSnapshot(candidates, membership.StateHealthy)
+	drainingID := current.Entries[0].OwnerZoneID
+	want := 0
+	for _, entry := range current.Entries {
+		if entry.OwnerZoneID == drainingID {
+			want++
+		}
+	}
+	for index := range members.Members {
+		if members.Members[index].LogicalZoneID == drainingID {
+			members.Members[index].State = membership.StateDraining
+		}
+	}
+	store, _ := migration.NewMemoryTaskStore()
+	planner, _ := NewPlanner(&snapshotSource{snapshot: current}, fixedMembership{members}, store)
+	result, err := planner.Reconcile(context.Background())
+	if err != nil || result.Proposed != want {
+		t.Fatalf("Reconcile = (%+v, %v), want %d drain tasks", result, err, want)
+	}
+	open, err := store.LoadOpen(context.Background())
+	if err != nil || len(open) != want {
+		t.Fatalf("LoadOpen = %d, %v", len(open), err)
+	}
+	for _, task := range open {
+		if task.SourceZoneID != drainingID || task.Reason != migration.ReasonDrain || task.Priority != migration.PriorityDrain {
+			t.Fatalf("non-drain proposal: %+v", task)
+		}
 	}
 }
 

@@ -155,11 +155,11 @@ func main() {
 		}
 		logger.Info("using MySQL Player checkpoint store")
 	}
-	var pushForwarder *player.GRPCPushForwarder
+	var pushRouter *player.GRPCPushRouter
 	defer func() {
 		runtime.Close()
-		if pushForwarder != nil {
-			_ = pushForwarder.Close()
+		if pushRouter != nil {
+			_ = pushRouter.Close()
 		}
 	}()
 
@@ -224,17 +224,12 @@ func main() {
 		}
 	}
 
-	pushEndpoint := os.Getenv("GATE_RPC_URL")
-	if pushEndpoint == "" {
-		pushEndpoint = "http://127.0.0.1:8081"
-	}
-	pushForwarder, err = player.NewGRPCPushForwarder(
-		rpcKey, rpcauth.ZoneService, pushEndpoint, gatewayID,
-	)
+	connectionRegistry := connection.NewRegistry()
+	pushRouter, err = player.NewGRPCPushRouter(rpcKey, rpcauth.ZoneService, connectionRegistry)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := runtime.SetPushForwarder(pushForwarder); err != nil {
+	if err := runtime.SetPushForwarder(pushRouter); err != nil {
 		log.Fatal(err)
 	}
 
@@ -255,7 +250,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ownerFarmService, err := visit.NewOwnerService(runtime, pushForwarder, time.Now)
+	ownerFarmService, err := visit.NewOwnerService(runtime, pushRouter, time.Now)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -267,13 +262,12 @@ func main() {
 	}
 	defer quickInfoClient.Close()
 	runtime.SetFarmQuickInfoNotifier(quickInfoClient)
-	connectionRegistry := connection.NewRegistry()
 	go runConnectionEvictionLoop(ctx, connectionRegistry, quickInfoClient, logger)
 	runtime.SetPlayerPresence(connectionRegistry)
 	runtime.SetFarmObservers(ownerFarmService)
 	go runActorIdleEvictionLoop(ctx, runtime, logger)
 
-	farmViewBroadcaster, err := farmview.NewBroadcaster(pushForwarder, ownerFarmService, connectionRegistry)
+	farmViewBroadcaster, err := farmview.NewBroadcaster(pushRouter, ownerFarmService, connectionRegistry)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -286,7 +280,7 @@ func main() {
 		log.Fatal(err)
 	}
 	pushDispatcher, err := push.NewDispatcher(
-		push.StaticGateResolver{GateID: gatewayID, Client: pushForwarder},
+		pushRouter,
 		connectionRegistry,
 		logger,
 		push.Config{},
@@ -431,7 +425,7 @@ func main() {
 		"advertised_endpoint", identity.Endpoint,
 		"owner_epoch", player.LocalOwnerEpoch,
 		"routing_mode", routingMode,
-		"gate_rpc_url", pushEndpoint,
+		"gate_push_routing", "connection-lease",
 		"state_adapter", func() string {
 			if os.Getenv("MYSQL_DSN") == "" {
 				return "lazy-in-memory-development-only"

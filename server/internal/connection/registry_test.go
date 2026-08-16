@@ -38,6 +38,25 @@ func TestRegisterRefreshIdempotent(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsGateEndpointMutation(t *testing.T) {
+	reg := NewRegistry()
+	first := PlayerConnection{PlayerID: 7, GateID: "pod-uid", GateEndpoint: "http://gate-0.gate-headless.classic-farm.svc.cluster.local:8081", ConnectionID: "c1", ExpiresAt: time.Now().Add(LeaseTTL)}
+	if err := reg.Register(first); err != nil {
+		t.Fatal(err)
+	}
+	first.GateEndpoint = "http://gate-1.gate-headless.classic-farm.svc.cluster.local:8081"
+	if err := reg.Register(first); err != ErrConnectionMismatch {
+		t.Fatalf("Register endpoint mutation = %v, want ErrConnectionMismatch", err)
+	}
+}
+
+func TestRegisterRejectsNonGateEndpoint(t *testing.T) {
+	err := NewRegistry().Register(PlayerConnection{PlayerID: 7, GateID: "pod-uid", GateEndpoint: "http://gate:8081", ConnectionID: "c1", ExpiresAt: time.Now().Add(LeaseTTL)})
+	if err != ErrInvalidConnection {
+		t.Fatalf("Register arbitrary service endpoint = %v", err)
+	}
+}
+
 func TestUnregisterIgnoresStaleConnectionID(t *testing.T) {
 	reg := NewRegistry()
 	now := time.Unix(1000, 0)

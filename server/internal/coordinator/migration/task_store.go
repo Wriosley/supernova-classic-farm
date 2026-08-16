@@ -70,6 +70,64 @@ type TaskStore interface {
 	Complete(context.Context, uint32, []byte) error
 }
 
+// RecoverOpenProgressTasks restores the queue entry for every durable OPEN
+// Progress row. It never changes Route or Fence evidence; it only recreates a
+// terminal/missing MigrationTask so the Executor can resume at the persisted
+// Progress step after a Coordinator restart.
+func RecoverOpenProgressTasks(ctx context.Context, tasks TaskStore, progress ProgressStore, mapVersion uint64) (int, error) {
+	if tasks == nil || progress == nil || mapVersion == 0 {
+		return 0, errors.New("migration recovery dependencies and map version are required")
+	}
+	open, err := progress.LoadOpen(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("load open migration progress for task recovery: %w", err)
+	}
+	recovered := 0
+	for _, item := range open {
+		current, found, err := tasks.Get(ctx, item.ShardID)
+		if err != nil {
+			return recovered, fmt.Errorf("load migration task %d for recovery: %w", item.ShardID, err)
+		}
+		if found && (current.Status == StatusPlanned || current.Status == StatusRunning) {
+			if taskMatchesProgress(current, item) {
+				continue
+			}
+			return recovered, fmt.Errorf("%w: open task %d conflicts with durable progress", ErrTaskConflict, item.ShardID)
+		}
+		reason, priority := ReasonDrain, uint32(PriorityDrain)
+		if found {
+			switch current.Reason {
+			case ReasonRebalance, ReasonDrain, ReasonFailover:
+				reason, priority = current.Reason, current.Priority
+			}
+		}
+		_, changed, err := tasks.UpsertPlanned(ctx, Task{
+			ShardID: item.ShardID, Reason: reason, Priority: priority,
+			SourceZoneID: item.Source.OwnerZoneID, SourceEndpoint: item.Source.OwnerEndpoint,
+			SourceOwnerEpoch: item.Source.OwnerEpoch, SourceRouteVersion: item.Source.RouteVersion,
+			TargetZoneID: item.Prepared.OwnerZoneID, TargetEndpoint: item.Prepared.OwnerEndpoint,
+			PlannedFromMapVersion: mapVersion, PlannedFromAvailabilityVersion: 1,
+		})
+		if err != nil {
+			return recovered, fmt.Errorf("recover migration task %d: %w", item.ShardID, err)
+		}
+		if changed {
+			recovered++
+		}
+	}
+	return recovered, nil
+}
+
+func taskMatchesProgress(task Task, progress Progress) bool {
+	return task.ShardID == progress.ShardID &&
+		task.SourceZoneID == progress.Source.OwnerZoneID &&
+		task.SourceEndpoint == progress.Source.OwnerEndpoint &&
+		task.SourceOwnerEpoch == progress.Source.OwnerEpoch &&
+		task.SourceRouteVersion == progress.Source.RouteVersion &&
+		task.TargetZoneID == progress.Prepared.OwnerZoneID &&
+		task.TargetEndpoint == progress.Prepared.OwnerEndpoint
+}
+
 func resolveClaim(task Task, found bool, taskID []byte, nowMS int64) (Task, bool, error) {
 	if !found || !bytes.Equal(task.TaskID, taskID) {
 		return Task{}, false, ErrTaskConflict
@@ -201,9 +259,7 @@ func sameProposal(a, b Task) bool {
 	return a.ShardID == b.ShardID && a.Reason == b.Reason && a.Priority == b.Priority &&
 		a.SourceZoneID == b.SourceZoneID && a.SourceEndpoint == b.SourceEndpoint &&
 		a.SourceOwnerEpoch == b.SourceOwnerEpoch && a.SourceRouteVersion == b.SourceRouteVersion &&
-		a.TargetZoneID == b.TargetZoneID && a.TargetEndpoint == b.TargetEndpoint &&
-		a.PlannedFromMapVersion == b.PlannedFromMapVersion &&
-		a.PlannedFromAvailabilityVersion == b.PlannedFromAvailabilityVersion
+		a.TargetZoneID == b.TargetZoneID && a.TargetEndpoint == b.TargetEndpoint
 }
 
 func sortOpen(tasks []Task) {

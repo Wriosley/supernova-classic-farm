@@ -60,6 +60,11 @@ type OwnerFarmClient interface {
 	) (*rpcv1.ApplyVisitorActionResponse, error)
 }
 
+type TargetedOwnerFarmClient interface {
+	EnterVisitorAt(context.Context, uint64, uint64, string, string, []byte, string) ([]byte, int64, *wsv1.FarmVisitSnapshot, *wsv1.Error, error)
+	RefreshVisitorHeartbeatAt(context.Context, uint64, uint64, []byte, string, string) (int64, *wsv1.Error, error)
+}
+
 // ZoneOwnerFarmClient resolves the owner player's shard route through the
 // Coordinator and calls OwnerFarmService on whichever Zone currently owns
 // it, exactly like friend.ZoneTaskCreditClient does for PlayerSocialService.
@@ -129,13 +134,20 @@ func (z *ZoneOwnerFarmClient) EnterVisitor(
 	relationID []byte,
 	requestID string,
 ) ([]byte, int64, *wsv1.FarmVisitSnapshot, *wsv1.Error, error) {
+	return z.EnterVisitorAt(ctx, ownerPlayerID, visitorPlayerID, gateID, "http://legacy-gate:8081", relationID, requestID)
+}
+
+func (z *ZoneOwnerFarmClient) EnterVisitorAt(
+	ctx context.Context, ownerPlayerID, visitorPlayerID uint64, gateID, gateEndpoint string,
+	relationID []byte, requestID string,
+) ([]byte, int64, *wsv1.FarmVisitSnapshot, *wsv1.Error, error) {
 	client, route, err := z.resolve(ctx, ownerPlayerID)
 	if err != nil {
 		return nil, 0, nil, nil, err
 	}
 	response, err := client.EnterVisitor(ctx, &rpcv1.EnterVisitorRequest{
 		OwnerRoute: route, OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
-		GateId: gateID, RelationId: relationID, RequestId: requestID,
+		GateId: gateID, GateEndpoint: gateEndpoint, RelationId: relationID, RequestId: requestID,
 	})
 	if err != nil {
 		return nil, 0, nil, nil, fmt.Errorf("Owner Zone EnterVisitor gRPC call: %w", err)
@@ -149,13 +161,19 @@ func (z *ZoneOwnerFarmClient) RefreshVisitorHeartbeat(
 	visitID []byte,
 	gateID string,
 ) (int64, *wsv1.Error, error) {
+	return z.RefreshVisitorHeartbeatAt(ctx, ownerPlayerID, visitorPlayerID, visitID, gateID, "http://legacy-gate:8081")
+}
+
+func (z *ZoneOwnerFarmClient) RefreshVisitorHeartbeatAt(
+	ctx context.Context, ownerPlayerID, visitorPlayerID uint64, visitID []byte, gateID, gateEndpoint string,
+) (int64, *wsv1.Error, error) {
 	client, route, err := z.resolve(ctx, ownerPlayerID)
 	if err != nil {
 		return 0, nil, err
 	}
 	response, err := client.RefreshVisitorHeartbeat(ctx, &rpcv1.RefreshVisitorHeartbeatRequest{
 		OwnerRoute: route, OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
-		VisitId: visitID, GateId: gateID,
+		VisitId: visitID, GateId: gateID, GateEndpoint: gateEndpoint,
 	})
 	if err != nil {
 		return 0, nil, fmt.Errorf("Owner Zone RefreshVisitorHeartbeat gRPC call: %w", err)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinator/routestore"
@@ -54,7 +55,14 @@ type ExecutorConfig struct {
 	AfterPersist  func(uint32, PersistBoundary) error
 }
 
-type Executor struct{ cfg ExecutorConfig }
+type Executor struct {
+	cfg ExecutorConfig
+	// Tcaplus exposes one global ShardMapMeta commit anchor and its Go SDK does
+	// not support concurrent Traverse calls for the same table. Serialize the
+	// Load -> Commit -> apply/publish sequence while retaining parallel Zone
+	// drain/load work around it.
+	routeMu sync.Mutex
+}
 
 func NewExecutor(cfg ExecutorConfig) (*Executor, error) {
 	if cfg.Tasks == nil || cfg.Progress == nil || cfg.Routes == nil || cfg.RouteStore == nil ||
@@ -88,7 +96,7 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			return errors.New("migration Current snapshot is incomplete")
 		}
 		source := current.Entries[shardID]
-		if completedTaskRoute(task, source) {
+		if CompletedTaskRoute(task, source) {
 			if err := executor.cfg.Tasks.Complete(ctx, shardID, taskID); err != nil {
 				return err
 			}
@@ -131,14 +139,18 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			progress.Step = StepSourceFlushed
 
 		case StepSourceFlushed:
+			executor.routeMu.Lock()
 			stored, err := executor.ensurePreparing(ctx, progress)
 			if err != nil {
+				executor.routeMu.Unlock()
 				return err
 			}
 			progress.Prepared = stored.Entries[shardID]
 			if err := executor.applyAndPublish(stored); err != nil {
+				executor.routeMu.Unlock()
 				return err
 			}
+			executor.routeMu.Unlock()
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepRoutePreparing); err != nil {
 				return err
 			}
@@ -181,13 +193,17 @@ func (executor *Executor) Execute(ctx context.Context, shardID uint32, taskID []
 			progress.Step = StepTargetReady
 
 		case StepTargetReady:
+			executor.routeMu.Lock()
 			stored, err := executor.ensureActive(ctx, progress)
 			if err != nil {
+				executor.routeMu.Unlock()
 				return err
 			}
 			if err := executor.applyAndPublish(stored); err != nil {
+				executor.routeMu.Unlock()
 				return err
 			}
+			executor.routeMu.Unlock()
 			if err := executor.cfg.Progress.Advance(ctx, progress, StepRouteActive); err != nil {
 				return err
 			}
@@ -306,7 +322,11 @@ func sameActivatedRoute(active, prepared routing.RouteEntry) bool {
 		active.PreviousOwnerZoneID == prepared.PreviousOwnerZoneID && active.TransitionID == prepared.TransitionID
 }
 
-func completedTaskRoute(task Task, active routing.RouteEntry) bool {
+// CompletedTaskRoute reports whether Current contains the exact durable
+// evidence that task already committed its target ACTIVE route. Callers may
+// use this to distinguish an idempotent migration tail from an unrelated
+// stale task whose target merely happens to equal Current ownership.
+func CompletedTaskRoute(task Task, active routing.RouteEntry) bool {
 	return active.ShardID == task.ShardID && active.State == routing.RouteStateActive &&
 		active.OwnerZoneID == task.TargetZoneID && active.OwnerEndpoint == task.TargetEndpoint &&
 		active.OwnerEpoch > task.SourceOwnerEpoch && active.RouteVersion == task.SourceRouteVersion+2 &&

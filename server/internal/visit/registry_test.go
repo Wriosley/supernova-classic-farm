@@ -154,3 +154,15 @@ func TestRegistryListVisitorsForUnknownOwnerIsEmpty(t *testing.T) {
 		t.Fatalf("ListVisitors(unknown owner) = %+v, want empty", got)
 	}
 }
+
+func TestRegistryRefreshRejectsGateTargetMutation(t *testing.T) {
+	reg := NewRegistry()
+	now := time.Now()
+	id, _, _, err := reg.Enter(1, 2, "gate-uid", "req", now, "http://gate-0.gate-headless.classic-farm.svc.cluster.local:8081")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = reg.Refresh(1, 2, id, "gate-uid", now.Add(time.Second), "http://gate-1.gate-headless.classic-farm.svc.cluster.local:8081"); err != ErrVisitNotFound {
+		t.Fatalf("Refresh target mutation = %v, want ErrVisitNotFound", err)
+	}
+}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/Wriosley/supernova-classic-farm/server/internal/connection"
 )
 
 // VisitTTL is the eviction window measured from the last accepted heartbeat
@@ -13,8 +15,9 @@ import (
 const VisitTTL = 90 * time.Second
 
 var (
-	ErrVisitNotFound = errors.New("visit not found")
-	ErrVisitExpired  = errors.New("visit expired")
+	ErrVisitNotFound     = errors.New("visit not found")
+	ErrVisitExpired      = errors.New("visit expired")
+	ErrInvalidGateTarget = errors.New("invalid gate target")
 )
 
 // VisitRecord is one owner-side lease granted to a visiting player.
@@ -23,6 +26,7 @@ type VisitRecord struct {
 	VisitorPlayerID uint64
 	VisitID         []byte
 	GateID          string
+	GateEndpoint    string
 	LastHeartbeatAt time.Time
 	ExpiresAt       time.Time
 	RequestID       string
@@ -60,8 +64,15 @@ func NewRegistry() *Registry {
 func (r *Registry) Enter(
 	owner, visitor uint64,
 	gateID, requestID string,
-	now time.Time,
+	now time.Time, gateEndpoints ...string,
 ) (visitID []byte, expiresAt time.Time, newlyCreated bool, err error) {
+	gateEndpoint := "http://legacy-gate:8081"
+	if len(gateEndpoints) > 0 && gateEndpoints[0] != "" {
+		gateEndpoint = gateEndpoints[0]
+	}
+	if gateID == "" || !connection.ValidGateEndpoint(gateEndpoint) {
+		return nil, time.Time{}, false, ErrInvalidGateTarget
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	ow := r.owners[owner]
@@ -74,9 +85,11 @@ func (r *Registry) Enter(
 	}
 	if existing := ow.byVisitor[visitor]; existing != nil {
 		if requestID != "" && existing.RequestID == requestID {
+			if existing.GateID != gateID || existing.GateEndpoint != gateEndpoint {
+				return nil, time.Time{}, false, ErrVisitNotFound
+			}
 			existing.LastHeartbeatAt = now
 			existing.ExpiresAt = now.Add(VisitTTL)
-			existing.GateID = gateID
 			return append([]byte(nil), existing.VisitID...), existing.ExpiresAt, false, nil
 		}
 		delete(ow.byVisitID, string(existing.VisitID))
@@ -88,7 +101,7 @@ func (r *Registry) Enter(
 	}
 	record := &VisitRecord{
 		OwnerPlayerID: owner, VisitorPlayerID: visitor, VisitID: id,
-		GateID: gateID, LastHeartbeatAt: now, ExpiresAt: now.Add(VisitTTL),
+		GateID: gateID, GateEndpoint: gateEndpoint, LastHeartbeatAt: now, ExpiresAt: now.Add(VisitTTL),
 		RequestID: requestID,
 	}
 	ow.byVisitor[visitor] = record
@@ -101,8 +114,15 @@ func (r *Registry) Refresh(
 	owner, visitor uint64,
 	visitID []byte,
 	gateID string,
-	now time.Time,
+	now time.Time, gateEndpoints ...string,
 ) (time.Time, error) {
+	gateEndpoint := "http://legacy-gate:8081"
+	if len(gateEndpoints) > 0 && gateEndpoints[0] != "" {
+		gateEndpoint = gateEndpoints[0]
+	}
+	if gateID == "" || !connection.ValidGateEndpoint(gateEndpoint) {
+		return time.Time{}, ErrInvalidGateTarget
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	record, ow := r.lookupLocked(owner, visitor, visitID)
@@ -113,9 +133,11 @@ func (r *Registry) Refresh(
 		r.removeLocked(ow, owner, visitor, record)
 		return time.Time{}, ErrVisitExpired
 	}
+	if record.GateID != gateID || record.GateEndpoint != gateEndpoint {
+		return time.Time{}, ErrVisitNotFound
+	}
 	record.LastHeartbeatAt = now
 	record.ExpiresAt = now.Add(VisitTTL)
-	record.GateID = gateID
 	return record.ExpiresAt, nil
 }
 

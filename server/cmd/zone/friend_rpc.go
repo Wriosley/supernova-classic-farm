@@ -80,7 +80,7 @@ func (s *visitorZoneRPCServer) EnterFriendFarm(
 		return nil, err
 	}
 	result, wsErr, err := s.visits.EnterFriendFarm(
-		ctx, request.CallerPlayerId, request.OwnerPlayerId, request.GateId, request.RequestId,
+		ctx, request.CallerPlayerId, request.OwnerPlayerId, request.GateId, request.RequestId, request.GateEndpoint,
 	)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "enter friend farm failed")
@@ -103,7 +103,7 @@ func (s *visitorZoneRPCServer) HeartbeatFriendFarm(
 		return nil, err
 	}
 	result, wsErr, err := s.visits.HeartbeatFriendFarm(
-		ctx, request.CallerPlayerId, request.OwnerPlayerId, request.VisitId, request.GateId,
+		ctx, request.CallerPlayerId, request.OwnerPlayerId, request.VisitId, request.GateId, request.GateEndpoint,
 	)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "farm heartbeat failed")
@@ -290,7 +290,7 @@ func (s *ownerFarmRPCServer) EnterVisitor(
 	defer unlockShard()
 	visitID, expiresAtMs, snapshot, wsErr, err := s.owner.EnterVisitor(
 		ctx, request.OwnerPlayerId, request.OwnerRoute.OwnerEpoch, request.VisitorPlayerId,
-		request.GateId, request.RequestId,
+		request.GateId, request.RequestId, request.GateEndpoint,
 	)
 	switch {
 	case errors.Is(err, player.ErrNotOwner):
@@ -317,7 +317,7 @@ func (s *ownerFarmRPCServer) RefreshVisitorHeartbeat(
 	unlockShard := s.gates.readLock(request.OwnerRoute.LogicalShardId)
 	defer unlockShard()
 	expiresAtMs, wsErr, err := s.owner.RefreshVisitorHeartbeat(
-		ctx, request.OwnerPlayerId, request.VisitorPlayerId, request.VisitId, request.GateId,
+		ctx, request.OwnerPlayerId, request.VisitorPlayerId, request.VisitId, request.GateId, request.GateEndpoint,
 	)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "refresh visitor heartbeat failed")

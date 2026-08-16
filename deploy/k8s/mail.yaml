@@ -4,7 +4,12 @@ metadata:
   name: mail
   namespace: classic-farm
 spec:
-  replicas: 1
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: mail
@@ -15,6 +20,13 @@ spec:
         app.kubernetes.io/part-of: classic-farm
     spec:
       terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: mail
       containers:
         - name: mail
           image: classic-farm/mail:dev

@@ -399,6 +399,9 @@ func run() error {
 			migrations.abandonMigration,
 		)
 	}
+	if len(membershipConfig.DrainingZoneIDs) > 0 {
+		mux.HandleFunc("GET /internal/v1/zones/drain", drainStatusHandler(routes, migrationTasks, migrationProgressBackend, membershipConfig.DrainingZoneIDs))
+	}
 	mux.HandleFunc("GET /internal/v1/debug/route-subscribers", subscriberDiagnosticsHandler(routePublisher))
 	mux.Handle("/", health.NewHandler(health.Check{
 		Name: "shard_map",

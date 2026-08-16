@@ -209,6 +209,7 @@ type EnterFriendFarmRequest struct {
 	OwnerPlayerId  uint64                 `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
 	GateId         string                 `protobuf:"bytes,3,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
 	RequestId      string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	GateEndpoint   string                 `protobuf:"bytes,5,opt,name=gate_endpoint,json=gateEndpoint,proto3" json:"gate_endpoint,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -267,6 +268,13 @@ func (x *EnterFriendFarmRequest) GetGateId() string {
 func (x *EnterFriendFarmRequest) GetRequestId() string {
 	if x != nil {
 		return x.RequestId
+	}
+	return ""
+}
+
+func (x *EnterFriendFarmRequest) GetGateEndpoint() string {
+	if x != nil {
+		return x.GateEndpoint
 	}
 	return ""
 }
@@ -330,6 +338,7 @@ type HeartbeatFriendFarmRequest struct {
 	VisitId        []byte                 `protobuf:"bytes,3,opt,name=visit_id,json=visitId,proto3" json:"visit_id,omitempty"`
 	GateId         string                 `protobuf:"bytes,4,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
 	RequestId      string                 `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	GateEndpoint   string                 `protobuf:"bytes,6,opt,name=gate_endpoint,json=gateEndpoint,proto3" json:"gate_endpoint,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -395,6 +404,13 @@ func (x *HeartbeatFriendFarmRequest) GetGateId() string {
 func (x *HeartbeatFriendFarmRequest) GetRequestId() string {
 	if x != nil {
 		return x.RequestId
+	}
+	return ""
+}
+
+func (x *HeartbeatFriendFarmRequest) GetGateEndpoint() string {
+	if x != nil {
+		return x.GateEndpoint
 	}
 	return ""
 }
@@ -757,6 +773,7 @@ type EnterVisitorRequest struct {
 	GateId          string                 `protobuf:"bytes,4,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
 	RelationId      []byte                 `protobuf:"bytes,5,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
 	RequestId       string                 `protobuf:"bytes,6,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	GateEndpoint    string                 `protobuf:"bytes,7,opt,name=gate_endpoint,json=gateEndpoint,proto3" json:"gate_endpoint,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -829,6 +846,13 @@ func (x *EnterVisitorRequest) GetRelationId() []byte {
 func (x *EnterVisitorRequest) GetRequestId() string {
 	if x != nil {
 		return x.RequestId
+	}
+	return ""
+}
+
+func (x *EnterVisitorRequest) GetGateEndpoint() string {
+	if x != nil {
+		return x.GateEndpoint
 	}
 	return ""
 }
@@ -908,6 +932,7 @@ type RefreshVisitorHeartbeatRequest struct {
 	VisitorPlayerId uint64                 `protobuf:"varint,3,opt,name=visitor_player_id,json=visitorPlayerId,proto3" json:"visitor_player_id,omitempty"`
 	VisitId         []byte                 `protobuf:"bytes,4,opt,name=visit_id,json=visitId,proto3" json:"visit_id,omitempty"`
 	GateId          string                 `protobuf:"bytes,5,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
+	GateEndpoint    string                 `protobuf:"bytes,6,opt,name=gate_endpoint,json=gateEndpoint,proto3" json:"gate_endpoint,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -973,6 +998,13 @@ func (x *RefreshVisitorHeartbeatRequest) GetVisitId() []byte {
 func (x *RefreshVisitorHeartbeatRequest) GetGateId() string {
 	if x != nil {
 		return x.GateId
+	}
+	return ""
+}
+
+func (x *RefreshVisitorHeartbeatRequest) GetGateEndpoint() string {
+	if x != nil {
+		return x.GateEndpoint
 	}
 	return ""
 }
@@ -1956,6 +1988,7 @@ type RegisterPlayerConnectionRequest struct {
 	ConnectionId  string                 `protobuf:"bytes,3,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
 	Route         *CommittedRoute        `protobuf:"bytes,4,opt,name=route,proto3" json:"route,omitempty"`
 	ExpiresAtMs   int64                  `protobuf:"varint,5,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	GateEndpoint  string                 `protobuf:"bytes,6,opt,name=gate_endpoint,json=gateEndpoint,proto3" json:"gate_endpoint,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2025,6 +2058,13 @@ func (x *RegisterPlayerConnectionRequest) GetExpiresAtMs() int64 {
 	return 0
 }
 
+func (x *RegisterPlayerConnectionRequest) GetGateEndpoint() string {
+	if x != nil {
+		return x.GateEndpoint
+	}
+	return ""
+}
+
 type RegisterPlayerConnectionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Error         *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
@@ -2076,6 +2116,7 @@ type RefreshPlayerConnectionRequest struct {
 	ConnectionId  string                 `protobuf:"bytes,3,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
 	Route         *CommittedRoute        `protobuf:"bytes,4,opt,name=route,proto3" json:"route,omitempty"`
 	ExpiresAtMs   int64                  `protobuf:"varint,5,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	GateEndpoint  string                 `protobuf:"bytes,6,opt,name=gate_endpoint,json=gateEndpoint,proto3" json:"gate_endpoint,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2143,6 +2184,13 @@ func (x *RefreshPlayerConnectionRequest) GetExpiresAtMs() int64 {
 		return x.ExpiresAtMs
 	}
 	return 0
+}
+
+func (x *RefreshPlayerConnectionRequest) GetGateEndpoint() string {
+	if x != nil {
+		return x.GateEndpoint
+	}
+	return ""
 }
 
 type RefreshPlayerConnectionResponse struct {
@@ -2668,23 +2716,25 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\x05route\x18\x03 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\x05route\x129\n" +
 	"\benvelope\x18\x04 \x01(\v2\x1d.classicfarm.ws.v1.WsEnvelopeR\benvelope\"Y\n" +
 	"\x1cExecutePlayerCommandResponse\x129\n" +
-	"\benvelope\x18\x01 \x01(\v2\x1d.classicfarm.ws.v1.WsEnvelopeR\benvelope\"\xa2\x01\n" +
+	"\benvelope\x18\x01 \x01(\v2\x1d.classicfarm.ws.v1.WsEnvelopeR\benvelope\"\xc7\x01\n" +
 	"\x16EnterFriendFarmRequest\x12(\n" +
 	"\x10caller_player_id\x18\x01 \x01(\x04R\x0ecallerPlayerId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x17\n" +
 	"\agate_id\x18\x03 \x01(\tR\x06gateId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x04 \x01(\tR\trequestId\"\x8d\x01\n" +
+	"request_id\x18\x04 \x01(\tR\trequestId\x12#\n" +
+	"\rgate_endpoint\x18\x05 \x01(\tR\fgateEndpoint\"\x8d\x01\n" +
 	"\x17EnterFriendFarmResponse\x12B\n" +
 	"\x06result\x18\x01 \x01(\v2*.classicfarm.ws.v1.EnterFriendFarmResponseR\x06result\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xc1\x01\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xe6\x01\n" +
 	"\x1aHeartbeatFriendFarmRequest\x12(\n" +
 	"\x10caller_player_id\x18\x01 \x01(\x04R\x0ecallerPlayerId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x19\n" +
 	"\bvisit_id\x18\x03 \x01(\fR\avisitId\x12\x17\n" +
 	"\agate_id\x18\x04 \x01(\tR\x06gateId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x05 \x01(\tR\trequestId\"\x8f\x01\n" +
+	"request_id\x18\x05 \x01(\tR\trequestId\x12#\n" +
+	"\rgate_endpoint\x18\x06 \x01(\tR\fgateEndpoint\"\x8f\x01\n" +
 	"\x1bHeartbeatFriendFarmResponse\x12@\n" +
 	"\x06result\x18\x01 \x01(\v2(.classicfarm.ws.v1.FarmHeartbeatResponseR\x06result\x12.\n" +
 	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xbc\x01\n" +
@@ -2715,7 +2765,7 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\b_pest_id\"\x8e\x01\n" +
 	"\x1bExecuteFriendActionResponse\x12?\n" +
 	"\x06result\x18\x01 \x01(\v2'.classicfarm.ws.v1.FriendActionResponseR\x06result\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\x87\x02\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xac\x02\n" +
 	"\x13EnterVisitorRequest\x12C\n" +
 	"\vowner_route\x18\x01 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\n" +
 	"ownerRoute\x12&\n" +
@@ -2725,19 +2775,21 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\vrelation_id\x18\x05 \x01(\fR\n" +
 	"relationId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x06 \x01(\tR\trequestId\"\xc7\x01\n" +
+	"request_id\x18\x06 \x01(\tR\trequestId\x12#\n" +
+	"\rgate_endpoint\x18\a \x01(\tR\fgateEndpoint\"\xc7\x01\n" +
 	"\x14EnterVisitorResponse\x12\x19\n" +
 	"\bvisit_id\x18\x01 \x01(\fR\avisitId\x12\"\n" +
 	"\rexpires_at_ms\x18\x02 \x01(\x03R\vexpiresAtMs\x12@\n" +
 	"\bsnapshot\x18\x03 \x01(\v2$.classicfarm.ws.v1.FarmVisitSnapshotR\bsnapshot\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xed\x01\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\x92\x02\n" +
 	"\x1eRefreshVisitorHeartbeatRequest\x12C\n" +
 	"\vowner_route\x18\x01 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\n" +
 	"ownerRoute\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12*\n" +
 	"\x11visitor_player_id\x18\x03 \x01(\x04R\x0fvisitorPlayerId\x12\x19\n" +
 	"\bvisit_id\x18\x04 \x01(\fR\avisitId\x12\x17\n" +
-	"\agate_id\x18\x05 \x01(\tR\x06gateId\"u\n" +
+	"\agate_id\x18\x05 \x01(\tR\x06gateId\x12#\n" +
+	"\rgate_endpoint\x18\x06 \x01(\tR\fgateEndpoint\"u\n" +
 	"\x1fRefreshVisitorHeartbeatResponse\x12\"\n" +
 	"\rexpires_at_ms\x18\x01 \x01(\x03R\vexpiresAtMs\x12.\n" +
 	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xc8\x01\n" +
@@ -2806,21 +2858,23 @@ const file_classicfarm_v1_rpc_runtime_proto_rawDesc = "" +
 	"\x14recipient_player_ids\x18\x02 \x03(\x04R\x12recipientPlayerIds\x12=\n" +
 	"\ared_dot\x18\x03 \x01(\v2$.classicfarm.ws.v1.RedDotChangedPushR\x06redDot\"H\n" +
 	"\x16DispatchRedDotResponse\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xda\x01\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xff\x01\n" +
 	"\x1fRegisterPlayerConnectionRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
 	"\agate_id\x18\x02 \x01(\tR\x06gateId\x12#\n" +
 	"\rconnection_id\x18\x03 \x01(\tR\fconnectionId\x128\n" +
 	"\x05route\x18\x04 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\x05route\x12\"\n" +
-	"\rexpires_at_ms\x18\x05 \x01(\x03R\vexpiresAtMs\"R\n" +
+	"\rexpires_at_ms\x18\x05 \x01(\x03R\vexpiresAtMs\x12#\n" +
+	"\rgate_endpoint\x18\x06 \x01(\tR\fgateEndpoint\"R\n" +
 	" RegisterPlayerConnectionResponse\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xd9\x01\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xfe\x01\n" +
 	"\x1eRefreshPlayerConnectionRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
 	"\agate_id\x18\x02 \x01(\tR\x06gateId\x12#\n" +
 	"\rconnection_id\x18\x03 \x01(\tR\fconnectionId\x128\n" +
 	"\x05route\x18\x04 \x01(\v2\".classicfarm.rpc.v1.CommittedRouteR\x05route\x12\"\n" +
-	"\rexpires_at_ms\x18\x05 \x01(\x03R\vexpiresAtMs\"Q\n" +
+	"\rexpires_at_ms\x18\x05 \x01(\x03R\vexpiresAtMs\x12#\n" +
+	"\rgate_endpoint\x18\x06 \x01(\tR\fgateEndpoint\"Q\n" +
 	"\x1fRefreshPlayerConnectionResponse\x12.\n" +
 	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xb8\x01\n" +
 	"!UnregisterPlayerConnectionRequest\x12\x1b\n" +

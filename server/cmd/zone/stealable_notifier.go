@@ -44,11 +44,15 @@ func newZoneStealableNotifier(parent context.Context, key []byte, endpoint strin
 	if err != nil {
 		return nil, err
 	}
-	target, err := rpcnet.TargetFromHTTPURL(endpoint)
+	target, err := rpcnet.TargetFromEndpoint(endpoint)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithUnaryInterceptor(interceptor), grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(128<<10), grpc.MaxCallRecvMsgSize(128<<10)))
+	balancing, err := rpcnet.RoundRobinDialOption(friendv1.FriendService_ListFriends_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithUnaryInterceptor(interceptor), balancing, grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(128<<10), grpc.MaxCallRecvMsgSize(128<<10)))
 	if err != nil {
 		return nil, err
 	}

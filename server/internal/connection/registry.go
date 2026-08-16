@@ -5,6 +5,8 @@ package connection
 
 import (
 	"errors"
+	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -25,6 +27,7 @@ var (
 type PlayerConnection struct {
 	PlayerID     uint64
 	GateID       string
+	GateEndpoint string
 	ConnectionID string
 	ExpiresAt    time.Time
 }
@@ -48,24 +51,42 @@ func NewRegistry() *Registry {
 // Register upserts one connection lease. Same (player, gate, connection)
 // repeats are idempotent and extend ExpiresAt.
 func (r *Registry) Register(conn PlayerConnection) error {
+	if strings.TrimSpace(conn.GateEndpoint) == "" {
+		conn.GateEndpoint = "http://legacy-gate:8081"
+	}
 	if err := validate(conn); err != nil {
 		return err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	byKey := r.players[conn.PlayerID]
+	for _, playerConnections := range r.players {
+		for _, existing := range playerConnections {
+			if existing.GateID == conn.GateID && existing.GateEndpoint != conn.GateEndpoint {
+				return ErrConnectionMismatch
+			}
+		}
+	}
 	if byKey == nil {
 		byKey = make(map[string]PlayerConnection)
 		r.players[conn.PlayerID] = byKey
+	}
+	if existing, ok := byKey[conn.key()]; ok && existing.GateEndpoint != conn.GateEndpoint {
+		return ErrConnectionMismatch
 	}
 	byKey[conn.key()] = conn.clone()
 	return nil
 }
 
 // Refresh extends an existing lease when the full triplet matches.
-func (r *Registry) Refresh(playerID uint64, gateID, connectionID string, expiresAt time.Time) error {
+func (r *Registry) Refresh(playerID uint64, gateID, connectionID string, expiresAt time.Time, gateEndpoints ...string) error {
+	gateEndpoint := "http://legacy-gate:8081"
+	if len(gateEndpoints) > 0 {
+		gateEndpoint = gateEndpoints[0]
+	}
 	conn := PlayerConnection{
-		PlayerID: playerID, GateID: gateID, ConnectionID: connectionID, ExpiresAt: expiresAt,
+		PlayerID: playerID, GateID: gateID, GateEndpoint: gateEndpoint,
+		ConnectionID: connectionID, ExpiresAt: expiresAt,
 	}
 	if err := validate(conn); err != nil {
 		return err
@@ -77,7 +98,8 @@ func (r *Registry) Refresh(playerID uint64, gateID, connectionID string, expires
 		return ErrConnectionMismatch
 	}
 	key := conn.key()
-	if _, ok := byKey[key]; !ok {
+	existing, ok := byKey[key]
+	if !ok || existing.GateEndpoint != conn.GateEndpoint {
 		return ErrConnectionMismatch
 	}
 	byKey[key] = conn.clone()
@@ -182,11 +204,30 @@ func (r *Registry) RemoveShard(shardID uint32) []PlayerConnection {
 func validate(conn PlayerConnection) error {
 	if conn.PlayerID == 0 ||
 		strings.TrimSpace(conn.GateID) == "" ||
+		!ValidGateEndpoint(conn.GateEndpoint) ||
 		strings.TrimSpace(conn.ConnectionID) == "" ||
 		conn.ExpiresAt.IsZero() {
 		return ErrInvalidConnection
 	}
 	return nil
+}
+
+// ValidGateEndpoint accepts loopback development targets and exact
+// StatefulSet Pod DNS targets. It deliberately rejects the Gate ClusterIP.
+func ValidGateEndpoint(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme != "http" || parsed.Host == "" || parsed.User != nil ||
+		(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	host, port := parsed.Hostname(), parsed.Port()
+	if port != "8081" {
+		return false
+	}
+	if host == "127.0.0.1" || host == "localhost" || host == "legacy-gate" {
+		return true
+	}
+	return regexp.MustCompile(`^gate-[0-9]+\.gate-headless\.[a-z0-9-]+\.svc\.cluster\.local$`).MatchString(host)
 }
 
 func sortConnections(conns []PlayerConnection) {

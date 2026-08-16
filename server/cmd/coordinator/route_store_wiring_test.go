@@ -146,6 +146,34 @@ func TestValidateCurrentFencesAcceptsActivatedRouteAfterFenceAdvance(t *testing.
 	}
 }
 
+func TestValidateCurrentFencesAcceptsNewWorkerPreparingBoundaries(t *testing.T) {
+	now := time.Date(2026, 8, 16, 17, 0, 0, 0, time.UTC)
+	snapshot := staticCandidate(t, now, []routing.ZoneCandidate{{ZoneID: "zone-a", Endpoint: "http://zone-a:8082"}})
+	fences := make([]routing.ShardFence, routing.ShardCount)
+	for index, entry := range snapshot.Entries {
+		fences[index] = routing.ShardFence{ShardID: uint32(index), OwnerZoneID: entry.OwnerZoneID,
+			OwnerEpoch: entry.OwnerEpoch, RouteVersion: entry.RouteVersion}
+	}
+	const shardID = uint32(1593)
+	source := snapshot.Entries[shardID]
+	prepared := durablePreparing(source)
+	snapshot.Entries[shardID] = prepared
+	progress := map[uint32]*migrationProgress{shardID: {
+		Source: source, Prepared: prepared, Step: routing.MigrationStepSourceFlushed,
+	}}
+
+	if err := validateCurrentFences(snapshot, fences, progress); err != nil {
+		t.Fatalf("SOURCE_FLUSHED with source Fence rejected: %v", err)
+	}
+	progress[shardID].Step = routing.MigrationStepFenceAdvanced
+	fences[shardID] = routing.ShardFence{ShardID: shardID, OwnerZoneID: prepared.OwnerZoneID,
+		OwnerEpoch: prepared.OwnerEpoch, RouteVersion: prepared.RouteVersion,
+		TransitionID: prepared.TransitionID}
+	if err := validateCurrentFences(snapshot, fences, progress); err != nil {
+		t.Fatalf("FENCE_ADVANCED with target Fence rejected: %v", err)
+	}
+}
+
 func staticCandidate(t *testing.T, now time.Time, zones []routing.ZoneCandidate) routestore.Snapshot {
 	t.Helper()
 	routes, err := routing.NewStaticMap(now, time.Minute, zones)

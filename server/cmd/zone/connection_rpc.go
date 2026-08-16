@@ -15,12 +15,11 @@ import (
 type playerConnectionRPCServer struct {
 	rpcv1.UnimplementedPlayerConnectionServiceServer
 
-	registry          *connection.Registry
-	authorization     ownerAuthorization
-	gates             *shardExecutionGates
-	now               func() time.Time
-	expectedGatewayID string
-	quickInfo         *zoneQuickInfoClient
+	registry      *connection.Registry
+	authorization ownerAuthorization
+	gates         *shardExecutionGates
+	now           func() time.Time
+	quickInfo     *zoneQuickInfoClient
 }
 
 func (s *playerConnectionRPCServer) withQuickInfo(client *zoneQuickInfoClient) *playerConnectionRPCServer {
@@ -33,21 +32,20 @@ func newPlayerConnectionRPCServer(
 	authorization ownerAuthorization,
 	gates *shardExecutionGates,
 	now func() time.Time,
-	expectedGatewayID string,
+	_ string,
 ) *playerConnectionRPCServer {
 	if now == nil {
 		now = time.Now
 	}
 	return &playerConnectionRPCServer{
 		registry: registry, authorization: authorization, gates: gates, now: now,
-		expectedGatewayID: expectedGatewayID,
 	}
 }
 
 func (s *playerConnectionRPCServer) RegisterPlayerConnection(
 	_ context.Context, request *rpcv1.RegisterPlayerConnectionRequest,
 ) (*rpcv1.RegisterPlayerConnectionResponse, error) {
-	conn, route, err := s.parse(request.GetPlayerId(), request.GetGateId(), request.GetConnectionId(), request.GetRoute(), request.GetExpiresAtMs())
+	conn, route, err := s.parse(request.GetPlayerId(), request.GetGateId(), request.GetGateEndpoint(), request.GetConnectionId(), request.GetRoute(), request.GetExpiresAtMs())
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +66,7 @@ func (s *playerConnectionRPCServer) RegisterPlayerConnection(
 func (s *playerConnectionRPCServer) RefreshPlayerConnection(
 	_ context.Context, request *rpcv1.RefreshPlayerConnectionRequest,
 ) (*rpcv1.RefreshPlayerConnectionResponse, error) {
-	conn, route, err := s.parse(request.GetPlayerId(), request.GetGateId(), request.GetConnectionId(), request.GetRoute(), request.GetExpiresAtMs())
+	conn, route, err := s.parse(request.GetPlayerId(), request.GetGateId(), request.GetGateEndpoint(), request.GetConnectionId(), request.GetRoute(), request.GetExpiresAtMs())
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +75,7 @@ func (s *playerConnectionRPCServer) RefreshPlayerConnection(
 	if err := s.validateOwner(request.GetPlayerId(), route); err != nil {
 		return nil, err
 	}
-	if err := s.registry.Refresh(conn.PlayerID, conn.GateID, conn.ConnectionID, conn.ExpiresAt); err != nil {
+	if err := s.registry.Refresh(conn.PlayerID, conn.GateID, conn.ConnectionID, conn.ExpiresAt, conn.GateEndpoint); err != nil {
 		if err == connection.ErrConnectionMismatch {
 			return nil, status.Error(codes.NotFound, "player connection not registered")
 		}
@@ -96,9 +94,6 @@ func (s *playerConnectionRPCServer) UnregisterPlayerConnection(
 		strings.TrimSpace(request.GetGateId()) == "" ||
 		strings.TrimSpace(request.GetConnectionId()) == "" ||
 		request.GetRoute() == nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid player connection")
-	}
-	if request.GetGateId() != s.expectedGatewayID {
 		return nil, status.Error(codes.InvalidArgument, "invalid player connection")
 	}
 	route := request.GetRoute()
@@ -128,10 +123,10 @@ func (s *playerConnectionRPCServer) UnregisterPlayerConnection(
 }
 
 func (s *playerConnectionRPCServer) parse(
-	playerID uint64, gateID, connectionID string, route *rpcv1.CommittedRoute, expiresAtMs int64,
+	playerID uint64, gateID, gateEndpoint, connectionID string, route *rpcv1.CommittedRoute, expiresAtMs int64,
 ) (connection.PlayerConnection, *rpcv1.CommittedRoute, error) {
 	if playerID == 0 || strings.TrimSpace(gateID) == "" || strings.TrimSpace(connectionID) == "" ||
-		route == nil || expiresAtMs <= 0 || gateID != s.expectedGatewayID {
+		route == nil || expiresAtMs <= 0 {
 		return connection.PlayerConnection{}, nil, status.Error(codes.InvalidArgument, "invalid player connection")
 	}
 	if route.LogicalShardId >= routing.ShardCount ||
@@ -142,7 +137,7 @@ func (s *playerConnectionRPCServer) parse(
 		return connection.PlayerConnection{}, nil, status.Error(codes.InvalidArgument, "invalid player connection")
 	}
 	return connection.PlayerConnection{
-		PlayerID: playerID, GateID: gateID, ConnectionID: connectionID,
+		PlayerID: playerID, GateID: gateID, GateEndpoint: gateEndpoint, ConnectionID: connectionID,
 		ExpiresAt: time.UnixMilli(expiresAtMs),
 	}, route, nil
 }

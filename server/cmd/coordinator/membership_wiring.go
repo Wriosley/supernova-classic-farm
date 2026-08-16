@@ -22,6 +22,7 @@ type membershipConfig struct {
 	Source, ClusterID, Namespace, ServiceName, HeadlessServiceName string
 	ProbeInterval, ProbeTimeout                                    time.Duration
 	FailureThreshold, Workers                                      int
+	DrainingZoneIDs                                                map[string]struct{}
 }
 
 type membershipRuntime struct {
@@ -50,6 +51,13 @@ func membershipConfigFromEnvironment() (membershipConfig, error) {
 	config.Workers, err = strconv.Atoi(environmentOr("ZONE_PROBE_WORKERS", "8"))
 	if err != nil || config.Workers <= 0 {
 		return config, errors.New("invalid ZONE_PROBE_WORKERS")
+	}
+	config.DrainingZoneIDs = make(map[string]struct{})
+	for _, raw := range strings.Split(os.Getenv("COORDINATOR_DRAIN_ZONE_IDS"), ",") {
+		zoneID := strings.TrimSpace(raw)
+		if zoneID != "" {
+			config.DrainingZoneIDs[zoneID] = struct{}{}
+		}
 	}
 	if config.Source == "kubernetes" && (config.ClusterID == "" || config.Namespace == "" || config.ServiceName == "" || config.HeadlessServiceName == "") {
 		return config, errors.New("Kubernetes membership requires cluster, namespace and discovery services")
@@ -83,7 +91,7 @@ func startMembership(ctx context.Context, routePublisher *publisher.Publisher, z
 	if err != nil {
 		return nil, fmt.Errorf("create Kubernetes client: %w", err)
 	}
-	controller, err := membership.NewController(nil, registry, membership.NewHTTPProber(config.ProbeTimeout), routePublisher, membership.ControllerConfig{ProbeInterval: config.ProbeInterval, ProbeTimeout: config.ProbeTimeout, FailureThreshold: config.FailureThreshold, Workers: config.Workers})
+	controller, err := membership.NewController(nil, registry, membership.NewHTTPProber(config.ProbeTimeout), routePublisher, membership.ControllerConfig{ProbeInterval: config.ProbeInterval, ProbeTimeout: config.ProbeTimeout, FailureThreshold: config.FailureThreshold, Workers: config.Workers, DrainingZoneIDs: config.DrainingZoneIDs})
 	if err != nil {
 		return nil, err
 	}

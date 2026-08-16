@@ -76,8 +76,7 @@ func validateCurrentFences(snapshot routestore.Snapshot, fences []routing.ShardF
 			if migration == nil || migration.Prepared.TransitionID != entry.TransitionID {
 				return fmt.Errorf("PREPARING Current lacks matching Progress at shard %d", index)
 			}
-			beforeFence := migration.Step == routing.MigrationStepPreparingCommitted ||
-				migration.Step == routing.MigrationStepDrained
+			beforeFence := progressIsBeforeFence(migration.Step)
 			if beforeFence {
 				if fence.OwnerZoneID != migration.Source.OwnerZoneID ||
 					fence.OwnerEpoch != migration.Source.OwnerEpoch ||
@@ -94,4 +93,17 @@ func validateCurrentFences(snapshot routestore.Snapshot, fences []routing.ShardF
 		}
 	}
 	return nil
+}
+
+func progressIsBeforeFence(step string) bool {
+	switch step {
+	case routing.MigrationStepPreparingCommitted,
+		routing.MigrationStepDrained,
+		routing.MigrationStepSourceDraining,
+		routing.MigrationStepSourceFlushed,
+		routing.MigrationStepRoutePreparing:
+		return true
+	default:
+		return false
+	}
 }

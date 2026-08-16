@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,12 +16,13 @@ import (
 )
 
 type plannerConfig struct {
-	Enabled  bool
-	Interval time.Duration
+	Enabled        bool
+	Interval       time.Duration
+	MinimumHealthy int
 }
 
 func plannerConfigFromEnvironment() (plannerConfig, error) {
-	config := plannerConfig{Interval: 30 * time.Second}
+	config := plannerConfig{Interval: 30 * time.Second, MinimumHealthy: 1}
 	switch strings.TrimSpace(os.Getenv("COORDINATOR_PLANNER_ENABLED")) {
 	case "", "0":
 	case "1":
@@ -35,6 +37,13 @@ func plannerConfigFromEnvironment() (plannerConfig, error) {
 			return config, fmt.Errorf("invalid COORDINATOR_PLANNER_INTERVAL %q", rawInterval)
 		}
 		config.Interval = interval
+	}
+	if raw := strings.TrimSpace(os.Getenv("COORDINATOR_PLANNER_MIN_HEALTHY_ZONES")); raw != "" {
+		minimum, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || minimum <= 0 {
+			return config, errors.New("COORDINATOR_PLANNER_MIN_HEALTHY_ZONES must be positive")
+		}
+		config.MinimumHealthy = minimum
 	}
 	return config, nil
 }
@@ -53,7 +62,7 @@ func startPlanner(
 	if routes == nil || members == nil || members.registry == nil || store == nil {
 		return errors.New("enabled planner requires Current, membership and MigrationTask store")
 	}
-	planner, err := placement.NewPlanner(routes, members.registry, store)
+	planner, err := placement.NewPlannerWithMinimum(routes, members.registry, store, config.MinimumHealthy)
 	if err != nil {
 		return err
 	}

@@ -25,32 +25,36 @@ const (
 // different Gate endpoints; callers must not assume a single Gate.
 type GateClient interface {
 	PublishFarmViewPatch(
-		ctx context.Context, gateID string, recipientPlayerIDs []uint64, patch *wsv1.FarmViewPatch,
+		ctx context.Context, gateID, gateEndpoint string, recipientPlayerIDs []uint64, patch *wsv1.FarmViewPatch,
 	) error
 	PublishRedDotChanged(
-		ctx context.Context, gateID string, recipientPlayerIDs []uint64, payload *RedDotChanged,
+		ctx context.Context, gateID, gateEndpoint string, recipientPlayerIDs []uint64, payload *RedDotChanged,
 	) error
 }
 
 // GateClientResolver looks up a Gate client by gate_id without hard-coding a
 // single Gate into business code.
 type GateClientResolver interface {
-	Resolve(gateID string) (GateClient, error)
+	Resolve(gateID, gateEndpoint string) (GateClient, error)
 }
 
 // StaticGateResolver serves the current single-Gate deployment while keeping
 // the multi-Gate Resolve(gateID) surface.
 type StaticGateResolver struct {
-	GateID string
-	Client GateClient
+	GateID       string
+	GateEndpoint string
+	Client       GateClient
 }
 
-func (r StaticGateResolver) Resolve(gateID string) (GateClient, error) {
+func (r StaticGateResolver) Resolve(gateID, gateEndpoint string) (GateClient, error) {
 	if r.Client == nil || strings.TrimSpace(r.GateID) == "" {
 		return nil, errors.New("gate client resolver is not configured")
 	}
 	if gateID != r.GateID {
 		return nil, fmt.Errorf("unknown gate id %q", gateID)
+	}
+	if r.GateEndpoint != "" && gateEndpoint != r.GateEndpoint {
+		return nil, fmt.Errorf("unknown gate endpoint %q", gateEndpoint)
 	}
 	return r.Client, nil
 }
@@ -186,16 +190,21 @@ func (d *Dispatcher) worker() {
 func (d *Dispatcher) deliver(event Event) {
 	ctx, cancel := context.WithTimeout(context.Background(), d.publishTimeout)
 	defer cancel()
-	groups := make(map[string]map[uint64]struct{})
+	type target struct{ id, endpoint string }
+	groups := make(map[target]map[uint64]struct{})
 	for _, playerID := range event.RecipientPlayerIDs {
 		for _, conn := range d.connections.List(playerID) {
-			if strings.TrimSpace(conn.GateID) == "" {
+			if !conn.ExpiresAt.After(time.Now()) {
 				continue
 			}
-			set := groups[conn.GateID]
+			if strings.TrimSpace(conn.GateID) == "" || strings.TrimSpace(conn.GateEndpoint) == "" {
+				continue
+			}
+			key := target{conn.GateID, conn.GateEndpoint}
+			set := groups[key]
 			if set == nil {
 				set = make(map[uint64]struct{})
-				groups[conn.GateID] = set
+				groups[key] = set
 			}
 			set[playerID] = struct{}{}
 		}
@@ -204,11 +213,11 @@ func (d *Dispatcher) deliver(event Event) {
 		return
 	}
 	var failed bool
-	for gateID, set := range groups {
-		client, err := d.resolver.Resolve(gateID)
+	for target, set := range groups {
+		client, err := d.resolver.Resolve(target.id, target.endpoint)
 		if err != nil {
 			failed = true
-			d.logger.Warn("push gate resolve failed", "gate_id", gateID, "error", err)
+			d.logger.Warn("push gate resolve failed", "gate_id", target.id, "gate_endpoint", target.endpoint, "error", err)
 			continue
 		}
 		recipients := make([]uint64, 0, len(set))
@@ -217,14 +226,14 @@ func (d *Dispatcher) deliver(event Event) {
 		}
 		switch {
 		case event.FarmView != nil:
-			err = client.PublishFarmViewPatch(ctx, gateID, recipients, event.FarmView)
+			err = client.PublishFarmViewPatch(ctx, target.id, target.endpoint, recipients, event.FarmView)
 		case event.RedDot != nil:
-			err = client.PublishRedDotChanged(ctx, gateID, recipients, event.RedDot)
+			err = client.PublishRedDotChanged(ctx, target.id, target.endpoint, recipients, event.RedDot)
 		}
 		if err != nil {
 			failed = true
 			d.logger.Warn("push publish failed",
-				"gate_id", gateID, "notification_id", event.NotificationID, "error", err)
+				"gate_id", target.id, "gate_endpoint", target.endpoint, "notification_id", event.NotificationID, "error", err)
 		}
 	}
 	if failed {

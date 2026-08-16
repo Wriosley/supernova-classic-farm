@@ -52,6 +52,26 @@ func TestControllerRecoversAfterTwoFailures(t *testing.T) {
 	waitAvailability(t, publisher.batches, coordinatorv1.ZoneAvailability_ZONE_AVAILABILITY_HEALTHY)
 }
 
+func TestControllerConfiguredDrainOverridesHealthyProbe(t *testing.T) {
+	logical := "d859cea1-ac5b-5524-bffa-4e542301cd95"
+	registry := NewRegistry(time.Now)
+	publisher := &recordingPublisher{batches: make(chan *coordinatorv1.AvailabilityBatch, 1)}
+	controller, err := NewController(nil, registry, &sequenceProber{results: []ProbeResult{{}}}, publisher, ControllerConfig{
+		ProbeInterval: time.Second, ProbeTimeout: time.Second, FailureThreshold: 3, Workers: 1,
+		DrainingZoneIDs: map[string]struct{}{logical: {}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.apply(Member{LogicalZoneID: logical, IncarnationID: "inc", Endpoint: "http://zone:8082", PodName: "zone", PodUID: "uid", ResourceVersion: "1", State: StateHealthy, ObservedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := memberByLogicalID(registry.Snapshot(), logical)
+	if !ok || got.State != StateDraining {
+		t.Fatalf("member = %+v, found=%t", got, ok)
+	}
+}
+
 func TestControllerThirdFailureAndTerminalPodBecomeDead(t *testing.T) {
 	prober := &sequenceProber{results: []ProbeResult{{Err: errors.New("down")}}}
 	publisher := &recordingPublisher{batches: make(chan *coordinatorv1.AvailabilityBatch, 8)}

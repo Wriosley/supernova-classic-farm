@@ -3,6 +3,7 @@ package visit
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
@@ -61,14 +62,18 @@ func NewOwnerService(
 func (o *OwnerService) EnterVisitor(
 	ctx context.Context,
 	ownerPlayerID, ownerEpoch, visitorPlayerID uint64,
-	gateID, requestID string,
+	gateID, requestID string, gateEndpoints ...string,
 ) (visitID []byte, expiresAtMs int64, snapshot *wsv1.FarmVisitSnapshot, wsErr *wsv1.Error, err error) {
+	gateEndpoint := "http://legacy-gate:8081"
+	if len(gateEndpoints) > 0 && strings.TrimSpace(gateEndpoints[0]) != "" {
+		gateEndpoint = gateEndpoints[0]
+	}
 	snapshot, err = o.snapshots.BuildPublicFarmSnapshot(ctx, ownerPlayerID, ownerEpoch)
 	if err != nil {
 		return nil, 0, nil, nil, err
 	}
 	visitID, expiresAt, newlyCreated, err := o.registry.Enter(
-		ownerPlayerID, visitorPlayerID, gateID, requestID, o.now(),
+		ownerPlayerID, visitorPlayerID, gateID, requestID, o.now(), gateEndpoint,
 	)
 	if err != nil {
 		return nil, 0, nil, nil, err
@@ -86,9 +91,13 @@ func (o *OwnerService) RefreshVisitorHeartbeat(
 	_ context.Context,
 	ownerPlayerID, visitorPlayerID uint64,
 	visitID []byte,
-	gateID string,
+	gateID string, gateEndpoints ...string,
 ) (expiresAtMs int64, wsErr *wsv1.Error, err error) {
-	expiresAt, refreshErr := o.registry.Refresh(ownerPlayerID, visitorPlayerID, visitID, gateID, o.now())
+	gateEndpoint := "http://legacy-gate:8081"
+	if len(gateEndpoints) > 0 && strings.TrimSpace(gateEndpoints[0]) != "" {
+		gateEndpoint = gateEndpoints[0]
+	}
+	expiresAt, refreshErr := o.registry.Refresh(ownerPlayerID, visitorPlayerID, visitID, gateID, o.now(), gateEndpoint)
 	switch {
 	case errors.Is(refreshErr, ErrVisitNotFound):
 		return 0, &wsv1.Error{Code: wsv1.ErrorCode_VISIT_NOT_FOUND}, nil

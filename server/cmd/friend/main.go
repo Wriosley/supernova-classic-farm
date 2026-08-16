@@ -22,8 +22,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-const reconcileInterval = 5 * time.Second
-
 func main() {
 	if err := run(); err != nil {
 		slog.Error("friend service stopped", "error", err)
@@ -101,14 +99,8 @@ func run() error {
 	}
 	defer infoQuick.Close()
 	service.SetQuickInfoReader(infoQuick)
-	reconciler, err := friend.NewReconciler(store, linker, client)
-	if err != nil {
-		return err
-	}
-
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
-	go runReconcileLoop(ctx, reconciler, logger)
 
 	mux := http.NewServeMux()
 	healthHandler := health.NewHandler()
@@ -145,24 +137,11 @@ func run() error {
 	}
 	logger.Info("friend listening",
 		"address", cfg.HTTPAddress,
+		"instance_id", envOr("FRIEND_INSTANCE_ID", "friend-local"),
 		"coordinator_url", coordinatorURL,
+		"saga_reconciler", "disabled",
 	)
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
-}
-
-func runReconcileLoop(ctx context.Context, reconciler *friend.Reconciler, logger *slog.Logger) {
-	ticker := time.NewTicker(reconcileInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := reconciler.ReconcileDue(ctx, time.Now()); err != nil {
-				logger.Error("friend Saga reconcile failed", "error", err)
-			}
-		}
-	}
 }
 
 func friendTableNames() ([]string, error) {

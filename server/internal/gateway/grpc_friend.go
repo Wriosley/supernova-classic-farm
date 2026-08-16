@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// FriendClient lets Handler route CREATE_FRIEND_CODE, REDEEM_FRIEND_CODE and
-// LIST_FRIENDS straight to FriendSvr (which is not Sharded, unlike Zone), so
-// there is no route resolution or NOT_OWNER retry on this path.
+// FriendClient lets Handler route friend commands straight to the replicated,
+// non-sharded FriendSvr service. Kubernetes DNS and gRPC round_robin select a
+// Ready replica; there is no Coordinator route or NOT_OWNER retry on this path.
 type FriendClient interface {
 	CreateCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
 	RedeemCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
@@ -63,7 +63,7 @@ func NewGRPCFriendCommander(key []byte, endpoint string) (*GRPCFriendCommander, 
 	if strings.TrimSpace(endpoint) == "" {
 		return nil, errors.New("FriendSvr endpoint is required")
 	}
-	target, err := rpcnet.TargetFromHTTPURL(endpoint)
+	target, err := rpcnet.TargetFromEndpoint(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid FriendSvr gRPC endpoint: %w", err)
 	}
@@ -73,10 +73,20 @@ func NewGRPCFriendCommander(key []byte, endpoint string) (*GRPCFriendCommander, 
 	if err != nil {
 		return nil, err
 	}
+	balancing, err := rpcnet.RoundRobinDialOption(
+		friendv1.FriendService_ListFriends_FullMethodName,
+		friendv1.FriendService_CheckMutualFriend_FullMethodName,
+		friendv1.FriendService_GetOfflineVisitors_FullMethodName,
+		friendv1.FriendService_AckOfflineVisitors_FullMethodName,
+	)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := grpc.NewClient(
 		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(interceptor),
+		balancing,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(128<<10),
 			grpc.MaxCallRecvMsgSize(128<<10),

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,8 +53,12 @@ func NewService(friendChecker FriendChecker, ownerClient OwnerFarmClient, now fu
 func (s *Service) EnterFriendFarm(
 	ctx context.Context,
 	visitorPlayerID, ownerPlayerID uint64,
-	gateID, requestID string,
+	gateID, requestID string, gateEndpoints ...string,
 ) (*wsv1.EnterFriendFarmResponse, *wsv1.Error, error) {
+	gateEndpoint := "http://legacy-gate:8081"
+	if len(gateEndpoints) > 0 && strings.TrimSpace(gateEndpoints[0]) != "" {
+		gateEndpoint = gateEndpoints[0]
+	}
 	if visitorPlayerID == 0 || ownerPlayerID == 0 {
 		return nil, &wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}, nil
 	}
@@ -77,9 +82,15 @@ func (s *Service) EnterFriendFarm(
 		_, _ = s.owner.ExitVisitor(ctx, previous.ownerPlayerID, visitorPlayerID, previous.visitID)
 	}
 
-	visitID, expiresAtMs, snapshot, wsErr, err := s.owner.EnterVisitor(
-		ctx, ownerPlayerID, visitorPlayerID, gateID, relationID, requestID,
-	)
+	var visitID []byte
+	var expiresAtMs int64
+	var snapshot *wsv1.FarmVisitSnapshot
+	var wsErr *wsv1.Error
+	if targeted, ok := s.owner.(TargetedOwnerFarmClient); ok {
+		visitID, expiresAtMs, snapshot, wsErr, err = targeted.EnterVisitorAt(ctx, ownerPlayerID, visitorPlayerID, gateID, gateEndpoint, relationID, requestID)
+	} else {
+		visitID, expiresAtMs, snapshot, wsErr, err = s.owner.EnterVisitor(ctx, ownerPlayerID, visitorPlayerID, gateID, relationID, requestID)
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("enter Owner farm: %w", err)
 	}
@@ -100,14 +111,23 @@ func (s *Service) HeartbeatFriendFarm(
 	ctx context.Context,
 	visitorPlayerID, ownerPlayerID uint64,
 	visitID []byte,
-	gateID string,
+	gateID string, gateEndpoints ...string,
 ) (*wsv1.FarmHeartbeatResponse, *wsv1.Error, error) {
+	gateEndpoint := "http://legacy-gate:8081"
+	if len(gateEndpoints) > 0 && strings.TrimSpace(gateEndpoints[0]) != "" {
+		gateEndpoint = gateEndpoints[0]
+	}
 	if visitorPlayerID == 0 || ownerPlayerID == 0 || len(visitID) != 16 {
 		return nil, &wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT}, nil
 	}
-	expiresAtMs, wsErr, err := s.owner.RefreshVisitorHeartbeat(
-		ctx, ownerPlayerID, visitorPlayerID, visitID, gateID,
-	)
+	var expiresAtMs int64
+	var wsErr *wsv1.Error
+	var err error
+	if targeted, ok := s.owner.(TargetedOwnerFarmClient); ok {
+		expiresAtMs, wsErr, err = targeted.RefreshVisitorHeartbeatAt(ctx, ownerPlayerID, visitorPlayerID, visitID, gateID, gateEndpoint)
+	} else {
+		expiresAtMs, wsErr, err = s.owner.RefreshVisitorHeartbeat(ctx, ownerPlayerID, visitorPlayerID, visitID, gateID)
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("refresh visitor heartbeat: %w", err)
 	}

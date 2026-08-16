@@ -16,7 +16,7 @@ import (
 // gateID. The one production implementation is *player.GRPCPushForwarder.
 type PatchPublisher interface {
 	PublishFarmViewPatch(
-		ctx context.Context, gateID string, recipientPlayerIDs []uint64, patch *wsv1.FarmViewPatch,
+		ctx context.Context, gateID, gateEndpoint string, recipientPlayerIDs []uint64, patch *wsv1.FarmViewPatch,
 	) error
 }
 
@@ -64,28 +64,33 @@ func (b *Broadcaster) Broadcast(
 	if ownerPlayerID == 0 || patch == nil {
 		return errors.New("owner player id and patch are required")
 	}
-	groups := make(map[string]map[uint64]struct{})
-	add := func(gateID string, playerID uint64) {
+	type target struct{ id, endpoint string }
+	groups := make(map[target]map[uint64]struct{})
+	add := func(gateID, gateEndpoint string, playerID uint64) {
 		if playerID == 0 || strings.TrimSpace(gateID) == "" {
 			return
 		}
-		set := groups[gateID]
+		if strings.TrimSpace(gateEndpoint) == "" {
+			gateEndpoint = "http://legacy-gate:8081"
+		}
+		key := target{gateID, gateEndpoint}
+		set := groups[key]
 		if set == nil {
 			set = make(map[uint64]struct{})
-			groups[gateID] = set
+			groups[key] = set
 		}
 		set[playerID] = struct{}{}
 	}
 	for _, conn := range b.connections.List(ownerPlayerID) {
 		if !conn.ExpiresAt.IsZero() {
-			add(conn.GateID, ownerPlayerID)
+			add(conn.GateID, conn.GateEndpoint, ownerPlayerID)
 		}
 	}
 	for _, record := range b.visitors.ListVisitors(ownerPlayerID) {
-		add(record.GateID, record.VisitorPlayerID)
+		add(record.GateID, record.GateEndpoint, record.VisitorPlayerID)
 	}
 	var errs error
-	for gateID, recipientSet := range groups {
+	for target, recipientSet := range groups {
 		recipientIDs := make([]uint64, 0, len(recipientSet))
 		for playerID := range recipientSet {
 			recipientIDs = append(recipientIDs, playerID)
@@ -93,8 +98,8 @@ func (b *Broadcaster) Broadcast(
 		if len(recipientIDs) == 0 {
 			continue
 		}
-		if err := b.publisher.PublishFarmViewPatch(ctx, gateID, recipientIDs, patch); err != nil {
-			errs = errors.Join(errs, fmt.Errorf("publish farm view patch to gate %s: %w", gateID, err))
+		if err := b.publisher.PublishFarmViewPatch(ctx, target.id, target.endpoint, recipientIDs, patch); err != nil {
+			errs = errors.Join(errs, fmt.Errorf("publish farm view patch to gate %s: %w", target.id, err))
 		}
 	}
 	return errs

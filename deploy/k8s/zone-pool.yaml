@@ -4,7 +4,7 @@ metadata:
   name: zone-pool
   namespace: classic-farm
 spec:
-  replicas: 4
+  replicas: 8
   serviceName: zone-headless
   selector:
     matchLabels:

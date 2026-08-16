@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -181,15 +180,40 @@ func sameFrozenProgress(left, right Progress) bool {
 }
 
 func sameProgressIdentity(left, right Progress) bool {
-	left.Step, right.Step = "", ""
-	left.UpdatedAtMS, right.UpdatedAtMS = 0, 0
-	left.Manifest, right.Manifest = nil, nil
-	left.Source.LeaseExpiresAt, right.Source.LeaseExpiresAt = time.Time{}, time.Time{}
-	left.Source.UpdatedAt, right.Source.UpdatedAt = time.Time{}, time.Time{}
-	left.Source.LeaseTerm, right.Source.LeaseTerm = 0, 0
-	left.Prepared.LeaseExpiresAt, right.Prepared.LeaseExpiresAt = time.Time{}, time.Time{}
-	left.Prepared.UpdatedAt, right.Prepared.UpdatedAt = time.Time{}, time.Time{}
-	return reflect.DeepEqual(left, right)
+	// Compare exactly the frozen identity persisted by MigrationProgress. Source
+	// may be an ACTIVE route left by an earlier transition, but the progress
+	// schema intentionally does not persist that route's historical
+	// previous_owner_zone_id or transition_id. Comparing the whole RouteEntry
+	// therefore makes a write/read round trip conflict for otherwise valid
+	// routes. Expiry and timestamps are also runtime/durability metadata rather
+	// than migration identity.
+	return left.ShardID == right.ShardID &&
+		left.TransitionID == right.TransitionID &&
+		samePersistedSource(left.Source, right.Source) &&
+		samePersistedPrepared(left.Prepared, right.Prepared)
+}
+
+func samePersistedSource(left, right routing.RouteEntry) bool {
+	return left.ShardID == right.ShardID &&
+		left.OwnerZoneID == right.OwnerZoneID &&
+		left.OwnerEndpoint == right.OwnerEndpoint &&
+		left.OwnerEpoch == right.OwnerEpoch &&
+		left.RouteVersion == right.RouteVersion &&
+		left.State == right.State &&
+		left.LeaseID == right.LeaseID
+}
+
+func samePersistedPrepared(left, right routing.RouteEntry) bool {
+	return left.ShardID == right.ShardID &&
+		left.OwnerZoneID == right.OwnerZoneID &&
+		left.OwnerEndpoint == right.OwnerEndpoint &&
+		left.OwnerEpoch == right.OwnerEpoch &&
+		left.RouteVersion == right.RouteVersion &&
+		left.State == right.State &&
+		left.LeaseID == right.LeaseID &&
+		left.LeaseTerm == right.LeaseTerm &&
+		left.PreviousOwnerZoneID == right.PreviousOwnerZoneID &&
+		left.TransitionID == right.TransitionID
 }
 
 func progressRecord(progress Progress) (routing.MigrationProgressRow, error) {

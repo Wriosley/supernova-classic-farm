@@ -83,14 +83,32 @@ func TestGameCommandRPCServerRejectsStaleOwner(t *testing.T) {
 	}
 }
 
-func TestGameCommandRPCServerRejectsWrongGateway(t *testing.T) {
+func TestGameCommandRPCServerAcceptsInstanceGateID(t *testing.T) {
+	runtime := player.NewRuntime()
+	defer runtime.Close()
+	server := newGameCommandRPCServer(
+		runtime, localAuthorization{}, nil, nil, "local-gateway", nil,
+	)
+	response, err := server.ExecutePlayerCommand(
+		context.Background(),
+		rpcCommandRequest(42, 1, "f3f3c49c-0b28-4fb1-abb0-adfd7806c272"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.GetEnvelope().GetRequestId() != "grpc-request" {
+		t.Fatalf("response = %+v", response.GetEnvelope())
+	}
+}
+
+func TestGameCommandRPCServerRejectsEmptyGateID(t *testing.T) {
 	runtime := player.NewRuntime()
 	defer runtime.Close()
 	server := newGameCommandRPCServer(
 		runtime, localAuthorization{}, nil, nil, "local-gateway", nil,
 	)
 	_, err := server.ExecutePlayerCommand(
-		context.Background(), rpcCommandRequest(42, 1, "forged-gateway"),
+		context.Background(), rpcCommandRequest(42, 1, ""),
 	)
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("status = %v, want InvalidArgument", status.Code(err))

@@ -24,7 +24,7 @@ type recordingPatchPublisher struct {
 }
 
 func (p *recordingPatchPublisher) PublishFarmViewPatch(
-	_ context.Context, gateID string, recipientPlayerIDs []uint64, patch *wsv1.FarmViewPatch,
+	_ context.Context, gateID, _ string, recipientPlayerIDs []uint64, patch *wsv1.FarmViewPatch,
 ) error {
 	sorted := append([]uint64(nil), recipientPlayerIDs...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })

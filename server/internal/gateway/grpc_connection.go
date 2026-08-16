@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	connectionRPCTimeout = 2 * time.Second
-	ConnectionLeaseTTL   = 90 * time.Second
+	connectionRPCTimeout   = 2 * time.Second
+	ConnectionLeaseTTL     = 90 * time.Second
 	ConnectionRefreshEvery = 30 * time.Second
 )
 
@@ -35,16 +35,20 @@ type PlayerConnectionClient interface {
 var ErrConnectionNotRegistered = errors.New("player connection not registered")
 
 type GRPCPlayerConnectionClient struct {
-	mu        sync.Mutex
-	conns     map[string]*grpc.ClientConn
-	clients   map[string]rpcv1.PlayerConnectionServiceClient
-	dialOpts  []grpc.DialOption
-	gatewayID string
+	mu              sync.Mutex
+	conns           map[string]*grpc.ClientConn
+	clients         map[string]rpcv1.PlayerConnectionServiceClient
+	dialOpts        []grpc.DialOption
+	gatewayID       string
+	gatewayEndpoint string
 }
 
-func NewGRPCPlayerConnectionClient(key []byte, gatewayID string) (*GRPCPlayerConnectionClient, error) {
+func NewGRPCPlayerConnectionClient(key []byte, gatewayID, gatewayEndpoint string) (*GRPCPlayerConnectionClient, error) {
 	if strings.TrimSpace(gatewayID) == "" {
 		gatewayID = DefaultGatewayID
+	}
+	if strings.TrimSpace(gatewayEndpoint) == "" {
+		return nil, errors.New("gate advertised endpoint is required")
 	}
 	interceptor, err := rpcauth.NewClientUnaryInterceptor(rpcauth.ClientConfig{
 		Service: "gate",
@@ -64,7 +68,7 @@ func NewGRPCPlayerConnectionClient(key []byte, gatewayID string) (*GRPCPlayerCon
 				grpc.MaxCallRecvMsgSize(128<<10),
 			),
 		},
-		gatewayID: gatewayID,
+		gatewayID: gatewayID, gatewayEndpoint: strings.TrimSpace(gatewayEndpoint),
 	}, nil
 }
 
@@ -76,7 +80,7 @@ func (c *GRPCPlayerConnectionClient) Register(
 		return err
 	}
 	_, err = client.RegisterPlayerConnection(ctx, &rpcv1.RegisterPlayerConnectionRequest{
-		PlayerId: playerID, GateId: c.gatewayID, ConnectionId: connectionID,
+		PlayerId: playerID, GateId: c.gatewayID, GateEndpoint: c.gatewayEndpoint, ConnectionId: connectionID,
 		Route: committedRoute(route), ExpiresAtMs: expiresAt.UnixMilli(),
 	})
 	return mapConnectionErr(err)
@@ -90,7 +94,7 @@ func (c *GRPCPlayerConnectionClient) Refresh(
 		return err
 	}
 	_, err = client.RefreshPlayerConnection(ctx, &rpcv1.RefreshPlayerConnectionRequest{
-		PlayerId: playerID, GateId: c.gatewayID, ConnectionId: connectionID,
+		PlayerId: playerID, GateId: c.gatewayID, GateEndpoint: c.gatewayEndpoint, ConnectionId: connectionID,
 		Route: committedRoute(route), ExpiresAtMs: expiresAt.UnixMilli(),
 	})
 	return mapConnectionErr(err)

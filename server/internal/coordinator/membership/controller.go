@@ -20,6 +20,7 @@ type ControllerConfig struct {
 	ProbeTimeout     time.Duration
 	FailureThreshold int
 	Workers          int
+	DrainingZoneIDs  map[string]struct{}
 }
 
 type Controller struct {
@@ -196,6 +197,11 @@ func (controller *Controller) applyFailure(endpoint EndpointObservation, termina
 }
 
 func (controller *Controller) apply(member Member) error {
+	if member.State == StateHealthy {
+		if _, draining := controller.cfg.DrainingZoneIDs[member.LogicalZoneID]; draining {
+			member.State = StateDraining
+		}
+	}
 	snapshot, changed, err := controller.registry.Apply(Observation(member))
 	if errors.Is(err, ErrStaleObservation) || errors.Is(err, ErrIdentityConflict) {
 		return nil

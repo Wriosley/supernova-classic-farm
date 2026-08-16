@@ -1,9 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: gate
   namespace: classic-farm
 spec:
+  serviceName: gate-headless
+  podManagementPolicy: Parallel
   replicas: 3
   selector:
     matchLabels:
@@ -30,6 +32,20 @@ spec:
               value: 0.0.0.0:8081
             - name: GATEWAY_ID
               value: local-gateway
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: GATE_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: GATE_ADVERTISED_ENDPOINT
+              value: http://$(POD_NAME).gate-headless.$(POD_NAMESPACE).svc.cluster.local:8081
             - name: LOGIN_TICKET_CONSUME_URL
               value: http://login:8080/internal/v1/ws-tickets/consume
             - name: CLIENT_CONFIG_URL

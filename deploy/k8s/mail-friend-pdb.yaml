@@ -1,0 +1,32 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: friend
+  namespace: classic-farm
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: friend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mail
+  namespace: classic-farm
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mail
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gate
+  namespace: classic-farm
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gate

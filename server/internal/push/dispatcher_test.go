@@ -18,14 +18,14 @@ type recordingGateClient struct {
 }
 
 func (c *recordingGateClient) PublishFarmViewPatch(
-	_ context.Context, _ string, _ []uint64, _ *wsv1.FarmViewPatch,
+	_ context.Context, _, _ string, _ []uint64, _ *wsv1.FarmViewPatch,
 ) error {
 	c.farmCalls.Add(1)
 	return nil
 }
 
 func (c *recordingGateClient) PublishRedDotChanged(
-	_ context.Context, _ string, _ []uint64, _ *push.RedDotChanged,
+	_ context.Context, _, _ string, _ []uint64, _ *push.RedDotChanged,
 ) error {
 	c.redCalls.Add(1)
 	return nil
@@ -33,7 +33,7 @@ func (c *recordingGateClient) PublishRedDotChanged(
 
 func TestDispatcherGroupsByConnectionRegistry(t *testing.T) {
 	reg := connection.NewRegistry()
-	now := time.Unix(1000, 0)
+	now := time.Now()
 	_ = reg.Register(connection.PlayerConnection{
 		PlayerID: 1, GateID: "gate-a", ConnectionID: "c1", ExpiresAt: now.Add(connection.LeaseTTL),
 	})
@@ -74,7 +74,7 @@ func TestDispatcherGroupsByConnectionRegistry(t *testing.T) {
 
 func TestStaticGateResolverRejectsUnknownGate(t *testing.T) {
 	resolver := push.StaticGateResolver{GateID: "gate-a", Client: &recordingGateClient{}}
-	if _, err := resolver.Resolve("gate-b"); err == nil {
+	if _, err := resolver.Resolve("gate-b", "http://legacy-gate:8081"); err == nil {
 		t.Fatal("expected unknown gate error")
 	}
 }

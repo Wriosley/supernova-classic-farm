@@ -85,6 +85,13 @@ func startMigrationWorker(
 	if err != nil {
 		return err
 	}
+	recovered, err := coordinatormigration.RecoverOpenProgressTasks(ctx, tasks, progress, routes.Snapshot().MapVersion)
+	if err != nil {
+		return err
+	}
+	if recovered > 0 {
+		logger.Warn("recovered migration tasks from open progress", "recovered_tasks", recovered)
+	}
 	executor, err := coordinatormigration.NewExecutor(coordinatormigration.ExecutorConfig{
 		Tasks: tasks, Progress: progress, Routes: routes, RouteStore: routeStore,
 		Zones: newHTTPZoneLifecycle(client), Fences: fences, Publisher: publisher,

@@ -81,6 +81,12 @@ func (h *PushHub) Publish(envelope *wsv1.WsEnvelope) error {
 	return nil
 }
 
+func (h *PushHub) HasSubscriber(playerID uint64) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.subscribers[playerID]) > 0
+}
+
 func (s *connectionSubscription) enqueue(envelope *wsv1.WsEnvelope, body []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

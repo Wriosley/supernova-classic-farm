@@ -46,6 +46,97 @@ func TestTaskStoreDeduplicatesExactProposalAndSurvivesReload(t *testing.T) {
 	}
 }
 
+func TestTaskStoreDeduplicatesSameIntentAcrossPlannerObservationVersions(t *testing.T) {
+	ctx := context.Background()
+	stores := []struct {
+		name string
+		new  func(t *testing.T) TaskStore
+	}{
+		{name: "memory", new: func(t *testing.T) TaskStore {
+			store, err := NewMemoryTaskStore()
+			if err != nil {
+				t.Fatal(err)
+			}
+			return store
+		}},
+		{name: "tcaplus", new: func(t *testing.T) TaskStore {
+			store, err := NewTcaplusTaskStore(testtcaplus.New(), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return store
+		}},
+	}
+	for _, test := range stores {
+		t.Run(test.name, func(t *testing.T) {
+			store := test.new(t)
+			proposal := rebalanceTask(31, "zone-a", "zone-c", 10)
+			created, changed, err := store.UpsertPlanned(ctx, proposal)
+			if err != nil || !changed {
+				t.Fatalf("first UpsertPlanned = (%+v, %t, %v)", created, changed, err)
+			}
+
+			restartedObservation := proposal
+			restartedObservation.PlannedFromMapVersion += 2
+			restartedObservation.PlannedFromAvailabilityVersion += 9
+			replayed, changed, err := store.UpsertPlanned(ctx, restartedObservation)
+			if err != nil || changed {
+				t.Fatalf("same intent after restart = (%+v, %t, %v), want deduplicated", replayed, changed, err)
+			}
+			if !bytes.Equal(replayed.TaskID, created.TaskID) ||
+				replayed.PlannedFromMapVersion != created.PlannedFromMapVersion ||
+				replayed.PlannedFromAvailabilityVersion != created.PlannedFromAvailabilityVersion {
+				t.Fatalf("dedup changed frozen task evidence: first=%+v replay=%+v", created, replayed)
+			}
+		})
+	}
+}
+
+func TestRecoverOpenProgressTasksRequeuesCancelledTask(t *testing.T) {
+	ctx := context.Background()
+	progressStore, err := NewProgressStore(newMemoryProgressBackend())
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress := sampleProgress(StepSourceDraining)
+	progress.Manifest = Manifest{{PlayerID: 9, OwnerEpoch: 5, CheckpointRevision: 11}}
+	if err := progressStore.Create(ctx, progress); err != nil {
+		t.Fatal(err)
+	}
+	if err := progressStore.Advance(ctx, progress, StepSourceFlushed); err != nil {
+		t.Fatal(err)
+	}
+
+	proposal := rebalanceTask(progress.ShardID, progress.Source.OwnerZoneID, progress.Prepared.OwnerZoneID, 10)
+	proposal.SourceEndpoint = progress.Source.OwnerEndpoint
+	proposal.SourceOwnerEpoch = progress.Source.OwnerEpoch
+	proposal.SourceRouteVersion = progress.Source.RouteVersion
+	proposal.TargetEndpoint = progress.Prepared.OwnerEndpoint
+	tasks, _ := NewMemoryTaskStore()
+	created, _, err := tasks.UpsertPlanned(ctx, proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Claim(ctx, created.ShardID, created.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tasks.Fail(ctx, created.ShardID, created.TaskID, "CURRENT_MATCHES_DESIRED"); err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, err := RecoverOpenProgressTasks(ctx, tasks, progressStore, 20)
+	if err != nil || recovered != 1 {
+		t.Fatalf("RecoverOpenProgressTasks = (%d, %v)", recovered, err)
+	}
+	got, found, err := tasks.Get(ctx, progress.ShardID)
+	if err != nil || !found || got.Status != StatusPlanned || !taskMatchesProgress(got, progress) {
+		t.Fatalf("recovered task = (%+v, %t, %v)", got, found, err)
+	}
+	if replayed, err := RecoverOpenProgressTasks(ctx, tasks, progressStore, 21); err != nil || replayed != 0 {
+		t.Fatalf("replayed recovery = (%d, %v)", replayed, err)
+	}
+}
+
 func TestTaskStoreReplacementConflictCancellationAndOrder(t *testing.T) {
 	ctx := context.Background()
 	running := rebalanceTask(9, "zone-a", "zone-b", 4)

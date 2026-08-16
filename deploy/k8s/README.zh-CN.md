@@ -138,7 +138,7 @@ kubectl -n classic-farm patch service gate --type merge -p '{
     "type": "LoadBalancer"
   }
 }'
-kubectl -n classic-farm rollout restart deploy/login deploy/gate
+kubectl -n classic-farm rollout restart deploy/login
 ```
 
 前端不需要自己发现 gate。它先访问 Login，Login 在 `/v1/bootstrap`
@@ -161,6 +161,47 @@ pnpm -C web dev
 这样浏览器访问本机 Web 页面时，`/v1/*` 和 `/ws` 都会被开发服务器转到
 对应的 LB，不需要再手工做 `kubectl port-forward`。
 
+## Gate 三副本精确 Push 路由
+
+Gate 已由 Deployment 改为三副本 StatefulSet。公网 WebSocket 仍访问 `gate`
+LoadBalancer；Zone 内部 Push 使用玩家连接租约登记的 Pod UID 和精确 Pod DNS：
+
+```text
+http://gate-N.gate-headless.classic-farm.svc.cluster.local:8081
+```
+
+首次从旧清单切换时必须删除旧 Deployment，避免两种控制器同时选中 `gate`
+Service：
+
+```bash
+kubectl -n classic-farm delete deployment gate
+kubectl apply -k deploy/k8s
+kubectl -n classic-farm rollout status statefulset/gate
+kubectl -n classic-farm get pods -l app.kubernetes.io/name=gate -o wide
+```
+
+后续 Gate 更新使用 `rollout restart statefulset/gate`，不再使用
+`rollout restart deploy/gate`。
+
+## Mail/Friend 三副本
+
+MailSvr 和 FriendSvr 各运行 3 个 API 副本。内部调用方使用：
+
+```text
+dns:///mail-headless.classic-farm.svc.cluster.local:8087
+dns:///friend-headless.classic-farm.svc.cluster.local:8085
+```
+
+Headless Service 只发布 Ready Pod，gRPC `round_robin` 为每个地址维护
+SubConn。安全查询和幂等 Ack 遇到 `UNAVAILABLE` 时最多重试一次；好友码
+写入、邮件创建和邮件领奖不做透明重试。普通 `mail`、`friend` ClusterIP
+Service 继续保留用于健康检查、调试和旧客户端回滚。
+
+两个 Deployment 使用 `maxUnavailable: 0`，并各有 `minAvailable: 2` 的
+PDB。当前 kind 是单节点环境，因此这些设置能保护滚动更新和主动驱逐，不能
+抵御宿主机或整个 kind Node 故障。FriendLinkSaga 和 MailClaimSaga 均不运行
+周期性全表恢复扫描。
+
 若要在非生产环境显式重建整张 Route 表（例如把另一套环境遗留的 endpoint
 替换为当前 kind Service），临时设置
 `COORDINATOR_ROUTE_REINITIALIZE=true` 并只滚动 Coordinator。它会先删除
@@ -171,15 +212,47 @@ bootstrap route identity，而 map version 可能与旧快照相同；严格的 
 authorization 会拒绝这种同版本身份变化，所以该维护动作完成后还必须滚动
 重启两个 Zone。生产环境进程会拒绝此开关。
 
+## 八 Zone Pool 与 A/B 退役
+
+清单将 `zone-pool` 扩到8副本，并通过以下 Coordinator 配置持久表达 A/B
+退役意图：
+
+```text
+COORDINATOR_DRAIN_ZONE_IDS=zone-a,zone-b
+COORDINATOR_PLANNER_MIN_HEALTHY_ZONES=8
+COORDINATOR_PLANNER_ENABLED=1
+COORDINATOR_MIGRATION_WORKER_ENABLED=1
+```
+
+必须先构建并加载新的 Coordinator 镜像，再应用清单。Planner 会等8个 pool
+均通过健康探测后才创建任务；Migration Worker 保持全局8、每来源2、每目标2
+的并发限制。
+
+迁移期间通过端口转发查询删除门槛：
+
+```bash
+kubectl -n classic-farm port-forward service/coordinator 18083:8083
+curl http://127.0.0.1:18083/internal/v1/zones/drain
+```
+
+只有 `zone-a` 和 `zone-b` 都同时满足以下结果才可删除：
+
+```json
+{"owner_shards":0,"open_tasks":0,"removable":true}
+```
+
+不要仅凭 Pod 数量或 Planner 日志删除 A/B。当前清单仍保留两者，完成实时迁移
+验收后再从 kustomization、Deployment 和 Service 中移除。
+
 ## 明确限制
 
-- 两个 Zone 是固定身份和固定 Service，不注册、不发现；
-- 当前不产生 Zone availability 变化，不提供自动再均衡、自动故障转移或
+- `zone-pool` 使用动态身份和 Kubernetes 发现；旧 A/B 只在迁移验收完成前
+  保留；
+- 当前支持配置驱动的正常 DRAIN/Rebalance，不提供自动故障转移或
   Coordinator Leader Election；
 - `INTERNAL_NETWORK_MODE=kubernetes` 允许 Pod 网络调用内部 HTTP/gRPC，
   只能用于隔离的非生产集群；
-- Zone 收到 SIGTERM 时会停止 HTTP 服务，但当前没有 Zone 级 drain，
-  因此不要直接缩容或滚动重启有活跃玩家的 Zone；
-- 不提供 Ingress、TLS、NetworkPolicy、PDB 或 HPA；
+- 不要直接缩容仍持有 Current Shard 的 Zone；必须先通过 Drain 删除门槛；
+- 不提供 Ingress、TLS、NetworkPolicy 或 HPA；PDB 目前覆盖 Gate/Mail/Friend；
 - Tcaplus 凭据和内部 gRPC HMAC key 只从各自 Secret 注入，示例文件不得
   填写或提交真实值。

@@ -31,6 +31,21 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: gate-headless
+  namespace: classic-farm
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: false
+  selector:
+    app.kubernetes.io/name: gate
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: gate
   namespace: classic-farm
   annotations:
@@ -61,6 +76,21 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: friend-headless
+  namespace: classic-farm
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: false
+  selector:
+    app.kubernetes.io/name: friend
+  ports:
+    - name: grpc
+      port: 8085
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: info
   namespace: classic-farm
 spec:
@@ -81,6 +111,21 @@ spec:
     app.kubernetes.io/name: mail
   ports:
     - name: http
+      port: 8087
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mail-headless
+  namespace: classic-farm
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: false
+  selector:
+    app.kubernetes.io/name: mail
+  ports:
+    - name: grpc
       port: 8087
       targetPort: http
 ---

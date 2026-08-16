@@ -18,13 +18,12 @@ import (
 type gameCommandRPCServer struct {
 	rpcv1.UnimplementedGameCommandServiceServer
 
-	runtime           *player.Runtime
-	authorization     ownerAuthorization
-	gates             *shardExecutionGates
-	now               func() time.Time
-	expectedGatewayID string
-	logger            *slog.Logger
-	giftNotifier      giftOutboxNotifier
+	runtime       *player.Runtime
+	authorization ownerAuthorization
+	gates         *shardExecutionGates
+	now           func() time.Time
+	logger        *slog.Logger
+	giftNotifier  giftOutboxNotifier
 }
 
 type giftOutboxNotifier interface {
@@ -36,7 +35,7 @@ func newGameCommandRPCServer(
 	authorization ownerAuthorization,
 	gates *shardExecutionGates,
 	now func() time.Time,
-	expectedGatewayID string,
+	_ string,
 	logger *slog.Logger,
 ) *gameCommandRPCServer {
 	if now == nil {
@@ -47,7 +46,7 @@ func newGameCommandRPCServer(
 	}
 	return &gameCommandRPCServer{
 		runtime: runtime, authorization: authorization, gates: gates, now: now,
-		expectedGatewayID: expectedGatewayID, logger: logger,
+		logger: logger,
 	}
 }
 
@@ -71,8 +70,11 @@ func (s *gameCommandRPCServer) ExecutePlayerCommand(
 	ctx context.Context,
 	request *rpcv1.ExecutePlayerCommandRequest,
 ) (*rpcv1.ExecutePlayerCommandResponse, error) {
+	// GateId is the Gate process incarnation (Pod UID under precise-push
+	// routing). Do not require a cluster-wide GATEWAY_ID; connection leases
+	// already stopped doing that.
 	if request == nil || request.CallerPlayerId == 0 ||
-		request.GateId == "" || request.GateId != s.expectedGatewayID ||
+		request.GateId == "" ||
 		request.Route == nil || request.Envelope == nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid game command")
 	}

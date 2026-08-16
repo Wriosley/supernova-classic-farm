@@ -48,7 +48,7 @@ spec:
             - name: ZONE_C_ENDPOINT
               value: http://zone-pool-0.zone-headless.classic-farm.svc.cluster.local:8082
             - name: ZONE_POOL_REPLICAS
-              value: "4"
+              value: "8"
             - name: ZONE_STATEFULSET_NAME
               value: zone-pool
             - name: CLUSTER_ID
@@ -60,7 +60,11 @@ spec:
             - name: COORDINATOR_MIGRATION_WORKER_ENABLED
               value: "1"
             - name: COORDINATOR_PLANNER_ENABLED
-              value: "0"
+              value: "1"
+            - name: COORDINATOR_DRAIN_ZONE_IDS
+              value: zone-a,zone-b
+            - name: COORDINATOR_PLANNER_MIN_HEALTHY_ZONES
+              value: "8"
           ports:
             - name: http
               containerPort: 8083
