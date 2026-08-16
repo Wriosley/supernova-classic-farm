@@ -413,6 +413,11 @@ For `sell_all`, the Actor resolves the current full stack quantity at execution 
 
 `items_pending_mail` means a pending `CreateRewardMail` Outbox event was recorded atomically with the Actor's reward-claim state. It MUST NOT claim that the Mail Service has already created or delivered the mail. Under V3 asynchronous Dirty writeback, the event becomes database-durable only after the checkpoint and relational Outbox row commit; an acknowledged but unflushed claim and event may roll back together after abnormal Zone loss.
 
+If the claimed chapter has a configured next chapter, the response patch activates it.
+If it is terminal (`next_chapter_id = 0`), the patch retains that chapter and its
+task progress with status `CLAIMED`; absence of a next chapter is not a
+`CONFIG_UNAVAILABLE` error.
+
 ## 11. Push
 
 V1 uses one Push action: `PLAYER_STATE_CHANGED`.

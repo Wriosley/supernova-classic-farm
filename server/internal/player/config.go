@@ -30,23 +30,25 @@ const (
 	developmentCropSellPriceVersion      uint64 = 9
 	developmentNextChapterID             uint32 = 2
 	developmentNextSeedItemID            uint32 = 1003
+	developmentPumpkinSeedItemID         uint32 = 1012
+	developmentWatermelonSeedItemID      uint32 = 1013
 	developmentChapterRewardCoins        int64  = 10
 	developmentStealQuantity             uint32 = 1
 	developmentMaxStealTimes             uint32 = 1
 	developmentProtectedOwnerYield       uint32 = 2
 
-	developmentVillageDogPetID           uint32 = 1
-	developmentShepherdDogPetID          uint32 = 2
-	developmentPetGuardProbabilityBPS    uint32 = 1000
-	developmentVillageDogPriceCoins      int64  = 5
-	developmentShepherdDogPriceCoins     int64  = 10
-	developmentVillageDogPenaltyCoins    int64  = 2
-	developmentShepherdDogPenaltyCoins   int64  = 4
-	developmentPetFoodItemID             uint32 = 1004
-	developmentPetFoodShopEntryID        uint32 = 5004
-	developmentPetFoodUnitPrice          int64  = 5
-	developmentPetFoodPriceVersion       uint64 = 11
-	developmentPetFoodDurationSeconds    uint64 = 86400
+	developmentVillageDogPetID         uint32 = 1
+	developmentShepherdDogPetID        uint32 = 2
+	developmentPetGuardProbabilityBPS  uint32 = 1000
+	developmentVillageDogPriceCoins    int64  = 5
+	developmentShepherdDogPriceCoins   int64  = 10
+	developmentVillageDogPenaltyCoins  int64  = 2
+	developmentShepherdDogPenaltyCoins int64  = 4
+	developmentPetFoodItemID           uint32 = 1004
+	developmentPetFoodShopEntryID      uint32 = 5004
+	developmentPetFoodUnitPrice        int64  = 5
+	developmentPetFoodPriceVersion     uint64 = 11
+	developmentPetFoodDurationSeconds  uint64 = 86400
 )
 
 type ShopEntry struct {
@@ -477,8 +479,8 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 			CropItemID: def.CropItemID, ConfigVersion: ServerConfigVersion,
 			MaturityValueScaled9: def.MaturityScaled9, BaseGrowthRateScaled6: developmentGrowthRateScaled6,
 			BaseYield: def.BaseYield, Enabled: true,
-			StealQuantity: stealQuantityFromBaseYield(def.BaseYield),
-			MaxStealTimes: maxStealTimesFromBaseYield(def.BaseYield),
+			StealQuantity:       stealQuantityFromBaseYield(def.BaseYield),
+			MaxStealTimes:       maxStealTimesFromBaseYield(def.BaseYield),
 			ProtectedOwnerYield: protectedOwnerYieldFromBaseYield(def.BaseYield),
 		})
 		sellRules = append(sellRules, SellRule{
@@ -498,14 +500,14 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 	}}, []PetConfig{
 		{
 			PetID: developmentVillageDogPetID, Name: "田园犬",
-			PriceCoins: developmentVillageDogPriceCoins,
+			PriceCoins:          developmentVillageDogPriceCoins,
 			GuardProbabilityBPS: developmentPetGuardProbabilityBPS,
 			GuardPenaltyCoins:   developmentVillageDogPenaltyCoins,
 			ConfigVersion:       ServerConfigVersion, Enabled: true,
 		},
 		{
 			PetID: developmentShepherdDogPetID, Name: "牧羊犬",
-			PriceCoins: developmentShepherdDogPriceCoins,
+			PriceCoins:          developmentShepherdDogPriceCoins,
 			GuardProbabilityBPS: developmentPetGuardProbabilityBPS,
 			GuardPenaltyCoins:   developmentShepherdDogPenaltyCoins,
 			ConfigVersion:       ServerConfigVersion, Enabled: true,
@@ -523,7 +525,7 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 			RewardCoins: developmentChapterRewardCoins,
 			RewardItems: []RewardItem{
 				{ItemID: BasicFertilizerID, Quantity: 1},
-				{ItemID: developmentNextSeedItemID, Quantity: 3},
+				{ItemID: developmentPumpkinSeedItemID, Quantity: 3},
 			},
 			NextChapterID: developmentNextChapterID,
 		},
@@ -533,6 +535,11 @@ func NewDevelopmentConfigSnapshot() *ConfigSnapshot {
 				{ID: 6, Target: 1},
 				{ID: 7, Target: 1},
 				{ID: 8, Target: 1},
+			},
+			RewardCoins: developmentChapterRewardCoins,
+			RewardItems: []RewardItem{
+				{ItemID: BasicFertilizerID, Quantity: 5},
+				{ItemID: developmentWatermelonSeedItemID, Quantity: 10},
 			},
 		},
 	})

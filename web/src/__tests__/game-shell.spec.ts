@@ -14,6 +14,7 @@ const harness = vi.hoisted(() => ({
   friends: [] as Array<Record<string, unknown>>,
   unlockedCropIds: [] as number[],
   unreadMailCount: 0,
+  chapterStatus: 1,
 }))
 
 vi.mock('../lib/http', () => ({
@@ -65,7 +66,7 @@ vi.mock('../lib/ws', () => {
         estimatedMatureAtMs: BigInt(Date.now() + 90_000),
       },
     ],
-    currentChapter: { chapterId: 1, status: 1, tasks: [] },
+    currentChapter: { chapterId: 1, status: harness.chapterStatus, tasks: [] },
     career: {},
     cropCompendium: { unlockedCropIds: [] },
   }
@@ -167,6 +168,7 @@ vi.mock('../lib/ws', () => {
       return envelope('getPlayerSnapshotResponse', {
         snapshot: {
           ...snapshot,
+          currentChapter: { ...snapshot.currentChapter, status: harness.chapterStatus },
           cropCompendium: { unlockedCropIds: [...harness.unlockedCropIds] },
         },
       })
@@ -299,6 +301,27 @@ describe('game shell navigation', () => {
     wrapper.unmount()
     harness.unlockedCropIds = []
     localStorage.clear()
+  })
+
+  it('shows a chapter reward red dot until the task drawer is opened', async () => {
+    harness.chapterStatus = 2
+    const storageKey = `classic-farm:task-claim-seen:${harness.playerId.toString()}:1`
+    localStorage.removeItem(storageKey)
+
+    const wrapper = await signIn()
+    const taskButton = wrapper
+      .findAll('.top-nav__link')
+      .find((candidate) => candidate.text().startsWith('任务'))
+
+    expect(taskButton?.find('.red-dot').exists()).toBe(true)
+    await taskButton!.trigger('click')
+    await flushPromises()
+    expect(taskButton?.find('.red-dot').exists()).toBe(false)
+    expect(localStorage.getItem(storageKey)).toBe('1')
+
+    wrapper.unmount()
+    harness.chapterStatus = 1
+    localStorage.removeItem(storageKey)
   })
 
   it('shows friend-farm indicators returned by the login friend query', async () => {

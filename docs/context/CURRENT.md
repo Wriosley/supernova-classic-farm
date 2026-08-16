@@ -20,6 +20,14 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 
 ## Snapshot at handoff
 
+- 两章任务与奖励已完成离线实现：新玩家配置版本提升为 2，第一章奖励改为
+  10 金币、1 肥料、3 南瓜种子；第二章三个好友任务已有中文名称，奖励为
+  10 金币、5 肥料、10 西瓜种子。第二章作为终章可正常领取并以 `CLAIMED`
+  保留，H5 支持 1/2 章翻页、终章提示，以及按玩家/章节记录的“可领奖待查看”
+  任务红点（打开任务面板即清除，不改变服务端领奖状态）。不迁移或回填旧玩家。
+  Player 包、前端 34 项测试及生产构建通过；真实 kind/Tcaplus 新玩家链路待部署
+  后手测。Evidence: `../evidence/2026-08-16-two-chapter-task-rewards.md`。
+
 - 2026-08-16 kind 集群已用 `deploy/kind-config.yaml` 重建，宿主机固定映射
   `31238 -> login NodePort`、`32591 -> gate NodePort`；Login/Gate Service 同步
   固定对应 `nodePort`。7 个当前源码镜像和两个运行 Secret 已恢复，8 个

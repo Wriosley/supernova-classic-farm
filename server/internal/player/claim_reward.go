@@ -61,15 +61,18 @@ func (r *Runtime) claimChapterReward(
 			&wsv1.Error{Code: wsv1.ErrorCode_CHAPTER_NOT_CLAIMABLE}), true
 	}
 	chapter, exists := config.Chapter(a.state.ChapterID)
-	if !exists || chapter.ConfigVersion != a.state.ChapterConfigVersion ||
-		chapter.NextChapterID == 0 {
+	if !exists || chapter.ConfigVersion != a.state.ChapterConfigVersion {
 		return r.storeClaimRewardFailure(a, request, requestID, fingerprint, config.Version(), now,
 			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
 	}
-	nextChapter, exists := config.Chapter(chapter.NextChapterID)
-	if !exists {
-		return r.storeClaimRewardFailure(a, request, requestID, fingerprint, config.Version(), now,
-			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+	var nextChapter ChapterConfig
+	terminalChapter := chapter.NextChapterID == 0
+	if !terminalChapter {
+		nextChapter, exists = config.Chapter(chapter.NextChapterID)
+		if !exists {
+			return r.storeClaimRewardFailure(a, request, requestID, fingerprint, config.Version(), now,
+				&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+		}
 	}
 	if a.state.Coins > math.MaxInt64-chapter.RewardCoins {
 		return r.storeClaimRewardFailure(a, request, requestID, fingerprint, config.Version(), now,
@@ -122,11 +125,15 @@ func (r *Runtime) claimChapterReward(
 
 	a.state.Coins += chapter.RewardCoins
 	a.state.Inventory = inventoryAfter
-	a.state.ChapterID = nextChapter.ChapterID
-	a.state.ChapterConfigVersion = nextChapter.ConfigVersion
-	a.state.Chapter = chapterv1.ChapterStatus_IN_PROGRESS
-	a.state.ChapterActivatedAtMS = now.UnixMilli()
-	a.state.Tasks = append([]Task(nil), nextChapter.Tasks...)
+	if terminalChapter {
+		a.state.Chapter = chapterv1.ChapterStatus_CLAIMED
+	} else {
+		a.state.ChapterID = nextChapter.ChapterID
+		a.state.ChapterConfigVersion = nextChapter.ConfigVersion
+		a.state.Chapter = chapterv1.ChapterStatus_IN_PROGRESS
+		a.state.ChapterActivatedAtMS = now.UnixMilli()
+		a.state.Tasks = append([]Task(nil), nextChapter.Tasks...)
+	}
 	a.state.PlayerSeq = nextPlayerSeq
 	a.state.CheckpointRevision++
 	a.state.ConfigVersion = config.Version()

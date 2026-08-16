@@ -17,7 +17,7 @@ const (
 	InitialPlotID       uint32 = 1
 	InitialPlotCount    uint32 = 16
 	InitialChapterID    uint32 = 1
-	ServerConfigVersion uint64 = 1
+	ServerConfigVersion uint64 = 2
 )
 
 type Task struct {
@@ -48,11 +48,11 @@ type Plot struct {
 	// before Phase 5 (or under a CropConfig with no steal configuration)
 	// decodes StealQuantity/MaxStealTimes/ProtectedOwnerYield as zero,
 	// which CanSteal always treats as "not stealable".
-	StealCount              uint32
-	StealQuantity           uint32
-	MaxStealTimes           uint32
-	ProtectedOwnerYield     uint32
-	StealVisitorPlayerIDs   []uint64
+	StealCount            uint32
+	StealQuantity         uint32
+	MaxStealTimes         uint32
+	ProtectedOwnerYield   uint32
+	StealVisitorPlayerIDs []uint64
 }
 
 type State struct {

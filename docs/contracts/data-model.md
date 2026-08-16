@@ -239,7 +239,7 @@ State invariants:
 - `current_value` is saturated at `target_value`; `completed` equals `current_value >= target_value`.
 - `CLAIMABLE` means all tasks completed.
 - Only successful server-side actions advance progress.
-- Claiming atomically records the reward effects, marks the chapter claimed, and activates the next chapter state. The checkpoint stores only the resulting current chapter; historical chapter analytics are outside V1.
+- Claiming atomically records the reward effects and marks the chapter claimed. A configured next chapter replaces it as the current chapter; a terminal chapter remains in the checkpoint as `CLAIMED`. Earlier chapter history and analytics are outside V1 and may only be inferred by the client from the current chapter transition order.
 
 ## 6. Configuration snapshot references
 

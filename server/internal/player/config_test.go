@@ -126,6 +126,12 @@ func TestDevelopmentChapterTwoDefinesFriendTasks(t *testing.T) {
 			t.Fatalf("chapter two task %d = %+v", index, task)
 		}
 	}
+	if chapter.RewardCoins != 10 || len(chapter.RewardItems) != 2 ||
+		chapter.RewardItems[0] != (RewardItem{ItemID: BasicFertilizerID, Quantity: 5}) ||
+		chapter.RewardItems[1] != (RewardItem{ItemID: developmentWatermelonSeedItemID, Quantity: 10}) ||
+		chapter.NextChapterID != 0 {
+		t.Fatalf("chapter two rewards = %+v", chapter)
+	}
 }
 
 func TestConfigSnapshotRejectsInvalidChapterGraph(t *testing.T) {

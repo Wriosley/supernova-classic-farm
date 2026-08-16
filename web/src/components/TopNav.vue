@@ -9,6 +9,7 @@ const props = defineProps<{
   newMailCount: number
   friendRedDot: boolean
   compendiumRedDot: boolean
+  taskRedDot: boolean
 }>()
 
 const emit = defineEmits<{
@@ -23,6 +24,8 @@ function redDot(panel: PanelId): boolean {
       return props.friendRedDot
     case 'compendium':
       return props.compendiumRedDot
+    case 'tasks':
+      return props.taskRedDot
     default:
       return false
   }

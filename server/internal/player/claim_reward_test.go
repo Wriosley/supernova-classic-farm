@@ -66,6 +66,12 @@ func TestClaimRewardCreditsInventoryActivatesNextChapterAndReplays(t *testing.T)
 		claimed.GetPatch().GetCurrentChapter().GetStatus() != chapterv1.ChapterStatus_IN_PROGRESS {
 		t.Fatalf("unexpected CLAIM_CHAPTER_REWARD response: %+v", first)
 	}
+	if claimed.GetItemsAddedToInventory()[0].GetItemId() != BasicFertilizerID ||
+		claimed.GetItemsAddedToInventory()[0].GetQuantity() != 1 ||
+		claimed.GetItemsAddedToInventory()[1].GetItemId() != developmentPumpkinSeedItemID ||
+		claimed.GetItemsAddedToInventory()[1].GetQuantity() != 3 {
+		t.Fatalf("unexpected chapter one rewards: %+v", claimed.GetItemsAddedToInventory())
+	}
 	replay, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, request)
 	if err != nil {
 		t.Fatal(err)
@@ -87,6 +93,63 @@ func TestClaimRewardCreditsInventoryActivatesNextChapterAndReplays(t *testing.T)
 		checkpoint.CurrentChapter.Status != datav1.ChapterRecordStatus_IN_PROGRESS ||
 		len(checkpoint.PendingOutbox) != 0 {
 		t.Fatalf("unexpected claim checkpoint: %+v", checkpoint)
+	}
+}
+
+func TestClaimTerminalChapterRewardsAndKeepsClaimedHistory(t *testing.T) {
+	const playerID = uint64(43)
+	now := time.Date(2026, 8, 16, 3, 0, 0, 0, time.UTC)
+	state := NewDevelopmentState(playerID)
+	chapter, exists := NewDevelopmentConfigSnapshot().Chapter(developmentNextChapterID)
+	if !exists {
+		t.Fatal("chapter two config missing")
+	}
+	state.ChapterID = chapter.ChapterID
+	state.ChapterConfigVersion = chapter.ConfigVersion
+	state.Chapter = chapterv1.ChapterStatus_CLAIMABLE
+	state.Tasks = append([]Task(nil), chapter.Tasks...)
+	for index := range state.Tasks {
+		state.Tasks[index].Current = state.Tasks[index].Target
+	}
+	state.Coins = 7
+	state.Inventory = map[uint32]uint32{}
+	store := &recordingCheckpointStore{state: state}
+	runtime := NewRuntime()
+	runtime.store = store
+	runtime.SetNow(func() time.Time { return now })
+	defer runtime.Close()
+
+	request := claimRewardRequest(
+		playerID, "00112233-4455-6677-8899-aabbccddee65", developmentNextChapterID,
+	)
+	response, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed := response.GetClaimChapterRewardResponse()
+	current := claimed.GetPatch().GetCurrentChapter()
+	if response.GetError() != nil || claimed.GetCoinGranted() != 10 ||
+		claimed.GetChapterId() != developmentNextChapterID ||
+		claimed.GetPatch().GetCoinBalance() != 17 ||
+		current.GetChapterId() != developmentNextChapterID ||
+		current.GetStatus() != chapterv1.ChapterStatus_CLAIMED ||
+		len(current.GetTasks()) != 3 {
+		t.Fatalf("unexpected terminal claim response: %+v", response)
+	}
+	if len(claimed.GetItemsAddedToInventory()) != 2 ||
+		claimed.GetItemsAddedToInventory()[0].GetItemId() != BasicFertilizerID ||
+		claimed.GetItemsAddedToInventory()[0].GetQuantity() != 5 ||
+		claimed.GetItemsAddedToInventory()[1].GetItemId() != developmentWatermelonSeedItemID ||
+		claimed.GetItemsAddedToInventory()[1].GetQuantity() != 10 {
+		t.Fatalf("unexpected terminal rewards: %+v", claimed.GetItemsAddedToInventory())
+	}
+
+	replay, err := runtime.Handle(context.Background(), playerID, LocalOwnerEpoch, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !replay.GetReplayed() || !proto.Equal(replay.GetClaimChapterRewardResponse(), claimed) {
+		t.Fatalf("unexpected terminal replay: %+v", replay)
 	}
 }
 
@@ -115,7 +178,7 @@ func TestClaimRewardFullInventoryCreatesOneDeterministicOutbox(t *testing.T) {
 	if len(claimed.GetItemsAddedToInventory()) != 0 ||
 		len(claimed.GetItemsPendingMail()) != 2 ||
 		claimed.GetItemsPendingMail()[0].GetItemId() != BasicFertilizerID ||
-		claimed.GetItemsPendingMail()[1].GetItemId() != developmentNextSeedItemID {
+		claimed.GetItemsPendingMail()[1].GetItemId() != developmentPumpkinSeedItemID {
 		t.Fatalf("unexpected pending mail receipt: %+v", claimed)
 	}
 	actorState := runtime.actors[playerID].state
@@ -130,7 +193,7 @@ func TestClaimRewardFullInventoryCreatesOneDeterministicOutbox(t *testing.T) {
 		proto.Unmarshal(pending.Payload, payload) != nil ||
 		len(payload.Attachments) != 2 ||
 		payload.Attachments[0].GetItemId() != BasicFertilizerID ||
-		payload.Attachments[1].GetItemId() != developmentNextSeedItemID ||
+		payload.Attachments[1].GetItemId() != developmentPumpkinSeedItemID ||
 		!proto.Equal(payload.Source, &eventv1.RewardMailSourceV1{
 			ChapterId: InitialChapterID, ChapterConfigVersion: ServerConfigVersion,
 			RequestId: pending.CausedByRequestId,

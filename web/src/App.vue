@@ -24,6 +24,7 @@ import {
   RedDotCategory,
   RedDotOperation,
 } from './gen/classicfarm/v1/ws/ws_pb'
+import { ChapterStatus } from './gen/classicfarm/v1/ws/chapter/chapter_status_pb'
 import { create } from '@bufbuild/protobuf'
 import { HttpErrorCode } from './gen/classicfarm/v1/http/http_pb'
 import {
@@ -204,6 +205,7 @@ const newMailCount = ref(0)
 const friendFarmRedDots = ref<Set<string>>(new Set())
 const friendPanelRedDot = ref(false)
 const newCompendiumCropIds = ref<Set<number>>(new Set())
+const taskPanelRedDot = ref(false)
 const offlineVisitorNotice = ref('')
 const activePanel = ref<PanelId | null>(null)
 const mailboxMails = ref<MailView[]>([])
@@ -268,6 +270,7 @@ const diagnosticFacts = computed(() => [
 ])
 const friendRedDot = computed(() => friendPanelRedDot.value)
 const compendiumRedDot = computed(() => newCompendiumCropIds.value.size > 0)
+const taskRedDot = computed(() => taskPanelRedDot.value)
 // The farm stays on screen when the socket dies, so the shell must say so
 // itself; otherwise every panel just looks empty and every button dead.
 const shellNotice = computed(() => {
@@ -300,6 +303,9 @@ function togglePanel(panel: PanelId): void {
       friendPanelRedDot.value = false
       void loadFriends()
       break
+    case 'tasks':
+      acknowledgeTaskClaim()
+      break
     case 'pet':
       if (!petPanel.value) {
         void refreshPetPanel()
@@ -318,6 +324,33 @@ function togglePanel(panel: PanelId): void {
 
 function compendiumSeenStorageKey(playerId: bigint): string {
   return `classic-farm:compendium-seen:${playerId.toString()}`
+}
+
+function taskClaimSeenStorageKey(playerId: bigint, chapterId: number): string {
+  return `classic-farm:task-claim-seen:${playerId.toString()}:${chapterId}`
+}
+
+function taskClaimSeen(playerId: bigint, chapterId: number): boolean {
+  try {
+    return localStorage.getItem(taskClaimSeenStorageKey(playerId, chapterId)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function acknowledgeTaskClaim(): void {
+  const current = snapshot.value
+  if (current?.currentChapter?.status === ChapterStatus.CLAIMABLE) {
+    try {
+      localStorage.setItem(
+        taskClaimSeenStorageKey(current.playerId, current.currentChapter.chapterId),
+        '1',
+      )
+    } catch {
+      // A blocked/full localStorage must not prevent the task panel from opening.
+    }
+  }
+  taskPanelRedDot.value = false
 }
 
 function storeSeenCompendium(playerId: bigint, cropIds: readonly number[]): void {
@@ -387,6 +420,15 @@ watch(snapshot, (next, previous) => {
       ...newlyUnlocked,
     ])
   }
+})
+
+watch(snapshot, (next) => {
+  const chapter = next?.currentChapter
+  if (!next || !chapter || chapter.status !== ChapterStatus.CLAIMABLE) {
+    taskPanelRedDot.value = false
+    return
+  }
+  taskPanelRedDot.value = !taskClaimSeen(next.playerId, chapter.chapterId)
 })
 const inventoryMap = computed(() => {
   const map = new Map<number, number>()
@@ -465,6 +507,7 @@ function clearResult(): void {
   newMailCount.value = 0
   friendFarmRedDots.value = new Set()
   newCompendiumCropIds.value = new Set()
+  taskPanelRedDot.value = false
   offlineVisitorNotice.value = ''
   activePanel.value = null
   mailboxMails.value = []
@@ -2283,6 +2326,7 @@ onBeforeUnmount(() => {
       :new-mail-count="newMailCount"
       :friend-red-dot="friendRedDot"
       :compendium-red-dot="compendiumRedDot"
+      :task-red-dot="taskRedDot"
       @select="togglePanel"
     />
 

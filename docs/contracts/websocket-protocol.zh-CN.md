@@ -373,6 +373,10 @@ V1 自己清理地块不消耗物品、不发奖励、不推进任务。`NEED_CL
 
 `items_pending_mail` 只表示待处理 `CreateRewardMail` Outbox 事件已经与 Actor 的领奖状态原子记录，禁止声称 Mail Service 已经创建或送达邮件。按照 V3 异步 Dirty 写回，只有检查点和关系型 Outbox 行提交后，事件才获得数据库持久性；已经确认但尚未刷盘的领奖及事件可能在 Zone 异常退出后一起回退。
 
+如果被领取章节配置了下一章，响应 Patch 激活下一章。如果它是终章
+（`next_chapter_id = 0`），Patch 保留该章及其任务进度并把状态改为
+`CLAIMED`；缺少下一章不能返回 `CONFIG_UNAVAILABLE`。
+
 ## 11. Push
 
 V1 只有一种 Push 动作：`PLAYER_STATE_CHANGED`。
