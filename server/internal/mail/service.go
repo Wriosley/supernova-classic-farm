@@ -16,9 +16,16 @@ import (
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 )
 
-// RedDotNotifier is InfoSvr SetMailRedDot. Failures must not roll back mail writes.
+// RedDotNotifier emits a best-effort mail indicator. Failures must not roll back mail writes.
 type RedDotNotifier interface {
-	SetMailRedDot(ctx context.Context, playerID uint64, notificationID string) error
+	SetMailRedDot(ctx context.Context, playerID uint64, notificationID string, count uint32) error
+}
+
+type MailboxQuickCache interface {
+	ApplyMailEvent(context.Context, uint64, string, int64) (bool, uint32, error)
+	SetMailbox(context.Context, uint64, uint32, int64, int64) error
+	GetMailbox(context.Context, uint64) (bool, uint32, bool, error)
+	AdvancePublicWatermark(context.Context, int64) error
 }
 
 // Service implements MailService and admin create helpers.
@@ -30,7 +37,10 @@ type Service struct {
 	orchestrator *ClaimOrchestrator
 	now          func() time.Time
 	logger       *slog.Logger
+	quickCache   MailboxQuickCache
 }
+
+func (s *Service) SetMailboxQuickCache(cache MailboxQuickCache) { s.quickCache = cache }
 
 func NewService(store Store, notifier RedDotNotifier, now func() time.Time, logger *slog.Logger) (*Service, error) {
 	return NewServiceWithOrchestrator(store, notifier, nil, now, logger)
@@ -72,7 +82,50 @@ func (s *Service) ClaimMail(
 			Error: &wsv1.Error{Code: wsv1.ErrorCode_SERVICE_UNAVAILABLE, Retryable: true},
 		}, nil
 	}
-	return s.orchestrator.ClaimMail(ctx, request)
+	response, err := s.orchestrator.ClaimMailDirect(ctx, request)
+	if err == nil && response.GetError() == nil {
+		playerID := request.GetPlayerId()
+		mailID := request.GetMailId()
+		registeredAt := request.GetRegisteredAtMs()
+		go s.finishDirectClaim(playerID, mailID, registeredAt)
+	}
+	return response, err
+}
+
+func (s *Service) finishDirectClaim(playerID uint64, mailID string, registeredAt int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := s.orchestrator.markMailClaimed(ctx, playerID, mailID, s.now().UnixMilli()); err != nil {
+		s.logger.Error("async direct mail claim state write failed",
+			"player_id", playerID, "mail_id", mailID, "error", err)
+		return
+	}
+	s.refreshUnreadQuickCache(ctx, playerID, registeredAt, "direct claim")
+}
+
+func (s *Service) refreshUnreadQuickCache(
+	ctx context.Context, playerID uint64, registeredAtHint int64, reason string,
+) {
+	if s.quickCache == nil || playerID == 0 {
+		return
+	}
+	registeredAt, err := s.resolveRegisteredAt(ctx, playerID, registeredAtHint)
+	if err != nil {
+		s.logger.Warn("resolve registration for mailbox unread refresh failed",
+			"player_id", playerID, "reason", reason, "error", err)
+		return
+	}
+	count, err := s.countUnreadVisibleMails(ctx, playerID, registeredAt)
+	if err != nil {
+		s.logger.Warn("count mailbox unread refresh failed",
+			"player_id", playerID, "reason", reason, "error", err)
+		return
+	}
+	calculatedAt := s.now().UTC().UnixMilli()
+	if err := s.quickCache.SetMailbox(ctx, playerID, count, calculatedAt, calculatedAt); err != nil {
+		s.logger.Warn("set mailbox unread refresh failed",
+			"player_id", playerID, "reason", reason, "error", err)
+	}
 }
 
 func (s *Service) OpenMailbox(
@@ -102,6 +155,8 @@ func (s *Service) OpenMailbox(
 	if err != nil {
 		return nil, err
 	}
+	publicUnreadMailIDs := s.collectUnreadPublicMailIDs(views)
+	markPublicViewsRead(views)
 	page := make([]*mailv1.MailView, 0, pageSize)
 	var nextToken string
 	for _, view := range views {
@@ -117,8 +172,11 @@ func (s *Service) OpenMailbox(
 	}
 
 	openedAt := s.now().UnixMilli()
-	if err := s.saveCursor(ctx, playerID, openedAt); err != nil {
-		return nil, err
+	if s.quickCache != nil {
+		_ = s.quickCache.SetMailbox(ctx, playerID, countUnreadMailViews(views), openedAt, openedAt)
+	}
+	if len(publicUnreadMailIDs) > 0 {
+		s.schedulePublicMailReadBackfill(playerID, publicUnreadMailIDs)
 	}
 	return &mailv1.OpenMailboxResponse{
 		Mails:                 page,
@@ -149,6 +207,22 @@ func (s *Service) MarkMailRead(
 	if err := s.markRead(ctx, playerID, mailID); err != nil {
 		return nil, err
 	}
+	// Reading one mail changes the absolute unread projection. Recalculate from
+	// the authoritative read states so duplicate MARK_MAIL_READ requests cannot
+	// decrement the cache twice.
+	if s.quickCache != nil {
+		views, listErr := s.listVisibleMails(ctx, playerID, registeredAt)
+		if listErr != nil {
+			return nil, listErr
+		}
+		calculatedAt := s.now().UTC().UnixMilli()
+		if cacheErr := s.quickCache.SetMailbox(
+			ctx, playerID, countUnreadMailViews(views), calculatedAt, calculatedAt,
+		); cacheErr != nil {
+			s.logger.Warn("refresh mailbox unread count after mark read failed",
+				"player_id", playerID, "mail_id", mailID, "error", cacheErr)
+		}
+	}
 	return &mailv1.MarkMailReadResponse{}, nil
 }
 
@@ -159,31 +233,81 @@ func (s *Service) CheckMailboxIndicator(
 	if playerID == 0 {
 		return &mailv1.CheckMailboxIndicatorResponse{Error: invalidArg()}, nil
 	}
+	// Login is the repair boundary. InfoSvr is an acceleration projection and
+	// may still contain a legacy "since mailbox open" zero, so never let that
+	// cache suppress authoritative unread PlayerMailState records here.
 	registeredAt, err := s.resolveRegisteredAt(ctx, playerID, request.GetRegisteredAtMs())
 	if err != nil {
 		return nil, err
 	}
-	cursorMS := int64(0)
-	cursor, _, err := s.store.GetCursor(ctx, playerID)
-	if err == nil {
-		cursorMS = cursor.GetLastMailboxOpenedAtMs()
-	} else if !errors.Is(err, ErrNotFound) {
+	count, err := s.countUnreadVisibleMails(ctx, playerID, registeredAt)
+	if err != nil {
+		s.logger.Error("mailbox indicator authoritative count failed",
+			"player_id", playerID, "error", err)
 		return nil, err
 	}
+	calculatedAt := s.now().UTC().UnixMilli()
+	if s.quickCache != nil {
+		if cacheErr := s.quickCache.SetMailbox(ctx, playerID, count, calculatedAt, calculatedAt); cacheErr != nil {
+			s.logger.Warn("mailbox indicator quick cache repair failed",
+				"player_id", playerID, "unread_count", count, "error", cacheErr)
+		}
+	}
+	s.logger.Info("mailbox indicator refreshed",
+		"player_id", playerID, "unread_count", count)
+	return &mailv1.CheckMailboxIndicatorResponse{HasNewMail: count > 0, NewMailCount: count}, nil
+}
+
+func (s *Service) countUnreadVisibleMails(ctx context.Context, playerID uint64, registeredAt int64) (uint32, error) {
 	views, err := s.listVisibleMails(ctx, playerID, registeredAt)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
+	return countUnreadMailViews(views), nil
+}
+
+func (s *Service) collectUnreadPublicMailIDs(views []*mailv1.MailView) []string {
+	ids := make([]string, 0)
 	for _, view := range views {
-		indicatorAt := view.CreatedAtMs
-		if view.Kind == mailv1.MailKind_MAIL_KIND_PUBLIC && view.PublishedAtMs > 0 {
-			indicatorAt = view.PublishedAtMs
+		if view == nil || view.GetKind() != mailv1.MailKind_MAIL_KIND_PUBLIC || view.GetRead() {
+			continue
 		}
-		if indicatorAt > cursorMS {
-			return &mailv1.CheckMailboxIndicatorResponse{HasNewMail: true}, nil
+		ids = append(ids, view.GetMailId())
+	}
+	return ids
+}
+
+func markPublicViewsRead(views []*mailv1.MailView) {
+	for _, view := range views {
+		if view == nil || view.GetKind() != mailv1.MailKind_MAIL_KIND_PUBLIC || view.GetRead() {
+			continue
+		}
+		view.Read = true
+	}
+}
+
+func (s *Service) schedulePublicMailReadBackfill(playerID uint64, mailIDs []string) {
+	ids := append([]string(nil), mailIDs...)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		for _, mailID := range ids {
+			if err := s.markRead(ctx, playerID, mailID); err != nil {
+				s.logger.Warn("backfill public mail read failed", "player_id", playerID, "mail_id", mailID, "error", err)
+				return
+			}
+		}
+	}()
+}
+
+func countUnreadMailViews(views []*mailv1.MailView) uint32 {
+	var count uint32
+	for _, view := range views {
+		if view != nil && !view.GetRead() {
+			count++
 		}
 	}
-	return &mailv1.CheckMailboxIndicatorResponse{HasNewMail: false}, nil
+	return count
 }
 
 func (s *Service) CreateGiftMail(
@@ -256,7 +380,8 @@ func (s *Service) CreateGiftMail(
 		}
 		return nil, err
 	}
-	s.notifyMailRedDot(ctx, request.GetRecipientPlayerId(), mailID)
+	count := s.mailCountAfterPrivateInsert(ctx, request.GetRecipientPlayerId(), mailID, record.GetCreatedAtMs())
+	s.notifyMailRedDot(ctx, request.GetRecipientPlayerId(), mailID, count)
 	return &mailv1.CreateGiftMailResponse{MailId: mailID}, nil
 }
 
@@ -375,6 +500,9 @@ func (s *Service) CreatePublicMail(ctx context.Context, in CreatePublicMailInput
 	if err := s.store.InsertPublicMail(ctx, record); err != nil {
 		return "", err
 	}
+	if s.quickCache != nil {
+		_ = s.quickCache.AdvancePublicWatermark(ctx, published)
+	}
 	return mailID, nil
 }
 
@@ -421,15 +549,48 @@ func (s *Service) CreatePrivateMail(ctx context.Context, in CreatePrivateMailInp
 	if err := s.store.InsertPrivateMail(ctx, record); err != nil {
 		return "", err
 	}
-	s.notifyMailRedDot(ctx, in.RecipientPlayerID, mailID)
+	count := s.mailCountAfterPrivateInsert(ctx, in.RecipientPlayerID, mailID, nowMS)
+	s.notifyMailRedDot(ctx, in.RecipientPlayerID, mailID, count)
 	return mailID, nil
 }
 
-func (s *Service) notifyMailRedDot(ctx context.Context, playerID uint64, mailID string) {
+func (s *Service) mailCountAfterPrivateInsert(ctx context.Context, playerID uint64, mailID string, createdAtMS int64) uint32 {
+	if s.quickCache != nil {
+		known, cachedCount, err := s.quickCache.ApplyMailEvent(ctx, playerID, mailID, createdAtMS)
+		if err != nil {
+			s.logger.Warn("apply mailbox quick event failed", "player_id", playerID, "mail_id", mailID, "error", err)
+		}
+		if known {
+			return cachedCount
+		}
+	}
+
+	// InfoSvr is an acceleration cache, never the authority. A cold or failed
+	// cache lookup must still produce an absolute count for the push; sending
+	// zero here makes the H5 interpret a newly-created mail as a clear event.
+	registeredAt, err := s.resolveRegisteredAt(ctx, playerID, 0)
+	if err != nil {
+		s.logger.Warn("resolve mailbox registration time failed", "player_id", playerID, "mail_id", mailID, "error", err)
+		return 0
+	}
+	count, err := s.countUnreadVisibleMails(ctx, playerID, registeredAt)
+	if err != nil {
+		s.logger.Warn("count new mailbox items failed", "player_id", playerID, "mail_id", mailID, "error", err)
+		return 0
+	}
+	if s.quickCache != nil {
+		if err := s.quickCache.SetMailbox(ctx, playerID, count, createdAtMS, createdAtMS); err != nil {
+			s.logger.Warn("repair mailbox quick count failed", "player_id", playerID, "mail_id", mailID, "error", err)
+		}
+	}
+	return count
+}
+
+func (s *Service) notifyMailRedDot(ctx context.Context, playerID uint64, mailID string, count uint32) {
 	if s.notifier == nil {
 		return
 	}
-	if err := s.notifier.SetMailRedDot(ctx, playerID, mailID); err != nil {
+	if err := s.notifier.SetMailRedDot(ctx, playerID, mailID, count); err != nil {
 		s.logger.Warn("mail red-dot notify failed",
 			"player_id", playerID,
 			"mail_id", mailID,
@@ -463,23 +624,25 @@ func (s *Service) listVisibleMails(
 	if err != nil {
 		return nil, err
 	}
+	states, err := s.store.ListMailStates(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	stateByMailID := make(map[string]*tcaplusv1.PlayerMailState, len(states))
+	for _, state := range states {
+		if state != nil {
+			stateByMailID[state.GetMailId()] = state
+		}
+	}
 	views := make([]*mailv1.MailView, 0, len(publicMails)+len(privateMails))
 	for _, record := range publicMails {
 		if record.GetPublishedAtMs() <= registeredAtMS {
 			continue
 		}
-		view, err := s.toPublicView(ctx, playerID, record)
-		if err != nil {
-			return nil, err
-		}
-		views = append(views, view)
+		views = append(views, toPublicView(record, stateByMailID[record.GetMailId()]))
 	}
 	for _, record := range privateMails {
-		view, err := s.toPrivateView(ctx, playerID, record)
-		if err != nil {
-			return nil, err
-		}
-		views = append(views, view)
+		views = append(views, toPrivateView(record, stateByMailID[record.GetMailId()]))
 	}
 	sortMailViews(views)
 	return views, nil
@@ -501,13 +664,7 @@ func (s *Service) mailVisibleToPlayer(
 	return false, nil
 }
 
-func (s *Service) toPublicView(
-	ctx context.Context, playerID uint64, record *tcaplusv1.PublicMail,
-) (*mailv1.MailView, error) {
-	read, claimed, err := s.readState(ctx, playerID, record.GetMailId())
-	if err != nil {
-		return nil, err
-	}
+func toPublicView(record *tcaplusv1.PublicMail, state *tcaplusv1.PlayerMailState) *mailv1.MailView {
 	return &mailv1.MailView{
 		MailId:            record.GetMailId(),
 		Kind:              mailv1.MailKind_MAIL_KIND_PUBLIC,
@@ -518,19 +675,13 @@ func (s *Service) toPublicView(
 		Title:             record.GetTitle(),
 		Content:           record.GetContent(),
 		Attachments:       toAttachmentViews(record.GetAttachments()),
-		Read:              read,
-		Claimed:           claimed,
+		Read:              state.GetRead(),
+		Claimed:           state.GetClaimed(),
 		CoinAmount:        record.GetCoinAmount(),
-	}, nil
+	}
 }
 
-func (s *Service) toPrivateView(
-	ctx context.Context, playerID uint64, record *tcaplusv1.PrivateMail,
-) (*mailv1.MailView, error) {
-	read, claimed, err := s.readState(ctx, playerID, record.GetMailId())
-	if err != nil {
-		return nil, err
-	}
+func toPrivateView(record *tcaplusv1.PrivateMail, state *tcaplusv1.PlayerMailState) *mailv1.MailView {
 	kind := mailv1.MailKind_MAIL_KIND_PRIVATE
 	if record.GetMailType() == tcaplusv1.MailType_MAIL_TYPE_GIFT {
 		kind = mailv1.MailKind_MAIL_KIND_GIFT
@@ -546,21 +697,10 @@ func (s *Service) toPrivateView(
 		Title:             record.GetTitle(),
 		Content:           record.GetContent(),
 		Attachments:       toAttachmentViews(record.GetAttachments()),
-		Read:              read,
-		Claimed:           claimed,
+		Read:              state.GetRead(),
+		Claimed:           state.GetClaimed(),
 		CoinAmount:        record.GetCoinAmount(),
-	}, nil
-}
-
-func (s *Service) readState(ctx context.Context, playerID uint64, mailID string) (bool, bool, error) {
-	state, _, err := s.store.GetMailState(ctx, playerID, mailID)
-	if errors.Is(err, ErrNotFound) {
-		return false, false, nil
 	}
-	if err != nil {
-		return false, false, err
-	}
-	return state.GetRead(), state.GetClaimed(), nil
 }
 
 func (s *Service) markRead(ctx context.Context, playerID uint64, mailID string) error {
@@ -585,37 +725,6 @@ func (s *Service) markRead(ctx context.Context, playerID uint64, mailID string) 
 		state.Read = true
 		state.UpdatedAtMs = nowMS
 		_, err = s.store.UpdateMailState(ctx, state, version)
-		if errors.Is(err, ErrConflict) {
-			continue
-		}
-		return err
-	}
-	return ErrConflict
-}
-
-func (s *Service) saveCursor(ctx context.Context, playerID uint64, openedAtMS int64) error {
-	for attempt := 0; attempt < 8; attempt++ {
-		cursor, version, err := s.store.GetCursor(ctx, playerID)
-		if errors.Is(err, ErrNotFound) {
-			_, err = s.store.InsertCursor(ctx, &tcaplusv1.PlayerMailboxCursor{
-				PlayerId:               playerID,
-				LastMailboxOpenedAtMs:  openedAtMS,
-				UpdatedAtMs:            openedAtMS,
-			})
-			if errors.Is(err, ErrAlreadyExists) {
-				continue
-			}
-			return err
-		}
-		if err != nil {
-			return err
-		}
-		if openedAtMS < cursor.GetLastMailboxOpenedAtMs() {
-			return nil
-		}
-		cursor.LastMailboxOpenedAtMs = openedAtMS
-		cursor.UpdatedAtMs = openedAtMS
-		_, err = s.store.UpdateCursor(ctx, cursor, version)
 		if errors.Is(err, ErrConflict) {
 			continue
 		}

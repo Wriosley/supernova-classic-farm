@@ -33,9 +33,11 @@ type ApplyMailRewardResult struct {
 	Patch        *wsv1.PlayerStatePatch
 }
 
-// ApplyMailReward idempotently grants mail attachments and optional coins,
-// keyed by (mail_id, claim_id). Inventory is checked all-or-nothing; success
-// requires a synchronous SaveCAS before returning.
+// ApplyMailReward idempotently grants mail attachments and optional coins in
+// Actor memory, keyed by (mail_id, claim_id). Inventory is checked
+// all-or-nothing and the resulting checkpoint is flushed by the ordinary Dirty
+// writer after the response. A Zone crash inside that accepted Dirty window may
+// lose the reward and receipt; this is the deliberately accepted fast path.
 func (r *Runtime) ApplyMailReward(
 	ctx context.Context,
 	playerID uint64,
@@ -62,14 +64,14 @@ func (r *Runtime) ApplyMailReward(
 		return empty, err
 	}
 	now := r.currentTime().UTC()
-	stepKey := syncStepKey(syncStepApplyMailReward, claimID)
 	var result ApplyMailRewardResult
 	var mailboxErr error
+	var dirtyRevision uint64
 	if err := a.mailbox.Do(ctx, func() {
 		beforeRevision := a.state.CheckpointRevision
 		result, mailboxErr = applyMailReward(a.state, claimID, mailID, attachments, coinAmount, now)
 		if mailboxErr == nil && a.state.CheckpointRevision != beforeRevision {
-			a.markSyncPending(stepKey, pendingSyncStep{revision: a.state.CheckpointRevision})
+			dirtyRevision = a.state.CheckpointRevision
 		}
 	}); err != nil {
 		return empty, fmt.Errorf("execute mail reward mailbox: %w", err)
@@ -77,9 +79,10 @@ func (r *Runtime) ApplyMailReward(
 	if mailboxErr != nil {
 		return empty, mailboxErr
 	}
-	if _, err := r.settleSyncStepLocked(ctx, playerID, a, stepKey); err != nil {
-		return empty, fmt.Errorf("flush mail reward: %w", err)
+	if dirtyRevision > 0 {
+		r.markDirty(playerID, dirtyRevision)
 	}
+	r.refreshActorDeadline(playerID, a)
 	return result, nil
 }
 

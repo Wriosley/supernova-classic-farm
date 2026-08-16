@@ -17,6 +17,7 @@ type tcaplusClient interface {
 	DoGet(proto.Message, *option.PBOpt, ...uint32) error
 	DoInsert(proto.Message, *option.PBOpt, ...uint32) error
 	DoUpdate(proto.Message, *option.PBOpt, ...uint32) error
+	DoGetByPartKey(proto.Message, []string, *option.PBOpt, ...uint32) ([]proto.Message, error)
 	Traverse(proto.Message) ([]proto.Message, error)
 }
 
@@ -103,21 +104,46 @@ func (s *TcaplusStore) InsertPrivateMail(ctx context.Context, record *tcaplusv1.
 }
 
 func (s *TcaplusStore) ListPrivateMails(ctx context.Context, recipientPlayerID uint64) ([]*tcaplusv1.PrivateMail, error) {
-	_ = ctx
+	rows, err := s.client.DoGetByPartKey(
+		&tcaplusv1.PrivateMail{RecipientPlayerId: recipientPlayerID},
+		[]string{"recipient_player_id"},
+		&option.PBOpt{Ctx: ctx},
+		s.zoneID,
+	)
+	if err != nil {
+		if tcaplusdb.IsNotFound(err) {
+			return nil, nil
+		}
+		if tcaplusdb.IsIndexNotFound(err) {
+			return s.listPrivateMailsByTraverse(recipientPlayerID)
+		}
+		return nil, fmt.Errorf("get PrivateMail by recipient_player_id: %w", err)
+	}
+	out := make([]*tcaplusv1.PrivateMail, 0)
+	for _, row := range rows {
+		record, ok := row.(*tcaplusv1.PrivateMail)
+		if !ok || record == nil {
+			continue
+		}
+		out = append(out, record)
+	}
+	return out, nil
+}
+
+func (s *TcaplusStore) listPrivateMailsByTraverse(recipientPlayerID uint64) ([]*tcaplusv1.PrivateMail, error) {
 	rows, err := s.client.Traverse(&tcaplusv1.PrivateMail{})
 	if err != nil {
 		if tcaplusdb.IsNotFound(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("traverse PrivateMail: %w", err)
+		return nil, fmt.Errorf("traverse PrivateMail after missing recipient index: %w", err)
 	}
 	out := make([]*tcaplusv1.PrivateMail, 0)
 	for _, row := range rows {
 		record, ok := row.(*tcaplusv1.PrivateMail)
-		if !ok || record == nil || record.RecipientPlayerId != recipientPlayerID {
-			continue
+		if ok && record != nil && record.GetRecipientPlayerId() == recipientPlayerID {
+			out = append(out, record)
 		}
-		out = append(out, record)
 	}
 	return out, nil
 }
@@ -181,6 +207,50 @@ func (s *TcaplusStore) GetMailState(
 		return nil, 0, fmt.Errorf("get PlayerMailState: %w", err)
 	}
 	return record, opt.Version, nil
+}
+
+func (s *TcaplusStore) ListMailStates(ctx context.Context, playerID uint64) ([]*tcaplusv1.PlayerMailState, error) {
+	rows, err := s.client.DoGetByPartKey(
+		&tcaplusv1.PlayerMailState{PlayerId: playerID},
+		[]string{"player_id"},
+		&option.PBOpt{Ctx: ctx},
+		s.zoneID,
+	)
+	if err != nil {
+		if tcaplusdb.IsNotFound(err) {
+			return nil, nil
+		}
+		if tcaplusdb.IsIndexNotFound(err) {
+			return s.listMailStatesByTraverse(playerID)
+		}
+		return nil, fmt.Errorf("get PlayerMailState by player_id: %w", err)
+	}
+	out := make([]*tcaplusv1.PlayerMailState, 0, len(rows))
+	for _, row := range rows {
+		record, ok := row.(*tcaplusv1.PlayerMailState)
+		if ok && record != nil {
+			out = append(out, record)
+		}
+	}
+	return out, nil
+}
+
+func (s *TcaplusStore) listMailStatesByTraverse(playerID uint64) ([]*tcaplusv1.PlayerMailState, error) {
+	rows, err := s.client.Traverse(&tcaplusv1.PlayerMailState{})
+	if err != nil {
+		if tcaplusdb.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("traverse PlayerMailState after missing player index: %w", err)
+	}
+	out := make([]*tcaplusv1.PlayerMailState, 0)
+	for _, row := range rows {
+		record, ok := row.(*tcaplusv1.PlayerMailState)
+		if ok && record != nil && record.GetPlayerId() == playerID {
+			out = append(out, record)
+		}
+	}
+	return out, nil
 }
 
 func (s *TcaplusStore) InsertMailState(ctx context.Context, record *tcaplusv1.PlayerMailState) (int32, error) {

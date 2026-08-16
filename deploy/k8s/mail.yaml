@@ -27,6 +27,10 @@ spec:
             - secretRef:
                 name: classic-farm-tcaplus
           env:
+            - name: MAIL_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: MAIL_PORT
               value: ""
             - name: HTTP_ADDRESS

@@ -134,8 +134,8 @@ func TestActivePetGuardDeductsRandomCoinsOnVisitorSideEffect(t *testing.T) {
 	if response.GetVisitorPatch().GetCoinBalance() != 8 {
 		t.Fatalf("visitor coins = %d", response.GetVisitorPatch().GetCoinBalance())
 	}
-	if ownerStore.saved[len(ownerStore.saved)-1].CoinBalance != InitialCoinBalance {
-		t.Fatalf("owner coins changed")
+	if len(ownerStore.saved) != 0 {
+		t.Fatalf("owner steal must remain dirty instead of synchronously persisting")
 	}
 }
 
@@ -227,7 +227,8 @@ func TestCatchAndCleanCreditOneCoin(t *testing.T) {
 		state.CreatedAtMS = now.Add(-time.Minute).UnixMilli()
 		state.UpdatedAtMS = now.Add(-time.Minute).UnixMilli()
 		runtime := NewRuntime()
-		runtime.store = &recordingCheckpointStore{state: state}
+		store := &recordingCheckpointStore{state: state}
+		runtime.store = store
 		runtime.SetNow(func() time.Time { return now })
 		defer runtime.Close()
 
@@ -240,6 +241,15 @@ func TestCatchAndCleanCreditOneCoin(t *testing.T) {
 		}
 		if response.GetVisitorPatch().GetCoinBalance() != 6 {
 			t.Fatalf("action %v coins = %d", action, response.GetVisitorPatch().GetCoinBalance())
+		}
+		if len(store.saved) != 0 {
+			t.Fatalf("visitor action %v synchronously persisted", action)
+		}
+		if err := runtime.flushDirty(context.Background()); err != nil {
+			t.Fatalf("flush visitor action %v: %v", action, err)
+		}
+		if got := store.saved[len(store.saved)-1].CoinBalance; got != 6 {
+			t.Fatalf("persisted action %v coins = %d", action, got)
 		}
 	}
 }

@@ -38,6 +38,7 @@ type Service struct {
 	routes  gateway.RouteResolver
 	zones   ZoneDispatcher
 	friends FriendLister
+	quick   *QuickStore
 	logger  *slog.Logger
 }
 
@@ -53,7 +54,82 @@ func NewService(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{routes: routes, zones: zones, friends: friends, logger: logger}, nil
+	return &Service{routes: routes, zones: zones, friends: friends, quick: NewQuickStore(nil), logger: logger}, nil
+}
+
+func (s *Service) UpdatePresenceLease(ctx context.Context, request *infov1.UpdatePresenceLeaseRequest) (*infov1.UpdatePresenceLeaseResponse, error) {
+	_ = ctx
+	return &infov1.UpdatePresenceLeaseResponse{Applied: s.quick.UpdatePresence(request.GetUpdate())}, nil
+}
+
+func (s *Service) BatchRenewPresenceLeases(ctx context.Context, request *infov1.BatchRenewPresenceLeasesRequest) (*infov1.BatchRenewPresenceLeasesResponse, error) {
+	_ = ctx
+	if len(request.GetUpdates()) > maxRecipientsPerRequest {
+		return nil, errors.New("presence batch exceeds limit")
+	}
+	var applied uint32
+	for _, update := range request.GetUpdates() {
+		if s.quick.UpdatePresence(update) {
+			applied++
+		}
+	}
+	return &infov1.BatchRenewPresenceLeasesResponse{AppliedCount: applied}, nil
+}
+
+func (s *Service) UpdateFarmQuickInfo(ctx context.Context, request *infov1.UpdateFarmQuickInfoRequest) (*infov1.UpdateFarmQuickInfoResponse, error) {
+	_ = ctx
+	return &infov1.UpdateFarmQuickInfoResponse{Applied: s.quick.UpdateFarm(request.GetUpdate())}, nil
+}
+
+func (s *Service) BatchGetPlayerQuickInfo(ctx context.Context, request *infov1.BatchGetPlayerQuickInfoRequest) (*infov1.BatchGetPlayerQuickInfoResponse, error) {
+	_ = ctx
+	if len(request.GetPlayerIds()) > maxRecipientsPerRequest {
+		return nil, errors.New("player quick-info batch exceeds limit")
+	}
+	return &infov1.BatchGetPlayerQuickInfoResponse{Players: s.quick.BatchGetForViewer(request.GetPlayerIds(), request.GetViewerPlayerId())}, nil
+}
+
+func (s *Service) RecordOfflineFarmVisit(_ context.Context, request *infov1.RecordOfflineFarmVisitRequest) (*infov1.RecordOfflineFarmVisitResponse, error) {
+	if request.GetVisitorPlayerId() == 0 || request.GetOwnerPlayerId() == 0 || request.GetVisitorPlayerId() == request.GetOwnerPlayerId() {
+		return nil, errors.New("invalid offline farm visit")
+	}
+	recorded, revision := s.quick.RecordOfflineFarmVisit(request.GetVisitorPlayerId(), request.GetOwnerPlayerId())
+	return &infov1.RecordOfflineFarmVisitResponse{RecordedForOfflineOwner: recorded, SeenCheckpointRevision: revision}, nil
+}
+
+func (s *Service) GetOfflineVisitors(_ context.Context, request *infov1.GetOfflineVisitorsRequest) (*infov1.GetOfflineVisitorsResponse, error) {
+	if request.GetOwnerPlayerId() == 0 {
+		return nil, errors.New("invalid offline visitor owner")
+	}
+	ids, version, truncated := s.quick.OfflineVisitors(request.GetOwnerPlayerId())
+	return &infov1.GetOfflineVisitorsResponse{VisitorPlayerIds: ids, VisitorVersion: version, Truncated: truncated}, nil
+}
+
+func (s *Service) AckOfflineVisitors(_ context.Context, request *infov1.AckOfflineVisitorsRequest) (*infov1.AckOfflineVisitorsResponse, error) {
+	return &infov1.AckOfflineVisitorsResponse{Applied: s.quick.AckOfflineVisitors(request.GetOwnerPlayerId(), request.GetVisitorVersion())}, nil
+}
+
+func (s *Service) ApplyPrivateMailEvent(ctx context.Context, request *infov1.ApplyPrivateMailEventRequest) (*infov1.ApplyPrivateMailEventResponse, error) {
+	_ = ctx
+	known, count, applied := s.quick.ApplyMailEvent(request.GetPlayerId(), strings.TrimSpace(request.GetMailId()), request.GetCreatedAtMs())
+	return &infov1.ApplyPrivateMailEventResponse{Known: known, NewMailCount: count, Applied: applied}, nil
+}
+
+func (s *Service) SetMailboxQuickInfo(ctx context.Context, request *infov1.SetMailboxQuickInfoRequest) (*infov1.SetMailboxQuickInfoResponse, error) {
+	_ = ctx
+	applied := s.quick.SetMailbox(request.GetPlayerId(), request.GetNewMailCount(), request.GetCursorMs(), request.GetCalculatedAtMs())
+	return &infov1.SetMailboxQuickInfoResponse{Applied: applied}, nil
+}
+
+func (s *Service) AdvancePublicMailWatermark(ctx context.Context, request *infov1.AdvancePublicMailWatermarkRequest) (*infov1.AdvancePublicMailWatermarkResponse, error) {
+	_ = ctx
+	return &infov1.AdvancePublicMailWatermarkResponse{Applied: s.quick.AdvancePublicWatermark(request.GetPublishedAtMs())}, nil
+}
+
+func (s *Service) GetMailboxQuickInfo(ctx context.Context, request *infov1.GetMailboxQuickInfoRequest) (*infov1.GetMailboxQuickInfoResponse, error) {
+	_ = ctx
+	known, count, cursor, refresh := s.quick.Mailbox(request.GetPlayerId())
+	return &infov1.GetMailboxQuickInfoResponse{Known: known, NewMailCount: count, CursorMs: cursor, PublicRefreshRequired: refresh}, nil
 }
 
 func (s *Service) SetMailRedDot(

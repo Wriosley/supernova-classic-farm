@@ -208,9 +208,8 @@ func (r *Runtime) ApplyStealOnOwner(
 		return nil, nil, nil, false, err
 	}
 	now := r.currentTime().UTC()
-	stepKey := syncStepKey(syncStepApplyStealOnOwner, interactionID)
-
 	var mutated bool
+	var dirtyRevision uint64
 	var stealErr error
 	if execErr := a.mailbox.Do(ctx, func() {
 		if existing := findFriendReceipt(
@@ -261,10 +260,7 @@ func (r *Runtime) ApplyStealOnOwner(
 		a.state.CheckpointRevision++
 		a.state.UpdatedAtMS = now.UnixMilli()
 		mutated = true
-		a.markSyncPending(stepKey, pendingSyncStep{
-			revision:      a.state.CheckpointRevision,
-			domainChanges: DomainChanges{}.PlotChanged(plotID),
-		})
+		dirtyRevision = a.state.CheckpointRevision
 		resultPayload = body
 		resultDigest = digest[:]
 	}); execErr != nil {
@@ -276,12 +272,9 @@ func (r *Runtime) ApplyStealOnOwner(
 	if !alreadyApplied && !mutated {
 		return nil, nil, nil, false, errors.New("apply steal did not mutate owner state")
 	}
-	owedChanges, err := r.settleSyncStepLocked(ctx, ownerID, a, stepKey)
-	if err != nil {
-		return nil, nil, nil, false, fmt.Errorf("flush steal apply: %w", err)
-	}
-	if !owedChanges.Empty() {
-		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, owedChanges)
+	if mutated {
+		r.markDirty(ownerID, dirtyRevision)
+		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, DomainChanges{}.PlotChanged(plotID))
 	}
 	r.refreshActorDeadline(ownerID, a)
 	return resultPayload, resultDigest, farmPatch, alreadyApplied, nil

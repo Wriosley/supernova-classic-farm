@@ -9,6 +9,10 @@ depends_on:
 
 # 邮件领取 Saga Implementation Plan
 
+> 历史计划：2026-08-15 起，在线领取主链路已由
+> `docs/decisions/ADR-0013-low-latency-direct-mail-claim.md` 取代。Saga 表、恢复器
+> 和本文保留用于理解及处理旧版本遗留记录，不再描述当前在线返回边界。
+
 > **For agentic workers:** 附件领取跨 MailSvr 和 Recipient Player Actor。必须测试三个崩溃窗口，禁止用两个无幂等 RPC 拼接。
 
 **Goal:** 玩家手动领取邮件附件；仓库和邮件状态最终一致，重试不丢奖励、不重复发奖。

@@ -2,19 +2,14 @@ package mail
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
@@ -26,8 +21,7 @@ import (
 
 // ZoneClient resolves the recipient Owner Zone and calls ApplyMailReward.
 type ZoneClient struct {
-	httpClient     *http.Client
-	coordinatorURL string
+	routes gateway.RouteResolver
 
 	mu       sync.Mutex
 	conns    map[string]*grpc.ClientConn
@@ -35,9 +29,9 @@ type ZoneClient struct {
 	dialOpts []grpc.DialOption
 }
 
-func NewZoneClient(key []byte, coordinatorURL string, httpClient *http.Client) (*ZoneClient, error) {
-	if strings.TrimSpace(coordinatorURL) == "" {
-		return nil, errors.New("coordinator url is required")
+func NewZoneClient(key []byte, routes gateway.RouteResolver) (*ZoneClient, error) {
+	if routes == nil {
+		return nil, errors.New("route resolver is required")
 	}
 	interceptor, err := rpcauth.NewClientUnaryInterceptor(rpcauth.ClientConfig{
 		Service: "mail", Key: key,
@@ -45,12 +39,9 @@ func NewZoneClient(key []byte, coordinatorURL string, httpClient *http.Client) (
 	if err != nil {
 		return nil, err
 	}
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 5 * time.Second}
-	}
 	return &ZoneClient{
-		httpClient: httpClient, coordinatorURL: strings.TrimRight(coordinatorURL, "/"),
-		conns: make(map[string]*grpc.ClientConn), clients: make(map[string]rpcv1.PlayerSocialServiceClient),
+		routes: routes,
+		conns:  make(map[string]*grpc.ClientConn), clients: make(map[string]rpcv1.PlayerSocialServiceClient),
 		dialOpts: []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithUnaryInterceptor(interceptor),
@@ -76,6 +67,9 @@ func (c *ZoneClient) ApplyMailReward(
 	}
 	response, err := c.applyOnce(ctx, route, playerID, claimID, mailID, attachments, coinAmount)
 	if status.Code(err) == codes.FailedPrecondition {
+		if invalidator, ok := c.routes.(gateway.RouteInvalidator); ok {
+			invalidator.InvalidateIfVersion(route.ShardID, route.RouteVersion)
+		}
 		route, err = c.resolveRoute(ctx, routing.ShardForPlayer(playerID))
 		if err != nil {
 			return nil, err
@@ -87,14 +81,14 @@ func (c *ZoneClient) ApplyMailReward(
 
 func (c *ZoneClient) applyOnce(
 	ctx context.Context,
-	route mailTargetRoute,
+	route gateway.Route,
 	playerID uint64,
 	claimID []byte,
 	mailID string,
 	attachments []*tcaplusv1.MailClaimAttachment,
 	coinAmount int64,
 ) (*rpcv1.ApplyMailRewardResponse, error) {
-	client, err := c.client(route.ownerEndpoint)
+	client, err := c.client(route.OwnerEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -111,8 +105,8 @@ func (c *ZoneClient) applyOnce(
 	}
 	return client.ApplyMailReward(ctx, &rpcv1.ApplyMailRewardRequest{
 		PlayerRoute: &rpcv1.CommittedRoute{
-			LogicalShardId: route.shardID, OwnerZoneId: route.ownerZoneID,
-			OwnerEpoch: route.ownerEpoch, RouteVersion: route.routeVersion,
+			LogicalShardId: route.ShardID, OwnerZoneId: route.OwnerZoneID,
+			OwnerEpoch: route.OwnerEpoch, RouteVersion: route.RouteVersion,
 		},
 		PlayerId: playerID, ClaimId: claimID, MailId: mailID,
 		Attachments: reqAttachments, CoinAmount: coinAmount,
@@ -153,57 +147,6 @@ func (c *ZoneClient) client(endpoint string) (rpcv1.PlayerSocialServiceClient, e
 	return client, nil
 }
 
-type mailTargetRoute struct {
-	shardID       uint32
-	ownerZoneID   string
-	ownerEndpoint string
-	ownerEpoch    uint64
-	routeVersion  uint64
-}
-
-func (c *ZoneClient) resolveRoute(ctx context.Context, shardID uint32) (mailTargetRoute, error) {
-	request, err := http.NewRequestWithContext(
-		ctx, http.MethodGet,
-		c.coordinatorURL+"/internal/v1/routes/"+strconv.FormatUint(uint64(shardID), 10),
-		nil,
-	)
-	if err != nil {
-		return mailTargetRoute{}, err
-	}
-	response, err := c.httpClient.Do(request)
-	if err != nil {
-		return mailTargetRoute{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return mailTargetRoute{}, fmt.Errorf("route lookup returned %s", response.Status)
-	}
-	var result struct {
-		ShardID       uint32 `json:"shard_id"`
-		OwnerZoneID   string `json:"owner_zone_id"`
-		OwnerEndpoint string `json:"owner_endpoint"`
-		OwnerEpoch    string `json:"owner_epoch"`
-		RouteVersion  string `json:"route_version"`
-		State         string `json:"state"`
-		Routable      bool   `json:"routable"`
-	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 16<<10))
-	if err := decoder.Decode(&result); err != nil {
-		return mailTargetRoute{}, fmt.Errorf("decode route response: %w", err)
-	}
-	epoch, epochErr := strconv.ParseUint(result.OwnerEpoch, 10, 64)
-	routeVersion, routeErr := strconv.ParseUint(result.RouteVersion, 10, 64)
-	if epochErr != nil || routeErr != nil || epoch == 0 || routeVersion == 0 ||
-		result.ShardID != shardID || result.State != string(routing.RouteStateActive) ||
-		!result.Routable || result.OwnerZoneID == "" || result.OwnerEndpoint == "" {
-		return mailTargetRoute{}, errors.New("route is not a routable ACTIVE owner")
-	}
-	if err := internalnet.ValidateHTTPURL(result.OwnerEndpoint); err != nil {
-		return mailTargetRoute{}, fmt.Errorf("invalid owner endpoint: %w", err)
-	}
-	return mailTargetRoute{
-		shardID: result.ShardID, ownerZoneID: result.OwnerZoneID,
-		ownerEndpoint: result.OwnerEndpoint, ownerEpoch: epoch, routeVersion: routeVersion,
-	}, nil
+func (c *ZoneClient) resolveRoute(ctx context.Context, shardID uint32) (gateway.Route, error) {
+	return c.routes.Resolve(ctx, shardID)
 }

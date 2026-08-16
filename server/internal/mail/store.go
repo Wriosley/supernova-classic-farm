@@ -14,12 +14,12 @@ var (
 )
 
 const (
-	DefaultPageSize = 20
-	MaxPageSize     = 50
-	MaxAttachments  = 8
+	DefaultPageSize  = 20
+	MaxPageSize      = 50
+	MaxAttachments   = 8
 	MaxAttachmentQty = 999
-	MaxTitleRunes   = 64
-	MaxContentRunes = 2000
+	MaxTitleRunes    = 64
+	MaxContentRunes  = 2000
 )
 
 // Store is the durable dependency of MailSvr. Callers own CAS retries.
@@ -39,6 +39,7 @@ type Store interface {
 	UpdateCursor(ctx context.Context, record *tcaplusv1.PlayerMailboxCursor, expectedVersion int32) (int32, error)
 
 	GetMailState(ctx context.Context, playerID uint64, mailID string) (*tcaplusv1.PlayerMailState, int32, error)
+	ListMailStates(ctx context.Context, playerID uint64) ([]*tcaplusv1.PlayerMailState, error)
 	InsertMailState(ctx context.Context, record *tcaplusv1.PlayerMailState) (int32, error)
 	UpdateMailState(ctx context.Context, record *tcaplusv1.PlayerMailState, expectedVersion int32) (int32, error)
 

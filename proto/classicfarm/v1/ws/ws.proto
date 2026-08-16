@@ -55,7 +55,9 @@ enum Action {
   OPEN_MAILBOX = 326;
   MARK_MAIL_READ = 327;
   CHECK_MAILBOX_INDICATOR = 328;
-  reserved 329 to 999;
+  GET_OFFLINE_VISITORS = 329;
+  ACK_OFFLINE_VISITORS = 330;
+  reserved 331 to 999;
   PLAYER_STATE_CHANGED = 1000;
   reserved 1001 to 1099;
   FARM_VIEW_CHANGED = 1100;
@@ -199,8 +201,12 @@ message WsEnvelope {
     MarkMailReadResponse mark_mail_read_response = 77;
     CheckMailboxIndicatorRequest check_mailbox_indicator_request = 78;
     CheckMailboxIndicatorResponse check_mailbox_indicator_response = 79;
+    GetOfflineVisitorsRequest get_offline_visitors_request = 80;
+    GetOfflineVisitorsResponse get_offline_visitors_response = 81;
+    AckOfflineVisitorsRequest ack_offline_visitors_request = 82;
+    AckOfflineVisitorsResponse ack_offline_visitors_response = 83;
   }
-  reserved 80 to 99;
+  reserved 84 to 99;
 }
 
 message StateVersion {
@@ -492,6 +498,12 @@ message FriendView {
   uint64 player_id = 1;
   string account_name = 2;
   int64 created_at_ms = 3;
+  bool presence_known = 4;
+  bool online = 5;
+  int64 last_seen_at_ms = 6;
+  bool farm_summary_known = 7;
+  int64 earliest_mature_at_ms = 8;
+  bool may_have_stealable_crop = 9;
 }
 
 message FarmViewVersion {
@@ -573,6 +585,7 @@ message RedDotChangedPush {
   RedDotCategory category = 2;
   RedDotOperation operation = 3;
   optional uint64 source_player_id = 4;
+  uint32 count = 5;
 }
 
 message EnterFriendFarmRequest {
@@ -811,4 +824,14 @@ message CheckMailboxIndicatorRequest {}
 // the mail arrived, and public mail never pushes at all.
 message CheckMailboxIndicatorResponse {
   bool has_new_mail = 1;
+  uint32 new_mail_count = 2;
 }
+
+message GetOfflineVisitorsRequest {}
+message GetOfflineVisitorsResponse {
+  repeated FriendView visitors = 1;
+  uint64 visitor_version = 2;
+  bool truncated = 3;
+}
+message AckOfflineVisitorsRequest { uint64 visitor_version = 1; }
+message AckOfflineVisitorsResponse { bool applied = 1; }

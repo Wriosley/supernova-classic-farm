@@ -114,6 +114,8 @@ func authService(cfg Config) string {
 		return "info"
 	case coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE:
 		return rpcauth.ZoneService
+	case coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_MAIL:
+		return "mail"
 	default:
 		return cfg.SubscriberID
 	}

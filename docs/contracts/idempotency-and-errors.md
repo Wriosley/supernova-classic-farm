@@ -345,23 +345,21 @@ V3 does not claim durable exactly-once execution across an unflushed abnormal fa
 - atomic recovery of player state, retained result and pending Outbox;
 - an explicit bounded-loss window accepted by ADR-0006.
 
-Cross-player friend interactions are the exception to asynchronous Dirty
-acknowledgement. The visitor reservation is synchronously checkpointed before
-the owner mutation; the owner receipt is synchronously checkpointed with that
-mutation; and the visitor completion receipt is synchronously checkpointed
-with resource consumption, reward and task credit. `FriendInteraction` records
-orchestrate these checkpoints but never replace them as resource authority.
+The current direct friend-action path (steal/apply pest/catch pest/help clean)
+uses the ordinary asynchronous Dirty boundary on both Player Actors. Owner
+farm mutation + OWNER receipt and visitor reward/penalty/task + VISITOR receipt
+are each atomic only inside their respective Actor mailbox and checkpoint;
+neither side waits for SaveCAS before success is returned. A Zone crash inside
+either Dirty window may therefore lose an already-acknowledged mutation and
+its receipt, and a retry may execute it again. This deliberately does not claim
+durable cross-Actor exactly-once behavior.
 
-The WebSocket request UUID, raw-byte `interaction_id`, Tcaplus Saga key and both
-Player receipts identify one intent. A same-ID/different-fingerprint request is
-`REQUEST_ID_CONFLICT`. A timeout after any durable step is
-`INTERACTION_OUTCOME_UNKNOWN`; the client must keep the ID until reconciliation
-returns the stored terminal result.
-
-`FriendInteraction` persists every input needed to resume execution, including
-`action`, `plot_id` and `pest_id` when present; the request digest detects any
-changed retry. Owner-enter calls also forward the original request ID so a
-timeout cannot create duplicate visit leases or presence notifications.
+The raw WebSocket request UUID remains the in-memory receipt key and detects
+same-ID replay while both Actors retain the receipt. Historical
+`FriendInteraction` Saga records and synchronous reservation helpers are not
+on this direct runtime path. Owner-enter calls still forward the original
+request ID so a timeout cannot create duplicate visit leases or presence
+notifications within the live process.
 
 ## 12. Required tests
 

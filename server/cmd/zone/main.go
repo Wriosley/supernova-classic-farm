@@ -14,6 +14,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/connection"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinatorclient"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/farmview"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/outbox"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
@@ -25,6 +26,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/push"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/reddot"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/visit"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/zoneidentity"
@@ -170,6 +172,7 @@ func main() {
 	gates := &shardExecutionGates{}
 	var authorization ownerAuthorization = localAuthorization{}
 	var lifecycle *lifecycleHandler
+	var outboundRoutes gateway.RouteResolver
 	coordinatorURL := environmentOr("COORDINATOR_URL", "http://127.0.0.1:8083")
 	if routingMode == dualRoutingMode {
 		table, tableErr := routing.NewAuthorizationTable(ownerZoneID)
@@ -189,6 +192,14 @@ func main() {
 				return refreshAuthorization(refreshCtx, table, client, coordinatorURL)
 			}}
 			go refreshAuthorizationLoop(ctx, table, client, coordinatorURL, logger)
+			httpRoutes := &gateway.HTTPRouteResolver{Client: client, BaseURL: coordinatorURL}
+			outboundRoutes, err = gateway.NewCachedRouteResolver(httpRoutes, time.Now)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err = outboundRoutes.(*gateway.CachedRouteResolver).Warm(ctx); err != nil {
+				log.Fatal(err)
+			}
 		case "coordinator-sdk":
 			sdk, sdkErr := coordinatorclient.New(coordinatorclient.Config{Endpoint: environmentOr("COORDINATOR_RPC_URL", coordinatorURL), SubscriberID: identity.IncarnationID, Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE, HMACKey: rpcKey, OnSnapshot: table.Replace})
 			if sdkErr != nil {
@@ -198,6 +209,10 @@ func main() {
 				log.Fatalf("start Coordinator SDK: %v", sdkErr)
 			}
 			defer sdk.Close()
+			outboundRoutes, sdkErr = gateway.NewCoordinatorRouteResolver(sdk, nil)
+			if sdkErr != nil {
+				log.Fatal(sdkErr)
+			}
 			lifecycle = &lifecycleHandler{runtime: runtime, authorization: table, gates: gates, now: time.Now, refresh: func() error { sdk.ForceResync(); return nil }}
 			interval, intervalErr := time.ParseDuration(environmentOr("ZONE_ROUTE_VERIFY_INTERVAL", "5m"))
 			if intervalErr != nil || interval <= 0 {
@@ -246,8 +261,14 @@ func main() {
 	}
 	go ownerFarmService.RunEvictionLoop(ctx)
 
+	quickInfoClient, err := newZoneQuickInfoClient(ctx, rpcKey, environmentOr("INFO_RPC_URL", "http://127.0.0.1:8086"), identity.LogicalZoneID, identity.IncarnationID, logger)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer quickInfoClient.Close()
+	runtime.SetFarmQuickInfoNotifier(quickInfoClient)
 	connectionRegistry := connection.NewRegistry()
-	go runConnectionEvictionLoop(ctx, connectionRegistry, logger)
+	go runConnectionEvictionLoop(ctx, connectionRegistry, quickInfoClient, logger)
 	runtime.SetPlayerPresence(connectionRegistry)
 	runtime.SetFarmObservers(ownerFarmService)
 	go runActorIdleEvictionLoop(ctx, runtime, logger)
@@ -275,12 +296,25 @@ func main() {
 	}
 	defer pushDispatcher.Close()
 
-	infoNotifier, infoErr := newInfoStealableNotifier(rpcKey, environmentOr("INFO_RPC_URL", "http://127.0.0.1:8086"), logger)
-	if infoErr != nil {
-		log.Fatal(infoErr)
+	if outboundRoutes != nil {
+		redDotZones, redDotErr := reddot.NewZoneClient(rpcKey, rpcauth.ZoneService)
+		if redDotErr != nil {
+			log.Fatal(redDotErr)
+		}
+		defer redDotZones.Close()
+		redDotDelivery, redDotErr := reddot.NewDelivery(outboundRoutes, redDotZones, logger)
+		if redDotErr != nil {
+			log.Fatal(redDotErr)
+		}
+		stealableNotifier, notifierErr := newZoneStealableNotifier(ctx, rpcKey, friendURL, redDotDelivery, logger)
+		if notifierErr != nil {
+			log.Fatal(notifierErr)
+		}
+		defer stealableNotifier.Close()
+		runtime.SetStealableNotifier(stealableNotifier)
+	} else {
+		logger.Warn("outbound routes unavailable; friend-farm red dots disabled")
 	}
-	defer infoNotifier.Close()
-	runtime.SetStealableNotifier(infoNotifier)
 
 	var giftNotifier giftOutboxNotifier
 	if tcaplusClient != nil {
@@ -344,7 +378,7 @@ func main() {
 			rpcv1.PlayerConnectionService_RegisterPlayerConnection_FullMethodName:   {"gate"},
 			rpcv1.PlayerConnectionService_RefreshPlayerConnection_FullMethodName:    {"gate"},
 			rpcv1.PlayerConnectionService_UnregisterPlayerConnection_FullMethodName: {"gate"},
-			rpcv1.ZoneNotificationService_DispatchRedDot_FullMethodName:             {"info"},
+			rpcv1.ZoneNotificationService_DispatchRedDot_FullMethodName:             {"info", "mail", rpcauth.ZoneService},
 		},
 	})
 	if err != nil {
@@ -365,7 +399,7 @@ func main() {
 		grpcServer,
 		newPlayerSocialRPCServer(runtime, authorization, gates, time.Now),
 	)
-	visitorZoneServer := newVisitorZoneRPCServer(visitorService, ownerFarmClient, authorization, ownerZoneID)
+	visitorZoneServer := newVisitorZoneRPCServer(visitorService, ownerFarmClient, authorization, ownerZoneID).withQuickInfo(quickInfoClient)
 	visitorZoneServer.withRuntime(runtime)
 	rpcv1.RegisterVisitorZoneServiceServer(grpcServer, visitorZoneServer)
 	ownerFarmServer := newOwnerFarmRPCServer(ownerFarmService, authorization, gates, time.Now)
@@ -374,7 +408,7 @@ func main() {
 	rpcv1.RegisterOwnerFarmServiceServer(grpcServer, ownerFarmServer)
 	rpcv1.RegisterPlayerConnectionServiceServer(
 		grpcServer,
-		newPlayerConnectionRPCServer(connectionRegistry, authorization, gates, time.Now, gatewayID),
+		newPlayerConnectionRPCServer(connectionRegistry, authorization, gates, time.Now, gatewayID).withQuickInfo(quickInfoClient),
 	)
 	rpcv1.RegisterZoneNotificationServiceServer(
 		grpcServer,
@@ -519,9 +553,11 @@ func sameDurableRoutes(a, b routing.Snapshot) bool {
 
 // runConnectionEvictionLoop sweeps expired connection leases every five
 // seconds until ctx is cancelled.
-func runConnectionEvictionLoop(ctx context.Context, registry *connection.Registry, logger *slog.Logger) {
+func runConnectionEvictionLoop(ctx context.Context, registry *connection.Registry, quickInfo *zoneQuickInfoClient, logger *slog.Logger) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	reconcileTicker := time.NewTicker(3 * time.Minute)
+	defer reconcileTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -530,6 +566,20 @@ func runConnectionEvictionLoop(ctx context.Context, registry *connection.Registr
 			removed := registry.EvictExpired(time.Now())
 			if len(removed) > 0 {
 				logger.Debug("evicted expired player connections", "count", len(removed))
+				seen := make(map[uint64]struct{}, len(removed))
+				for _, conn := range removed {
+					if _, ok := seen[conn.PlayerID]; ok {
+						continue
+					}
+					seen[conn.PlayerID] = struct{}{}
+					if !registry.Has(conn.PlayerID) && quickInfo != nil {
+						quickInfo.PresenceExpired(conn.PlayerID)
+					}
+				}
+			}
+		case <-reconcileTicker.C:
+			if quickInfo != nil {
+				quickInfo.ReconcilePresence(registry.ListAll())
 			}
 		}
 	}

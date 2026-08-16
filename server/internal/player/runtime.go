@@ -41,7 +41,6 @@ const (
 
 var errActorGone = errors.New("player actor is leaving")
 
-
 // FarmViewDispatcher 接收 Actor mailbox 内已构造好的公开农场 Patch。
 // 生产实现是 farmview.Dispatcher；业务路径不得查询访客或调用 Gate Push。
 type FarmViewDispatcher interface {
@@ -96,6 +95,7 @@ type runtimeActor struct {
 	// lastAccessAtMS is the last admitted external request/visit time.
 	// Scheduler ticks must not update it. Units: Unix milliseconds.
 	lastAccessAtMS atomic.Int64
+	quickSummary   atomic.Pointer[FarmQuickSummary]
 }
 
 type DrainedPlayer struct {
@@ -117,9 +117,10 @@ type Runtime struct {
 	accountNamer  AccountNamer
 	presence      PlayerPresence
 	observers     FarmObservers
+	quickInfo     FarmQuickInfoNotifier
 	config        atomic.Pointer[ConfigSnapshot]
-	now           atomic.Value // stores func() time.Time
-	randBPS       func() uint32 // 可注入；返回值会对 10000 取模（旧护主概率路径）
+	now           atomic.Value    // stores func() time.Time
+	randBPS       func() uint32   // 可注入；返回值会对 10000 取模（旧护主概率路径）
 	randIntn      func(n int) int // 可注入；返回 [0,n)；护主罚款与投虫金币
 	backgroundCtx context.Context
 	cancel        context.CancelFunc
@@ -562,7 +563,7 @@ func (r *Runtime) activateActor(a *runtimeActor, playerID, ownerEpoch uint64) {
 	if state.CheckpointRevision > persistedRevision {
 		r.markDirty(playerID, state.CheckpointRevision)
 	}
-	r.refreshActorDeadline(playerID, a)
+	r.refreshActorDeadlineOwned(playerID, a)
 }
 
 // createInitialPlayerCheckpoint 仅在 Load 明确 NotFound 时调用。

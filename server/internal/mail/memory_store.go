@@ -188,6 +188,18 @@ func (s *MemoryStore) GetMailState(_ context.Context, playerID uint64, mailID st
 	return proto.Clone(entry.record).(*tcaplusv1.PlayerMailState), entry.version, nil
 }
 
+func (s *MemoryStore) ListMailStates(_ context.Context, playerID uint64) ([]*tcaplusv1.PlayerMailState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows := make([]*tcaplusv1.PlayerMailState, 0)
+	for _, entry := range s.states {
+		if entry.record.GetPlayerId() == playerID {
+			rows = append(rows, proto.Clone(entry.record).(*tcaplusv1.PlayerMailState))
+		}
+	}
+	return rows, nil
+}
+
 func (s *MemoryStore) InsertMailState(_ context.Context, record *tcaplusv1.PlayerMailState) (int32, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

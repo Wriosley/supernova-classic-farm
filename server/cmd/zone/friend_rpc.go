@@ -32,7 +32,13 @@ type visitorZoneRPCServer struct {
 
 	// runtime applies visitor-side coin effects after owner ApplyVisitorAction
 	// succeeds on the direct friend-action path.
-	runtime *player.Runtime
+	runtime   *player.Runtime
+	quickInfo *zoneQuickInfoClient
+}
+
+func (s *visitorZoneRPCServer) withQuickInfo(client *zoneQuickInfoClient) *visitorZoneRPCServer {
+	s.quickInfo = client
+	return s
 }
 
 func newVisitorZoneRPCServer(
@@ -78,6 +84,10 @@ func (s *visitorZoneRPCServer) EnterFriendFarm(
 	)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "enter friend farm failed")
+	}
+	if wsErr == nil && result != nil && s.quickInfo != nil {
+		visitor, owner := request.CallerPlayerId, request.OwnerPlayerId
+		go func() { _ = s.quickInfo.RecordOfflineFarmVisit(context.Background(), visitor, owner) }()
 	}
 	return &rpcv1.EnterFriendFarmResponse{Result: result, Error: wsErr}, nil
 }

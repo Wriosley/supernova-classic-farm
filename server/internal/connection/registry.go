@@ -17,7 +17,7 @@ import (
 const LeaseTTL = 90 * time.Second
 
 var (
-	ErrInvalidConnection = errors.New("invalid player connection")
+	ErrInvalidConnection  = errors.New("invalid player connection")
 	ErrConnectionMismatch = errors.New("player connection mismatch")
 )
 
@@ -114,6 +114,21 @@ func (r *Registry) List(playerID uint64) []PlayerConnection {
 	out := make([]PlayerConnection, 0, len(byKey))
 	for _, conn := range byKey {
 		out = append(out, conn.clone())
+	}
+	sortConnections(out)
+	return out
+}
+
+// ListAll returns a stable snapshot of every registered connection for
+// periodic best-effort presence reconciliation.
+func (r *Registry) ListAll() []PlayerConnection {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []PlayerConnection
+	for _, byKey := range r.players {
+		for _, conn := range byKey {
+			out = append(out, conn.clone())
+		}
 	}
 	sortConnections(out)
 	return out

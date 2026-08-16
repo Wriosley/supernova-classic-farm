@@ -30,6 +30,7 @@ const (
 	SubscriberKind_SUBSCRIBER_KIND_INFO        SubscriberKind = 2
 	SubscriberKind_SUBSCRIBER_KIND_ZONE        SubscriberKind = 3
 	SubscriberKind_SUBSCRIBER_KIND_OTHER       SubscriberKind = 4
+	SubscriberKind_SUBSCRIBER_KIND_MAIL        SubscriberKind = 5
 )
 
 // Enum value maps for SubscriberKind.
@@ -40,6 +41,7 @@ var (
 		2: "SUBSCRIBER_KIND_INFO",
 		3: "SUBSCRIBER_KIND_ZONE",
 		4: "SUBSCRIBER_KIND_OTHER",
+		5: "SUBSCRIBER_KIND_MAIL",
 	}
 	SubscriberKind_value = map[string]int32{
 		"SUBSCRIBER_KIND_UNSPECIFIED": 0,
@@ -47,6 +49,7 @@ var (
 		"SUBSCRIBER_KIND_INFO":        2,
 		"SUBSCRIBER_KIND_ZONE":        3,
 		"SUBSCRIBER_KIND_OTHER":       4,
+		"SUBSCRIBER_KIND_MAIL":        5,
 	}
 )
 
@@ -1298,13 +1301,14 @@ const file_classicfarm_v1_coordinator_coordinator_proto_rawDesc = "" +
 	"\ffailure_kind\x18\a \x01(\x0e2+.classicfarm.coordinator.v1.ZoneFailureKindR\vfailureKind\x12$\n" +
 	"\x0eobserved_at_ms\x18\b \x01(\x03R\fobservedAtMs\"~\n" +
 	"\x19ReportZoneFailureResponse\x12a\n" +
-	"\x15observed_availability\x18\x01 \x01(\x0e2,.classicfarm.coordinator.v1.ZoneAvailabilityR\x14observedAvailability*\x9a\x01\n" +
+	"\x15observed_availability\x18\x01 \x01(\x0e2,.classicfarm.coordinator.v1.ZoneAvailabilityR\x14observedAvailability*\xb4\x01\n" +
 	"\x0eSubscriberKind\x12\x1f\n" +
 	"\x1bSUBSCRIBER_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14SUBSCRIBER_KIND_GATE\x10\x01\x12\x18\n" +
 	"\x14SUBSCRIBER_KIND_INFO\x10\x02\x12\x18\n" +
 	"\x14SUBSCRIBER_KIND_ZONE\x10\x03\x12\x19\n" +
-	"\x15SUBSCRIBER_KIND_OTHER\x10\x04*\xaf\x01\n" +
+	"\x15SUBSCRIBER_KIND_OTHER\x10\x04\x12\x18\n" +
+	"\x14SUBSCRIBER_KIND_MAIL\x10\x05*\xaf\x01\n" +
 	"\x10ZoneAvailability\x12!\n" +
 	"\x1dZONE_AVAILABILITY_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19ZONE_AVAILABILITY_HEALTHY\x10\x01\x12\x1d\n" +

@@ -52,6 +52,7 @@ message PublicMail {
 // PrivateMail is isolated per recipient (admin private + gifts + system rewards).
 message PrivateMail {
   option (tcaplusservice.tcaplus_primary_key) = "recipient_player_id,mail_id";
+  option (tcaplusservice.tcaplus_index) = "idx_recipient(recipient_player_id)";
 
   uint64 recipient_player_id = 1;
   string mail_id = 2;
@@ -78,6 +79,7 @@ message PlayerMailboxCursor {
 
 message PlayerMailState {
   option (tcaplusservice.tcaplus_primary_key) = "player_id,mail_id";
+  option (tcaplusservice.tcaplus_index) = "idx_player(player_id)";
 
   uint64 player_id = 1;
   string mail_id = 2;

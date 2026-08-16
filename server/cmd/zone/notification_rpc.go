@@ -71,6 +71,7 @@ func (s *zoneNotificationRPCServer) DispatchRedDot(
 		NotificationID: request.RedDot.NotificationId,
 		Category:       request.RedDot.Category,
 		Operation:      request.RedDot.Operation,
+		Count:          request.RedDot.Count,
 	}
 	if request.RedDot.SourcePlayerId != nil {
 		payload.HasSource = true

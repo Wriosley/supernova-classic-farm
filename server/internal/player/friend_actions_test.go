@@ -80,6 +80,12 @@ func TestApplyPestSuccessReplayAndAlreadyPresent(t *testing.T) {
 	); err != nil || replay {
 		t.Fatalf("apply pest: replay=%v err=%v", replay, err)
 	}
+	if len(store.saved) != 0 {
+		t.Fatal("owner action must not synchronously persist")
+	}
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatalf("flush dirty pest: %v", err)
+	}
 	saved := latestSavedState(t, store)
 	if effect := saved.Plots[1].PestEffect; effect == nil ||
 		effect.GetSourcePlayerId() != visitorID || effect.EffectItemOrPestId != developmentPestID {
@@ -138,6 +144,12 @@ func TestHelpCleanSuccessAndApplyPestTaskOnce(t *testing.T) {
 		context.Background(), 11, LocalOwnerEpoch, 7, interactionIDFixture(0x61), 1,
 	); err != nil {
 		t.Fatalf("help clean: %v", err)
+	}
+	if len(ownerStore.saved) != 0 {
+		t.Fatal("owner action must not synchronously persist")
+	}
+	if err := ownerRuntime.flushDirty(context.Background()); err != nil {
+		t.Fatalf("flush dirty clean: %v", err)
 	}
 	if got := latestSavedState(t, ownerStore).Plots[1].State; got != plotv1.PlotState_EMPTY {
 		t.Fatalf("cleaned plot state = %v", got)

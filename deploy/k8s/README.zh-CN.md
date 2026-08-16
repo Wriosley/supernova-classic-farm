@@ -63,6 +63,28 @@ kubectl -n classic-farm rollout status deploy/info
 kubectl -n classic-farm rollout status deploy/mail
 ```
 
+## 创建可供 CVM/CLB 访问的 kind 集群
+
+首次创建或重建集群时使用仓库内的固定配置：
+
+```bash
+kind create cluster --config deploy/kind-config.yaml
+```
+
+该配置把宿主机 `31238/32591` 映射到 kind 节点的同名 NodePort；
+`services.yaml` 也固定了 Login/Gate 的 NodePort，二者必须保持一致。腾讯云
+CLB 监听器应绑定：
+
+```text
+CLB :8080 -> CVM :31238 -> login Service
+CLB :8081 -> CVM :32591 -> gate Service -> 三个 Gate Pod
+```
+
+这种方式不需要 `kubectl port-forward`。已有 kind 节点无法追加 Docker 端口
+映射，修改该配置后必须重建集群才能生效。重建前需在内存或安全的临时位置
+保留 `classic-farm-tcaplus` 与 `classic-farm-internal-rpc` Secret；禁止把真实值
+写入仓库。
+
 本地验收使用端口转发：
 
 ```bash
@@ -83,6 +105,61 @@ Watch 使用内部 gRPC；Coordinator 的 HTTP 兼容路由和 gRPC 共享 8083 
 Gate、Info、Zone 可分别通过 `GATE_ROUTE_SOURCE=http`、
 `INFO_ROUTE_SOURCE=http`、`ZONE_ROUTE_SOURCE=http-poll` 回滚到 Phase 02；
 `COORDINATOR_ROUTE_STORE=legacy-fence` 是独立的存储回滚开关。
+
+如果要把 `login` 和 `gate` 都对外给浏览器直连，使用腾讯云 TKE 的
+`LoadBalancer` Service 暴露它们，并把下面这些值改成你的公网/内网 CLB 地址：
+
+```bash
+kubectl -n classic-farm patch configmap classic-farm-runtime --type merge -p '{
+  "data": {
+    "H5_ORIGIN": "http://<你的前端域名或IP>",
+    "GATEWAY_URL": "ws://<CLB域名或IP>:8081/ws",
+    "CLIENT_CONFIG_URL": "http://<CLB域名或IP>:8080/v1/client-config/1",
+    "CLIENT_CONFIG_PUBLIC_URL": "http://<CLB域名或IP>:8080/v1/client-config/1"
+  }
+}'
+kubectl -n classic-farm patch service login --type merge -p '{
+  "metadata": {
+    "annotations": {
+      "service.kubernetes.io/tke-existed-lbid": "lb-n9maz47a"
+    }
+  },
+  "spec": {
+    "type": "LoadBalancer"
+  }
+}'
+kubectl -n classic-farm patch service gate --type merge -p '{
+  "metadata": {
+    "annotations": {
+      "service.kubernetes.io/tke-existed-lbid": "lb-n9maz47a"
+    }
+  },
+  "spec": {
+    "type": "LoadBalancer"
+  }
+}'
+kubectl -n classic-farm rollout restart deploy/login deploy/gate
+```
+
+前端不需要自己发现 gate。它先访问 Login，Login 在 `/v1/bootstrap`
+和 `/v1/gateways` 里下发 `GatewayEndpoint.websocketUrl`；只要这里配置成
+CLB 地址，H5 就会自动连到 `gate` 的 3 个副本。前端的 HTTP 请求打到
+`login` 的 CLB 地址，WebSocket 打到 `gate` 的 CLB 地址；如果两者复用同一
+个 CLB，那么只需要区分端口 `8080/8081`。
+
+如果你暂时还想保留本机端口转发，只要不改 `GATEWAY_URL`，前端仍然会按
+`ws://localhost:8081/ws` 工作。
+
+本机开发时，Vite 代理也可以直接指向这两个 LB：
+
+```bash
+export LOGIN_PROXY_TARGET=http://21.214.142.172:8080
+export GATE_PROXY_TARGET=ws://21.214.142.172:8081
+pnpm -C web dev
+```
+
+这样浏览器访问本机 Web 页面时，`/v1/*` 和 `/ws` 都会被开发服务器转到
+对应的 LB，不需要再手工做 `kubectl port-forward`。
 
 若要在非生产环境显式重建整张 Route 表（例如把另一套环境遗留的 endpoint
 替换为当前 kind Service），临时设置

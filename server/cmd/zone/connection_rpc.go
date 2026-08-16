@@ -20,6 +20,12 @@ type playerConnectionRPCServer struct {
 	gates             *shardExecutionGates
 	now               func() time.Time
 	expectedGatewayID string
+	quickInfo         *zoneQuickInfoClient
+}
+
+func (s *playerConnectionRPCServer) withQuickInfo(client *zoneQuickInfoClient) *playerConnectionRPCServer {
+	s.quickInfo = client
+	return s
 }
 
 func newPlayerConnectionRPCServer(
@@ -53,6 +59,9 @@ func (s *playerConnectionRPCServer) RegisterPlayerConnection(
 	if err := s.registry.Register(conn); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid player connection")
 	}
+	if s.quickInfo != nil {
+		s.quickInfo.Presence(conn.PlayerID, route.OwnerEpoch, true, conn.ExpiresAt)
+	}
 	return &rpcv1.RegisterPlayerConnectionResponse{}, nil
 }
 
@@ -73,6 +82,9 @@ func (s *playerConnectionRPCServer) RefreshPlayerConnection(
 			return nil, status.Error(codes.NotFound, "player connection not registered")
 		}
 		return nil, status.Error(codes.InvalidArgument, "invalid player connection")
+	}
+	if s.quickInfo != nil {
+		s.quickInfo.Presence(conn.PlayerID, route.OwnerEpoch, true, conn.ExpiresAt)
 	}
 	return &rpcv1.RefreshPlayerConnectionResponse{}, nil
 }
@@ -100,6 +112,18 @@ func (s *playerConnectionRPCServer) UnregisterPlayerConnection(
 		return nil, err
 	}
 	s.registry.Unregister(request.GetPlayerId(), request.GetGateId(), request.GetConnectionId())
+	if s.quickInfo != nil {
+		online := s.registry.Has(request.GetPlayerId())
+		expires := s.now()
+		if online {
+			for _, conn := range s.registry.List(request.GetPlayerId()) {
+				if conn.ExpiresAt.After(expires) {
+					expires = conn.ExpiresAt
+				}
+			}
+		}
+		s.quickInfo.Presence(request.GetPlayerId(), route.OwnerEpoch, online, expires)
+	}
 	return &rpcv1.UnregisterPlayerConnectionResponse{}, nil
 }
 

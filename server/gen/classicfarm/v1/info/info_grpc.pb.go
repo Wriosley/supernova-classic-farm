@@ -19,8 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InfoService_SetMailRedDot_FullMethodName            = "/classicfarm.info.v1.InfoService/SetMailRedDot"
-	InfoService_NotifyOwnerPlotStealable_FullMethodName = "/classicfarm.info.v1.InfoService/NotifyOwnerPlotStealable"
+	InfoService_SetMailRedDot_FullMethodName              = "/classicfarm.info.v1.InfoService/SetMailRedDot"
+	InfoService_NotifyOwnerPlotStealable_FullMethodName   = "/classicfarm.info.v1.InfoService/NotifyOwnerPlotStealable"
+	InfoService_UpdatePresenceLease_FullMethodName        = "/classicfarm.info.v1.InfoService/UpdatePresenceLease"
+	InfoService_BatchRenewPresenceLeases_FullMethodName   = "/classicfarm.info.v1.InfoService/BatchRenewPresenceLeases"
+	InfoService_UpdateFarmQuickInfo_FullMethodName        = "/classicfarm.info.v1.InfoService/UpdateFarmQuickInfo"
+	InfoService_BatchGetPlayerQuickInfo_FullMethodName    = "/classicfarm.info.v1.InfoService/BatchGetPlayerQuickInfo"
+	InfoService_ApplyPrivateMailEvent_FullMethodName      = "/classicfarm.info.v1.InfoService/ApplyPrivateMailEvent"
+	InfoService_SetMailboxQuickInfo_FullMethodName        = "/classicfarm.info.v1.InfoService/SetMailboxQuickInfo"
+	InfoService_AdvancePublicMailWatermark_FullMethodName = "/classicfarm.info.v1.InfoService/AdvancePublicMailWatermark"
+	InfoService_GetMailboxQuickInfo_FullMethodName        = "/classicfarm.info.v1.InfoService/GetMailboxQuickInfo"
+	InfoService_RecordOfflineFarmVisit_FullMethodName     = "/classicfarm.info.v1.InfoService/RecordOfflineFarmVisit"
+	InfoService_GetOfflineVisitors_FullMethodName         = "/classicfarm.info.v1.InfoService/GetOfflineVisitors"
+	InfoService_AckOfflineVisitors_FullMethodName         = "/classicfarm.info.v1.InfoService/AckOfflineVisitors"
 )
 
 // InfoServiceClient is the client API for InfoService service.
@@ -33,6 +44,17 @@ const (
 type InfoServiceClient interface {
 	SetMailRedDot(ctx context.Context, in *SetMailRedDotRequest, opts ...grpc.CallOption) (*SetMailRedDotResponse, error)
 	NotifyOwnerPlotStealable(ctx context.Context, in *NotifyOwnerPlotStealableRequest, opts ...grpc.CallOption) (*NotifyOwnerPlotStealableResponse, error)
+	UpdatePresenceLease(ctx context.Context, in *UpdatePresenceLeaseRequest, opts ...grpc.CallOption) (*UpdatePresenceLeaseResponse, error)
+	BatchRenewPresenceLeases(ctx context.Context, in *BatchRenewPresenceLeasesRequest, opts ...grpc.CallOption) (*BatchRenewPresenceLeasesResponse, error)
+	UpdateFarmQuickInfo(ctx context.Context, in *UpdateFarmQuickInfoRequest, opts ...grpc.CallOption) (*UpdateFarmQuickInfoResponse, error)
+	BatchGetPlayerQuickInfo(ctx context.Context, in *BatchGetPlayerQuickInfoRequest, opts ...grpc.CallOption) (*BatchGetPlayerQuickInfoResponse, error)
+	ApplyPrivateMailEvent(ctx context.Context, in *ApplyPrivateMailEventRequest, opts ...grpc.CallOption) (*ApplyPrivateMailEventResponse, error)
+	SetMailboxQuickInfo(ctx context.Context, in *SetMailboxQuickInfoRequest, opts ...grpc.CallOption) (*SetMailboxQuickInfoResponse, error)
+	AdvancePublicMailWatermark(ctx context.Context, in *AdvancePublicMailWatermarkRequest, opts ...grpc.CallOption) (*AdvancePublicMailWatermarkResponse, error)
+	GetMailboxQuickInfo(ctx context.Context, in *GetMailboxQuickInfoRequest, opts ...grpc.CallOption) (*GetMailboxQuickInfoResponse, error)
+	RecordOfflineFarmVisit(ctx context.Context, in *RecordOfflineFarmVisitRequest, opts ...grpc.CallOption) (*RecordOfflineFarmVisitResponse, error)
+	GetOfflineVisitors(ctx context.Context, in *GetOfflineVisitorsRequest, opts ...grpc.CallOption) (*GetOfflineVisitorsResponse, error)
+	AckOfflineVisitors(ctx context.Context, in *AckOfflineVisitorsRequest, opts ...grpc.CallOption) (*AckOfflineVisitorsResponse, error)
 }
 
 type infoServiceClient struct {
@@ -63,6 +85,116 @@ func (c *infoServiceClient) NotifyOwnerPlotStealable(ctx context.Context, in *No
 	return out, nil
 }
 
+func (c *infoServiceClient) UpdatePresenceLease(ctx context.Context, in *UpdatePresenceLeaseRequest, opts ...grpc.CallOption) (*UpdatePresenceLeaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdatePresenceLeaseResponse)
+	err := c.cc.Invoke(ctx, InfoService_UpdatePresenceLease_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) BatchRenewPresenceLeases(ctx context.Context, in *BatchRenewPresenceLeasesRequest, opts ...grpc.CallOption) (*BatchRenewPresenceLeasesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchRenewPresenceLeasesResponse)
+	err := c.cc.Invoke(ctx, InfoService_BatchRenewPresenceLeases_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) UpdateFarmQuickInfo(ctx context.Context, in *UpdateFarmQuickInfoRequest, opts ...grpc.CallOption) (*UpdateFarmQuickInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateFarmQuickInfoResponse)
+	err := c.cc.Invoke(ctx, InfoService_UpdateFarmQuickInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) BatchGetPlayerQuickInfo(ctx context.Context, in *BatchGetPlayerQuickInfoRequest, opts ...grpc.CallOption) (*BatchGetPlayerQuickInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchGetPlayerQuickInfoResponse)
+	err := c.cc.Invoke(ctx, InfoService_BatchGetPlayerQuickInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) ApplyPrivateMailEvent(ctx context.Context, in *ApplyPrivateMailEventRequest, opts ...grpc.CallOption) (*ApplyPrivateMailEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplyPrivateMailEventResponse)
+	err := c.cc.Invoke(ctx, InfoService_ApplyPrivateMailEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) SetMailboxQuickInfo(ctx context.Context, in *SetMailboxQuickInfoRequest, opts ...grpc.CallOption) (*SetMailboxQuickInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetMailboxQuickInfoResponse)
+	err := c.cc.Invoke(ctx, InfoService_SetMailboxQuickInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) AdvancePublicMailWatermark(ctx context.Context, in *AdvancePublicMailWatermarkRequest, opts ...grpc.CallOption) (*AdvancePublicMailWatermarkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdvancePublicMailWatermarkResponse)
+	err := c.cc.Invoke(ctx, InfoService_AdvancePublicMailWatermark_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) GetMailboxQuickInfo(ctx context.Context, in *GetMailboxQuickInfoRequest, opts ...grpc.CallOption) (*GetMailboxQuickInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMailboxQuickInfoResponse)
+	err := c.cc.Invoke(ctx, InfoService_GetMailboxQuickInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) RecordOfflineFarmVisit(ctx context.Context, in *RecordOfflineFarmVisitRequest, opts ...grpc.CallOption) (*RecordOfflineFarmVisitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordOfflineFarmVisitResponse)
+	err := c.cc.Invoke(ctx, InfoService_RecordOfflineFarmVisit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) GetOfflineVisitors(ctx context.Context, in *GetOfflineVisitorsRequest, opts ...grpc.CallOption) (*GetOfflineVisitorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOfflineVisitorsResponse)
+	err := c.cc.Invoke(ctx, InfoService_GetOfflineVisitors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infoServiceClient) AckOfflineVisitors(ctx context.Context, in *AckOfflineVisitorsRequest, opts ...grpc.CallOption) (*AckOfflineVisitorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AckOfflineVisitorsResponse)
+	err := c.cc.Invoke(ctx, InfoService_AckOfflineVisitors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InfoServiceServer is the server API for InfoService service.
 // All implementations must embed UnimplementedInfoServiceServer
 // for forward compatibility.
@@ -73,6 +205,17 @@ func (c *infoServiceClient) NotifyOwnerPlotStealable(ctx context.Context, in *No
 type InfoServiceServer interface {
 	SetMailRedDot(context.Context, *SetMailRedDotRequest) (*SetMailRedDotResponse, error)
 	NotifyOwnerPlotStealable(context.Context, *NotifyOwnerPlotStealableRequest) (*NotifyOwnerPlotStealableResponse, error)
+	UpdatePresenceLease(context.Context, *UpdatePresenceLeaseRequest) (*UpdatePresenceLeaseResponse, error)
+	BatchRenewPresenceLeases(context.Context, *BatchRenewPresenceLeasesRequest) (*BatchRenewPresenceLeasesResponse, error)
+	UpdateFarmQuickInfo(context.Context, *UpdateFarmQuickInfoRequest) (*UpdateFarmQuickInfoResponse, error)
+	BatchGetPlayerQuickInfo(context.Context, *BatchGetPlayerQuickInfoRequest) (*BatchGetPlayerQuickInfoResponse, error)
+	ApplyPrivateMailEvent(context.Context, *ApplyPrivateMailEventRequest) (*ApplyPrivateMailEventResponse, error)
+	SetMailboxQuickInfo(context.Context, *SetMailboxQuickInfoRequest) (*SetMailboxQuickInfoResponse, error)
+	AdvancePublicMailWatermark(context.Context, *AdvancePublicMailWatermarkRequest) (*AdvancePublicMailWatermarkResponse, error)
+	GetMailboxQuickInfo(context.Context, *GetMailboxQuickInfoRequest) (*GetMailboxQuickInfoResponse, error)
+	RecordOfflineFarmVisit(context.Context, *RecordOfflineFarmVisitRequest) (*RecordOfflineFarmVisitResponse, error)
+	GetOfflineVisitors(context.Context, *GetOfflineVisitorsRequest) (*GetOfflineVisitorsResponse, error)
+	AckOfflineVisitors(context.Context, *AckOfflineVisitorsRequest) (*AckOfflineVisitorsResponse, error)
 	mustEmbedUnimplementedInfoServiceServer()
 }
 
@@ -88,6 +231,39 @@ func (UnimplementedInfoServiceServer) SetMailRedDot(context.Context, *SetMailRed
 }
 func (UnimplementedInfoServiceServer) NotifyOwnerPlotStealable(context.Context, *NotifyOwnerPlotStealableRequest) (*NotifyOwnerPlotStealableResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyOwnerPlotStealable not implemented")
+}
+func (UnimplementedInfoServiceServer) UpdatePresenceLease(context.Context, *UpdatePresenceLeaseRequest) (*UpdatePresenceLeaseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdatePresenceLease not implemented")
+}
+func (UnimplementedInfoServiceServer) BatchRenewPresenceLeases(context.Context, *BatchRenewPresenceLeasesRequest) (*BatchRenewPresenceLeasesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchRenewPresenceLeases not implemented")
+}
+func (UnimplementedInfoServiceServer) UpdateFarmQuickInfo(context.Context, *UpdateFarmQuickInfoRequest) (*UpdateFarmQuickInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateFarmQuickInfo not implemented")
+}
+func (UnimplementedInfoServiceServer) BatchGetPlayerQuickInfo(context.Context, *BatchGetPlayerQuickInfoRequest) (*BatchGetPlayerQuickInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchGetPlayerQuickInfo not implemented")
+}
+func (UnimplementedInfoServiceServer) ApplyPrivateMailEvent(context.Context, *ApplyPrivateMailEventRequest) (*ApplyPrivateMailEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApplyPrivateMailEvent not implemented")
+}
+func (UnimplementedInfoServiceServer) SetMailboxQuickInfo(context.Context, *SetMailboxQuickInfoRequest) (*SetMailboxQuickInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetMailboxQuickInfo not implemented")
+}
+func (UnimplementedInfoServiceServer) AdvancePublicMailWatermark(context.Context, *AdvancePublicMailWatermarkRequest) (*AdvancePublicMailWatermarkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdvancePublicMailWatermark not implemented")
+}
+func (UnimplementedInfoServiceServer) GetMailboxQuickInfo(context.Context, *GetMailboxQuickInfoRequest) (*GetMailboxQuickInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMailboxQuickInfo not implemented")
+}
+func (UnimplementedInfoServiceServer) RecordOfflineFarmVisit(context.Context, *RecordOfflineFarmVisitRequest) (*RecordOfflineFarmVisitResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordOfflineFarmVisit not implemented")
+}
+func (UnimplementedInfoServiceServer) GetOfflineVisitors(context.Context, *GetOfflineVisitorsRequest) (*GetOfflineVisitorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOfflineVisitors not implemented")
+}
+func (UnimplementedInfoServiceServer) AckOfflineVisitors(context.Context, *AckOfflineVisitorsRequest) (*AckOfflineVisitorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AckOfflineVisitors not implemented")
 }
 func (UnimplementedInfoServiceServer) mustEmbedUnimplementedInfoServiceServer() {}
 func (UnimplementedInfoServiceServer) testEmbeddedByValue()                     {}
@@ -146,6 +322,204 @@ func _InfoService_NotifyOwnerPlotStealable_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InfoService_UpdatePresenceLease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePresenceLeaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).UpdatePresenceLease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_UpdatePresenceLease_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).UpdatePresenceLease(ctx, req.(*UpdatePresenceLeaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_BatchRenewPresenceLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchRenewPresenceLeasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).BatchRenewPresenceLeases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_BatchRenewPresenceLeases_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).BatchRenewPresenceLeases(ctx, req.(*BatchRenewPresenceLeasesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_UpdateFarmQuickInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateFarmQuickInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).UpdateFarmQuickInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_UpdateFarmQuickInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).UpdateFarmQuickInfo(ctx, req.(*UpdateFarmQuickInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_BatchGetPlayerQuickInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchGetPlayerQuickInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).BatchGetPlayerQuickInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_BatchGetPlayerQuickInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).BatchGetPlayerQuickInfo(ctx, req.(*BatchGetPlayerQuickInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_ApplyPrivateMailEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyPrivateMailEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).ApplyPrivateMailEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_ApplyPrivateMailEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).ApplyPrivateMailEvent(ctx, req.(*ApplyPrivateMailEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_SetMailboxQuickInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetMailboxQuickInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).SetMailboxQuickInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_SetMailboxQuickInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).SetMailboxQuickInfo(ctx, req.(*SetMailboxQuickInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_AdvancePublicMailWatermark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdvancePublicMailWatermarkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).AdvancePublicMailWatermark(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_AdvancePublicMailWatermark_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).AdvancePublicMailWatermark(ctx, req.(*AdvancePublicMailWatermarkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_GetMailboxQuickInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMailboxQuickInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).GetMailboxQuickInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_GetMailboxQuickInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).GetMailboxQuickInfo(ctx, req.(*GetMailboxQuickInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_RecordOfflineFarmVisit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordOfflineFarmVisitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).RecordOfflineFarmVisit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_RecordOfflineFarmVisit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).RecordOfflineFarmVisit(ctx, req.(*RecordOfflineFarmVisitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_GetOfflineVisitors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOfflineVisitorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).GetOfflineVisitors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_GetOfflineVisitors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).GetOfflineVisitors(ctx, req.(*GetOfflineVisitorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfoService_AckOfflineVisitors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AckOfflineVisitorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfoServiceServer).AckOfflineVisitors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfoService_AckOfflineVisitors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfoServiceServer).AckOfflineVisitors(ctx, req.(*AckOfflineVisitorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InfoService_ServiceDesc is the grpc.ServiceDesc for InfoService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -160,6 +534,50 @@ var InfoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyOwnerPlotStealable",
 			Handler:    _InfoService_NotifyOwnerPlotStealable_Handler,
+		},
+		{
+			MethodName: "UpdatePresenceLease",
+			Handler:    _InfoService_UpdatePresenceLease_Handler,
+		},
+		{
+			MethodName: "BatchRenewPresenceLeases",
+			Handler:    _InfoService_BatchRenewPresenceLeases_Handler,
+		},
+		{
+			MethodName: "UpdateFarmQuickInfo",
+			Handler:    _InfoService_UpdateFarmQuickInfo_Handler,
+		},
+		{
+			MethodName: "BatchGetPlayerQuickInfo",
+			Handler:    _InfoService_BatchGetPlayerQuickInfo_Handler,
+		},
+		{
+			MethodName: "ApplyPrivateMailEvent",
+			Handler:    _InfoService_ApplyPrivateMailEvent_Handler,
+		},
+		{
+			MethodName: "SetMailboxQuickInfo",
+			Handler:    _InfoService_SetMailboxQuickInfo_Handler,
+		},
+		{
+			MethodName: "AdvancePublicMailWatermark",
+			Handler:    _InfoService_AdvancePublicMailWatermark_Handler,
+		},
+		{
+			MethodName: "GetMailboxQuickInfo",
+			Handler:    _InfoService_GetMailboxQuickInfo_Handler,
+		},
+		{
+			MethodName: "RecordOfflineFarmVisit",
+			Handler:    _InfoService_RecordOfflineFarmVisit_Handler,
+		},
+		{
+			MethodName: "GetOfflineVisitors",
+			Handler:    _InfoService_GetOfflineVisitors_Handler,
+		},
+		{
+			MethodName: "AckOfflineVisitors",
+			Handler:    _InfoService_AckOfflineVisitors_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

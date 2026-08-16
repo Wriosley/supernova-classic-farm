@@ -95,6 +95,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	infoQuick, err := friend.NewInfoQuickClient(rpcKey, envOr("INFO_RPC_URL", "http://127.0.0.1:8086"))
+	if err != nil {
+		return err
+	}
+	defer infoQuick.Close()
+	service.SetQuickInfoReader(infoQuick)
 	reconciler, err := friend.NewReconciler(store, linker, client)
 	if err != nil {
 		return err
@@ -112,10 +118,12 @@ func run() error {
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
-			friendv1.FriendService_CreateShareCode_FullMethodName:   {"gate"},
-			friendv1.FriendService_RedeemShareCode_FullMethodName:   {"gate"},
-			friendv1.FriendService_ListFriends_FullMethodName:       {"gate", "info"},
-			friendv1.FriendService_CheckMutualFriend_FullMethodName: append(rpcauth.ZoneAllowedCallers(true), "gate"),
+			friendv1.FriendService_CreateShareCode_FullMethodName:    {"gate"},
+			friendv1.FriendService_RedeemShareCode_FullMethodName:    {"gate"},
+			friendv1.FriendService_ListFriends_FullMethodName:        {"gate", "info", rpcauth.ZoneService},
+			friendv1.FriendService_CheckMutualFriend_FullMethodName:  append(rpcauth.ZoneAllowedCallers(true), "gate"),
+			friendv1.FriendService_GetOfflineVisitors_FullMethodName: {"gate"},
+			friendv1.FriendService_AckOfflineVisitors_FullMethodName: {"gate"},
 		},
 	})
 	if err != nil {

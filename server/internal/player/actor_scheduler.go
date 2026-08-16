@@ -52,10 +52,10 @@ func (h *actorDeadlineHeap) Pop() any {
 // actorDeadlineBook is the shared min-heap of Actor maturity deadlines.
 // Stale generations remain in the heap until popped and ignored.
 type actorDeadlineBook struct {
-	mu       sync.Mutex
-	heap     actorDeadlineHeap
-	latest   map[uint64]uint64 // playerID -> latest generation
-	wake     chan struct{}
+	mu     sync.Mutex
+	heap   actorDeadlineHeap
+	latest map[uint64]uint64 // playerID -> latest generation
+	wake   chan struct{}
 }
 
 func newActorDeadlineBook() *actorDeadlineBook {
@@ -158,6 +158,22 @@ func (r *Runtime) refreshActorDeadline(playerID uint64, a *runtimeActor) {
 	if r == nil || a == nil {
 		return
 	}
+	var deadline time.Time
+	var ok bool
+	if err := a.mailbox.Do(r.backgroundCtx, func() { deadline, ok = a.nextTickAt() }); err != nil {
+		return
+	}
+	if !ok {
+		r.cancelActorDeadline(playerID)
+		return
+	}
+	generation := a.tickGeneration.Add(1)
+	r.schedule(playerID, deadline, generation)
+}
+
+// refreshActorDeadlineOwned is used only while the caller already owns the
+// Actor mailbox (activation), so it must not submit a nested mailbox job.
+func (r *Runtime) refreshActorDeadlineOwned(playerID uint64, a *runtimeActor) {
 	deadline, ok := a.nextTickAt()
 	if !ok {
 		r.cancelActorDeadline(playerID)

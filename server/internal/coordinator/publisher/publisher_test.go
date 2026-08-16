@@ -42,6 +42,22 @@ func TestPublisherSendsSnapshotThenOrderedRouteDiff(t *testing.T) {
 	}
 }
 
+func TestPublisherAcceptsMailSubscriber(t *testing.T) {
+	source := &snapshotSource{snapshot: testSnapshot(t)}
+	p, err := New(source, Config{QueueCapacity: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	session, err := p.Register("mail-0", coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_MAIL, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.Kind() != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_MAIL {
+		t.Fatalf("kind=%v", session.Kind())
+	}
+}
+
 func TestPublisherCurrentSubscriberWaitsForFutureAndRejectsInvalidPublish(t *testing.T) {
 	source := &snapshotSource{snapshot: testSnapshot(t)}
 	p, _ := New(source, Config{QueueCapacity: 2})

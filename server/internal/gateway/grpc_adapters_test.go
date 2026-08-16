@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	mailv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/mail"
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
@@ -17,6 +18,15 @@ import (
 )
 
 var grpcAdapterTestKey = []byte("gateway-grpc-adapter-test-key-32-bytes")
+
+func TestToWSMailboxIndicatorPreservesUnreadCount(t *testing.T) {
+	got := toWSMailboxIndicator(&mailv1.CheckMailboxIndicatorResponse{
+		HasNewMail: true, NewMailCount: 7,
+	})
+	if !got.GetHasNewMail() || got.GetNewMailCount() != 7 {
+		t.Fatalf("indicator = %+v, want has_new_mail=true new_mail_count=7", got)
+	}
+}
 
 type testGameCommandServer struct {
 	rpcv1.UnimplementedGameCommandServiceServer

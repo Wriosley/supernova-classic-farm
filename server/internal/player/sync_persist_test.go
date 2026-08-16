@@ -152,11 +152,10 @@ func TestReserveStealFencedFlushNeverReportsSuccess(t *testing.T) {
 	}
 }
 
-// TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce is the owner-side
-// counterpart: the FarmViewPatch must be produced by whichever attempt
-// durably commits the owner mutation, exactly once, and a later replay of an
-// already-durable apply must not bump farm_view_seq again.
-func TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce(t *testing.T) {
+// TestApplyStealOnOwnerReturnsBeforeDirtyFlush records the deliberately weak
+// owner-side contract: the Actor mutation and patch are visible immediately,
+// while a failed asynchronous SaveCAS leaves the revision dirty for retry.
+func TestApplyStealOnOwnerReturnsBeforeDirtyFlush(t *testing.T) {
 	const ownerID = uint64(11)
 	const plotID = uint32(1)
 	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
@@ -175,45 +174,33 @@ func TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce(t *testing.T) {
 	}
 
 	interactionID := interactionIDFixture(0x80)
-	_, _, patch, alreadyApplied, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
-	if !errors.Is(err, ErrCheckpointConflict) {
-		t.Fatalf("first ApplyStealOnOwner error = %v, want ErrCheckpointConflict", err)
-	}
-	if alreadyApplied || patch != nil {
-		t.Fatalf("a failed apply must not report alreadyApplied=%v patch=%v", alreadyApplied, patch)
-	}
-	if calls, _, _ := broadcaster.snapshot(); calls != 0 {
-		t.Fatalf("Broadcast called %d times before the owner mutation was durable, want 0", calls)
-	}
-	if seq := farmViewSeqOf(t, runtime, ownerID); seq != 0 {
-		t.Fatalf("farm_view_seq after a failed apply = %d, want 0", seq)
-	}
-
 	payload, digest, patch, alreadyApplied, err := applySteal(t, runtime, ownerID, 99, interactionID, plotID, 4001)
 	if err != nil {
-		t.Fatalf("retried ApplyStealOnOwner: %v", err)
+		t.Fatalf("ApplyStealOnOwner: %v", err)
 	}
-	if !alreadyApplied {
-		t.Fatalf("expected the retry to reuse the OWNER receipt already in memory")
+	if alreadyApplied || patch == nil || len(payload) == 0 || len(digest) == 0 {
+		t.Fatalf("immediate result: already=%v patch=%v payload=%d digest=%d", alreadyApplied, patch, len(payload), len(digest))
 	}
-	if len(payload) == 0 || len(digest) == 0 {
-		t.Fatalf("expected the retry to replay the receipt's payload/digest")
-	}
-	if patch == nil {
-		t.Fatalf("expected the retry that persisted the apply to own the FarmViewPatch")
+	if store.attempts != 0 || len(store.saved) != 0 {
+		t.Fatalf("owner response waited on persistence: attempts=%d saved=%d", store.attempts, len(store.saved))
 	}
 	broadcaster.waitForCall(t)
 	calls, last, _ := broadcaster.snapshot()
 	if calls != 1 {
-		t.Fatalf("Broadcast called %d times after the apply became durable, want 1", calls)
+		t.Fatalf("Broadcast called %d times, want 1", calls)
 	}
 	if last.GetVersion().GetFarmViewSeq() != 1 || patch.GetVersion().GetFarmViewSeq() != 1 {
 		t.Fatalf("expected a single farm_view_seq bump, got broadcast=%d returned=%d",
 			last.GetVersion().GetFarmViewSeq(), patch.GetVersion().GetFarmViewSeq())
 	}
+	if err := runtime.flushDirty(context.Background()); !errors.Is(err, ErrCheckpointConflict) {
+		t.Fatalf("first async flush error=%v, want conflict", err)
+	}
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatalf("second async flush: %v", err)
+	}
 	if store.attempts != 2 || len(store.saved) != 1 {
-		t.Fatalf("expected the retry to re-attempt SaveCAS once and persist, got attempts=%d saved=%d",
-			store.attempts, len(store.saved))
+		t.Fatalf("dirty retry attempts=%d saved=%d", store.attempts, len(store.saved))
 	}
 	for _, record := range store.saved[0].Plots {
 		if record.PlotId == plotID &&
@@ -234,10 +221,6 @@ func TestApplyStealOnOwnerRetryAfterFailedFlushBroadcastsOnce(t *testing.T) {
 	}
 	if seq := farmViewSeqOf(t, runtime, ownerID); seq != 1 {
 		t.Fatalf("farm_view_seq after the durable replay = %d, want 1", seq)
-	}
-	if store.attempts != 2 || len(store.saved) != 1 {
-		t.Fatalf("expected the durable replay to write nothing, got attempts=%d saved=%d",
-			store.attempts, len(store.saved))
 	}
 }
 

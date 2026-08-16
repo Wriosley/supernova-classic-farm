@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -51,6 +52,10 @@ func run() error {
 		return err
 	}
 	gatewayID := envOr("GATEWAY_ID", gateway.DefaultGatewayID)
+	originPattern, err := websocketOriginPattern(envOr("H5_ORIGIN", "http://localhost:5173"))
+	if err != nil {
+		return err
+	}
 	zoneCommander, err := gateway.NewGRPCZoneCommander(rpcKey, gatewayID)
 	if err != nil {
 		return err
@@ -137,6 +142,7 @@ func run() error {
 		GatewayID:       gatewayID,
 		ClientConfigURL: publicConfigURL,
 		ClientConfigSHA: configSHA,
+		OriginPatterns:  []string{originPattern},
 	})
 	if err != nil {
 		return err
@@ -186,6 +192,14 @@ func run() error {
 	ctx, cancel := shutdown.SignalContext(context.Background())
 	defer cancel()
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
+}
+
+func websocketOriginPattern(raw string) (string, error) {
+	origin, err := url.Parse(raw)
+	if err != nil || (origin.Scheme != "http" && origin.Scheme != "https") || origin.Host == "" || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" {
+		return "", fmt.Errorf("H5_ORIGIN must be an http(s) origin without path, query, or fragment: %q", raw)
+	}
+	return origin.Host, nil
 }
 
 func newInternalHTTPClient() *http.Client {

@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-08-14
+updated: 2026-08-15
 ---
 
 # Current Handoff
@@ -20,15 +20,79 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 
 ## Snapshot at handoff
 
-- Steal (`STEAL_FRIEND_CROP`) is on the **direct visitor→owner success
-  path** (no steal FriendInteraction Saga / reconciler). Pest/catch/help
-  still use ActionSaga. Evidence:
-  `../evidence/2026-08-14-steal-direct-success-path.md`.
+- 2026-08-16 kind 集群已用 `deploy/kind-config.yaml` 重建，宿主机固定映射
+  `31238 -> login NodePort`、`32591 -> gate NodePort`；Login/Gate Service 同步
+  固定对应 `nodePort`。7 个当前源码镜像和两个运行 Secret 已恢复，8 个
+  Deployment、4 副本 `zone-pool` 全部 Ready。宿主机两个 `/readyz` 均成功，
+  Gate Endpoint 包含 3 个 Pod；不再需要 `kubectl port-forward`。腾讯云 CLB
+  仍需在控制台把临时后端端口 `18080/18081` 改为 `31238/32591`。
+  Evidence: `../evidence/2026-08-16-kind-clb-nodeport-rebuild.md`。
+
+- H5 邮箱“无未读仍显示 1”已修复：旧代码把 Mail `SET + count=0` 当作未知
+  数量并强制保留 1；在绝对未读数协议下现在直接接受权威零值。新增 Push
+  回归后前端 30 项测试及生产构建通过，仅需 Vite 热更新。
+
+- 邮件领取在线主链路已按 ADR-0013 改为低延迟直连：不创建/推进
+  MailClaimSaga，私人/礼物邮件优先点查后调用 Owner Zone；Actor 修改内存、追加
+  Receipt、标 Dirty 即返回，不同步 SaveCAS；claimed/read 和 Info 未读数在响应后
+  异步更新。旧 Saga/Reconciler 仅保留处理遗留记录。明确接受响应后的 Dirty
+  崩溃窗口可能丢奖励，以及邮件状态落库前故障可能导致重试重复奖励。Player/Mail
+  race 聚焦测试通过；真实 Tcaplus 单次计时待部署后验证。Evidence:
+  `../evidence/2026-08-15-direct-mail-claim-fast-path.md`。
+
+- 公共邮件打开语义已改为“先展示、后异步回写已读”：`OpenMailbox` 会把当前可见
+  的公共未读邮件先在响应里标为已读，并立即刷新 Info 里的未读数；后台再异步
+  将对应 `PlayerMailState.read` 回写到 Tcaplus。这样打开邮箱本身就会消除公共
+  邮件红点，不再依赖后续手动点击。Evidence:
+  `../evidence/2026-08-15-public-mail-open-auto-read.md`。
+
+- 邮箱列表的私人数据查询已从全表 Traverse 改为玩家二级索引查询：
+  `PrivateMail` 按 `recipient_player_id`、`PlayerMailState` 按 `player_id` 一次
+  读取，既不扫描其他玩家私人邮件，也消除逐封状态 N+1。MailSvr 不再启动
+  5 秒 ClaimReconciler/`MailClaimSaga` Traverse。`mail_tables.proto` 已新增
+  `idx_recipient` 和 `idx_player`；旧表缺少索引时会兼容回退 Traverse，避免
+  MailSvr 中断，但只有重建 `PrivateMail`/`PlayerMailState` 后才走快路径。
+  Mail Store/cmd race 回归通过，真实 Tcaplus 单次延迟待部署验证。
+
+- `PlayerMailboxCursor` 已退出邮箱运行时热路径：打开邮箱不再执行 Cursor
+  DoGet/CAS，登录未读校准、标记已读和 Claim 后刷新也不再读取它；未读权威
+  统一为 `PlayerMailState.read`，Info 使用权威计算时间作为事件水位。表和协议
+  字段暂留兼容，无 schema 变化；Mail/Info race 回归通过。
+
+- 首次登录邮箱未读数量显示已修复：H5 原本就会在快照后调用
+  `CHECK_MAILBOX_INDICATOR`；第一处根因是 Gate Mail gRPC 适配层遗漏
+  `new_mail_count`，第二处根因是旧实现按“上次打开邮箱后新增”计数并在打开
+  邮箱时清零。现在登录按权威 `PlayerMailState.read` 校准并修复 Info 缓存，
+  打开不清零，逐封阅读/领取才减一；普通阅读和 Claim Saga 成功都会把最新
+  绝对未读数写回 Info，保证后续在线新邮件在正确基线上递增。部署需更新
+  Mail 和包含字段修复的 Gate，
+  Zone/Info 不需滚动，前端本地 Vite 自动热更新。Evidence:
+  `../evidence/2026-08-15-infosvr-quick-info-mail-count.md`。
+
+- H5 图鉴新解锁红点已完成离线验证：快照/Patch 中新增的解锁作物会同时点亮
+  顶部图鉴按钮和对应图鉴条目；关闭图鉴或切换抽屉后才按玩家写入浏览器
+  已读基线并清除。首次使用不会把历史解锁误报为新增，无服务端协议或表变化。
+  5 个前端测试文件共 28 项测试及生产构建通过；真实浏览器收获后的视觉验收
+  待执行。Evidence: `../evidence/2026-08-15-h5-compendium-red-dot.md`。
+
+- 好友红点语义已拆分：顶部“好友”按钮只表示好友面板有未查看的成熟通知，
+  打开好友列表后立即清除；列表内每个好友农场的成熟红点继续跟随成熟状态，
+  进入某个好友农场不再把该农场红点抹掉。前端单测已覆盖按钮态清除与列表态
+  保留。Evidence: `../evidence/2026-08-15-friend-red-dot-separation.md`。
+
+- All four visitor farm mutations (steal/apply pest/catch pest/help clean) use
+  the direct visitor→owner path and no runtime FriendInteraction Saga. Both
+  Owner farm mutation/receipt and Visitor coin/task/receipt commit in Actor
+  memory, `markDirty`, and return without waiting for Checkpoint SaveCAS. A
+  crash inside either Dirty window may lose an already-acknowledged effect and
+  its receipt, and a retry may execute it again; this weaker boundary is
+  explicitly accepted. Evidence:
+  `../evidence/2026-08-15-friend-action-owner-async-dirty.md`.
 
 - Actor idle eviction **phase 1** is implemented: Actor-owned maturity
   deadlines replace the Runtime one-second full scan; idle Actors with no
   owner connection, no live visitors, idle mailbox, and no external access
-  for 3 minutes are SaveCAS'd then removed; Zone sweeps every 10s. Redis
+  for 60 seconds are SaveCAS'd then removed; Zone sweeps every 10s. Redis
   offline maturity wake, TimerSvr, and QuerySvr remain phase 2/3. Evidence:
   `../evidence/2026-08-13-actor-idle-eviction-local-tick.md`.
 
@@ -140,6 +204,44 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   row is temporarily not visible. A live single sample reduced post-response
   mail red-dot latency from 2.779 s to 1.160 s; this is not a percentile claim.
   Evidence: `../evidence/2026-08-14-friend-action-mail-red-dot-latency.md`.
+- Mail/friend-farm red-dot routing has passed its offline cutover gate:
+  MailSvr now owns a Coordinator SDK subscriber and sends mail indicators
+  directly to the recipient Owner Zone; Zone queues maturity events, queries
+  FriendSvr and sends friend-farm indicators directly to each friend's Owner
+  Zone. Both call sites no longer depend on InfoSvr, while the old Info RPCs
+  remain for compatibility. Delivery groups by full Shard Route and retries
+  `NOT_OWNER` once. No Tcaplus schema change is required. The four affected
+  images are deployed and all 11 Pods are Ready; the InfoSvr-down functional
+  E2E remains pending. Evidence:
+  `../evidence/2026-08-15-direct-red-dot-routing.md`.
+- InfoSvr quick-info projection is implemented and deployed: Zone connection
+  leases publish online state (30s refresh / 90s expiry plus 3m reconcile),
+  Actor mailbox summaries publish earliest maturity and mature candidates,
+  FriendSvr batch-enriches FriendList, and MailSvr caches absolute
+  `new_mail_count` while retaining Tcaplus/Cursor authority and cold-cache
+  repair. H5 shows green bold 在线 / grey 离线 and a red numeric mail badge
+  (`99+` cap). No Tcaplus schema change was needed. Race, Vue tests/build and
+  11-Pod rollout are green; destructive/restart and user-visible functional
+  E2Es remain pending. Evidence:
+  `../evidence/2026-08-15-infosvr-quick-info-mail-count.md`.
+- Manual testing found and fixed a cold/error-path gift indicator bug: MailSvr
+  now repairs an unknown InfoSvr count from authoritative mail/cursor data
+  instead of pushing an accidental zero; H5 keeps a `SET + count=0` fallback
+  badge visible while fetching the exact count. Login already performs the
+  InfoSvr-enriched FriendList query and seeds friend-farm indicators without
+  opening the Friends drawer. The Mail image is rolled out; browser-visible
+  revalidation remains pending. Evidence:
+  `../evidence/2026-08-15-infosvr-quick-info-mail-count.md`.
+- Offline farm indicators and login visitor reminders are deployed and startup-verified.
+  Player Actors now publish the offline maturity summary only at eviction;
+  online maturity remains an active Zone push. InfoSvr compares each offline
+  farm's checkpoint revision with the viewer's seen revision, records at most
+  50 distinct visitors while the owner is offline, and uses versioned ACK so
+  a concurrent new visit is not cleared. H5 queries and acknowledges the list
+  after login. No Tcaplus schema change is required; live cluster/browser E2E
+  has rolled through Info/Friend/Gate/all Zones with 11 Pods Ready; browser
+  dual-account E2E remains pending. Evidence:
+  `../evidence/2026-08-15-offline-farm-visitor-info.md`.
 - Final delivery sprint **04-3C mail claim Saga** is complete: MailSvr
   orchestrates `BeginClaim → Zone ApplyMailReward → CompleteClaim`; Player
   Actor grants attachments all-or-nothing with sync SaveCAS

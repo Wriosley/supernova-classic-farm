@@ -473,12 +473,18 @@ func (x *CheckMutualFriendResponse) GetError() *ws.Error {
 }
 
 type FriendView struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	AccountName   string                 `protobuf:"bytes,2,opt,name=account_name,json=accountName,proto3" json:"account_name,omitempty"`
-	CreatedAtMs   int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId             uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	AccountName          string                 `protobuf:"bytes,2,opt,name=account_name,json=accountName,proto3" json:"account_name,omitempty"`
+	CreatedAtMs          int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	PresenceKnown        bool                   `protobuf:"varint,4,opt,name=presence_known,json=presenceKnown,proto3" json:"presence_known,omitempty"`
+	Online               bool                   `protobuf:"varint,5,opt,name=online,proto3" json:"online,omitempty"`
+	LastSeenAtMs         int64                  `protobuf:"varint,6,opt,name=last_seen_at_ms,json=lastSeenAtMs,proto3" json:"last_seen_at_ms,omitempty"`
+	FarmSummaryKnown     bool                   `protobuf:"varint,7,opt,name=farm_summary_known,json=farmSummaryKnown,proto3" json:"farm_summary_known,omitempty"`
+	EarliestMatureAtMs   int64                  `protobuf:"varint,8,opt,name=earliest_mature_at_ms,json=earliestMatureAtMs,proto3" json:"earliest_mature_at_ms,omitempty"`
+	MayHaveStealableCrop bool                   `protobuf:"varint,9,opt,name=may_have_stealable_crop,json=mayHaveStealableCrop,proto3" json:"may_have_stealable_crop,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *FriendView) Reset() {
@@ -532,6 +538,264 @@ func (x *FriendView) GetCreatedAtMs() int64 {
 	return 0
 }
 
+func (x *FriendView) GetPresenceKnown() bool {
+	if x != nil {
+		return x.PresenceKnown
+	}
+	return false
+}
+
+func (x *FriendView) GetOnline() bool {
+	if x != nil {
+		return x.Online
+	}
+	return false
+}
+
+func (x *FriendView) GetLastSeenAtMs() int64 {
+	if x != nil {
+		return x.LastSeenAtMs
+	}
+	return 0
+}
+
+func (x *FriendView) GetFarmSummaryKnown() bool {
+	if x != nil {
+		return x.FarmSummaryKnown
+	}
+	return false
+}
+
+func (x *FriendView) GetEarliestMatureAtMs() int64 {
+	if x != nil {
+		return x.EarliestMatureAtMs
+	}
+	return 0
+}
+
+func (x *FriendView) GetMayHaveStealableCrop() bool {
+	if x != nil {
+		return x.MayHaveStealableCrop
+	}
+	return false
+}
+
+type GetOfflineVisitorsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CallerPlayerId uint64                 `protobuf:"varint,1,opt,name=caller_player_id,json=callerPlayerId,proto3" json:"caller_player_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetOfflineVisitorsRequest) Reset() {
+	*x = GetOfflineVisitorsRequest{}
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOfflineVisitorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOfflineVisitorsRequest) ProtoMessage() {}
+
+func (x *GetOfflineVisitorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOfflineVisitorsRequest.ProtoReflect.Descriptor instead.
+func (*GetOfflineVisitorsRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_friend_friend_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetOfflineVisitorsRequest) GetCallerPlayerId() uint64 {
+	if x != nil {
+		return x.CallerPlayerId
+	}
+	return 0
+}
+
+type GetOfflineVisitorsResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Visitors       []*FriendView          `protobuf:"bytes,1,rep,name=visitors,proto3" json:"visitors,omitempty"`
+	VisitorVersion uint64                 `protobuf:"varint,2,opt,name=visitor_version,json=visitorVersion,proto3" json:"visitor_version,omitempty"`
+	Truncated      bool                   `protobuf:"varint,3,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	Error          *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetOfflineVisitorsResponse) Reset() {
+	*x = GetOfflineVisitorsResponse{}
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOfflineVisitorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOfflineVisitorsResponse) ProtoMessage() {}
+
+func (x *GetOfflineVisitorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOfflineVisitorsResponse.ProtoReflect.Descriptor instead.
+func (*GetOfflineVisitorsResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_friend_friend_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetOfflineVisitorsResponse) GetVisitors() []*FriendView {
+	if x != nil {
+		return x.Visitors
+	}
+	return nil
+}
+
+func (x *GetOfflineVisitorsResponse) GetVisitorVersion() uint64 {
+	if x != nil {
+		return x.VisitorVersion
+	}
+	return 0
+}
+
+func (x *GetOfflineVisitorsResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *GetOfflineVisitorsResponse) GetError() *ws.Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+type AckOfflineVisitorsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CallerPlayerId uint64                 `protobuf:"varint,1,opt,name=caller_player_id,json=callerPlayerId,proto3" json:"caller_player_id,omitempty"`
+	VisitorVersion uint64                 `protobuf:"varint,2,opt,name=visitor_version,json=visitorVersion,proto3" json:"visitor_version,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AckOfflineVisitorsRequest) Reset() {
+	*x = AckOfflineVisitorsRequest{}
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckOfflineVisitorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckOfflineVisitorsRequest) ProtoMessage() {}
+
+func (x *AckOfflineVisitorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckOfflineVisitorsRequest.ProtoReflect.Descriptor instead.
+func (*AckOfflineVisitorsRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_friend_friend_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *AckOfflineVisitorsRequest) GetCallerPlayerId() uint64 {
+	if x != nil {
+		return x.CallerPlayerId
+	}
+	return 0
+}
+
+func (x *AckOfflineVisitorsRequest) GetVisitorVersion() uint64 {
+	if x != nil {
+		return x.VisitorVersion
+	}
+	return 0
+}
+
+type AckOfflineVisitorsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	Error         *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AckOfflineVisitorsResponse) Reset() {
+	*x = AckOfflineVisitorsResponse{}
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckOfflineVisitorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckOfflineVisitorsResponse) ProtoMessage() {}
+
+func (x *AckOfflineVisitorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_friend_friend_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckOfflineVisitorsResponse.ProtoReflect.Descriptor instead.
+func (*AckOfflineVisitorsResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_friend_friend_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *AckOfflineVisitorsResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+func (x *AckOfflineVisitorsResponse) GetError() *ws.Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
 var File_classicfarm_v1_friend_friend_proto protoreflect.FileDescriptor
 
 const file_classicfarm_v1_friend_friend_proto_rawDesc = "" +
@@ -567,17 +831,38 @@ const file_classicfarm_v1_friend_friend_proto_rawDesc = "" +
 	"\vrelation_id\x18\x02 \x01(\fH\x00R\n" +
 	"relationId\x88\x01\x01\x12.\n" +
 	"\x05error\x18\x03 \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05errorB\x0e\n" +
-	"\f_relation_id\"p\n" +
+	"\f_relation_id\"\xee\x02\n" +
 	"\n" +
 	"FriendView\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\faccount_name\x18\x02 \x01(\tR\vaccountName\x12\"\n" +
-	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs2\xd1\x03\n" +
+	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs\x12%\n" +
+	"\x0epresence_known\x18\x04 \x01(\bR\rpresenceKnown\x12\x16\n" +
+	"\x06online\x18\x05 \x01(\bR\x06online\x12%\n" +
+	"\x0flast_seen_at_ms\x18\x06 \x01(\x03R\flastSeenAtMs\x12,\n" +
+	"\x12farm_summary_known\x18\a \x01(\bR\x10farmSummaryKnown\x121\n" +
+	"\x15earliest_mature_at_ms\x18\b \x01(\x03R\x12earliestMatureAtMs\x125\n" +
+	"\x17may_have_stealable_crop\x18\t \x01(\bR\x14mayHaveStealableCrop\"E\n" +
+	"\x19GetOfflineVisitorsRequest\x12(\n" +
+	"\x10caller_player_id\x18\x01 \x01(\x04R\x0ecallerPlayerId\"\xd2\x01\n" +
+	"\x1aGetOfflineVisitorsResponse\x12=\n" +
+	"\bvisitors\x18\x01 \x03(\v2!.classicfarm.friend.v1.FriendViewR\bvisitors\x12'\n" +
+	"\x0fvisitor_version\x18\x02 \x01(\x04R\x0evisitorVersion\x12\x1c\n" +
+	"\ttruncated\x18\x03 \x01(\bR\ttruncated\x12.\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"n\n" +
+	"\x19AckOfflineVisitorsRequest\x12(\n" +
+	"\x10caller_player_id\x18\x01 \x01(\x04R\x0ecallerPlayerId\x12'\n" +
+	"\x0fvisitor_version\x18\x02 \x01(\x04R\x0evisitorVersion\"f\n" +
+	"\x1aAckOfflineVisitorsResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\x12.\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error2\xc7\x05\n" +
 	"\rFriendService\x12p\n" +
 	"\x0fCreateShareCode\x12-.classicfarm.friend.v1.CreateShareCodeRequest\x1a..classicfarm.friend.v1.CreateShareCodeResponse\x12p\n" +
 	"\x0fRedeemShareCode\x12-.classicfarm.friend.v1.RedeemShareCodeRequest\x1a..classicfarm.friend.v1.RedeemShareCodeResponse\x12d\n" +
 	"\vListFriends\x12).classicfarm.friend.v1.ListFriendsRequest\x1a*.classicfarm.friend.v1.ListFriendsResponse\x12v\n" +
-	"\x11CheckMutualFriend\x12/.classicfarm.friend.v1.CheckMutualFriendRequest\x1a0.classicfarm.friend.v1.CheckMutualFriendResponseBVZTgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/friend;friendv1b\x06proto3"
+	"\x11CheckMutualFriend\x12/.classicfarm.friend.v1.CheckMutualFriendRequest\x1a0.classicfarm.friend.v1.CheckMutualFriendResponse\x12y\n" +
+	"\x12GetOfflineVisitors\x120.classicfarm.friend.v1.GetOfflineVisitorsRequest\x1a1.classicfarm.friend.v1.GetOfflineVisitorsResponse\x12y\n" +
+	"\x12AckOfflineVisitors\x120.classicfarm.friend.v1.AckOfflineVisitorsRequest\x1a1.classicfarm.friend.v1.AckOfflineVisitorsResponseBVZTgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/friend;friendv1b\x06proto3"
 
 var (
 	file_classicfarm_v1_friend_friend_proto_rawDescOnce sync.Once
@@ -591,39 +876,50 @@ func file_classicfarm_v1_friend_friend_proto_rawDescGZIP() []byte {
 	return file_classicfarm_v1_friend_friend_proto_rawDescData
 }
 
-var file_classicfarm_v1_friend_friend_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_classicfarm_v1_friend_friend_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_classicfarm_v1_friend_friend_proto_goTypes = []any{
-	(*CreateShareCodeRequest)(nil),    // 0: classicfarm.friend.v1.CreateShareCodeRequest
-	(*CreateShareCodeResponse)(nil),   // 1: classicfarm.friend.v1.CreateShareCodeResponse
-	(*RedeemShareCodeRequest)(nil),    // 2: classicfarm.friend.v1.RedeemShareCodeRequest
-	(*RedeemShareCodeResponse)(nil),   // 3: classicfarm.friend.v1.RedeemShareCodeResponse
-	(*ListFriendsRequest)(nil),        // 4: classicfarm.friend.v1.ListFriendsRequest
-	(*ListFriendsResponse)(nil),       // 5: classicfarm.friend.v1.ListFriendsResponse
-	(*CheckMutualFriendRequest)(nil),  // 6: classicfarm.friend.v1.CheckMutualFriendRequest
-	(*CheckMutualFriendResponse)(nil), // 7: classicfarm.friend.v1.CheckMutualFriendResponse
-	(*FriendView)(nil),                // 8: classicfarm.friend.v1.FriendView
-	(*ws.Error)(nil),                  // 9: classicfarm.ws.v1.Error
+	(*CreateShareCodeRequest)(nil),     // 0: classicfarm.friend.v1.CreateShareCodeRequest
+	(*CreateShareCodeResponse)(nil),    // 1: classicfarm.friend.v1.CreateShareCodeResponse
+	(*RedeemShareCodeRequest)(nil),     // 2: classicfarm.friend.v1.RedeemShareCodeRequest
+	(*RedeemShareCodeResponse)(nil),    // 3: classicfarm.friend.v1.RedeemShareCodeResponse
+	(*ListFriendsRequest)(nil),         // 4: classicfarm.friend.v1.ListFriendsRequest
+	(*ListFriendsResponse)(nil),        // 5: classicfarm.friend.v1.ListFriendsResponse
+	(*CheckMutualFriendRequest)(nil),   // 6: classicfarm.friend.v1.CheckMutualFriendRequest
+	(*CheckMutualFriendResponse)(nil),  // 7: classicfarm.friend.v1.CheckMutualFriendResponse
+	(*FriendView)(nil),                 // 8: classicfarm.friend.v1.FriendView
+	(*GetOfflineVisitorsRequest)(nil),  // 9: classicfarm.friend.v1.GetOfflineVisitorsRequest
+	(*GetOfflineVisitorsResponse)(nil), // 10: classicfarm.friend.v1.GetOfflineVisitorsResponse
+	(*AckOfflineVisitorsRequest)(nil),  // 11: classicfarm.friend.v1.AckOfflineVisitorsRequest
+	(*AckOfflineVisitorsResponse)(nil), // 12: classicfarm.friend.v1.AckOfflineVisitorsResponse
+	(*ws.Error)(nil),                   // 13: classicfarm.ws.v1.Error
 }
 var file_classicfarm_v1_friend_friend_proto_depIdxs = []int32{
-	9,  // 0: classicfarm.friend.v1.CreateShareCodeResponse.error:type_name -> classicfarm.ws.v1.Error
+	13, // 0: classicfarm.friend.v1.CreateShareCodeResponse.error:type_name -> classicfarm.ws.v1.Error
 	8,  // 1: classicfarm.friend.v1.RedeemShareCodeResponse.friend:type_name -> classicfarm.friend.v1.FriendView
-	9,  // 2: classicfarm.friend.v1.RedeemShareCodeResponse.error:type_name -> classicfarm.ws.v1.Error
+	13, // 2: classicfarm.friend.v1.RedeemShareCodeResponse.error:type_name -> classicfarm.ws.v1.Error
 	8,  // 3: classicfarm.friend.v1.ListFriendsResponse.friends:type_name -> classicfarm.friend.v1.FriendView
-	9,  // 4: classicfarm.friend.v1.ListFriendsResponse.error:type_name -> classicfarm.ws.v1.Error
-	9,  // 5: classicfarm.friend.v1.CheckMutualFriendResponse.error:type_name -> classicfarm.ws.v1.Error
-	0,  // 6: classicfarm.friend.v1.FriendService.CreateShareCode:input_type -> classicfarm.friend.v1.CreateShareCodeRequest
-	2,  // 7: classicfarm.friend.v1.FriendService.RedeemShareCode:input_type -> classicfarm.friend.v1.RedeemShareCodeRequest
-	4,  // 8: classicfarm.friend.v1.FriendService.ListFriends:input_type -> classicfarm.friend.v1.ListFriendsRequest
-	6,  // 9: classicfarm.friend.v1.FriendService.CheckMutualFriend:input_type -> classicfarm.friend.v1.CheckMutualFriendRequest
-	1,  // 10: classicfarm.friend.v1.FriendService.CreateShareCode:output_type -> classicfarm.friend.v1.CreateShareCodeResponse
-	3,  // 11: classicfarm.friend.v1.FriendService.RedeemShareCode:output_type -> classicfarm.friend.v1.RedeemShareCodeResponse
-	5,  // 12: classicfarm.friend.v1.FriendService.ListFriends:output_type -> classicfarm.friend.v1.ListFriendsResponse
-	7,  // 13: classicfarm.friend.v1.FriendService.CheckMutualFriend:output_type -> classicfarm.friend.v1.CheckMutualFriendResponse
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	13, // 4: classicfarm.friend.v1.ListFriendsResponse.error:type_name -> classicfarm.ws.v1.Error
+	13, // 5: classicfarm.friend.v1.CheckMutualFriendResponse.error:type_name -> classicfarm.ws.v1.Error
+	8,  // 6: classicfarm.friend.v1.GetOfflineVisitorsResponse.visitors:type_name -> classicfarm.friend.v1.FriendView
+	13, // 7: classicfarm.friend.v1.GetOfflineVisitorsResponse.error:type_name -> classicfarm.ws.v1.Error
+	13, // 8: classicfarm.friend.v1.AckOfflineVisitorsResponse.error:type_name -> classicfarm.ws.v1.Error
+	0,  // 9: classicfarm.friend.v1.FriendService.CreateShareCode:input_type -> classicfarm.friend.v1.CreateShareCodeRequest
+	2,  // 10: classicfarm.friend.v1.FriendService.RedeemShareCode:input_type -> classicfarm.friend.v1.RedeemShareCodeRequest
+	4,  // 11: classicfarm.friend.v1.FriendService.ListFriends:input_type -> classicfarm.friend.v1.ListFriendsRequest
+	6,  // 12: classicfarm.friend.v1.FriendService.CheckMutualFriend:input_type -> classicfarm.friend.v1.CheckMutualFriendRequest
+	9,  // 13: classicfarm.friend.v1.FriendService.GetOfflineVisitors:input_type -> classicfarm.friend.v1.GetOfflineVisitorsRequest
+	11, // 14: classicfarm.friend.v1.FriendService.AckOfflineVisitors:input_type -> classicfarm.friend.v1.AckOfflineVisitorsRequest
+	1,  // 15: classicfarm.friend.v1.FriendService.CreateShareCode:output_type -> classicfarm.friend.v1.CreateShareCodeResponse
+	3,  // 16: classicfarm.friend.v1.FriendService.RedeemShareCode:output_type -> classicfarm.friend.v1.RedeemShareCodeResponse
+	5,  // 17: classicfarm.friend.v1.FriendService.ListFriends:output_type -> classicfarm.friend.v1.ListFriendsResponse
+	7,  // 18: classicfarm.friend.v1.FriendService.CheckMutualFriend:output_type -> classicfarm.friend.v1.CheckMutualFriendResponse
+	10, // 19: classicfarm.friend.v1.FriendService.GetOfflineVisitors:output_type -> classicfarm.friend.v1.GetOfflineVisitorsResponse
+	12, // 20: classicfarm.friend.v1.FriendService.AckOfflineVisitors:output_type -> classicfarm.friend.v1.AckOfflineVisitorsResponse
+	15, // [15:21] is the sub-list for method output_type
+	9,  // [9:15] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_friend_friend_proto_init() }
@@ -638,7 +934,7 @@ func file_classicfarm_v1_friend_friend_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_friend_friend_proto_rawDesc), len(file_classicfarm_v1_friend_friend_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

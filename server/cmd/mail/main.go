@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	coordinatorv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/coordinator"
 	mailv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/mail"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinatorclient"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/mail"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
@@ -19,6 +22,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/shutdown"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/tcaplusdb"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/reddot"
 	"google.golang.org/grpc"
 )
 
@@ -41,6 +45,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	ctx, cancel := shutdown.SignalContext(context.Background())
+	defer cancel()
 	if strings.TrimSpace(os.Getenv("STORAGE_MODE")) != "tcaplus" {
 		return errors.New("MailSvr requires STORAGE_MODE=tcaplus")
 	}
@@ -72,24 +78,39 @@ func run() error {
 		return err
 	}
 
-	var notifier mail.RedDotNotifier
-	var infoCloser interface{ Close() error }
-	if infoURL := strings.TrimSpace(os.Getenv("INFO_RPC_URL")); infoURL != "" {
-		infoClient, infoErr := mail.NewInfoClient(rpcKey, infoURL)
-		if infoErr != nil {
-			return infoErr
-		}
-		infoCloser = infoClient
-		notifier = infoClient
-	} else {
-		logger.Warn("INFO_RPC_URL unset; private mail red dots disabled")
+	coordinatorRPCURL := envOr("COORDINATOR_RPC_URL", "http://127.0.0.1:8083")
+	sdk, err := coordinatorclient.New(coordinatorclient.Config{
+		Endpoint: coordinatorRPCURL, SubscriberID: envOr("MAIL_INSTANCE_ID", "mail-local"),
+		Kind: coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_MAIL, HMACKey: rpcKey,
+	})
+	if err != nil {
+		return err
 	}
-	if infoCloser != nil {
-		defer func() { _ = infoCloser.Close() }()
+	if err = sdk.Start(ctx); err != nil {
+		return err
 	}
+	defer sdk.Close()
+	routes, err := gateway.NewCoordinatorRouteResolver(sdk, nil)
+	if err != nil {
+		return err
+	}
+	redDotZones, err := reddot.NewZoneClient(rpcKey, "mail")
+	if err != nil {
+		return err
+	}
+	defer redDotZones.Close()
+	delivery, err := reddot.NewDelivery(routes, redDotZones, logger)
+	if err != nil {
+		return err
+	}
+	notifier := mail.NewDirectRedDotNotifier(delivery)
+	infoQuick, err := mail.NewInfoClient(rpcKey, envOr("INFO_RPC_URL", "http://127.0.0.1:8086"))
+	if err != nil {
+		return err
+	}
+	defer infoQuick.Close()
 
-	coordinatorURL := envOr("COORDINATOR_URL", "http://127.0.0.1:8083")
-	zoneClient, err := mail.NewZoneClient(rpcKey, coordinatorURL, nil)
+	zoneClient, err := mail.NewZoneClient(rpcKey, routes)
 	if err != nil {
 		return err
 	}
@@ -103,6 +124,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	service.SetMailboxQuickCache(infoQuick)
 	admin, err := mail.NewAdminHandler(service, adminToken)
 	if err != nil {
 		return err
@@ -143,9 +165,9 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 	logger.Info("mail listening", "address", cfg.HTTPAddress)
-	ctx, cancel := shutdown.SignalContext(context.Background())
-	defer cancel()
-	go mail.NewClaimReconciler(orchestrator, time.Now, logger).Run(ctx)
+	// The accepted direct-claim path no longer creates MailClaimSaga records.
+	// Legacy rows and reconciler code remain available for manual recovery, but
+	// production startup must not run a five-second full-table Saga Traverse.
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
 }
 

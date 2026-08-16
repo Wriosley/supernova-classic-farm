@@ -12,7 +12,7 @@ import (
 
 // actorIdleTimeout is the continuous idle window required before an Actor may
 // be safely recycled. Tests inject time rather than sleeping.
-const actorIdleTimeout = 3 * time.Minute
+const actorIdleTimeout = 60 * time.Second
 
 func (a *runtimeActor) touchAccess(now time.Time) {
 	if a == nil || now.IsZero() {
@@ -175,6 +175,7 @@ func (r *Runtime) evictIdleActor(ctx context.Context, playerID uint64, now time.
 		r.mu.Unlock()
 	}
 
+	r.publishFarmQuickSummary(a)
 	r.cancelActorDeadline(playerID)
 	r.removeActorIfSame(playerID, a)
 	go a.mailbox.Close()

@@ -135,6 +135,12 @@ func (c *Client) DoUpdate(message proto.Message, opt *option.PBOpt, _ ...uint32)
 	return c.raw.DoUpdate(message, opt, c.zoneID)
 }
 
+func (c *Client) DoGetByPartKey(
+	message proto.Message, keys []string, opt *option.PBOpt, _ ...uint32,
+) ([]proto.Message, error) {
+	return c.raw.DoGetByPartKey(message, keys, opt, c.zoneID)
+}
+
 func (c *Client) DoDelete(message proto.Message, opt *option.PBOpt, _ ...uint32) error {
 	return c.raw.DoDelete(message, opt, c.zoneID)
 }
@@ -158,6 +164,13 @@ func IsNotFound(err error) bool {
 
 func IsAlreadyExists(err error) bool {
 	return ErrorCode(err) == terror.SVR_ERR_FAIL_RECORD_EXIST
+}
+
+// IsIndexNotFound reports that a partial-key read named no usable server-side
+// index. Older live tables may legitimately predate a newly introduced query
+// index, so callers can use this to retain a bounded compatibility fallback.
+func IsIndexNotFound(err error) bool {
+	return ErrorCode(err) == terror.TXHDB_ERR_INDEX_NO_EXIST
 }
 
 func ErrorCode(err error) int {

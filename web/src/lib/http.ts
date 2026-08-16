@@ -127,12 +127,13 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
 
 function localConfigUrl(advertisedUrl: string): string {
   const url = new URL(advertisedUrl, window.location.href)
-  const isLoopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost'
   if (
     import.meta.env.DEV &&
-    isLoopback &&
     url.pathname.startsWith('/v1/')
   ) {
+    // Keep development HTTP same-origin even when Login advertises a CLB URL.
+    // Vite forwards /v1 through the configured Login target; a browser fetch
+    // of the absolute CLB URL would otherwise require production CORS policy.
     return `${url.pathname}${url.search}`
   }
   return url.href

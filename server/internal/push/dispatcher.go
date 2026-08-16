@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	defaultQueueSize       = 256
-	defaultWorkers         = 2
-	defaultPublishTimeout  = 2 * time.Second
+	defaultQueueSize         = 256
+	defaultWorkers           = 2
+	defaultPublishTimeout    = 2 * time.Second
 	defaultCloseDrainTimeout = 3 * time.Second
 )
 
@@ -62,6 +62,7 @@ type RedDotChanged struct {
 	Operation      wsv1.RedDotOperation
 	SourcePlayerID uint64
 	HasSource      bool
+	Count          uint32
 }
 
 func (r *RedDotChanged) ToPush() *wsv1.RedDotChangedPush {
@@ -72,6 +73,7 @@ func (r *RedDotChanged) ToPush() *wsv1.RedDotChangedPush {
 		NotificationId: r.NotificationID,
 		Category:       r.Category,
 		Operation:      r.Operation,
+		Count:          r.Count,
 	}
 	if r.HasSource {
 		id := r.SourcePlayerID

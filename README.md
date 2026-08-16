@@ -158,6 +158,62 @@ Vite 的 `/ws` 代理访问 `127.0.0.1:8081`；不需要转发 Coordinator，也
 长期对外部署应改用 Ingress 或受控的反向代理，而不是长期依赖
 `kubectl port-forward`。
 
+### 手动更新 kind 集群中的服务
+
+默认协作边界是：AI 修改代码并运行离线测试，集群镜像构建、加载和滚动
+更新由项目负责人手动执行。每次代码交付应明确列出受影响的服务；只更新
+这些服务即可，不必重建整个集群。
+
+以更新 Zone 为例，在仓库根目录执行：
+
+```bash
+docker build --build-arg SERVICE=zone -t classic-farm/zone:dev .
+kind load docker-image classic-farm/zone:dev --name classic-farm
+kubectl -n classic-farm rollout restart statefulset/zone-pool
+kubectl -n classic-farm rollout status statefulset/zone-pool --timeout=300s
+```
+
+如果集群仍保留固定身份的 `zone-a`、`zone-b`，也要同时更新它们：
+
+```bash
+kubectl -n classic-farm rollout restart deployment/zone-a deployment/zone-b
+kubectl -n classic-farm rollout status deployment/zone-a --timeout=300s
+kubectl -n classic-farm rollout status deployment/zone-b --timeout=300s
+```
+
+更新其他 Go 服务时，将服务名同时用于 Docker 构建参数、镜像名和
+Deployment 名。例如更新 MailSvr：
+
+```bash
+docker build --build-arg SERVICE=mail -t classic-farm/mail:dev .
+kind load docker-image classic-farm/mail:dev --name classic-farm
+kubectl -n classic-farm rollout restart deployment/mail
+kubectl -n classic-farm rollout status deployment/mail --timeout=300s
+```
+
+可用的后端镜像名是 `login`、`gate`、`coordinator`、`zone`、`friend`、
+`info` 和 `mail`。共享协议或公共 Go 包发生变化时，可能需要更新多个服务，
+以每次代码交付列出的影响范围为准。
+
+修改了 `deploy/k8s/` 清单后，先应用清单，再滚动受影响的服务：
+
+```bash
+kubectl apply -k deploy/k8s
+```
+
+更新后检查运行状态和日志：
+
+```bash
+kubectl -n classic-farm get pods -o wide
+kubectl -n classic-farm get deployments,statefulsets
+kubectl -n classic-farm logs deployment/mail --tail=100
+kubectl -n classic-farm logs statefulset/zone-pool --tail=100
+```
+
+只修改 `web/` 下的 Vue H5 时，本地 `npm run dev` 会热更新，不需要滚动
+任何集群服务。Tcaplus schema 变化不能通过重启服务完成；交付说明会单独
+列出需要更新的 Proto 和表。
+
 MySQL 仅作为保留的基线和回退路径。需要运行该基线时，启动 MySQL
 并应用迁移：
 

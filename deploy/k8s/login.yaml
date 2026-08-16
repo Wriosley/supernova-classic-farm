@@ -28,14 +28,8 @@ spec:
               value: ""
             - name: HTTP_ADDRESS
               value: 0.0.0.0:8080
-            - name: H5_ORIGIN
-              value: http://localhost:5173
             - name: GATEWAY_ID
               value: local-gateway
-            - name: GATEWAY_URL
-              value: ws://localhost:8081/ws
-            - name: CLIENT_CONFIG_URL
-              value: http://localhost:8080/v1/client-config/1
           ports:
             - name: http
               containerPort: 8080

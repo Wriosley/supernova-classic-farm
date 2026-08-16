@@ -11,6 +11,7 @@ import (
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/protocol/option"
 	"github.com/tencentyun/tcaplusdb-go-sdk/pb/terror"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type storedRecord struct {
@@ -120,6 +121,44 @@ func (c *Client) Traverse(message proto.Message) ([]proto.Message, error) {
 		return nil, &terror.ErrorCode{Code: terror.TXHDB_ERR_RECORD_NOT_EXIST}
 	}
 	return result, nil
+}
+
+func (c *Client) DoGetByPartKey(
+	message proto.Message, keys []string, opt *option.PBOpt, _ ...uint32,
+) ([]proto.Message, error) {
+	if err := contextError(opt); err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	wanted := message.ProtoReflect()
+	table := wanted.Descriptor().FullName()
+	result := make([]proto.Message, 0)
+	for _, stored := range c.records {
+		candidate := stored.message.ProtoReflect()
+		if candidate.Descriptor().FullName() != table {
+			continue
+		}
+		matched := true
+		for _, key := range keys {
+			field := wanted.Descriptor().Fields().ByName(protoreflect.Name(key))
+			if field == nil || !protoValueEqual(wanted.Get(field), candidate.Get(field)) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			result = append(result, proto.Clone(stored.message))
+		}
+	}
+	if len(result) == 0 {
+		return nil, &terror.ErrorCode{Code: terror.TXHDB_ERR_RECORD_NOT_EXIST}
+	}
+	return result, nil
+}
+
+func protoValueEqual(left, right protoreflect.Value) bool {
+	return fmt.Sprint(left.Interface()) == fmt.Sprint(right.Interface())
 }
 
 func recordKey(message proto.Message) string {

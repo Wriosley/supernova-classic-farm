@@ -84,6 +84,7 @@ message CheckMailboxIndicatorRequest {
 
 message CheckMailboxIndicatorResponse {
   bool has_new_mail = 1;
+  uint32 new_mail_count = 2;
   classicfarm.ws.v1.Error error = 15;
 }
 

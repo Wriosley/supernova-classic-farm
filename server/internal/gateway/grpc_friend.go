@@ -21,7 +21,34 @@ type FriendClient interface {
 	CreateCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
 	RedeemCode(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
 	List(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
+	GetOfflineVisitors(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
+	AckOfflineVisitors(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error)
 	CheckMutualFriend(ctx context.Context, playerAID, playerBID uint64) (mutual bool, err error)
+}
+
+func (c *GRPCFriendCommander) GetOfflineVisitors(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	response, err := c.client.GetOfflineVisitors(ctx, &friendv1.GetOfflineVisitorsRequest{CallerPlayerId: caller})
+	if err != nil {
+		return nil, fmt.Errorf("FriendSvr GetOfflineVisitors gRPC call: %w", err)
+	}
+	views := make([]*wsv1.FriendView, 0, len(response.GetVisitors()))
+	for _, visitor := range response.GetVisitors() {
+		views = append(views, friendView(visitor))
+	}
+	return buildDomainResponse(request, response.GetError(), func(envelope *wsv1.WsEnvelope) {
+		envelope.Payload = &wsv1.WsEnvelope_GetOfflineVisitorsResponse{GetOfflineVisitorsResponse: &wsv1.GetOfflineVisitorsResponse{Visitors: views, VisitorVersion: response.GetVisitorVersion(), Truncated: response.GetTruncated()}}
+	})
+}
+
+func (c *GRPCFriendCommander) AckOfflineVisitors(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
+	body := request.GetAckOfflineVisitorsRequest()
+	response, err := c.client.AckOfflineVisitors(ctx, &friendv1.AckOfflineVisitorsRequest{CallerPlayerId: caller, VisitorVersion: body.GetVisitorVersion()})
+	if err != nil {
+		return nil, fmt.Errorf("FriendSvr AckOfflineVisitors gRPC call: %w", err)
+	}
+	return buildDomainResponse(request, response.GetError(), func(envelope *wsv1.WsEnvelope) {
+		envelope.Payload = &wsv1.WsEnvelope_AckOfflineVisitorsResponse{AckOfflineVisitorsResponse: &wsv1.AckOfflineVisitorsResponse{Applied: response.GetApplied()}}
+	})
 }
 
 // GRPCFriendCommander dials FriendSvr's FriendService using the internal
@@ -154,5 +181,8 @@ func friendView(view *friendv1.FriendView) *wsv1.FriendView {
 	}
 	return &wsv1.FriendView{
 		PlayerId: view.PlayerId, AccountName: view.AccountName, CreatedAtMs: view.CreatedAtMs,
+		PresenceKnown: view.PresenceKnown, Online: view.Online, LastSeenAtMs: view.LastSeenAtMs,
+		FarmSummaryKnown: view.FarmSummaryKnown, EarliestMatureAtMs: view.EarliestMatureAtMs,
+		MayHaveStealableCrop: view.MayHaveStealableCrop,
 	}
 }

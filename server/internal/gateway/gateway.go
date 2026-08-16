@@ -73,6 +73,7 @@ type Config struct {
 	HeartbeatInterval time.Duration
 	ClientConfigURL   string
 	ClientConfigSHA   []byte
+	OriginPatterns    []string
 	Now               func() time.Time
 }
 
@@ -90,6 +91,7 @@ type Handler struct {
 	heartbeatInterval time.Duration
 	clientConfigURL   string
 	clientConfigSHA   []byte
+	originPatterns    []string
 	now               func() time.Time
 	pushHub           *PushHub
 	failureStats      *commandFailureStats
@@ -120,6 +122,14 @@ func NewHandler(cfg Config) (*Handler, error) {
 	if cfg.ClientConfigSHA == nil {
 		cfg.ClientConfigSHA = defaultConfigSHA[:]
 	}
+	if len(cfg.OriginPatterns) == 0 {
+		cfg.OriginPatterns = []string{"localhost:5173", "127.0.0.1:5173"}
+	}
+	for _, pattern := range cfg.OriginPatterns {
+		if strings.TrimSpace(pattern) == "" {
+			return nil, errors.New("WebSocket origin pattern must not be empty")
+		}
+	}
 	if len(cfg.ClientConfigSHA) != sha256.Size {
 		return nil, fmt.Errorf("client config SHA-256 must be %d bytes", sha256.Size)
 	}
@@ -135,11 +145,12 @@ func NewHandler(cfg Config) (*Handler, error) {
 	return &Handler{
 		tickets: cfg.Tickets, routes: cfg.Routes, zone: cfg.Zone,
 		visitor: cfg.Visitor, friends: cfg.Friends, mail: cfg.Mail, connections: cfg.Connections,
-		gatewayID: cfg.GatewayID,
+		gatewayID:   cfg.GatewayID,
 		authTimeout: cfg.AuthTimeout, commandTimeout: cfg.CommandTimeout,
 		heartbeatInterval: cfg.HeartbeatInterval,
 		clientConfigURL:   cfg.ClientConfigURL,
 		clientConfigSHA:   append([]byte(nil), cfg.ClientConfigSHA...),
+		originPatterns:    append([]string(nil), cfg.OriginPatterns...),
 		now:               cfg.Now,
 		pushHub:           newPushHub(),
 		failureStats: &commandFailureStats{
@@ -171,7 +182,7 @@ func (h *Handler) DebugCommandFailuresHandler() http.Handler {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"localhost:5173", "127.0.0.1:5173"},
+		OriginPatterns: h.originPatterns,
 	})
 	if err != nil {
 		return
@@ -429,6 +440,14 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 		if request.TargetPlayerId == 0 || request.GetListFriendsRequest() == nil {
 			return errors.New("invalid list friends request")
 		}
+	case wsv1.Action_GET_OFFLINE_VISITORS:
+		if request.TargetPlayerId == 0 || request.GetGetOfflineVisitorsRequest() == nil {
+			return errors.New("invalid get offline visitors request")
+		}
+	case wsv1.Action_ACK_OFFLINE_VISITORS:
+		if request.TargetPlayerId == 0 || request.GetAckOfflineVisitorsRequest() == nil || request.GetAckOfflineVisitorsRequest().GetVisitorVersion() == 0 {
+			return errors.New("invalid ack offline visitors request")
+		}
 	case wsv1.Action_ENTER_FRIEND_FARM:
 		if request.TargetPlayerId == 0 || request.GetEnterFriendFarmRequest() == nil {
 			return errors.New("invalid enter friend farm request")
@@ -513,7 +532,8 @@ func (h *Handler) handleGame(
 		return
 	}
 	switch request.Action {
-	case wsv1.Action_CREATE_FRIEND_CODE, wsv1.Action_REDEEM_FRIEND_CODE, wsv1.Action_LIST_FRIENDS:
+	case wsv1.Action_CREATE_FRIEND_CODE, wsv1.Action_REDEEM_FRIEND_CODE, wsv1.Action_LIST_FRIENDS,
+		wsv1.Action_GET_OFFLINE_VISITORS, wsv1.Action_ACK_OFFLINE_VISITORS:
 		h.handleFriendAction(parent, writer, caller, request)
 		return
 	case wsv1.Action_CLAIM_MAIL, wsv1.Action_OPEN_MAILBOX, wsv1.Action_MARK_MAIL_READ,
@@ -608,6 +628,10 @@ func (h *Handler) handleFriendAction(
 		response, err = h.friends.RedeemCode(ctx, caller, request)
 	case wsv1.Action_LIST_FRIENDS:
 		response, err = h.friends.List(ctx, caller, request)
+	case wsv1.Action_GET_OFFLINE_VISITORS:
+		response, err = h.friends.GetOfflineVisitors(ctx, caller, request)
+	case wsv1.Action_ACK_OFFLINE_VISITORS:
+		response, err = h.friends.AckOfflineVisitors(ctx, caller, request)
 	}
 	var zoneFailure *zoneCommandError
 	if errors.As(err, &zoneFailure) {

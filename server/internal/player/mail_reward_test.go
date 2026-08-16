@@ -34,8 +34,14 @@ func TestApplyMailRewardAllOrNothingAndReplay(t *testing.T) {
 	if runtime.actors[playerID].state.Inventory[1002] != 3 {
 		t.Fatalf("inventory=%v", runtime.actors[playerID].state.Inventory)
 	}
-	if len(store.saved) == 0 {
-		t.Fatal("expected sync SaveCAS")
+	if len(store.saved) != 0 {
+		t.Fatalf("fast mail claim must not synchronously SaveCAS, writes=%d", len(store.saved))
+	}
+	runtime.mu.Lock()
+	dirtyRevision := runtime.dirtyRevision[playerID]
+	runtime.mu.Unlock()
+	if dirtyRevision == 0 {
+		t.Fatal("fast mail claim must mark the Actor dirty")
 	}
 
 	second, err := runtime.ApplyMailReward(context.Background(), playerID, LocalOwnerEpoch, claimID, "m1",

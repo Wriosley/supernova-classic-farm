@@ -6,8 +6,21 @@ import (
 	"time"
 
 	friendv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/friend"
+	infov1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/info"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 )
+
+type fakeQuickInfoReader struct{ players []*infov1.PlayerQuickInfo }
+
+func (f fakeQuickInfoReader) BatchGet(context.Context, []uint64, uint64) ([]*infov1.PlayerQuickInfo, error) {
+	return f.players, nil
+}
+func (f fakeQuickInfoReader) GetOfflineVisitors(context.Context, uint64) ([]uint64, uint64, bool, error) {
+	return nil, 0, false, nil
+}
+func (f fakeQuickInfoReader) AckOfflineVisitors(context.Context, uint64, uint64) (bool, error) {
+	return true, nil
+}
 
 func friendCreateShareCodeRequest(playerID uint64) *friendv1.CreateShareCodeRequest {
 	return &friendv1.CreateShareCodeRequest{CallerPlayerId: playerID}
@@ -213,7 +226,7 @@ func TestRedeemShareCodeDuplicateRedeemReturnsExistingRelation(t *testing.T) {
 
 func TestListFriendsAndCheckMutualFriend(t *testing.T) {
 	ctx := context.Background()
-	_, service := newTestService(t)
+	harness, service := newTestService(t)
 	created, err := service.CreateShareCode(ctx, friendCreateShareCodeRequest(1))
 	if err != nil || created.GetError() != nil {
 		t.Fatalf("CreateShareCode: %v %v", err, created.GetError())
@@ -231,6 +244,7 @@ func TestListFriendsAndCheckMutualFriend(t *testing.T) {
 	if err != nil || redeemed.GetError() != nil {
 		t.Fatalf("RedeemShareCode: %v %v", err, redeemed.GetError())
 	}
+	service.SetQuickInfoReader(fakeQuickInfoReader{players: []*infov1.PlayerQuickInfo{{PlayerId: 2, PresenceKnown: true, Online: true, FarmSummaryKnown: true, HasGrowingCrop: true, EarliestMatureAtMs: harness.now.Add(-time.Second).UnixMilli()}}})
 
 	list, err := service.ListFriends(ctx, friendListRequest(1))
 	if err != nil {
@@ -238,6 +252,9 @@ func TestListFriendsAndCheckMutualFriend(t *testing.T) {
 	}
 	if len(list.Friends) != 1 || list.Friends[0].PlayerId != 2 {
 		t.Fatalf("unexpected friend list: %+v", list.Friends)
+	}
+	if !list.Friends[0].GetOnline() || list.Friends[0].GetMayHaveStealableCrop() {
+		t.Fatalf("quick fields missing: %+v", list.Friends[0])
 	}
 
 	afterMutual, err := service.CheckMutualFriend(ctx, friendCheckMutualRequest(2, 1))

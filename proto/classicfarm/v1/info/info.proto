@@ -12,6 +12,17 @@ option go_package = "github.com/Wriosley/supernova-classic-farm/server/gen/class
 service InfoService {
   rpc SetMailRedDot(SetMailRedDotRequest) returns (SetMailRedDotResponse);
   rpc NotifyOwnerPlotStealable(NotifyOwnerPlotStealableRequest) returns (NotifyOwnerPlotStealableResponse);
+  rpc UpdatePresenceLease(UpdatePresenceLeaseRequest) returns (UpdatePresenceLeaseResponse);
+  rpc BatchRenewPresenceLeases(BatchRenewPresenceLeasesRequest) returns (BatchRenewPresenceLeasesResponse);
+  rpc UpdateFarmQuickInfo(UpdateFarmQuickInfoRequest) returns (UpdateFarmQuickInfoResponse);
+  rpc BatchGetPlayerQuickInfo(BatchGetPlayerQuickInfoRequest) returns (BatchGetPlayerQuickInfoResponse);
+  rpc ApplyPrivateMailEvent(ApplyPrivateMailEventRequest) returns (ApplyPrivateMailEventResponse);
+  rpc SetMailboxQuickInfo(SetMailboxQuickInfoRequest) returns (SetMailboxQuickInfoResponse);
+  rpc AdvancePublicMailWatermark(AdvancePublicMailWatermarkRequest) returns (AdvancePublicMailWatermarkResponse);
+  rpc GetMailboxQuickInfo(GetMailboxQuickInfoRequest) returns (GetMailboxQuickInfoResponse);
+  rpc RecordOfflineFarmVisit(RecordOfflineFarmVisitRequest) returns (RecordOfflineFarmVisitResponse);
+  rpc GetOfflineVisitors(GetOfflineVisitorsRequest) returns (GetOfflineVisitorsResponse);
+  rpc AckOfflineVisitors(AckOfflineVisitorsRequest) returns (AckOfflineVisitorsResponse);
 }
 
 message SetMailRedDotRequest {
@@ -31,4 +42,107 @@ message NotifyOwnerPlotStealableRequest {
 
 message NotifyOwnerPlotStealableResponse {
   classicfarm.ws.v1.Error error = 15;
+}
+
+message PresenceLeaseUpdate {
+  uint64 player_id = 1;
+  bool online = 2;
+  int64 online_until_ms = 3;
+  int64 last_seen_at_ms = 4;
+  string logical_zone_id = 5;
+  string incarnation_id = 6;
+  uint64 owner_epoch = 7;
+  uint64 source_seq = 8;
+}
+
+message UpdatePresenceLeaseRequest { PresenceLeaseUpdate update = 1; }
+message UpdatePresenceLeaseResponse { bool applied = 1; }
+message BatchRenewPresenceLeasesRequest { repeated PresenceLeaseUpdate updates = 1; }
+message BatchRenewPresenceLeasesResponse { uint32 applied_count = 1; }
+
+message FarmQuickInfoUpdate {
+  uint64 player_id = 1;
+  uint64 owner_epoch = 2;
+  uint64 checkpoint_revision = 3;
+  bool has_growing_crop = 4;
+  int64 earliest_mature_at_ms = 5;
+  bool has_mature_crop_candidate = 6;
+  int64 updated_at_ms = 7;
+}
+
+message UpdateFarmQuickInfoRequest { FarmQuickInfoUpdate update = 1; }
+message UpdateFarmQuickInfoResponse { bool applied = 1; }
+
+message BatchGetPlayerQuickInfoRequest {
+  repeated uint64 player_ids = 1;
+  uint64 viewer_player_id = 2;
+}
+message BatchGetPlayerQuickInfoResponse { repeated PlayerQuickInfo players = 1; }
+
+message PlayerQuickInfo {
+  uint64 player_id = 1;
+  bool presence_known = 2;
+  bool online = 3;
+  int64 online_until_ms = 4;
+  int64 last_seen_at_ms = 5;
+  bool farm_summary_known = 6;
+  bool has_growing_crop = 7;
+  int64 earliest_mature_at_ms = 8;
+  bool has_mature_crop_candidate = 9;
+  uint64 owner_epoch = 10;
+  uint64 checkpoint_revision = 11;
+  bool show_offline_farm_red_dot = 12;
+}
+
+message RecordOfflineFarmVisitRequest {
+  uint64 visitor_player_id = 1;
+  uint64 owner_player_id = 2;
+  int64 visited_at_ms = 3;
+}
+message RecordOfflineFarmVisitResponse {
+  bool recorded_for_offline_owner = 1;
+  uint64 seen_checkpoint_revision = 2;
+}
+
+message GetOfflineVisitorsRequest { uint64 owner_player_id = 1; }
+message GetOfflineVisitorsResponse {
+  repeated uint64 visitor_player_ids = 1;
+  uint64 visitor_version = 2;
+  bool truncated = 3;
+}
+
+message AckOfflineVisitorsRequest {
+  uint64 owner_player_id = 1;
+  uint64 visitor_version = 2;
+}
+message AckOfflineVisitorsResponse { bool applied = 1; }
+
+message ApplyPrivateMailEventRequest {
+  uint64 player_id = 1;
+  string mail_id = 2;
+  int64 created_at_ms = 3;
+}
+message ApplyPrivateMailEventResponse {
+  bool known = 1;
+  uint32 new_mail_count = 2;
+  bool applied = 3;
+}
+
+message SetMailboxQuickInfoRequest {
+  uint64 player_id = 1;
+  uint32 new_mail_count = 2;
+  int64 cursor_ms = 3;
+  int64 calculated_at_ms = 4;
+}
+message SetMailboxQuickInfoResponse { bool applied = 1; }
+
+message AdvancePublicMailWatermarkRequest { int64 published_at_ms = 1; }
+message AdvancePublicMailWatermarkResponse { bool applied = 1; }
+
+message GetMailboxQuickInfoRequest { uint64 player_id = 1; }
+message GetMailboxQuickInfoResponse {
+  bool known = 1;
+  uint32 new_mail_count = 2;
+  int64 cursor_ms = 3;
+  bool public_refresh_required = 4;
 }

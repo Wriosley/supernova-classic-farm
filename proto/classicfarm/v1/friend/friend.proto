@@ -13,6 +13,8 @@ service FriendService {
   rpc RedeemShareCode(RedeemShareCodeRequest) returns (RedeemShareCodeResponse);
   rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
   rpc CheckMutualFriend(CheckMutualFriendRequest) returns (CheckMutualFriendResponse);
+  rpc GetOfflineVisitors(GetOfflineVisitorsRequest) returns (GetOfflineVisitorsResponse);
+  rpc AckOfflineVisitors(AckOfflineVisitorsRequest) returns (AckOfflineVisitorsResponse);
 }
 
 message CreateShareCodeRequest {
@@ -65,4 +67,26 @@ message FriendView {
   uint64 player_id = 1;
   string account_name = 2;
   int64 created_at_ms = 3;
+  bool presence_known = 4;
+  bool online = 5;
+  int64 last_seen_at_ms = 6;
+  bool farm_summary_known = 7;
+  int64 earliest_mature_at_ms = 8;
+  bool may_have_stealable_crop = 9;
+}
+
+message GetOfflineVisitorsRequest { uint64 caller_player_id = 1; }
+message GetOfflineVisitorsResponse {
+  repeated FriendView visitors = 1;
+  uint64 visitor_version = 2;
+  bool truncated = 3;
+  classicfarm.ws.v1.Error error = 15;
+}
+message AckOfflineVisitorsRequest {
+  uint64 caller_player_id = 1;
+  uint64 visitor_version = 2;
+}
+message AckOfflineVisitorsResponse {
+  bool applied = 1;
+  classicfarm.ws.v1.Error error = 15;
 }

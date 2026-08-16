@@ -10,7 +10,6 @@ import (
 	plotv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws/plot"
 )
 
-
 func farmViewFor(t *testing.T, runtime *Runtime, playerID uint64) ([]byte, uint64) {
 	t.Helper()
 	snap, err := runtime.BuildPublicFarmSnapshot(context.Background(), playerID, LocalOwnerEpoch)
@@ -225,8 +224,11 @@ func TestApplyStealOnOwnerMutatesOnceAndDedupesRetry(t *testing.T) {
 	if patch1 == nil {
 		t.Fatalf("expected a FarmViewPatch on first apply")
 	}
-	if len(store.saved) != 1 {
-		t.Fatalf("expected exactly one synchronous checkpoint write, got %d", len(store.saved))
+	if len(store.saved) != 0 {
+		t.Fatalf("owner steal must not synchronously persist, got %d writes", len(store.saved))
+	}
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatalf("flush dirty steal: %v", err)
 	}
 	saved := store.saved[0]
 	if len(saved.Plots) == 0 {
@@ -266,7 +268,7 @@ func TestApplyStealOnOwnerMutatesOnceAndDedupesRetry(t *testing.T) {
 		t.Fatalf("expected nil FarmViewPatch on replay (already broadcast once)")
 	}
 	if len(store.saved) != 1 {
-		t.Fatalf("expected retry to skip the synchronous flush, got %d writes", len(store.saved))
+		t.Fatalf("expected retry to skip another dirty flush, got %d writes", len(store.saved))
 	}
 }
 
@@ -313,6 +315,12 @@ func TestApplyStealOnOwnerConcurrentVisitorsRespectMaxStealTimes(t *testing.T) {
 	_, _, _, _, err := applySteal(t, runtime, ownerID, 102, interactionIDFixture(0x22), plotID, 4001)
 	if err != ErrStealNotAvailable {
 		t.Fatalf("expected third steal to be rejected once max_steal_times is reached, got %v", err)
+	}
+	if len(store.saved) != 0 {
+		t.Fatalf("owner steals must remain dirty before flush, got %d writes", len(store.saved))
+	}
+	if err := runtime.flushDirty(context.Background()); err != nil {
+		t.Fatalf("flush concurrent owner steals: %v", err)
 	}
 	saved := store.saved[len(store.saved)-1]
 	for _, record := range saved.Plots {

@@ -111,8 +111,19 @@ func run() error {
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
-			infov1.InfoService_SetMailRedDot_FullMethodName:            append([]string{"mail"}, rpcauth.ZoneAllowedCallers(true)...),
-			infov1.InfoService_NotifyOwnerPlotStealable_FullMethodName: rpcauth.ZoneAllowedCallers(true),
+			infov1.InfoService_SetMailRedDot_FullMethodName:              append([]string{"mail"}, rpcauth.ZoneAllowedCallers(true)...),
+			infov1.InfoService_NotifyOwnerPlotStealable_FullMethodName:   rpcauth.ZoneAllowedCallers(true),
+			infov1.InfoService_UpdatePresenceLease_FullMethodName:        rpcauth.ZoneAllowedCallers(true),
+			infov1.InfoService_BatchRenewPresenceLeases_FullMethodName:   rpcauth.ZoneAllowedCallers(true),
+			infov1.InfoService_UpdateFarmQuickInfo_FullMethodName:        rpcauth.ZoneAllowedCallers(true),
+			infov1.InfoService_BatchGetPlayerQuickInfo_FullMethodName:    {"friend"},
+			infov1.InfoService_ApplyPrivateMailEvent_FullMethodName:      {"mail"},
+			infov1.InfoService_SetMailboxQuickInfo_FullMethodName:        {"mail"},
+			infov1.InfoService_AdvancePublicMailWatermark_FullMethodName: {"mail"},
+			infov1.InfoService_GetMailboxQuickInfo_FullMethodName:        {"mail"},
+			infov1.InfoService_RecordOfflineFarmVisit_FullMethodName:     rpcauth.ZoneAllowedCallers(true),
+			infov1.InfoService_GetOfflineVisitors_FullMethodName:         {"friend"},
+			infov1.InfoService_AckOfflineVisitors_FullMethodName:         {"friend"},
 		},
 	})
 	if err != nil {

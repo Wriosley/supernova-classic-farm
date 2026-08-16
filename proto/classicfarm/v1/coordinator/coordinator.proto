@@ -19,6 +19,7 @@ enum SubscriberKind {
   SUBSCRIBER_KIND_INFO = 2;
   SUBSCRIBER_KIND_ZONE = 3;
   SUBSCRIBER_KIND_OTHER = 4;
+  SUBSCRIBER_KIND_MAIL = 5;
 }
 
 enum ZoneAvailability {

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// InfoClient calls InfoSvr SetMailRedDot as caller "mail".
+// InfoClient maintains and queries MailSvr's best-effort InfoSvr projection.
 type InfoClient struct {
 	client infov1.InfoServiceClient
 	conn   *grpc.ClientConn
@@ -73,6 +73,47 @@ func (c *InfoClient) SetMailRedDot(ctx context.Context, playerID uint64, notific
 		return fmt.Errorf("set mail red-dot: %s", response.GetError().GetCode().String())
 	}
 	return nil
+}
+
+func (c *InfoClient) ApplyMailEvent(ctx context.Context, playerID uint64, mailID string, createdAtMS int64) (bool, uint32, error) {
+	ctx, cancel := infoDeadline(ctx)
+	defer cancel()
+	response, err := c.client.ApplyPrivateMailEvent(ctx, &infov1.ApplyPrivateMailEventRequest{PlayerId: playerID, MailId: mailID, CreatedAtMs: createdAtMS})
+	if err != nil {
+		return false, 0, err
+	}
+	return response.GetKnown(), response.GetNewMailCount(), nil
+}
+
+func (c *InfoClient) SetMailbox(ctx context.Context, playerID uint64, count uint32, cursorMS, calculatedAtMS int64) error {
+	ctx, cancel := infoDeadline(ctx)
+	defer cancel()
+	_, err := c.client.SetMailboxQuickInfo(ctx, &infov1.SetMailboxQuickInfoRequest{PlayerId: playerID, NewMailCount: count, CursorMs: cursorMS, CalculatedAtMs: calculatedAtMS})
+	return err
+}
+
+func (c *InfoClient) GetMailbox(ctx context.Context, playerID uint64) (known bool, count uint32, publicRefresh bool, err error) {
+	ctx, cancel := infoDeadline(ctx)
+	defer cancel()
+	response, err := c.client.GetMailboxQuickInfo(ctx, &infov1.GetMailboxQuickInfoRequest{PlayerId: playerID})
+	if err != nil {
+		return false, 0, false, err
+	}
+	return response.GetKnown(), response.GetNewMailCount(), response.GetPublicRefreshRequired(), nil
+}
+
+func (c *InfoClient) AdvancePublicWatermark(ctx context.Context, publishedAtMS int64) error {
+	ctx, cancel := infoDeadline(ctx)
+	defer cancel()
+	_, err := c.client.AdvancePublicMailWatermark(ctx, &infov1.AdvancePublicMailWatermarkRequest{PublishedAtMs: publishedAtMS})
+	return err
+}
+
+func infoDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, 2*time.Second)
 }
 
 func (c *InfoClient) Close() error {

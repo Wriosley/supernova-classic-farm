@@ -19,10 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FriendService_CreateShareCode_FullMethodName   = "/classicfarm.friend.v1.FriendService/CreateShareCode"
-	FriendService_RedeemShareCode_FullMethodName   = "/classicfarm.friend.v1.FriendService/RedeemShareCode"
-	FriendService_ListFriends_FullMethodName       = "/classicfarm.friend.v1.FriendService/ListFriends"
-	FriendService_CheckMutualFriend_FullMethodName = "/classicfarm.friend.v1.FriendService/CheckMutualFriend"
+	FriendService_CreateShareCode_FullMethodName    = "/classicfarm.friend.v1.FriendService/CreateShareCode"
+	FriendService_RedeemShareCode_FullMethodName    = "/classicfarm.friend.v1.FriendService/RedeemShareCode"
+	FriendService_ListFriends_FullMethodName        = "/classicfarm.friend.v1.FriendService/ListFriends"
+	FriendService_CheckMutualFriend_FullMethodName  = "/classicfarm.friend.v1.FriendService/CheckMutualFriend"
+	FriendService_GetOfflineVisitors_FullMethodName = "/classicfarm.friend.v1.FriendService/GetOfflineVisitors"
+	FriendService_AckOfflineVisitors_FullMethodName = "/classicfarm.friend.v1.FriendService/AckOfflineVisitors"
 )
 
 // FriendServiceClient is the client API for FriendService service.
@@ -36,6 +38,8 @@ type FriendServiceClient interface {
 	RedeemShareCode(ctx context.Context, in *RedeemShareCodeRequest, opts ...grpc.CallOption) (*RedeemShareCodeResponse, error)
 	ListFriends(ctx context.Context, in *ListFriendsRequest, opts ...grpc.CallOption) (*ListFriendsResponse, error)
 	CheckMutualFriend(ctx context.Context, in *CheckMutualFriendRequest, opts ...grpc.CallOption) (*CheckMutualFriendResponse, error)
+	GetOfflineVisitors(ctx context.Context, in *GetOfflineVisitorsRequest, opts ...grpc.CallOption) (*GetOfflineVisitorsResponse, error)
+	AckOfflineVisitors(ctx context.Context, in *AckOfflineVisitorsRequest, opts ...grpc.CallOption) (*AckOfflineVisitorsResponse, error)
 }
 
 type friendServiceClient struct {
@@ -86,6 +90,26 @@ func (c *friendServiceClient) CheckMutualFriend(ctx context.Context, in *CheckMu
 	return out, nil
 }
 
+func (c *friendServiceClient) GetOfflineVisitors(ctx context.Context, in *GetOfflineVisitorsRequest, opts ...grpc.CallOption) (*GetOfflineVisitorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOfflineVisitorsResponse)
+	err := c.cc.Invoke(ctx, FriendService_GetOfflineVisitors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendServiceClient) AckOfflineVisitors(ctx context.Context, in *AckOfflineVisitorsRequest, opts ...grpc.CallOption) (*AckOfflineVisitorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AckOfflineVisitorsResponse)
+	err := c.cc.Invoke(ctx, FriendService_AckOfflineVisitors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FriendServiceServer is the server API for FriendService service.
 // All implementations must embed UnimplementedFriendServiceServer
 // for forward compatibility.
@@ -97,6 +121,8 @@ type FriendServiceServer interface {
 	RedeemShareCode(context.Context, *RedeemShareCodeRequest) (*RedeemShareCodeResponse, error)
 	ListFriends(context.Context, *ListFriendsRequest) (*ListFriendsResponse, error)
 	CheckMutualFriend(context.Context, *CheckMutualFriendRequest) (*CheckMutualFriendResponse, error)
+	GetOfflineVisitors(context.Context, *GetOfflineVisitorsRequest) (*GetOfflineVisitorsResponse, error)
+	AckOfflineVisitors(context.Context, *AckOfflineVisitorsRequest) (*AckOfflineVisitorsResponse, error)
 	mustEmbedUnimplementedFriendServiceServer()
 }
 
@@ -118,6 +144,12 @@ func (UnimplementedFriendServiceServer) ListFriends(context.Context, *ListFriend
 }
 func (UnimplementedFriendServiceServer) CheckMutualFriend(context.Context, *CheckMutualFriendRequest) (*CheckMutualFriendResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckMutualFriend not implemented")
+}
+func (UnimplementedFriendServiceServer) GetOfflineVisitors(context.Context, *GetOfflineVisitorsRequest) (*GetOfflineVisitorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOfflineVisitors not implemented")
+}
+func (UnimplementedFriendServiceServer) AckOfflineVisitors(context.Context, *AckOfflineVisitorsRequest) (*AckOfflineVisitorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AckOfflineVisitors not implemented")
 }
 func (UnimplementedFriendServiceServer) mustEmbedUnimplementedFriendServiceServer() {}
 func (UnimplementedFriendServiceServer) testEmbeddedByValue()                       {}
@@ -212,6 +244,42 @@ func _FriendService_CheckMutualFriend_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FriendService_GetOfflineVisitors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOfflineVisitorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendServiceServer).GetOfflineVisitors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendService_GetOfflineVisitors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendServiceServer).GetOfflineVisitors(ctx, req.(*GetOfflineVisitorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendService_AckOfflineVisitors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AckOfflineVisitorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendServiceServer).AckOfflineVisitors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendService_AckOfflineVisitors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendServiceServer).AckOfflineVisitors(ctx, req.(*AckOfflineVisitorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FriendService_ServiceDesc is the grpc.ServiceDesc for FriendService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -234,6 +302,14 @@ var FriendService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckMutualFriend",
 			Handler:    _FriendService_CheckMutualFriend_Handler,
+		},
+		{
+			MethodName: "GetOfflineVisitors",
+			Handler:    _FriendService_GetOfflineVisitors_Handler,
+		},
+		{
+			MethodName: "AckOfflineVisitors",
+			Handler:    _FriendService_AckOfflineVisitors_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

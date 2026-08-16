@@ -58,11 +58,13 @@ func NewHandler(store *Store, config HandlerConfig) (http.Handler, error) {
 	if config.ClientConfigURL == "" {
 		config.ClientConfigURL = "http://127.0.0.1:8080/v1/client-config/1"
 	}
-	if err := validateDevelopmentURL(config.GatewayURL, "ws"); err != nil {
-		return nil, fmt.Errorf("gateway URL: %w", err)
-	}
-	if err := validateDevelopmentURL(config.ClientConfigURL, "http"); err != nil {
-		return nil, fmt.Errorf("client config URL: %w", err)
+	if !internalnet.KubernetesEnabled() {
+		if err := validateDevelopmentURL(config.GatewayURL, "ws"); err != nil {
+			return nil, fmt.Errorf("gateway URL: %w", err)
+		}
+		if err := validateDevelopmentURL(config.ClientConfigURL, "http"); err != nil {
+			return nil, fmt.Errorf("client config URL: %w", err)
+		}
 	}
 	configBody, err := proto.Marshal(&httpv1.ClientConfigPackage{
 		SchemaVersion: 1, ClientConfigVersion: 1, PublishedAtMs: clientConfigPublishedAtMS,

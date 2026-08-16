@@ -222,6 +222,1434 @@ func (x *NotifyOwnerPlotStealableResponse) GetError() *ws.Error {
 	return nil
 }
 
+type PresenceLeaseUpdate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Online        bool                   `protobuf:"varint,2,opt,name=online,proto3" json:"online,omitempty"`
+	OnlineUntilMs int64                  `protobuf:"varint,3,opt,name=online_until_ms,json=onlineUntilMs,proto3" json:"online_until_ms,omitempty"`
+	LastSeenAtMs  int64                  `protobuf:"varint,4,opt,name=last_seen_at_ms,json=lastSeenAtMs,proto3" json:"last_seen_at_ms,omitempty"`
+	LogicalZoneId string                 `protobuf:"bytes,5,opt,name=logical_zone_id,json=logicalZoneId,proto3" json:"logical_zone_id,omitempty"`
+	IncarnationId string                 `protobuf:"bytes,6,opt,name=incarnation_id,json=incarnationId,proto3" json:"incarnation_id,omitempty"`
+	OwnerEpoch    uint64                 `protobuf:"varint,7,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
+	SourceSeq     uint64                 `protobuf:"varint,8,opt,name=source_seq,json=sourceSeq,proto3" json:"source_seq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PresenceLeaseUpdate) Reset() {
+	*x = PresenceLeaseUpdate{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PresenceLeaseUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PresenceLeaseUpdate) ProtoMessage() {}
+
+func (x *PresenceLeaseUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PresenceLeaseUpdate.ProtoReflect.Descriptor instead.
+func (*PresenceLeaseUpdate) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PresenceLeaseUpdate) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *PresenceLeaseUpdate) GetOnline() bool {
+	if x != nil {
+		return x.Online
+	}
+	return false
+}
+
+func (x *PresenceLeaseUpdate) GetOnlineUntilMs() int64 {
+	if x != nil {
+		return x.OnlineUntilMs
+	}
+	return 0
+}
+
+func (x *PresenceLeaseUpdate) GetLastSeenAtMs() int64 {
+	if x != nil {
+		return x.LastSeenAtMs
+	}
+	return 0
+}
+
+func (x *PresenceLeaseUpdate) GetLogicalZoneId() string {
+	if x != nil {
+		return x.LogicalZoneId
+	}
+	return ""
+}
+
+func (x *PresenceLeaseUpdate) GetIncarnationId() string {
+	if x != nil {
+		return x.IncarnationId
+	}
+	return ""
+}
+
+func (x *PresenceLeaseUpdate) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
+	}
+	return 0
+}
+
+func (x *PresenceLeaseUpdate) GetSourceSeq() uint64 {
+	if x != nil {
+		return x.SourceSeq
+	}
+	return 0
+}
+
+type UpdatePresenceLeaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Update        *PresenceLeaseUpdate   `protobuf:"bytes,1,opt,name=update,proto3" json:"update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePresenceLeaseRequest) Reset() {
+	*x = UpdatePresenceLeaseRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePresenceLeaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePresenceLeaseRequest) ProtoMessage() {}
+
+func (x *UpdatePresenceLeaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePresenceLeaseRequest.ProtoReflect.Descriptor instead.
+func (*UpdatePresenceLeaseRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UpdatePresenceLeaseRequest) GetUpdate() *PresenceLeaseUpdate {
+	if x != nil {
+		return x.Update
+	}
+	return nil
+}
+
+type UpdatePresenceLeaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePresenceLeaseResponse) Reset() {
+	*x = UpdatePresenceLeaseResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePresenceLeaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePresenceLeaseResponse) ProtoMessage() {}
+
+func (x *UpdatePresenceLeaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePresenceLeaseResponse.ProtoReflect.Descriptor instead.
+func (*UpdatePresenceLeaseResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UpdatePresenceLeaseResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+type BatchRenewPresenceLeasesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Updates       []*PresenceLeaseUpdate `protobuf:"bytes,1,rep,name=updates,proto3" json:"updates,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchRenewPresenceLeasesRequest) Reset() {
+	*x = BatchRenewPresenceLeasesRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchRenewPresenceLeasesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchRenewPresenceLeasesRequest) ProtoMessage() {}
+
+func (x *BatchRenewPresenceLeasesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchRenewPresenceLeasesRequest.ProtoReflect.Descriptor instead.
+func (*BatchRenewPresenceLeasesRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *BatchRenewPresenceLeasesRequest) GetUpdates() []*PresenceLeaseUpdate {
+	if x != nil {
+		return x.Updates
+	}
+	return nil
+}
+
+type BatchRenewPresenceLeasesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AppliedCount  uint32                 `protobuf:"varint,1,opt,name=applied_count,json=appliedCount,proto3" json:"applied_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchRenewPresenceLeasesResponse) Reset() {
+	*x = BatchRenewPresenceLeasesResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchRenewPresenceLeasesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchRenewPresenceLeasesResponse) ProtoMessage() {}
+
+func (x *BatchRenewPresenceLeasesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchRenewPresenceLeasesResponse.ProtoReflect.Descriptor instead.
+func (*BatchRenewPresenceLeasesResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *BatchRenewPresenceLeasesResponse) GetAppliedCount() uint32 {
+	if x != nil {
+		return x.AppliedCount
+	}
+	return 0
+}
+
+type FarmQuickInfoUpdate struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId               uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	OwnerEpoch             uint64                 `protobuf:"varint,2,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
+	CheckpointRevision     uint64                 `protobuf:"varint,3,opt,name=checkpoint_revision,json=checkpointRevision,proto3" json:"checkpoint_revision,omitempty"`
+	HasGrowingCrop         bool                   `protobuf:"varint,4,opt,name=has_growing_crop,json=hasGrowingCrop,proto3" json:"has_growing_crop,omitempty"`
+	EarliestMatureAtMs     int64                  `protobuf:"varint,5,opt,name=earliest_mature_at_ms,json=earliestMatureAtMs,proto3" json:"earliest_mature_at_ms,omitempty"`
+	HasMatureCropCandidate bool                   `protobuf:"varint,6,opt,name=has_mature_crop_candidate,json=hasMatureCropCandidate,proto3" json:"has_mature_crop_candidate,omitempty"`
+	UpdatedAtMs            int64                  `protobuf:"varint,7,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *FarmQuickInfoUpdate) Reset() {
+	*x = FarmQuickInfoUpdate{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FarmQuickInfoUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FarmQuickInfoUpdate) ProtoMessage() {}
+
+func (x *FarmQuickInfoUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FarmQuickInfoUpdate.ProtoReflect.Descriptor instead.
+func (*FarmQuickInfoUpdate) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *FarmQuickInfoUpdate) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *FarmQuickInfoUpdate) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
+	}
+	return 0
+}
+
+func (x *FarmQuickInfoUpdate) GetCheckpointRevision() uint64 {
+	if x != nil {
+		return x.CheckpointRevision
+	}
+	return 0
+}
+
+func (x *FarmQuickInfoUpdate) GetHasGrowingCrop() bool {
+	if x != nil {
+		return x.HasGrowingCrop
+	}
+	return false
+}
+
+func (x *FarmQuickInfoUpdate) GetEarliestMatureAtMs() int64 {
+	if x != nil {
+		return x.EarliestMatureAtMs
+	}
+	return 0
+}
+
+func (x *FarmQuickInfoUpdate) GetHasMatureCropCandidate() bool {
+	if x != nil {
+		return x.HasMatureCropCandidate
+	}
+	return false
+}
+
+func (x *FarmQuickInfoUpdate) GetUpdatedAtMs() int64 {
+	if x != nil {
+		return x.UpdatedAtMs
+	}
+	return 0
+}
+
+type UpdateFarmQuickInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Update        *FarmQuickInfoUpdate   `protobuf:"bytes,1,opt,name=update,proto3" json:"update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateFarmQuickInfoRequest) Reset() {
+	*x = UpdateFarmQuickInfoRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateFarmQuickInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateFarmQuickInfoRequest) ProtoMessage() {}
+
+func (x *UpdateFarmQuickInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateFarmQuickInfoRequest.ProtoReflect.Descriptor instead.
+func (*UpdateFarmQuickInfoRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UpdateFarmQuickInfoRequest) GetUpdate() *FarmQuickInfoUpdate {
+	if x != nil {
+		return x.Update
+	}
+	return nil
+}
+
+type UpdateFarmQuickInfoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateFarmQuickInfoResponse) Reset() {
+	*x = UpdateFarmQuickInfoResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateFarmQuickInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateFarmQuickInfoResponse) ProtoMessage() {}
+
+func (x *UpdateFarmQuickInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateFarmQuickInfoResponse.ProtoReflect.Descriptor instead.
+func (*UpdateFarmQuickInfoResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *UpdateFarmQuickInfoResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+type BatchGetPlayerQuickInfoRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerIds      []uint64               `protobuf:"varint,1,rep,packed,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
+	ViewerPlayerId uint64                 `protobuf:"varint,2,opt,name=viewer_player_id,json=viewerPlayerId,proto3" json:"viewer_player_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BatchGetPlayerQuickInfoRequest) Reset() {
+	*x = BatchGetPlayerQuickInfoRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchGetPlayerQuickInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchGetPlayerQuickInfoRequest) ProtoMessage() {}
+
+func (x *BatchGetPlayerQuickInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchGetPlayerQuickInfoRequest.ProtoReflect.Descriptor instead.
+func (*BatchGetPlayerQuickInfoRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *BatchGetPlayerQuickInfoRequest) GetPlayerIds() []uint64 {
+	if x != nil {
+		return x.PlayerIds
+	}
+	return nil
+}
+
+func (x *BatchGetPlayerQuickInfoRequest) GetViewerPlayerId() uint64 {
+	if x != nil {
+		return x.ViewerPlayerId
+	}
+	return 0
+}
+
+type BatchGetPlayerQuickInfoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Players       []*PlayerQuickInfo     `protobuf:"bytes,1,rep,name=players,proto3" json:"players,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchGetPlayerQuickInfoResponse) Reset() {
+	*x = BatchGetPlayerQuickInfoResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchGetPlayerQuickInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchGetPlayerQuickInfoResponse) ProtoMessage() {}
+
+func (x *BatchGetPlayerQuickInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchGetPlayerQuickInfoResponse.ProtoReflect.Descriptor instead.
+func (*BatchGetPlayerQuickInfoResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *BatchGetPlayerQuickInfoResponse) GetPlayers() []*PlayerQuickInfo {
+	if x != nil {
+		return x.Players
+	}
+	return nil
+}
+
+type PlayerQuickInfo struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId               uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PresenceKnown          bool                   `protobuf:"varint,2,opt,name=presence_known,json=presenceKnown,proto3" json:"presence_known,omitempty"`
+	Online                 bool                   `protobuf:"varint,3,opt,name=online,proto3" json:"online,omitempty"`
+	OnlineUntilMs          int64                  `protobuf:"varint,4,opt,name=online_until_ms,json=onlineUntilMs,proto3" json:"online_until_ms,omitempty"`
+	LastSeenAtMs           int64                  `protobuf:"varint,5,opt,name=last_seen_at_ms,json=lastSeenAtMs,proto3" json:"last_seen_at_ms,omitempty"`
+	FarmSummaryKnown       bool                   `protobuf:"varint,6,opt,name=farm_summary_known,json=farmSummaryKnown,proto3" json:"farm_summary_known,omitempty"`
+	HasGrowingCrop         bool                   `protobuf:"varint,7,opt,name=has_growing_crop,json=hasGrowingCrop,proto3" json:"has_growing_crop,omitempty"`
+	EarliestMatureAtMs     int64                  `protobuf:"varint,8,opt,name=earliest_mature_at_ms,json=earliestMatureAtMs,proto3" json:"earliest_mature_at_ms,omitempty"`
+	HasMatureCropCandidate bool                   `protobuf:"varint,9,opt,name=has_mature_crop_candidate,json=hasMatureCropCandidate,proto3" json:"has_mature_crop_candidate,omitempty"`
+	OwnerEpoch             uint64                 `protobuf:"varint,10,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
+	CheckpointRevision     uint64                 `protobuf:"varint,11,opt,name=checkpoint_revision,json=checkpointRevision,proto3" json:"checkpoint_revision,omitempty"`
+	ShowOfflineFarmRedDot  bool                   `protobuf:"varint,12,opt,name=show_offline_farm_red_dot,json=showOfflineFarmRedDot,proto3" json:"show_offline_farm_red_dot,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *PlayerQuickInfo) Reset() {
+	*x = PlayerQuickInfo{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerQuickInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerQuickInfo) ProtoMessage() {}
+
+func (x *PlayerQuickInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerQuickInfo.ProtoReflect.Descriptor instead.
+func (*PlayerQuickInfo) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PlayerQuickInfo) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *PlayerQuickInfo) GetPresenceKnown() bool {
+	if x != nil {
+		return x.PresenceKnown
+	}
+	return false
+}
+
+func (x *PlayerQuickInfo) GetOnline() bool {
+	if x != nil {
+		return x.Online
+	}
+	return false
+}
+
+func (x *PlayerQuickInfo) GetOnlineUntilMs() int64 {
+	if x != nil {
+		return x.OnlineUntilMs
+	}
+	return 0
+}
+
+func (x *PlayerQuickInfo) GetLastSeenAtMs() int64 {
+	if x != nil {
+		return x.LastSeenAtMs
+	}
+	return 0
+}
+
+func (x *PlayerQuickInfo) GetFarmSummaryKnown() bool {
+	if x != nil {
+		return x.FarmSummaryKnown
+	}
+	return false
+}
+
+func (x *PlayerQuickInfo) GetHasGrowingCrop() bool {
+	if x != nil {
+		return x.HasGrowingCrop
+	}
+	return false
+}
+
+func (x *PlayerQuickInfo) GetEarliestMatureAtMs() int64 {
+	if x != nil {
+		return x.EarliestMatureAtMs
+	}
+	return 0
+}
+
+func (x *PlayerQuickInfo) GetHasMatureCropCandidate() bool {
+	if x != nil {
+		return x.HasMatureCropCandidate
+	}
+	return false
+}
+
+func (x *PlayerQuickInfo) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
+	}
+	return 0
+}
+
+func (x *PlayerQuickInfo) GetCheckpointRevision() uint64 {
+	if x != nil {
+		return x.CheckpointRevision
+	}
+	return 0
+}
+
+func (x *PlayerQuickInfo) GetShowOfflineFarmRedDot() bool {
+	if x != nil {
+		return x.ShowOfflineFarmRedDot
+	}
+	return false
+}
+
+type RecordOfflineFarmVisitRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	VisitorPlayerId uint64                 `protobuf:"varint,1,opt,name=visitor_player_id,json=visitorPlayerId,proto3" json:"visitor_player_id,omitempty"`
+	OwnerPlayerId   uint64                 `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	VisitedAtMs     int64                  `protobuf:"varint,3,opt,name=visited_at_ms,json=visitedAtMs,proto3" json:"visited_at_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RecordOfflineFarmVisitRequest) Reset() {
+	*x = RecordOfflineFarmVisitRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordOfflineFarmVisitRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordOfflineFarmVisitRequest) ProtoMessage() {}
+
+func (x *RecordOfflineFarmVisitRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordOfflineFarmVisitRequest.ProtoReflect.Descriptor instead.
+func (*RecordOfflineFarmVisitRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RecordOfflineFarmVisitRequest) GetVisitorPlayerId() uint64 {
+	if x != nil {
+		return x.VisitorPlayerId
+	}
+	return 0
+}
+
+func (x *RecordOfflineFarmVisitRequest) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *RecordOfflineFarmVisitRequest) GetVisitedAtMs() int64 {
+	if x != nil {
+		return x.VisitedAtMs
+	}
+	return 0
+}
+
+type RecordOfflineFarmVisitResponse struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	RecordedForOfflineOwner bool                   `protobuf:"varint,1,opt,name=recorded_for_offline_owner,json=recordedForOfflineOwner,proto3" json:"recorded_for_offline_owner,omitempty"`
+	SeenCheckpointRevision  uint64                 `protobuf:"varint,2,opt,name=seen_checkpoint_revision,json=seenCheckpointRevision,proto3" json:"seen_checkpoint_revision,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *RecordOfflineFarmVisitResponse) Reset() {
+	*x = RecordOfflineFarmVisitResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordOfflineFarmVisitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordOfflineFarmVisitResponse) ProtoMessage() {}
+
+func (x *RecordOfflineFarmVisitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordOfflineFarmVisitResponse.ProtoReflect.Descriptor instead.
+func (*RecordOfflineFarmVisitResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RecordOfflineFarmVisitResponse) GetRecordedForOfflineOwner() bool {
+	if x != nil {
+		return x.RecordedForOfflineOwner
+	}
+	return false
+}
+
+func (x *RecordOfflineFarmVisitResponse) GetSeenCheckpointRevision() uint64 {
+	if x != nil {
+		return x.SeenCheckpointRevision
+	}
+	return 0
+}
+
+type GetOfflineVisitorsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerPlayerId uint64                 `protobuf:"varint,1,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOfflineVisitorsRequest) Reset() {
+	*x = GetOfflineVisitorsRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOfflineVisitorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOfflineVisitorsRequest) ProtoMessage() {}
+
+func (x *GetOfflineVisitorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOfflineVisitorsRequest.ProtoReflect.Descriptor instead.
+func (*GetOfflineVisitorsRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetOfflineVisitorsRequest) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+type GetOfflineVisitorsResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	VisitorPlayerIds []uint64               `protobuf:"varint,1,rep,packed,name=visitor_player_ids,json=visitorPlayerIds,proto3" json:"visitor_player_ids,omitempty"`
+	VisitorVersion   uint64                 `protobuf:"varint,2,opt,name=visitor_version,json=visitorVersion,proto3" json:"visitor_version,omitempty"`
+	Truncated        bool                   `protobuf:"varint,3,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetOfflineVisitorsResponse) Reset() {
+	*x = GetOfflineVisitorsResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOfflineVisitorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOfflineVisitorsResponse) ProtoMessage() {}
+
+func (x *GetOfflineVisitorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOfflineVisitorsResponse.ProtoReflect.Descriptor instead.
+func (*GetOfflineVisitorsResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetOfflineVisitorsResponse) GetVisitorPlayerIds() []uint64 {
+	if x != nil {
+		return x.VisitorPlayerIds
+	}
+	return nil
+}
+
+func (x *GetOfflineVisitorsResponse) GetVisitorVersion() uint64 {
+	if x != nil {
+		return x.VisitorVersion
+	}
+	return 0
+}
+
+func (x *GetOfflineVisitorsResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+type AckOfflineVisitorsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OwnerPlayerId  uint64                 `protobuf:"varint,1,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	VisitorVersion uint64                 `protobuf:"varint,2,opt,name=visitor_version,json=visitorVersion,proto3" json:"visitor_version,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AckOfflineVisitorsRequest) Reset() {
+	*x = AckOfflineVisitorsRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckOfflineVisitorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckOfflineVisitorsRequest) ProtoMessage() {}
+
+func (x *AckOfflineVisitorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckOfflineVisitorsRequest.ProtoReflect.Descriptor instead.
+func (*AckOfflineVisitorsRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *AckOfflineVisitorsRequest) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *AckOfflineVisitorsRequest) GetVisitorVersion() uint64 {
+	if x != nil {
+		return x.VisitorVersion
+	}
+	return 0
+}
+
+type AckOfflineVisitorsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AckOfflineVisitorsResponse) Reset() {
+	*x = AckOfflineVisitorsResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckOfflineVisitorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckOfflineVisitorsResponse) ProtoMessage() {}
+
+func (x *AckOfflineVisitorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckOfflineVisitorsResponse.ProtoReflect.Descriptor instead.
+func (*AckOfflineVisitorsResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *AckOfflineVisitorsResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+type ApplyPrivateMailEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	MailId        string                 `protobuf:"bytes,2,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	CreatedAtMs   int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApplyPrivateMailEventRequest) Reset() {
+	*x = ApplyPrivateMailEventRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApplyPrivateMailEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApplyPrivateMailEventRequest) ProtoMessage() {}
+
+func (x *ApplyPrivateMailEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApplyPrivateMailEventRequest.ProtoReflect.Descriptor instead.
+func (*ApplyPrivateMailEventRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ApplyPrivateMailEventRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *ApplyPrivateMailEventRequest) GetMailId() string {
+	if x != nil {
+		return x.MailId
+	}
+	return ""
+}
+
+func (x *ApplyPrivateMailEventRequest) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+type ApplyPrivateMailEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Known         bool                   `protobuf:"varint,1,opt,name=known,proto3" json:"known,omitempty"`
+	NewMailCount  uint32                 `protobuf:"varint,2,opt,name=new_mail_count,json=newMailCount,proto3" json:"new_mail_count,omitempty"`
+	Applied       bool                   `protobuf:"varint,3,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApplyPrivateMailEventResponse) Reset() {
+	*x = ApplyPrivateMailEventResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApplyPrivateMailEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApplyPrivateMailEventResponse) ProtoMessage() {}
+
+func (x *ApplyPrivateMailEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApplyPrivateMailEventResponse.ProtoReflect.Descriptor instead.
+func (*ApplyPrivateMailEventResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ApplyPrivateMailEventResponse) GetKnown() bool {
+	if x != nil {
+		return x.Known
+	}
+	return false
+}
+
+func (x *ApplyPrivateMailEventResponse) GetNewMailCount() uint32 {
+	if x != nil {
+		return x.NewMailCount
+	}
+	return 0
+}
+
+func (x *ApplyPrivateMailEventResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+type SetMailboxQuickInfoRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	NewMailCount   uint32                 `protobuf:"varint,2,opt,name=new_mail_count,json=newMailCount,proto3" json:"new_mail_count,omitempty"`
+	CursorMs       int64                  `protobuf:"varint,3,opt,name=cursor_ms,json=cursorMs,proto3" json:"cursor_ms,omitempty"`
+	CalculatedAtMs int64                  `protobuf:"varint,4,opt,name=calculated_at_ms,json=calculatedAtMs,proto3" json:"calculated_at_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SetMailboxQuickInfoRequest) Reset() {
+	*x = SetMailboxQuickInfoRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetMailboxQuickInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetMailboxQuickInfoRequest) ProtoMessage() {}
+
+func (x *SetMailboxQuickInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetMailboxQuickInfoRequest.ProtoReflect.Descriptor instead.
+func (*SetMailboxQuickInfoRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *SetMailboxQuickInfoRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *SetMailboxQuickInfoRequest) GetNewMailCount() uint32 {
+	if x != nil {
+		return x.NewMailCount
+	}
+	return 0
+}
+
+func (x *SetMailboxQuickInfoRequest) GetCursorMs() int64 {
+	if x != nil {
+		return x.CursorMs
+	}
+	return 0
+}
+
+func (x *SetMailboxQuickInfoRequest) GetCalculatedAtMs() int64 {
+	if x != nil {
+		return x.CalculatedAtMs
+	}
+	return 0
+}
+
+type SetMailboxQuickInfoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetMailboxQuickInfoResponse) Reset() {
+	*x = SetMailboxQuickInfoResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetMailboxQuickInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetMailboxQuickInfoResponse) ProtoMessage() {}
+
+func (x *SetMailboxQuickInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetMailboxQuickInfoResponse.ProtoReflect.Descriptor instead.
+func (*SetMailboxQuickInfoResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *SetMailboxQuickInfoResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+type AdvancePublicMailWatermarkRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PublishedAtMs int64                  `protobuf:"varint,1,opt,name=published_at_ms,json=publishedAtMs,proto3" json:"published_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AdvancePublicMailWatermarkRequest) Reset() {
+	*x = AdvancePublicMailWatermarkRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AdvancePublicMailWatermarkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AdvancePublicMailWatermarkRequest) ProtoMessage() {}
+
+func (x *AdvancePublicMailWatermarkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AdvancePublicMailWatermarkRequest.ProtoReflect.Descriptor instead.
+func (*AdvancePublicMailWatermarkRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AdvancePublicMailWatermarkRequest) GetPublishedAtMs() int64 {
+	if x != nil {
+		return x.PublishedAtMs
+	}
+	return 0
+}
+
+type AdvancePublicMailWatermarkResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AdvancePublicMailWatermarkResponse) Reset() {
+	*x = AdvancePublicMailWatermarkResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AdvancePublicMailWatermarkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AdvancePublicMailWatermarkResponse) ProtoMessage() {}
+
+func (x *AdvancePublicMailWatermarkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AdvancePublicMailWatermarkResponse.ProtoReflect.Descriptor instead.
+func (*AdvancePublicMailWatermarkResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *AdvancePublicMailWatermarkResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+type GetMailboxQuickInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMailboxQuickInfoRequest) Reset() {
+	*x = GetMailboxQuickInfoRequest{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMailboxQuickInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMailboxQuickInfoRequest) ProtoMessage() {}
+
+func (x *GetMailboxQuickInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMailboxQuickInfoRequest.ProtoReflect.Descriptor instead.
+func (*GetMailboxQuickInfoRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *GetMailboxQuickInfoRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+type GetMailboxQuickInfoResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Known                 bool                   `protobuf:"varint,1,opt,name=known,proto3" json:"known,omitempty"`
+	NewMailCount          uint32                 `protobuf:"varint,2,opt,name=new_mail_count,json=newMailCount,proto3" json:"new_mail_count,omitempty"`
+	CursorMs              int64                  `protobuf:"varint,3,opt,name=cursor_ms,json=cursorMs,proto3" json:"cursor_ms,omitempty"`
+	PublicRefreshRequired bool                   `protobuf:"varint,4,opt,name=public_refresh_required,json=publicRefreshRequired,proto3" json:"public_refresh_required,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *GetMailboxQuickInfoResponse) Reset() {
+	*x = GetMailboxQuickInfoResponse{}
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMailboxQuickInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMailboxQuickInfoResponse) ProtoMessage() {}
+
+func (x *GetMailboxQuickInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_info_info_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMailboxQuickInfoResponse.ProtoReflect.Descriptor instead.
+func (*GetMailboxQuickInfoResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_info_info_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *GetMailboxQuickInfoResponse) GetKnown() bool {
+	if x != nil {
+		return x.Known
+	}
+	return false
+}
+
+func (x *GetMailboxQuickInfoResponse) GetNewMailCount() uint32 {
+	if x != nil {
+		return x.NewMailCount
+	}
+	return 0
+}
+
+func (x *GetMailboxQuickInfoResponse) GetCursorMs() int64 {
+	if x != nil {
+		return x.CursorMs
+	}
+	return 0
+}
+
+func (x *GetMailboxQuickInfoResponse) GetPublicRefreshRequired() bool {
+	if x != nil {
+		return x.PublicRefreshRequired
+	}
+	return false
+}
+
 var File_classicfarm_v1_info_info_proto protoreflect.FileDescriptor
 
 const file_classicfarm_v1_info_info_proto_rawDesc = "" +
@@ -237,10 +1665,118 @@ const file_classicfarm_v1_info_info_proto_rawDesc = "" +
 	"\aplot_id\x18\x02 \x01(\rR\x06plotId\x12'\n" +
 	"\x0fnotification_id\x18\x03 \x01(\tR\x0enotificationId\"R\n" +
 	" NotifyOwnerPlotStealableResponse\x12.\n" +
-	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error2\xff\x01\n" +
+	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xa8\x02\n" +
+	"\x13PresenceLeaseUpdate\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
+	"\x06online\x18\x02 \x01(\bR\x06online\x12&\n" +
+	"\x0fonline_until_ms\x18\x03 \x01(\x03R\ronlineUntilMs\x12%\n" +
+	"\x0flast_seen_at_ms\x18\x04 \x01(\x03R\flastSeenAtMs\x12&\n" +
+	"\x0flogical_zone_id\x18\x05 \x01(\tR\rlogicalZoneId\x12%\n" +
+	"\x0eincarnation_id\x18\x06 \x01(\tR\rincarnationId\x12\x1f\n" +
+	"\vowner_epoch\x18\a \x01(\x04R\n" +
+	"ownerEpoch\x12\x1d\n" +
+	"\n" +
+	"source_seq\x18\b \x01(\x04R\tsourceSeq\"^\n" +
+	"\x1aUpdatePresenceLeaseRequest\x12@\n" +
+	"\x06update\x18\x01 \x01(\v2(.classicfarm.info.v1.PresenceLeaseUpdateR\x06update\"7\n" +
+	"\x1bUpdatePresenceLeaseResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\"e\n" +
+	"\x1fBatchRenewPresenceLeasesRequest\x12B\n" +
+	"\aupdates\x18\x01 \x03(\v2(.classicfarm.info.v1.PresenceLeaseUpdateR\aupdates\"G\n" +
+	" BatchRenewPresenceLeasesResponse\x12#\n" +
+	"\rapplied_count\x18\x01 \x01(\rR\fappliedCount\"\xc0\x02\n" +
+	"\x13FarmQuickInfoUpdate\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vowner_epoch\x18\x02 \x01(\x04R\n" +
+	"ownerEpoch\x12/\n" +
+	"\x13checkpoint_revision\x18\x03 \x01(\x04R\x12checkpointRevision\x12(\n" +
+	"\x10has_growing_crop\x18\x04 \x01(\bR\x0ehasGrowingCrop\x121\n" +
+	"\x15earliest_mature_at_ms\x18\x05 \x01(\x03R\x12earliestMatureAtMs\x129\n" +
+	"\x19has_mature_crop_candidate\x18\x06 \x01(\bR\x16hasMatureCropCandidate\x12\"\n" +
+	"\rupdated_at_ms\x18\a \x01(\x03R\vupdatedAtMs\"^\n" +
+	"\x1aUpdateFarmQuickInfoRequest\x12@\n" +
+	"\x06update\x18\x01 \x01(\v2(.classicfarm.info.v1.FarmQuickInfoUpdateR\x06update\"7\n" +
+	"\x1bUpdateFarmQuickInfoResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\"i\n" +
+	"\x1eBatchGetPlayerQuickInfoRequest\x12\x1d\n" +
+	"\n" +
+	"player_ids\x18\x01 \x03(\x04R\tplayerIds\x12(\n" +
+	"\x10viewer_player_id\x18\x02 \x01(\x04R\x0eviewerPlayerId\"a\n" +
+	"\x1fBatchGetPlayerQuickInfoResponse\x12>\n" +
+	"\aplayers\x18\x01 \x03(\v2$.classicfarm.info.v1.PlayerQuickInfoR\aplayers\"\x8e\x04\n" +
+	"\x0fPlayerQuickInfo\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12%\n" +
+	"\x0epresence_known\x18\x02 \x01(\bR\rpresenceKnown\x12\x16\n" +
+	"\x06online\x18\x03 \x01(\bR\x06online\x12&\n" +
+	"\x0fonline_until_ms\x18\x04 \x01(\x03R\ronlineUntilMs\x12%\n" +
+	"\x0flast_seen_at_ms\x18\x05 \x01(\x03R\flastSeenAtMs\x12,\n" +
+	"\x12farm_summary_known\x18\x06 \x01(\bR\x10farmSummaryKnown\x12(\n" +
+	"\x10has_growing_crop\x18\a \x01(\bR\x0ehasGrowingCrop\x121\n" +
+	"\x15earliest_mature_at_ms\x18\b \x01(\x03R\x12earliestMatureAtMs\x129\n" +
+	"\x19has_mature_crop_candidate\x18\t \x01(\bR\x16hasMatureCropCandidate\x12\x1f\n" +
+	"\vowner_epoch\x18\n" +
+	" \x01(\x04R\n" +
+	"ownerEpoch\x12/\n" +
+	"\x13checkpoint_revision\x18\v \x01(\x04R\x12checkpointRevision\x128\n" +
+	"\x19show_offline_farm_red_dot\x18\f \x01(\bR\x15showOfflineFarmRedDot\"\x97\x01\n" +
+	"\x1dRecordOfflineFarmVisitRequest\x12*\n" +
+	"\x11visitor_player_id\x18\x01 \x01(\x04R\x0fvisitorPlayerId\x12&\n" +
+	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\"\n" +
+	"\rvisited_at_ms\x18\x03 \x01(\x03R\vvisitedAtMs\"\x97\x01\n" +
+	"\x1eRecordOfflineFarmVisitResponse\x12;\n" +
+	"\x1arecorded_for_offline_owner\x18\x01 \x01(\bR\x17recordedForOfflineOwner\x128\n" +
+	"\x18seen_checkpoint_revision\x18\x02 \x01(\x04R\x16seenCheckpointRevision\"C\n" +
+	"\x19GetOfflineVisitorsRequest\x12&\n" +
+	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\"\x91\x01\n" +
+	"\x1aGetOfflineVisitorsResponse\x12,\n" +
+	"\x12visitor_player_ids\x18\x01 \x03(\x04R\x10visitorPlayerIds\x12'\n" +
+	"\x0fvisitor_version\x18\x02 \x01(\x04R\x0evisitorVersion\x12\x1c\n" +
+	"\ttruncated\x18\x03 \x01(\bR\ttruncated\"l\n" +
+	"\x19AckOfflineVisitorsRequest\x12&\n" +
+	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\x12'\n" +
+	"\x0fvisitor_version\x18\x02 \x01(\x04R\x0evisitorVersion\"6\n" +
+	"\x1aAckOfflineVisitorsResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\"x\n" +
+	"\x1cApplyPrivateMailEventRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
+	"\amail_id\x18\x02 \x01(\tR\x06mailId\x12\"\n" +
+	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs\"u\n" +
+	"\x1dApplyPrivateMailEventResponse\x12\x14\n" +
+	"\x05known\x18\x01 \x01(\bR\x05known\x12$\n" +
+	"\x0enew_mail_count\x18\x02 \x01(\rR\fnewMailCount\x12\x18\n" +
+	"\aapplied\x18\x03 \x01(\bR\aapplied\"\xa6\x01\n" +
+	"\x1aSetMailboxQuickInfoRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
+	"\x0enew_mail_count\x18\x02 \x01(\rR\fnewMailCount\x12\x1b\n" +
+	"\tcursor_ms\x18\x03 \x01(\x03R\bcursorMs\x12(\n" +
+	"\x10calculated_at_ms\x18\x04 \x01(\x03R\x0ecalculatedAtMs\"7\n" +
+	"\x1bSetMailboxQuickInfoResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\"K\n" +
+	"!AdvancePublicMailWatermarkRequest\x12&\n" +
+	"\x0fpublished_at_ms\x18\x01 \x01(\x03R\rpublishedAtMs\">\n" +
+	"\"AdvancePublicMailWatermarkResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\"9\n" +
+	"\x1aGetMailboxQuickInfoRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"\xae\x01\n" +
+	"\x1bGetMailboxQuickInfoResponse\x12\x14\n" +
+	"\x05known\x18\x01 \x01(\bR\x05known\x12$\n" +
+	"\x0enew_mail_count\x18\x02 \x01(\rR\fnewMailCount\x12\x1b\n" +
+	"\tcursor_ms\x18\x03 \x01(\x03R\bcursorMs\x126\n" +
+	"\x17public_refresh_required\x18\x04 \x01(\bR\x15publicRefreshRequired2\xfa\f\n" +
 	"\vInfoService\x12f\n" +
 	"\rSetMailRedDot\x12).classicfarm.info.v1.SetMailRedDotRequest\x1a*.classicfarm.info.v1.SetMailRedDotResponse\x12\x87\x01\n" +
-	"\x18NotifyOwnerPlotStealable\x124.classicfarm.info.v1.NotifyOwnerPlotStealableRequest\x1a5.classicfarm.info.v1.NotifyOwnerPlotStealableResponseBRZPgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/info;infov1b\x06proto3"
+	"\x18NotifyOwnerPlotStealable\x124.classicfarm.info.v1.NotifyOwnerPlotStealableRequest\x1a5.classicfarm.info.v1.NotifyOwnerPlotStealableResponse\x12x\n" +
+	"\x13UpdatePresenceLease\x12/.classicfarm.info.v1.UpdatePresenceLeaseRequest\x1a0.classicfarm.info.v1.UpdatePresenceLeaseResponse\x12\x87\x01\n" +
+	"\x18BatchRenewPresenceLeases\x124.classicfarm.info.v1.BatchRenewPresenceLeasesRequest\x1a5.classicfarm.info.v1.BatchRenewPresenceLeasesResponse\x12x\n" +
+	"\x13UpdateFarmQuickInfo\x12/.classicfarm.info.v1.UpdateFarmQuickInfoRequest\x1a0.classicfarm.info.v1.UpdateFarmQuickInfoResponse\x12\x84\x01\n" +
+	"\x17BatchGetPlayerQuickInfo\x123.classicfarm.info.v1.BatchGetPlayerQuickInfoRequest\x1a4.classicfarm.info.v1.BatchGetPlayerQuickInfoResponse\x12~\n" +
+	"\x15ApplyPrivateMailEvent\x121.classicfarm.info.v1.ApplyPrivateMailEventRequest\x1a2.classicfarm.info.v1.ApplyPrivateMailEventResponse\x12x\n" +
+	"\x13SetMailboxQuickInfo\x12/.classicfarm.info.v1.SetMailboxQuickInfoRequest\x1a0.classicfarm.info.v1.SetMailboxQuickInfoResponse\x12\x8d\x01\n" +
+	"\x1aAdvancePublicMailWatermark\x126.classicfarm.info.v1.AdvancePublicMailWatermarkRequest\x1a7.classicfarm.info.v1.AdvancePublicMailWatermarkResponse\x12x\n" +
+	"\x13GetMailboxQuickInfo\x12/.classicfarm.info.v1.GetMailboxQuickInfoRequest\x1a0.classicfarm.info.v1.GetMailboxQuickInfoResponse\x12\x81\x01\n" +
+	"\x16RecordOfflineFarmVisit\x122.classicfarm.info.v1.RecordOfflineFarmVisitRequest\x1a3.classicfarm.info.v1.RecordOfflineFarmVisitResponse\x12u\n" +
+	"\x12GetOfflineVisitors\x12..classicfarm.info.v1.GetOfflineVisitorsRequest\x1a/.classicfarm.info.v1.GetOfflineVisitorsResponse\x12u\n" +
+	"\x12AckOfflineVisitors\x12..classicfarm.info.v1.AckOfflineVisitorsRequest\x1a/.classicfarm.info.v1.AckOfflineVisitorsResponseBRZPgithub.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/info;infov1b\x06proto3"
 
 var (
 	file_classicfarm_v1_info_info_proto_rawDescOnce sync.Once
@@ -254,26 +1790,77 @@ func file_classicfarm_v1_info_info_proto_rawDescGZIP() []byte {
 	return file_classicfarm_v1_info_info_proto_rawDescData
 }
 
-var file_classicfarm_v1_info_info_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_classicfarm_v1_info_info_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_classicfarm_v1_info_info_proto_goTypes = []any{
-	(*SetMailRedDotRequest)(nil),             // 0: classicfarm.info.v1.SetMailRedDotRequest
-	(*SetMailRedDotResponse)(nil),            // 1: classicfarm.info.v1.SetMailRedDotResponse
-	(*NotifyOwnerPlotStealableRequest)(nil),  // 2: classicfarm.info.v1.NotifyOwnerPlotStealableRequest
-	(*NotifyOwnerPlotStealableResponse)(nil), // 3: classicfarm.info.v1.NotifyOwnerPlotStealableResponse
-	(*ws.Error)(nil),                         // 4: classicfarm.ws.v1.Error
+	(*SetMailRedDotRequest)(nil),               // 0: classicfarm.info.v1.SetMailRedDotRequest
+	(*SetMailRedDotResponse)(nil),              // 1: classicfarm.info.v1.SetMailRedDotResponse
+	(*NotifyOwnerPlotStealableRequest)(nil),    // 2: classicfarm.info.v1.NotifyOwnerPlotStealableRequest
+	(*NotifyOwnerPlotStealableResponse)(nil),   // 3: classicfarm.info.v1.NotifyOwnerPlotStealableResponse
+	(*PresenceLeaseUpdate)(nil),                // 4: classicfarm.info.v1.PresenceLeaseUpdate
+	(*UpdatePresenceLeaseRequest)(nil),         // 5: classicfarm.info.v1.UpdatePresenceLeaseRequest
+	(*UpdatePresenceLeaseResponse)(nil),        // 6: classicfarm.info.v1.UpdatePresenceLeaseResponse
+	(*BatchRenewPresenceLeasesRequest)(nil),    // 7: classicfarm.info.v1.BatchRenewPresenceLeasesRequest
+	(*BatchRenewPresenceLeasesResponse)(nil),   // 8: classicfarm.info.v1.BatchRenewPresenceLeasesResponse
+	(*FarmQuickInfoUpdate)(nil),                // 9: classicfarm.info.v1.FarmQuickInfoUpdate
+	(*UpdateFarmQuickInfoRequest)(nil),         // 10: classicfarm.info.v1.UpdateFarmQuickInfoRequest
+	(*UpdateFarmQuickInfoResponse)(nil),        // 11: classicfarm.info.v1.UpdateFarmQuickInfoResponse
+	(*BatchGetPlayerQuickInfoRequest)(nil),     // 12: classicfarm.info.v1.BatchGetPlayerQuickInfoRequest
+	(*BatchGetPlayerQuickInfoResponse)(nil),    // 13: classicfarm.info.v1.BatchGetPlayerQuickInfoResponse
+	(*PlayerQuickInfo)(nil),                    // 14: classicfarm.info.v1.PlayerQuickInfo
+	(*RecordOfflineFarmVisitRequest)(nil),      // 15: classicfarm.info.v1.RecordOfflineFarmVisitRequest
+	(*RecordOfflineFarmVisitResponse)(nil),     // 16: classicfarm.info.v1.RecordOfflineFarmVisitResponse
+	(*GetOfflineVisitorsRequest)(nil),          // 17: classicfarm.info.v1.GetOfflineVisitorsRequest
+	(*GetOfflineVisitorsResponse)(nil),         // 18: classicfarm.info.v1.GetOfflineVisitorsResponse
+	(*AckOfflineVisitorsRequest)(nil),          // 19: classicfarm.info.v1.AckOfflineVisitorsRequest
+	(*AckOfflineVisitorsResponse)(nil),         // 20: classicfarm.info.v1.AckOfflineVisitorsResponse
+	(*ApplyPrivateMailEventRequest)(nil),       // 21: classicfarm.info.v1.ApplyPrivateMailEventRequest
+	(*ApplyPrivateMailEventResponse)(nil),      // 22: classicfarm.info.v1.ApplyPrivateMailEventResponse
+	(*SetMailboxQuickInfoRequest)(nil),         // 23: classicfarm.info.v1.SetMailboxQuickInfoRequest
+	(*SetMailboxQuickInfoResponse)(nil),        // 24: classicfarm.info.v1.SetMailboxQuickInfoResponse
+	(*AdvancePublicMailWatermarkRequest)(nil),  // 25: classicfarm.info.v1.AdvancePublicMailWatermarkRequest
+	(*AdvancePublicMailWatermarkResponse)(nil), // 26: classicfarm.info.v1.AdvancePublicMailWatermarkResponse
+	(*GetMailboxQuickInfoRequest)(nil),         // 27: classicfarm.info.v1.GetMailboxQuickInfoRequest
+	(*GetMailboxQuickInfoResponse)(nil),        // 28: classicfarm.info.v1.GetMailboxQuickInfoResponse
+	(*ws.Error)(nil),                           // 29: classicfarm.ws.v1.Error
 }
 var file_classicfarm_v1_info_info_proto_depIdxs = []int32{
-	4, // 0: classicfarm.info.v1.SetMailRedDotResponse.error:type_name -> classicfarm.ws.v1.Error
-	4, // 1: classicfarm.info.v1.NotifyOwnerPlotStealableResponse.error:type_name -> classicfarm.ws.v1.Error
-	0, // 2: classicfarm.info.v1.InfoService.SetMailRedDot:input_type -> classicfarm.info.v1.SetMailRedDotRequest
-	2, // 3: classicfarm.info.v1.InfoService.NotifyOwnerPlotStealable:input_type -> classicfarm.info.v1.NotifyOwnerPlotStealableRequest
-	1, // 4: classicfarm.info.v1.InfoService.SetMailRedDot:output_type -> classicfarm.info.v1.SetMailRedDotResponse
-	3, // 5: classicfarm.info.v1.InfoService.NotifyOwnerPlotStealable:output_type -> classicfarm.info.v1.NotifyOwnerPlotStealableResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	29, // 0: classicfarm.info.v1.SetMailRedDotResponse.error:type_name -> classicfarm.ws.v1.Error
+	29, // 1: classicfarm.info.v1.NotifyOwnerPlotStealableResponse.error:type_name -> classicfarm.ws.v1.Error
+	4,  // 2: classicfarm.info.v1.UpdatePresenceLeaseRequest.update:type_name -> classicfarm.info.v1.PresenceLeaseUpdate
+	4,  // 3: classicfarm.info.v1.BatchRenewPresenceLeasesRequest.updates:type_name -> classicfarm.info.v1.PresenceLeaseUpdate
+	9,  // 4: classicfarm.info.v1.UpdateFarmQuickInfoRequest.update:type_name -> classicfarm.info.v1.FarmQuickInfoUpdate
+	14, // 5: classicfarm.info.v1.BatchGetPlayerQuickInfoResponse.players:type_name -> classicfarm.info.v1.PlayerQuickInfo
+	0,  // 6: classicfarm.info.v1.InfoService.SetMailRedDot:input_type -> classicfarm.info.v1.SetMailRedDotRequest
+	2,  // 7: classicfarm.info.v1.InfoService.NotifyOwnerPlotStealable:input_type -> classicfarm.info.v1.NotifyOwnerPlotStealableRequest
+	5,  // 8: classicfarm.info.v1.InfoService.UpdatePresenceLease:input_type -> classicfarm.info.v1.UpdatePresenceLeaseRequest
+	7,  // 9: classicfarm.info.v1.InfoService.BatchRenewPresenceLeases:input_type -> classicfarm.info.v1.BatchRenewPresenceLeasesRequest
+	10, // 10: classicfarm.info.v1.InfoService.UpdateFarmQuickInfo:input_type -> classicfarm.info.v1.UpdateFarmQuickInfoRequest
+	12, // 11: classicfarm.info.v1.InfoService.BatchGetPlayerQuickInfo:input_type -> classicfarm.info.v1.BatchGetPlayerQuickInfoRequest
+	21, // 12: classicfarm.info.v1.InfoService.ApplyPrivateMailEvent:input_type -> classicfarm.info.v1.ApplyPrivateMailEventRequest
+	23, // 13: classicfarm.info.v1.InfoService.SetMailboxQuickInfo:input_type -> classicfarm.info.v1.SetMailboxQuickInfoRequest
+	25, // 14: classicfarm.info.v1.InfoService.AdvancePublicMailWatermark:input_type -> classicfarm.info.v1.AdvancePublicMailWatermarkRequest
+	27, // 15: classicfarm.info.v1.InfoService.GetMailboxQuickInfo:input_type -> classicfarm.info.v1.GetMailboxQuickInfoRequest
+	15, // 16: classicfarm.info.v1.InfoService.RecordOfflineFarmVisit:input_type -> classicfarm.info.v1.RecordOfflineFarmVisitRequest
+	17, // 17: classicfarm.info.v1.InfoService.GetOfflineVisitors:input_type -> classicfarm.info.v1.GetOfflineVisitorsRequest
+	19, // 18: classicfarm.info.v1.InfoService.AckOfflineVisitors:input_type -> classicfarm.info.v1.AckOfflineVisitorsRequest
+	1,  // 19: classicfarm.info.v1.InfoService.SetMailRedDot:output_type -> classicfarm.info.v1.SetMailRedDotResponse
+	3,  // 20: classicfarm.info.v1.InfoService.NotifyOwnerPlotStealable:output_type -> classicfarm.info.v1.NotifyOwnerPlotStealableResponse
+	6,  // 21: classicfarm.info.v1.InfoService.UpdatePresenceLease:output_type -> classicfarm.info.v1.UpdatePresenceLeaseResponse
+	8,  // 22: classicfarm.info.v1.InfoService.BatchRenewPresenceLeases:output_type -> classicfarm.info.v1.BatchRenewPresenceLeasesResponse
+	11, // 23: classicfarm.info.v1.InfoService.UpdateFarmQuickInfo:output_type -> classicfarm.info.v1.UpdateFarmQuickInfoResponse
+	13, // 24: classicfarm.info.v1.InfoService.BatchGetPlayerQuickInfo:output_type -> classicfarm.info.v1.BatchGetPlayerQuickInfoResponse
+	22, // 25: classicfarm.info.v1.InfoService.ApplyPrivateMailEvent:output_type -> classicfarm.info.v1.ApplyPrivateMailEventResponse
+	24, // 26: classicfarm.info.v1.InfoService.SetMailboxQuickInfo:output_type -> classicfarm.info.v1.SetMailboxQuickInfoResponse
+	26, // 27: classicfarm.info.v1.InfoService.AdvancePublicMailWatermark:output_type -> classicfarm.info.v1.AdvancePublicMailWatermarkResponse
+	28, // 28: classicfarm.info.v1.InfoService.GetMailboxQuickInfo:output_type -> classicfarm.info.v1.GetMailboxQuickInfoResponse
+	16, // 29: classicfarm.info.v1.InfoService.RecordOfflineFarmVisit:output_type -> classicfarm.info.v1.RecordOfflineFarmVisitResponse
+	18, // 30: classicfarm.info.v1.InfoService.GetOfflineVisitors:output_type -> classicfarm.info.v1.GetOfflineVisitorsResponse
+	20, // 31: classicfarm.info.v1.InfoService.AckOfflineVisitors:output_type -> classicfarm.info.v1.AckOfflineVisitorsResponse
+	19, // [19:32] is the sub-list for method output_type
+	6,  // [6:19] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_info_info_proto_init() }
@@ -287,7 +1874,7 @@ func file_classicfarm_v1_info_info_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_info_info_proto_rawDesc), len(file_classicfarm_v1_info_info_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

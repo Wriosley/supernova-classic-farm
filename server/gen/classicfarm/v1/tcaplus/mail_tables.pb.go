@@ -957,7 +957,7 @@ const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
 	" \x03(\v2&.classicfarm.tcaplus.v1.MailAttachmentR\vattachments\x12&\n" +
 	"\x0fsource_event_id\x18\v \x01(\tR\rsourceEventId\x12\x1f\n" +
 	"\vcoin_amount\x18\f \x01(\x03R\n" +
-	"coinAmount:\v\x82\xa6\x1d\amail_id\"\xe8\x04\n" +
+	"coinAmount:\v\x82\xa6\x1d\amail_id\"\x8e\x05\n" +
 	"\vPrivateMail\x12.\n" +
 	"\x13recipient_player_id\x18\x01 \x01(\x04R\x11recipientPlayerId\x12\x17\n" +
 	"\amail_id\x18\x02 \x01(\tR\x06mailId\x12=\n" +
@@ -974,17 +974,17 @@ const file_classicfarm_v1_tcaplus_mail_tables_proto_rawDesc = "" +
 	"\vattachments\x18\v \x03(\v2&.classicfarm.tcaplus.v1.MailAttachmentR\vattachments\x12&\n" +
 	"\x0fsource_event_id\x18\f \x01(\tR\rsourceEventId\x12\x1f\n" +
 	"\vcoin_amount\x18\r \x01(\x03R\n" +
-	"coinAmount:\x1f\x82\xa6\x1d\x1brecipient_player_id,mail_id\"\x9f\x01\n" +
+	"coinAmount:E\x82\xa6\x1d\x1brecipient_player_id,mail_id\x8a\xa6\x1d\"idx_recipient(recipient_player_id)\"\x9f\x01\n" +
 	"\x13PlayerMailboxCursor\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x128\n" +
 	"\x19last_mailbox_opened_at_ms\x18\x02 \x01(\x03R\x15lastMailboxOpenedAtMs\x12\"\n" +
-	"\rupdated_at_ms\x18\x03 \x01(\x03R\vupdatedAtMs:\r\x82\xa6\x1d\tplayer_id\"\xb0\x01\n" +
+	"\rupdated_at_ms\x18\x03 \x01(\x03R\vupdatedAtMs:\r\x82\xa6\x1d\tplayer_id\"\xc9\x01\n" +
 	"\x0fPlayerMailState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
 	"\amail_id\x18\x02 \x01(\tR\x06mailId\x12\x12\n" +
 	"\x04read\x18\x03 \x01(\bR\x04read\x12\x18\n" +
 	"\aclaimed\x18\x04 \x01(\bR\aclaimed\x12\"\n" +
-	"\rupdated_at_ms\x18\x05 \x01(\x03R\vupdatedAtMs:\x15\x82\xa6\x1d\x11player_id,mail_id\"\x8b\x01\n" +
+	"\rupdated_at_ms\x18\x05 \x01(\x03R\vupdatedAtMs:.\x82\xa6\x1d\x11player_id,mail_id\x8a\xa6\x1d\x15idx_player(player_id)\"\x8b\x01\n" +
 	"\x0fMailSourceDedup\x12&\n" +
 	"\x0fsource_event_id\x18\x01 \x01(\tR\rsourceEventId\x12\x17\n" +
 	"\amail_id\x18\x02 \x01(\tR\x06mailId\x12\"\n" +

@@ -101,6 +101,100 @@ func (o *ClaimOrchestrator) ClaimMail(
 	}, nil
 }
 
+// ClaimMailDirect is the low-latency online path. It validates the authoritative
+// mail, checks the persisted claimed bit, and asks the Owner Zone to apply the
+// reward in Actor memory. It deliberately creates or advances no MailClaimSaga;
+// legacy Saga records and the reconciler remain only for work created by older
+// binaries.
+func (o *ClaimOrchestrator) ClaimMailDirect(
+	ctx context.Context, request *mailv1.ClaimMailRequest,
+) (*mailv1.ClaimMailResponse, error) {
+	if request.GetPlayerId() == 0 || strings.TrimSpace(request.GetMailId()) == "" ||
+		len(request.GetClaimId()) != 16 {
+		return &mailv1.ClaimMailResponse{Error: invalidArg()}, nil
+	}
+	if o.zone == nil {
+		return nil, errors.New("zone mail reward client is required")
+	}
+	playerID := request.GetPlayerId()
+	mailID := strings.TrimSpace(request.GetMailId())
+	attachments, coinAmount, err := o.loadDirectClaimableAttachments(
+		ctx, playerID, request.GetRegisteredAtMs(), mailID,
+	)
+	if err != nil {
+		return mapClaimError(err), nil
+	}
+	state, _, err := o.store.GetMailState(ctx, playerID, mailID)
+	if err == nil && state.GetClaimed() {
+		return mapClaimError(ErrClaimConflict), nil
+	}
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return nil, err
+	}
+	applied, err := o.zone.ApplyMailReward(
+		ctx, playerID, request.GetClaimId(), mailID, attachments, coinAmount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if applied.GetError() != nil {
+		code := applied.GetError().GetCode()
+		if code == wsv1.ErrorCode_INVENTORY_CAPACITY_EXCEEDED ||
+			code == wsv1.ErrorCode_INVENTORY_TYPE_LIMIT ||
+			code == wsv1.ErrorCode_INVENTORY_STACK_LIMIT {
+			return mapClaimError(ErrClaimInventoryFull), nil
+		}
+		return &mailv1.ClaimMailResponse{Error: applied.GetError()}, nil
+	}
+	items := applied.GetItemsAdded()
+	if len(items) == 0 {
+		items = claimAttachmentsToViews(attachments)
+	}
+	patch := applied.GetPatch()
+	if patch == nil {
+		patch = &wsv1.PlayerStatePatch{InventoryUpserts: items}
+	}
+	return &mailv1.ClaimMailResponse{
+		MailId: mailID, ItemsAdded: items, CoinsAdded: applied.GetCoinsAdded(),
+		Patch: patch, StateVersion: appliedStateVersion(applied),
+	}, nil
+}
+
+func (o *ClaimOrchestrator) loadDirectClaimableAttachments(
+	ctx context.Context, playerID uint64, registeredAtHint int64, mailID string,
+) ([]*tcaplusv1.MailClaimAttachment, int64, error) {
+	// Private/gift mail is the common claim path and its composite key already
+	// proves recipient visibility, so resolve it with one point read. Only a miss
+	// falls back to public mail and registration-time filtering.
+	if private, err := o.store.GetPrivateMail(ctx, playerID, mailID); err == nil {
+		attachments := toClaimAttachments(private.GetAttachments())
+		coins := private.GetCoinAmount()
+		if len(attachments) == 0 && coins <= 0 {
+			return nil, 0, fmt.Errorf("%w: no claimable reward", ErrNotFound)
+		}
+		return attachments, coins, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return nil, 0, err
+	}
+	public, err := o.store.GetPublicMail(ctx, mailID)
+	if err != nil {
+		return nil, 0, err
+	}
+	registeredAt, err := o.resolveRegistered(ctx, playerID, registeredAtHint)
+	if err != nil {
+		return nil, 0, err
+	}
+	if public.GetPublishedAtMs() <= registeredAt {
+		return nil, 0, fmt.Errorf("%w: mail not visible", ErrNotFound)
+	}
+	attachments := toClaimAttachments(public.GetAttachments())
+	coins := public.GetCoinAmount()
+	if len(attachments) == 0 && coins <= 0 {
+		return nil, 0, fmt.Errorf("%w: no claimable reward", ErrNotFound)
+	}
+	return attachments, coins, nil
+}
+
 func (o *ClaimOrchestrator) BeginClaim(
 	ctx context.Context, request *mailv1.ClaimMailRequest,
 ) (*tcaplusv1.MailClaimSaga, int32, error) {

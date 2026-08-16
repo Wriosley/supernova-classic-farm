@@ -77,9 +77,9 @@ func (c *GRPCMailCommander) OpenMailbox(
 	return buildDomainResponse(request, response.GetError(), func(envelope *wsv1.WsEnvelope) {
 		envelope.Payload = &wsv1.WsEnvelope_OpenMailboxResponse{
 			OpenMailboxResponse: &wsv1.OpenMailboxResponse{
-				Mails:                  toWSMailViews(response.GetMails()),
-				NextPageToken:          response.GetNextPageToken(),
-				LastMailboxOpenedAtMs:  response.GetLastMailboxOpenedAtMs(),
+				Mails:                 toWSMailViews(response.GetMails()),
+				NextPageToken:         response.GetNextPageToken(),
+				LastMailboxOpenedAtMs: response.GetLastMailboxOpenedAtMs(),
 			},
 		}
 	})
@@ -157,11 +157,19 @@ func (c *GRPCMailCommander) CheckMailboxIndicator(
 	}
 	return buildDomainResponse(request, response.GetError(), func(envelope *wsv1.WsEnvelope) {
 		envelope.Payload = &wsv1.WsEnvelope_CheckMailboxIndicatorResponse{
-			CheckMailboxIndicatorResponse: &wsv1.CheckMailboxIndicatorResponse{
-				HasNewMail: response.GetHasNewMail(),
-			},
+			CheckMailboxIndicatorResponse: toWSMailboxIndicator(response),
 		}
 	})
+}
+
+func toWSMailboxIndicator(response *mailv1.CheckMailboxIndicatorResponse) *wsv1.CheckMailboxIndicatorResponse {
+	if response == nil {
+		return &wsv1.CheckMailboxIndicatorResponse{}
+	}
+	return &wsv1.CheckMailboxIndicatorResponse{
+		HasNewMail:   response.GetHasNewMail(),
+		NewMailCount: response.GetNewMailCount(),
+	}
 }
 
 func (c *GRPCMailCommander) Close() error {

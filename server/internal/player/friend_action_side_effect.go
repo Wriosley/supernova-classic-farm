@@ -50,9 +50,9 @@ func (r *Runtime) ApplyVisitorFriendSideEffect(
 		return nil, false, err
 	}
 	now := r.currentTime().UTC()
-	stepKey := syncStepKey(syncStepCommitFriendAction, interactionID)
 
 	var mutated bool
+	var dirtyRevision uint64
 	var sideErr error
 	if execErr := a.mailbox.Do(ctx, func() {
 		if existing := findFriendReceipt(
@@ -141,7 +141,7 @@ func (r *Runtime) ApplyVisitorFriendSideEffect(
 		a.state.CheckpointRevision++
 		a.state.UpdatedAtMS = now.UnixMilli()
 		mutated = true
-		a.markSyncPending(stepKey, pendingSyncStep{revision: a.state.CheckpointRevision})
+		dirtyRevision = a.state.CheckpointRevision
 		response = friendResponse
 	}); execErr != nil {
 		return nil, false, fmt.Errorf("execute visitor friend side-effect mailbox: %w", execErr)
@@ -152,8 +152,8 @@ func (r *Runtime) ApplyVisitorFriendSideEffect(
 	if !alreadyApplied && !mutated {
 		return nil, false, errors.New("visitor friend side-effect did not mutate state")
 	}
-	if _, err := r.settleSyncStepLocked(ctx, visitorID, a, stepKey); err != nil {
-		return nil, false, fmt.Errorf("flush visitor friend side-effect: %w", err)
+	if mutated {
+		r.markDirty(visitorID, dirtyRevision)
 	}
 	r.refreshActorDeadline(visitorID, a)
 	return response, alreadyApplied, nil

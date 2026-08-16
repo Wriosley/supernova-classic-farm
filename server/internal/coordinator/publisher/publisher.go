@@ -66,7 +66,7 @@ func (p *Publisher) Register(id string, kind coordinatorv1.SubscriberKind, lastM
 	if id == "" {
 		return nil, errors.New("subscriber ID is required")
 	}
-	if kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_GATE && kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_INFO && kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE && kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_OTHER {
+	if kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_GATE && kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_INFO && kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_ZONE && kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_OTHER && kind != coordinatorv1.SubscriberKind_SUBSCRIBER_KIND_MAIL {
 		return nil, errors.New("subscriber kind is unsupported")
 	}
 	p.mu.Lock()

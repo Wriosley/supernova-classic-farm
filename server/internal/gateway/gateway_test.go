@@ -96,6 +96,12 @@ func (f *fakeFriendClient) RedeemCode(ctx context.Context, caller uint64, reques
 func (f *fakeFriendClient) List(ctx context.Context, caller uint64, request *wsv1.WsEnvelope) ([]byte, error) {
 	return f.list(ctx, caller, request)
 }
+func (f *fakeFriendClient) GetOfflineVisitors(context.Context, uint64, *wsv1.WsEnvelope) ([]byte, error) {
+	return nil, nil
+}
+func (f *fakeFriendClient) AckOfflineVisitors(context.Context, uint64, *wsv1.WsEnvelope) ([]byte, error) {
+	return nil, nil
+}
 
 func (f *fakeFriendClient) CheckMutualFriend(context.Context, uint64, uint64) (bool, error) {
 	return true, nil
@@ -366,6 +372,34 @@ func unauthenticatedConnection(t *testing.T, authTimeout time.Duration) (*websoc
 		t.Fatalf("dial Gate: %v", err)
 	}
 	return conn, server.Close
+}
+
+func TestCustomWebSocketOriginPattern(t *testing.T) {
+	handler, err := NewHandler(Config{
+		Tickets: ticketFunc(func(context.Context, string) (uint64, error) { return 42, nil }),
+		Routes: routeFunc(func(context.Context, uint32) (Route, error) {
+			return Route{}, errors.New("unused")
+		}),
+		Zone: zoneFunc(func(context.Context, Route, uint64, []byte) ([]byte, error) {
+			return nil, errors.New("unused")
+		}),
+		OriginPatterns: []string{"192.168.255.10:1616"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), &websocket.DialOptions{
+		HTTPHeader: http.Header{"Origin": []string{"http://192.168.255.10:1616"}},
+	})
+	if err != nil {
+		t.Fatalf("dial Gate with configured origin: %v", err)
+	}
+	conn.CloseNow()
 }
 
 func authenticatedConnection(t *testing.T, zone ZoneCommander, routes RouteResolver) (*websocket.Conn, func()) {

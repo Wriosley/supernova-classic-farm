@@ -3,9 +3,11 @@ package friend
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	friendv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/friend"
+	infov1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/info"
 	tcaplusv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/tcaplus"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"google.golang.org/grpc/codes"
@@ -19,11 +21,20 @@ const shareCodeTTL = 10 * time.Minute
 type Service struct {
 	friendv1.UnimplementedFriendServiceServer
 
-	store             Store
-	linker            *FriendLinker
-	now               func() time.Time
-	publicWebBaseURL  string
+	store            Store
+	linker           *FriendLinker
+	now              func() time.Time
+	publicWebBaseURL string
+	quickInfo        QuickInfoReader
 }
+
+type QuickInfoReader interface {
+	BatchGet(context.Context, []uint64, uint64) ([]*infov1.PlayerQuickInfo, error)
+	GetOfflineVisitors(context.Context, uint64) ([]uint64, uint64, bool, error)
+	AckOfflineVisitors(context.Context, uint64, uint64) (bool, error)
+}
+
+func (s *Service) SetQuickInfoReader(reader QuickInfoReader) { s.quickInfo = reader }
 
 func NewService(store Store, linker *FriendLinker, now func() time.Time) (*Service, error) {
 	baseURL, err := LoadPublicWebBaseURL()
@@ -221,13 +232,69 @@ func (s *Service) ListFriends(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	views := make([]*friendv1.FriendView, 0, len(list.Entries))
+	ids := make([]uint64, 0, len(list.Entries))
 	for _, entry := range list.Entries {
-		views = append(views, &friendv1.FriendView{
+		ids = append(ids, entry.FriendPlayerId)
+	}
+	quickByID := make(map[uint64]*infov1.PlayerQuickInfo, len(ids))
+	if s.quickInfo != nil {
+		quick, quickErr := s.quickInfo.BatchGet(ctx, ids, request.GetCallerPlayerId())
+		if quickErr != nil {
+			slog.Warn("friend quick-info lookup failed", "error", quickErr)
+		} else {
+			for _, item := range quick {
+				quickByID[item.GetPlayerId()] = item
+			}
+		}
+	}
+	for _, entry := range list.Entries {
+		view := &friendv1.FriendView{
 			PlayerId: entry.FriendPlayerId, AccountName: entry.AccountName,
 			CreatedAtMs: entry.CreatedAtMs,
-		})
+		}
+		if quick := quickByID[entry.FriendPlayerId]; quick != nil {
+			view.PresenceKnown = quick.GetPresenceKnown()
+			view.Online = quick.GetOnline()
+			view.LastSeenAtMs = quick.GetLastSeenAtMs()
+			view.FarmSummaryKnown = quick.GetFarmSummaryKnown()
+			view.EarliestMatureAtMs = quick.GetEarliestMatureAtMs()
+			view.MayHaveStealableCrop = !quick.GetOnline() && quick.GetShowOfflineFarmRedDot()
+		}
+		views = append(views, view)
 	}
 	return &friendv1.ListFriendsResponse{Friends: views}, nil
+}
+
+func (s *Service) GetOfflineVisitors(ctx context.Context, request *friendv1.GetOfflineVisitorsRequest) (*friendv1.GetOfflineVisitorsResponse, error) {
+	if request.GetCallerPlayerId() == 0 || s.quickInfo == nil {
+		return &friendv1.GetOfflineVisitorsResponse{}, nil
+	}
+	ids, version, truncated, err := s.quickInfo.GetOfflineVisitors(ctx, request.GetCallerPlayerId())
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	visitors := make([]*friendv1.FriendView, 0, len(ids))
+	for _, id := range ids {
+		name, found, lookupErr := s.store.AccountName(ctx, id)
+		if lookupErr != nil {
+			return nil, status.Error(codes.Internal, lookupErr.Error())
+		}
+		if found {
+			visitors = append(visitors, &friendv1.FriendView{PlayerId: id, AccountName: name})
+		}
+	}
+	return &friendv1.GetOfflineVisitorsResponse{Visitors: visitors, VisitorVersion: version, Truncated: truncated}, nil
+}
+
+func (s *Service) AckOfflineVisitors(ctx context.Context, request *friendv1.AckOfflineVisitorsRequest) (*friendv1.AckOfflineVisitorsResponse, error) {
+	if request.GetCallerPlayerId() == 0 || request.GetVisitorVersion() == 0 || s.quickInfo == nil {
+		return &friendv1.AckOfflineVisitorsResponse{}, nil
+	}
+	applied, err := s.quickInfo.AckOfflineVisitors(ctx, request.GetCallerPlayerId(), request.GetVisitorVersion())
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	return &friendv1.AckOfflineVisitorsResponse{Applied: applied}, nil
 }
 
 func (s *Service) CheckMutualFriend(

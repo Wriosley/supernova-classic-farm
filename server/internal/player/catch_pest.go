@@ -29,8 +29,8 @@ func (r *Runtime) ApplyCatchPestOnOwner(
 		return nil, nil, nil, false, err
 	}
 	now := r.currentTime().UTC()
-	stepKey := syncStepKey(syncStepCatchPestOnOwner, interactionID)
 	var mutated bool
+	var dirtyRevision uint64
 	var applyErr error
 	if err := a.mailbox.Do(ctx, func() {
 		if existing := findFriendReceipt(a.state.FriendReceipts, interactionID, datav1.FriendReceiptRole_FRIEND_RECEIPT_OWNER); existing != nil {
@@ -75,9 +75,7 @@ func (r *Runtime) ApplyCatchPestOnOwner(
 		a.state.CheckpointRevision++
 		a.state.UpdatedAtMS = now.UnixMilli()
 		mutated = true
-		a.markSyncPending(stepKey, pendingSyncStep{
-			revision: a.state.CheckpointRevision, domainChanges: DomainChanges{}.PlotChanged(plotID),
-		})
+		dirtyRevision = a.state.CheckpointRevision
 	}); err != nil {
 		return nil, nil, nil, false, fmt.Errorf("execute catch pest mailbox: %w", err)
 	}
@@ -87,12 +85,9 @@ func (r *Runtime) ApplyCatchPestOnOwner(
 	if !alreadyApplied && !mutated {
 		return nil, nil, nil, false, errors.New("catch pest did not mutate owner state")
 	}
-	owedChanges, err := r.settleSyncStepLocked(ctx, ownerID, a, stepKey)
-	if err != nil {
-		return nil, nil, nil, false, fmt.Errorf("flush catch pest: %w", err)
-	}
-	if !owedChanges.Empty() {
-		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, owedChanges)
+	if mutated {
+		r.markDirty(ownerID, dirtyRevision)
+		farmPatch = r.publishFarmViewChanges(ctx, a, ownerID, DomainChanges{}.PlotChanged(plotID))
 	}
 	r.refreshActorDeadline(ownerID, a)
 	return resultPayload, resultDigest, farmPatch, alreadyApplied, nil

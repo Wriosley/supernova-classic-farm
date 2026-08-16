@@ -571,6 +571,7 @@ func (x *CheckMailboxIndicatorRequest) GetRegisteredAtMs() int64 {
 type CheckMailboxIndicatorResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HasNewMail    bool                   `protobuf:"varint,1,opt,name=has_new_mail,json=hasNewMail,proto3" json:"has_new_mail,omitempty"`
+	NewMailCount  uint32                 `protobuf:"varint,2,opt,name=new_mail_count,json=newMailCount,proto3" json:"new_mail_count,omitempty"`
 	Error         *ws.Error              `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -611,6 +612,13 @@ func (x *CheckMailboxIndicatorResponse) GetHasNewMail() bool {
 		return x.HasNewMail
 	}
 	return false
+}
+
+func (x *CheckMailboxIndicatorResponse) GetNewMailCount() uint32 {
+	if x != nil {
+		return x.NewMailCount
+	}
+	return 0
 }
 
 func (x *CheckMailboxIndicatorResponse) GetError() *ws.Error {
@@ -1134,10 +1142,11 @@ const file_classicfarm_v1_mail_mail_proto_rawDesc = "" +
 	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"e\n" +
 	"\x1cCheckMailboxIndicatorRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12(\n" +
-	"\x10registered_at_ms\x18\x02 \x01(\x03R\x0eregisteredAtMs\"q\n" +
+	"\x10registered_at_ms\x18\x02 \x01(\x03R\x0eregisteredAtMs\"\x97\x01\n" +
 	"\x1dCheckMailboxIndicatorResponse\x12 \n" +
 	"\fhas_new_mail\x18\x01 \x01(\bR\n" +
-	"hasNewMail\x12.\n" +
+	"hasNewMail\x12$\n" +
+	"\x0enew_mail_count\x18\x02 \x01(\rR\fnewMailCount\x12.\n" +
 	"\x05error\x18\x0f \x01(\v2\x18.classicfarm.ws.v1.ErrorR\x05error\"\xab\x02\n" +
 	"\x15CreateGiftMailRequest\x12&\n" +
 	"\x0fsource_event_id\x18\x01 \x01(\fR\rsourceEventId\x12(\n" +

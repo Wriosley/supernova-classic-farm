@@ -1,0 +1,16 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: classic-farm
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # Stable CVM ports consumed by the manually managed Tencent Cloud CLB.
+      # They must match login/gate nodePort values in deploy/k8s/services.yaml.
+      - containerPort: 31238
+        hostPort: 31238
+        listenAddress: "0.0.0.0"
+        protocol: TCP
+      - containerPort: 32591
+        hostPort: 32591
+        listenAddress: "0.0.0.0"
+        protocol: TCP

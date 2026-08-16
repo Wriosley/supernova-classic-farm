@@ -113,6 +113,8 @@ const (
 	Action_OPEN_MAILBOX            Action = 326
 	Action_MARK_MAIL_READ          Action = 327
 	Action_CHECK_MAILBOX_INDICATOR Action = 328
+	Action_GET_OFFLINE_VISITORS    Action = 329
+	Action_ACK_OFFLINE_VISITORS    Action = 330
 	Action_PLAYER_STATE_CHANGED    Action = 1000
 	Action_FARM_VIEW_CHANGED       Action = 1100
 	Action_FARM_PRESENCE_CHANGED   Action = 1101
@@ -156,6 +158,8 @@ var (
 		326:  "OPEN_MAILBOX",
 		327:  "MARK_MAIL_READ",
 		328:  "CHECK_MAILBOX_INDICATOR",
+		329:  "GET_OFFLINE_VISITORS",
+		330:  "ACK_OFFLINE_VISITORS",
 		1000: "PLAYER_STATE_CHANGED",
 		1100: "FARM_VIEW_CHANGED",
 		1101: "FARM_PRESENCE_CHANGED",
@@ -196,6 +200,8 @@ var (
 		"OPEN_MAILBOX":            326,
 		"MARK_MAIL_READ":          327,
 		"CHECK_MAILBOX_INDICATOR": 328,
+		"GET_OFFLINE_VISITORS":    329,
+		"ACK_OFFLINE_VISITORS":    330,
 		"PLAYER_STATE_CHANGED":    1000,
 		"FARM_VIEW_CHANGED":       1100,
 		"FARM_PRESENCE_CHANGED":   1101,
@@ -709,6 +715,10 @@ type WsEnvelope struct {
 	//	*WsEnvelope_MarkMailReadResponse
 	//	*WsEnvelope_CheckMailboxIndicatorRequest
 	//	*WsEnvelope_CheckMailboxIndicatorResponse
+	//	*WsEnvelope_GetOfflineVisitorsRequest
+	//	*WsEnvelope_GetOfflineVisitorsResponse
+	//	*WsEnvelope_AckOfflineVisitorsRequest
+	//	*WsEnvelope_AckOfflineVisitorsResponse
 	Payload       isWsEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1444,6 +1454,42 @@ func (x *WsEnvelope) GetCheckMailboxIndicatorResponse() *CheckMailboxIndicatorRe
 	return nil
 }
 
+func (x *WsEnvelope) GetGetOfflineVisitorsRequest() *GetOfflineVisitorsRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_GetOfflineVisitorsRequest); ok {
+			return x.GetOfflineVisitorsRequest
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetGetOfflineVisitorsResponse() *GetOfflineVisitorsResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_GetOfflineVisitorsResponse); ok {
+			return x.GetOfflineVisitorsResponse
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetAckOfflineVisitorsRequest() *AckOfflineVisitorsRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_AckOfflineVisitorsRequest); ok {
+			return x.AckOfflineVisitorsRequest
+		}
+	}
+	return nil
+}
+
+func (x *WsEnvelope) GetAckOfflineVisitorsResponse() *AckOfflineVisitorsResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*WsEnvelope_AckOfflineVisitorsResponse); ok {
+			return x.AckOfflineVisitorsResponse
+		}
+	}
+	return nil
+}
+
 type isWsEnvelope_Payload interface {
 	isWsEnvelope_Payload()
 }
@@ -1728,6 +1774,22 @@ type WsEnvelope_CheckMailboxIndicatorResponse struct {
 	CheckMailboxIndicatorResponse *CheckMailboxIndicatorResponse `protobuf:"bytes,79,opt,name=check_mailbox_indicator_response,json=checkMailboxIndicatorResponse,proto3,oneof"`
 }
 
+type WsEnvelope_GetOfflineVisitorsRequest struct {
+	GetOfflineVisitorsRequest *GetOfflineVisitorsRequest `protobuf:"bytes,80,opt,name=get_offline_visitors_request,json=getOfflineVisitorsRequest,proto3,oneof"`
+}
+
+type WsEnvelope_GetOfflineVisitorsResponse struct {
+	GetOfflineVisitorsResponse *GetOfflineVisitorsResponse `protobuf:"bytes,81,opt,name=get_offline_visitors_response,json=getOfflineVisitorsResponse,proto3,oneof"`
+}
+
+type WsEnvelope_AckOfflineVisitorsRequest struct {
+	AckOfflineVisitorsRequest *AckOfflineVisitorsRequest `protobuf:"bytes,82,opt,name=ack_offline_visitors_request,json=ackOfflineVisitorsRequest,proto3,oneof"`
+}
+
+type WsEnvelope_AckOfflineVisitorsResponse struct {
+	AckOfflineVisitorsResponse *AckOfflineVisitorsResponse `protobuf:"bytes,83,opt,name=ack_offline_visitors_response,json=ackOfflineVisitorsResponse,proto3,oneof"`
+}
+
 func (*WsEnvelope_AuthRequest) isWsEnvelope_Payload() {}
 
 func (*WsEnvelope_AuthResponse) isWsEnvelope_Payload() {}
@@ -1867,6 +1929,14 @@ func (*WsEnvelope_MarkMailReadResponse) isWsEnvelope_Payload() {}
 func (*WsEnvelope_CheckMailboxIndicatorRequest) isWsEnvelope_Payload() {}
 
 func (*WsEnvelope_CheckMailboxIndicatorResponse) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_GetOfflineVisitorsRequest) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_GetOfflineVisitorsResponse) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_AckOfflineVisitorsRequest) isWsEnvelope_Payload() {}
+
+func (*WsEnvelope_AckOfflineVisitorsResponse) isWsEnvelope_Payload() {}
 
 type StateVersion struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -4759,12 +4829,18 @@ func (x *ListFriendsResponse) GetFriends() []*FriendView {
 }
 
 type FriendView struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	AccountName   string                 `protobuf:"bytes,2,opt,name=account_name,json=accountName,proto3" json:"account_name,omitempty"`
-	CreatedAtMs   int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId             uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	AccountName          string                 `protobuf:"bytes,2,opt,name=account_name,json=accountName,proto3" json:"account_name,omitempty"`
+	CreatedAtMs          int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	PresenceKnown        bool                   `protobuf:"varint,4,opt,name=presence_known,json=presenceKnown,proto3" json:"presence_known,omitempty"`
+	Online               bool                   `protobuf:"varint,5,opt,name=online,proto3" json:"online,omitempty"`
+	LastSeenAtMs         int64                  `protobuf:"varint,6,opt,name=last_seen_at_ms,json=lastSeenAtMs,proto3" json:"last_seen_at_ms,omitempty"`
+	FarmSummaryKnown     bool                   `protobuf:"varint,7,opt,name=farm_summary_known,json=farmSummaryKnown,proto3" json:"farm_summary_known,omitempty"`
+	EarliestMatureAtMs   int64                  `protobuf:"varint,8,opt,name=earliest_mature_at_ms,json=earliestMatureAtMs,proto3" json:"earliest_mature_at_ms,omitempty"`
+	MayHaveStealableCrop bool                   `protobuf:"varint,9,opt,name=may_have_stealable_crop,json=mayHaveStealableCrop,proto3" json:"may_have_stealable_crop,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *FriendView) Reset() {
@@ -4816,6 +4892,48 @@ func (x *FriendView) GetCreatedAtMs() int64 {
 		return x.CreatedAtMs
 	}
 	return 0
+}
+
+func (x *FriendView) GetPresenceKnown() bool {
+	if x != nil {
+		return x.PresenceKnown
+	}
+	return false
+}
+
+func (x *FriendView) GetOnline() bool {
+	if x != nil {
+		return x.Online
+	}
+	return false
+}
+
+func (x *FriendView) GetLastSeenAtMs() int64 {
+	if x != nil {
+		return x.LastSeenAtMs
+	}
+	return 0
+}
+
+func (x *FriendView) GetFarmSummaryKnown() bool {
+	if x != nil {
+		return x.FarmSummaryKnown
+	}
+	return false
+}
+
+func (x *FriendView) GetEarliestMatureAtMs() int64 {
+	if x != nil {
+		return x.EarliestMatureAtMs
+	}
+	return 0
+}
+
+func (x *FriendView) GetMayHaveStealableCrop() bool {
+	if x != nil {
+		return x.MayHaveStealableCrop
+	}
+	return false
 }
 
 type FarmViewVersion struct {
@@ -5301,6 +5419,7 @@ type RedDotChangedPush struct {
 	Category       RedDotCategory         `protobuf:"varint,2,opt,name=category,proto3,enum=classicfarm.ws.v1.RedDotCategory" json:"category,omitempty"`
 	Operation      RedDotOperation        `protobuf:"varint,3,opt,name=operation,proto3,enum=classicfarm.ws.v1.RedDotOperation" json:"operation,omitempty"`
 	SourcePlayerId *uint64                `protobuf:"varint,4,opt,name=source_player_id,json=sourcePlayerId,proto3,oneof" json:"source_player_id,omitempty"`
+	Count          uint32                 `protobuf:"varint,5,opt,name=count,proto3" json:"count,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -5359,6 +5478,13 @@ func (x *RedDotChangedPush) GetOperation() RedDotOperation {
 func (x *RedDotChangedPush) GetSourcePlayerId() uint64 {
 	if x != nil && x.SourcePlayerId != nil {
 		return *x.SourcePlayerId
+	}
+	return 0
+}
+
+func (x *RedDotChangedPush) GetCount() uint32 {
+	if x != nil {
+		return x.Count
 	}
 	return 0
 }
@@ -7590,6 +7716,7 @@ func (*CheckMailboxIndicatorRequest) Descriptor() ([]byte, []int) {
 type CheckMailboxIndicatorResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HasNewMail    bool                   `protobuf:"varint,1,opt,name=has_new_mail,json=hasNewMail,proto3" json:"has_new_mail,omitempty"`
+	NewMailCount  uint32                 `protobuf:"varint,2,opt,name=new_mail_count,json=newMailCount,proto3" json:"new_mail_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7631,11 +7758,202 @@ func (x *CheckMailboxIndicatorResponse) GetHasNewMail() bool {
 	return false
 }
 
+func (x *CheckMailboxIndicatorResponse) GetNewMailCount() uint32 {
+	if x != nil {
+		return x.NewMailCount
+	}
+	return 0
+}
+
+type GetOfflineVisitorsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOfflineVisitorsRequest) Reset() {
+	*x = GetOfflineVisitorsRequest{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOfflineVisitorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOfflineVisitorsRequest) ProtoMessage() {}
+
+func (x *GetOfflineVisitorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOfflineVisitorsRequest.ProtoReflect.Descriptor instead.
+func (*GetOfflineVisitorsRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{93}
+}
+
+type GetOfflineVisitorsResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Visitors       []*FriendView          `protobuf:"bytes,1,rep,name=visitors,proto3" json:"visitors,omitempty"`
+	VisitorVersion uint64                 `protobuf:"varint,2,opt,name=visitor_version,json=visitorVersion,proto3" json:"visitor_version,omitempty"`
+	Truncated      bool                   `protobuf:"varint,3,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetOfflineVisitorsResponse) Reset() {
+	*x = GetOfflineVisitorsResponse{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[94]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOfflineVisitorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOfflineVisitorsResponse) ProtoMessage() {}
+
+func (x *GetOfflineVisitorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[94]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOfflineVisitorsResponse.ProtoReflect.Descriptor instead.
+func (*GetOfflineVisitorsResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{94}
+}
+
+func (x *GetOfflineVisitorsResponse) GetVisitors() []*FriendView {
+	if x != nil {
+		return x.Visitors
+	}
+	return nil
+}
+
+func (x *GetOfflineVisitorsResponse) GetVisitorVersion() uint64 {
+	if x != nil {
+		return x.VisitorVersion
+	}
+	return 0
+}
+
+func (x *GetOfflineVisitorsResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+type AckOfflineVisitorsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	VisitorVersion uint64                 `protobuf:"varint,1,opt,name=visitor_version,json=visitorVersion,proto3" json:"visitor_version,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AckOfflineVisitorsRequest) Reset() {
+	*x = AckOfflineVisitorsRequest{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckOfflineVisitorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckOfflineVisitorsRequest) ProtoMessage() {}
+
+func (x *AckOfflineVisitorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckOfflineVisitorsRequest.ProtoReflect.Descriptor instead.
+func (*AckOfflineVisitorsRequest) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *AckOfflineVisitorsRequest) GetVisitorVersion() uint64 {
+	if x != nil {
+		return x.VisitorVersion
+	}
+	return 0
+}
+
+type AckOfflineVisitorsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AckOfflineVisitorsResponse) Reset() {
+	*x = AckOfflineVisitorsResponse{}
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[96]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckOfflineVisitorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckOfflineVisitorsResponse) ProtoMessage() {}
+
+func (x *AckOfflineVisitorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_classicfarm_v1_ws_ws_proto_msgTypes[96]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckOfflineVisitorsResponse.ProtoReflect.Descriptor instead.
+func (*AckOfflineVisitorsResponse) Descriptor() ([]byte, []int) {
+	return file_classicfarm_v1_ws_ws_proto_rawDescGZIP(), []int{96}
+}
+
+func (x *AckOfflineVisitorsResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
 var File_classicfarm_v1_ws_ws_proto protoreflect.FileDescriptor
 
 const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\n" +
-	"\x1aclassicfarm/v1/ws/ws.proto\x12\x11classicfarm.ws.v1\x1a.classicfarm/v1/ws/chapter/chapter_status.proto\x1a'classicfarm/v1/ws/plot/plot_state.proto\x1a2classicfarm/v1/ws/reason/state_change_reason.proto\"\xb37\n" +
+	"\x1aclassicfarm/v1/ws/ws.proto\x12\x11classicfarm.ws.v1\x1a.classicfarm/v1/ws/chapter/chapter_status.proto\x1a'classicfarm/v1/ws/plot/plot_state.proto\x1a2classicfarm/v1/ws/reason/state_change_reason.proto\"\xfd:\n" +
 	"\n" +
 	"WsEnvelope\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12A\n" +
@@ -7718,8 +8036,12 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x16mark_mail_read_request\x18L \x01(\v2&.classicfarm.ws.v1.MarkMailReadRequestH\x00R\x13markMailReadRequest\x12`\n" +
 	"\x17mark_mail_read_response\x18M \x01(\v2'.classicfarm.ws.v1.MarkMailReadResponseH\x00R\x14markMailReadResponse\x12x\n" +
 	"\x1fcheck_mailbox_indicator_request\x18N \x01(\v2/.classicfarm.ws.v1.CheckMailboxIndicatorRequestH\x00R\x1ccheckMailboxIndicatorRequest\x12{\n" +
-	" check_mailbox_indicator_response\x18O \x01(\v20.classicfarm.ws.v1.CheckMailboxIndicatorResponseH\x00R\x1dcheckMailboxIndicatorResponseB\t\n" +
-	"\apayloadJ\x04\bP\x10d\"N\n" +
+	" check_mailbox_indicator_response\x18O \x01(\v20.classicfarm.ws.v1.CheckMailboxIndicatorResponseH\x00R\x1dcheckMailboxIndicatorResponse\x12o\n" +
+	"\x1cget_offline_visitors_request\x18P \x01(\v2,.classicfarm.ws.v1.GetOfflineVisitorsRequestH\x00R\x19getOfflineVisitorsRequest\x12r\n" +
+	"\x1dget_offline_visitors_response\x18Q \x01(\v2-.classicfarm.ws.v1.GetOfflineVisitorsResponseH\x00R\x1agetOfflineVisitorsResponse\x12o\n" +
+	"\x1cack_offline_visitors_request\x18R \x01(\v2,.classicfarm.ws.v1.AckOfflineVisitorsRequestH\x00R\x19ackOfflineVisitorsRequest\x12r\n" +
+	"\x1dack_offline_visitors_response\x18S \x01(\v2-.classicfarm.ws.v1.AckOfflineVisitorsResponseH\x00R\x1aackOfflineVisitorsResponseB\t\n" +
+	"\apayloadJ\x04\bT\x10d\"N\n" +
 	"\fStateVersion\x12\x1f\n" +
 	"\vowner_epoch\x18\x01 \x01(\x04R\n" +
 	"ownerEpoch\x12\x1d\n" +
@@ -7947,12 +8269,18 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\rnewly_created\x18\x02 \x01(\bR\fnewlyCreated\"\x14\n" +
 	"\x12ListFriendsRequest\"N\n" +
 	"\x13ListFriendsResponse\x127\n" +
-	"\afriends\x18\x01 \x03(\v2\x1d.classicfarm.ws.v1.FriendViewR\afriends\"p\n" +
+	"\afriends\x18\x01 \x03(\v2\x1d.classicfarm.ws.v1.FriendViewR\afriends\"\xee\x02\n" +
 	"\n" +
 	"FriendView\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\faccount_name\x18\x02 \x01(\tR\vaccountName\x12\"\n" +
-	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs\"]\n" +
+	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs\x12%\n" +
+	"\x0epresence_known\x18\x04 \x01(\bR\rpresenceKnown\x12\x16\n" +
+	"\x06online\x18\x05 \x01(\bR\x06online\x12%\n" +
+	"\x0flast_seen_at_ms\x18\x06 \x01(\x03R\flastSeenAtMs\x12,\n" +
+	"\x12farm_summary_known\x18\a \x01(\bR\x10farmSummaryKnown\x121\n" +
+	"\x15earliest_mature_at_ms\x18\b \x01(\x03R\x12earliestMatureAtMs\x125\n" +
+	"\x17may_have_stealable_crop\x18\t \x01(\bR\x14mayHaveStealableCrop\"]\n" +
 	"\x0fFarmViewVersion\x12&\n" +
 	"\x0ffarm_view_epoch\x18\x01 \x01(\fR\rfarmViewEpoch\x12\"\n" +
 	"\rfarm_view_seq\x18\x02 \x01(\x04R\vfarmViewSeq\"\xed\x02\n" +
@@ -8003,12 +8331,13 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\r_crop_item_idB\v\n" +
 	"\t_quantityB\x12\n" +
 	"\x10_guard_triggeredB\x10\n" +
-	"\x0e_guard_penalty\"\x81\x02\n" +
+	"\x0e_guard_penalty\"\x97\x02\n" +
 	"\x11RedDotChangedPush\x12'\n" +
 	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12=\n" +
 	"\bcategory\x18\x02 \x01(\x0e2!.classicfarm.ws.v1.RedDotCategoryR\bcategory\x12@\n" +
 	"\toperation\x18\x03 \x01(\x0e2\".classicfarm.ws.v1.RedDotOperationR\toperation\x12-\n" +
-	"\x10source_player_id\x18\x04 \x01(\x04H\x00R\x0esourcePlayerId\x88\x01\x01B\x13\n" +
+	"\x10source_player_id\x18\x04 \x01(\x04H\x00R\x0esourcePlayerId\x88\x01\x01\x12\x14\n" +
+	"\x05count\x18\x05 \x01(\rR\x05countB\x13\n" +
 	"\x11_source_player_id\"@\n" +
 	"\x16EnterFriendFarmRequest\x12&\n" +
 	"\x0fowner_player_id\x18\x01 \x01(\x04R\rownerPlayerId\"\x9a\x01\n" +
@@ -8176,15 +8505,25 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\x13MarkMailReadRequest\x12\x17\n" +
 	"\amail_id\x18\x01 \x01(\tR\x06mailId\"\x16\n" +
 	"\x14MarkMailReadResponse\"\x1e\n" +
-	"\x1cCheckMailboxIndicatorRequest\"A\n" +
+	"\x1cCheckMailboxIndicatorRequest\"g\n" +
 	"\x1dCheckMailboxIndicatorResponse\x12 \n" +
 	"\fhas_new_mail\x18\x01 \x01(\bR\n" +
-	"hasNewMail*P\n" +
+	"hasNewMail\x12$\n" +
+	"\x0enew_mail_count\x18\x02 \x01(\rR\fnewMailCount\"\x1b\n" +
+	"\x19GetOfflineVisitorsRequest\"\x9e\x01\n" +
+	"\x1aGetOfflineVisitorsResponse\x129\n" +
+	"\bvisitors\x18\x01 \x03(\v2\x1d.classicfarm.ws.v1.FriendViewR\bvisitors\x12'\n" +
+	"\x0fvisitor_version\x18\x02 \x01(\x04R\x0evisitorVersion\x12\x1c\n" +
+	"\ttruncated\x18\x03 \x01(\bR\ttruncated\"D\n" +
+	"\x19AckOfflineVisitorsRequest\x12'\n" +
+	"\x0fvisitor_version\x18\x01 \x01(\x04R\x0evisitorVersion\"6\n" +
+	"\x1aAckOfflineVisitorsResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied*P\n" +
 	"\vMessageKind\x12\x1c\n" +
 	"\x18MESSAGE_KIND_UNSPECIFIED\x10\x00\x12\v\n" +
 	"\aREQUEST\x10\x01\x12\f\n" +
 	"\bRESPONSE\x10\x02\x12\b\n" +
-	"\x04PUSH\x10\x03*\xd7\x06\n" +
+	"\x04PUSH\x10\x03*\x8d\a\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04AUTH\x10\x01\x12\b\n" +
@@ -8225,10 +8564,12 @@ const file_classicfarm_v1_ws_ws_proto_rawDesc = "" +
 	"\fOPEN_MAILBOX\x10\xc6\x02\x12\x13\n" +
 	"\x0eMARK_MAIL_READ\x10\xc7\x02\x12\x1c\n" +
 	"\x17CHECK_MAILBOX_INDICATOR\x10\xc8\x02\x12\x19\n" +
+	"\x14GET_OFFLINE_VISITORS\x10\xc9\x02\x12\x19\n" +
+	"\x14ACK_OFFLINE_VISITORS\x10\xca\x02\x12\x19\n" +
 	"\x14PLAYER_STATE_CHANGED\x10\xe8\a\x12\x16\n" +
 	"\x11FARM_VIEW_CHANGED\x10\xcc\b\x12\x1a\n" +
 	"\x15FARM_PRESENCE_CHANGED\x10\xcd\b\x12\x14\n" +
-	"\x0fRED_DOT_CHANGED\x10\xce\b\"\x04\b\x03\x10c\"\x05\bg\x10\xc7\x01\"\x06\b\xd5\x01\x10\xab\x02\"\x06\b\xaf\x02\x10\xb5\x02\"\x06\b\xb9\x02\x10\xbf\x02\"\x06\b\xc9\x02\x10\xe7\a\"\x06\b\xe9\a\x10\xcb\b\"\x06\b\xcf\b\x10\xcf\x0f*\x8a\n" +
+	"\x0fRED_DOT_CHANGED\x10\xce\b\"\x04\b\x03\x10c\"\x05\bg\x10\xc7\x01\"\x06\b\xd5\x01\x10\xab\x02\"\x06\b\xaf\x02\x10\xb5\x02\"\x06\b\xb9\x02\x10\xbf\x02\"\x06\b\xcb\x02\x10\xe7\a\"\x06\b\xe9\a\x10\xcb\b\"\x06\b\xcf\b\x10\xcf\x0f*\x8a\n" +
 	"\n" +
 	"\tErrorCode\x12\x15\n" +
 	"\x11ERROR_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -8314,7 +8655,7 @@ func file_classicfarm_v1_ws_ws_proto_rawDescGZIP() []byte {
 }
 
 var file_classicfarm_v1_ws_ws_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_classicfarm_v1_ws_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 93)
+var file_classicfarm_v1_ws_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 97)
 var file_classicfarm_v1_ws_ws_proto_goTypes = []any{
 	(MessageKind)(0),                      // 0: classicfarm.ws.v1.MessageKind
 	(Action)(0),                           // 1: classicfarm.ws.v1.Action
@@ -8416,9 +8757,13 @@ var file_classicfarm_v1_ws_ws_proto_goTypes = []any{
 	(*MarkMailReadResponse)(nil),          // 97: classicfarm.ws.v1.MarkMailReadResponse
 	(*CheckMailboxIndicatorRequest)(nil),  // 98: classicfarm.ws.v1.CheckMailboxIndicatorRequest
 	(*CheckMailboxIndicatorResponse)(nil), // 99: classicfarm.ws.v1.CheckMailboxIndicatorResponse
-	(plot.PlotState)(0),                   // 100: classicfarm.ws.v1.plot.PlotState
-	(chapter.ChapterStatus)(0),            // 101: classicfarm.ws.v1.chapter.ChapterStatus
-	(reason.StateChangeReason)(0),         // 102: classicfarm.ws.v1.reason.StateChangeReason
+	(*GetOfflineVisitorsRequest)(nil),     // 100: classicfarm.ws.v1.GetOfflineVisitorsRequest
+	(*GetOfflineVisitorsResponse)(nil),    // 101: classicfarm.ws.v1.GetOfflineVisitorsResponse
+	(*AckOfflineVisitorsRequest)(nil),     // 102: classicfarm.ws.v1.AckOfflineVisitorsRequest
+	(*AckOfflineVisitorsResponse)(nil),    // 103: classicfarm.ws.v1.AckOfflineVisitorsResponse
+	(plot.PlotState)(0),                   // 104: classicfarm.ws.v1.plot.PlotState
+	(chapter.ChapterStatus)(0),            // 105: classicfarm.ws.v1.chapter.ChapterStatus
+	(reason.StateChangeReason)(0),         // 106: classicfarm.ws.v1.reason.StateChangeReason
 }
 var file_classicfarm_v1_ws_ws_proto_depIdxs = []int32{
 	0,   // 0: classicfarm.ws.v1.WsEnvelope.message_kind:type_name -> classicfarm.ws.v1.MessageKind
@@ -8495,80 +8840,85 @@ var file_classicfarm_v1_ws_ws_proto_depIdxs = []int32{
 	97,  // 71: classicfarm.ws.v1.WsEnvelope.mark_mail_read_response:type_name -> classicfarm.ws.v1.MarkMailReadResponse
 	98,  // 72: classicfarm.ws.v1.WsEnvelope.check_mailbox_indicator_request:type_name -> classicfarm.ws.v1.CheckMailboxIndicatorRequest
 	99,  // 73: classicfarm.ws.v1.WsEnvelope.check_mailbox_indicator_response:type_name -> classicfarm.ws.v1.CheckMailboxIndicatorResponse
-	2,   // 74: classicfarm.ws.v1.Error.code:type_name -> classicfarm.ws.v1.ErrorCode
-	9,   // 75: classicfarm.ws.v1.Error.params:type_name -> classicfarm.ws.v1.ErrorParam
-	17,  // 76: classicfarm.ws.v1.Error.latest_shop_entry:type_name -> classicfarm.ws.v1.ShopEntryView
-	26,  // 77: classicfarm.ws.v1.Error.current_plot:type_name -> classicfarm.ws.v1.PlotView
-	17,  // 78: classicfarm.ws.v1.GetShopResponse.entries:type_name -> classicfarm.ws.v1.ShopEntryView
-	23,  // 79: classicfarm.ws.v1.GetShopResponse.crops:type_name -> classicfarm.ws.v1.CropCatalogEntryView
-	20,  // 80: classicfarm.ws.v1.GetPlayerSnapshotResponse.snapshot:type_name -> classicfarm.ws.v1.PlayerSnapshot
-	24,  // 81: classicfarm.ws.v1.PlayerSnapshot.inventory:type_name -> classicfarm.ws.v1.ItemStackView
-	26,  // 82: classicfarm.ws.v1.PlayerSnapshot.plots:type_name -> classicfarm.ws.v1.PlotView
-	27,  // 83: classicfarm.ws.v1.PlayerSnapshot.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
-	21,  // 84: classicfarm.ws.v1.PlayerSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
-	22,  // 85: classicfarm.ws.v1.PlayerSnapshot.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
-	100, // 86: classicfarm.ws.v1.PlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
-	25,  // 87: classicfarm.ws.v1.PlotView.fertilizer_effect:type_name -> classicfarm.ws.v1.EffectView
-	25,  // 88: classicfarm.ws.v1.PlotView.pest_effect:type_name -> classicfarm.ws.v1.EffectView
-	101, // 89: classicfarm.ws.v1.ChapterView.status:type_name -> classicfarm.ws.v1.chapter.ChapterStatus
-	28,  // 90: classicfarm.ws.v1.ChapterView.tasks:type_name -> classicfarm.ws.v1.TaskProgressView
-	24,  // 91: classicfarm.ws.v1.PlayerStatePatch.inventory_upserts:type_name -> classicfarm.ws.v1.ItemStackView
-	26,  // 92: classicfarm.ws.v1.PlayerStatePatch.plot_upserts:type_name -> classicfarm.ws.v1.PlotView
-	27,  // 93: classicfarm.ws.v1.PlayerStatePatch.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
-	21,  // 94: classicfarm.ws.v1.PlayerStatePatch.career:type_name -> classicfarm.ws.v1.PlayerCareerView
-	22,  // 95: classicfarm.ws.v1.PlayerStatePatch.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
-	29,  // 96: classicfarm.ws.v1.BuySeedsResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	29,  // 97: classicfarm.ws.v1.BuyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	29,  // 98: classicfarm.ws.v1.PlantResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	29,  // 99: classicfarm.ws.v1.ApplyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	29,  // 100: classicfarm.ws.v1.HarvestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	29,  // 101: classicfarm.ws.v1.CleanPlotResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	29,  // 102: classicfarm.ws.v1.CatchPestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	29,  // 103: classicfarm.ws.v1.SellCropResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	24,  // 104: classicfarm.ws.v1.ClaimChapterRewardResponse.items_added_to_inventory:type_name -> classicfarm.ws.v1.ItemStackView
-	24,  // 105: classicfarm.ws.v1.ClaimChapterRewardResponse.items_pending_mail:type_name -> classicfarm.ws.v1.ItemStackView
-	29,  // 106: classicfarm.ws.v1.ClaimChapterRewardResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	102, // 107: classicfarm.ws.v1.PlayerStateChangedPush.reason:type_name -> classicfarm.ws.v1.reason.StateChangeReason
-	29,  // 108: classicfarm.ws.v1.PlayerStateChangedPush.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	55,  // 109: classicfarm.ws.v1.RedeemFriendCodeResponse.friend:type_name -> classicfarm.ws.v1.FriendView
-	55,  // 110: classicfarm.ws.v1.ListFriendsResponse.friends:type_name -> classicfarm.ws.v1.FriendView
-	100, // 111: classicfarm.ws.v1.PublicPlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
-	56,  // 112: classicfarm.ws.v1.FarmVisitSnapshot.version:type_name -> classicfarm.ws.v1.FarmViewVersion
-	57,  // 113: classicfarm.ws.v1.FarmVisitSnapshot.plots:type_name -> classicfarm.ws.v1.PublicPlotView
-	21,  // 114: classicfarm.ws.v1.FarmVisitSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
-	58,  // 115: classicfarm.ws.v1.FarmVisitSnapshot.pet:type_name -> classicfarm.ws.v1.PublicPetView
-	22,  // 116: classicfarm.ws.v1.FarmVisitSnapshot.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
-	56,  // 117: classicfarm.ws.v1.FarmViewPatch.version:type_name -> classicfarm.ws.v1.FarmViewVersion
-	57,  // 118: classicfarm.ws.v1.FarmViewPatch.plot_upserts:type_name -> classicfarm.ws.v1.PublicPlotView
-	3,   // 119: classicfarm.ws.v1.FarmPresencePush.kind:type_name -> classicfarm.ws.v1.FarmPresenceKind
-	4,   // 120: classicfarm.ws.v1.RedDotChangedPush.category:type_name -> classicfarm.ws.v1.RedDotCategory
-	5,   // 121: classicfarm.ws.v1.RedDotChangedPush.operation:type_name -> classicfarm.ws.v1.RedDotOperation
-	59,  // 122: classicfarm.ws.v1.EnterFriendFarmResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
-	29,  // 123: classicfarm.ws.v1.FriendActionResponse.visitor_patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	60,  // 124: classicfarm.ws.v1.FriendActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
-	74,  // 125: classicfarm.ws.v1.FriendActionResponse.steal_guard:type_name -> classicfarm.ws.v1.StealGuardOutcome
-	75,  // 126: classicfarm.ws.v1.PetPanelView.pets:type_name -> classicfarm.ws.v1.PetShopEntryView
-	76,  // 127: classicfarm.ws.v1.PetPanelView.pet_food:type_name -> classicfarm.ws.v1.PetFoodShopView
-	77,  // 128: classicfarm.ws.v1.GetPetPanelResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 129: classicfarm.ws.v1.BuyPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 130: classicfarm.ws.v1.BuyPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 131: classicfarm.ws.v1.DeployPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 132: classicfarm.ws.v1.DeployPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 133: classicfarm.ws.v1.BuyPetFoodResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 134: classicfarm.ws.v1.BuyPetFoodResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 135: classicfarm.ws.v1.FeedPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	77,  // 136: classicfarm.ws.v1.FeedPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
-	29,  // 137: classicfarm.ws.v1.SendFriendGiftResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	24,  // 138: classicfarm.ws.v1.ClaimMailResponse.items_added:type_name -> classicfarm.ws.v1.ItemStackView
-	29,  // 139: classicfarm.ws.v1.ClaimMailResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
-	6,   // 140: classicfarm.ws.v1.MailView.kind:type_name -> classicfarm.ws.v1.MailKind
-	92,  // 141: classicfarm.ws.v1.MailView.attachments:type_name -> classicfarm.ws.v1.MailAttachmentView
-	93,  // 142: classicfarm.ws.v1.OpenMailboxResponse.mails:type_name -> classicfarm.ws.v1.MailView
-	143, // [143:143] is the sub-list for method output_type
-	143, // [143:143] is the sub-list for method input_type
-	143, // [143:143] is the sub-list for extension type_name
-	143, // [143:143] is the sub-list for extension extendee
-	0,   // [0:143] is the sub-list for field type_name
+	100, // 74: classicfarm.ws.v1.WsEnvelope.get_offline_visitors_request:type_name -> classicfarm.ws.v1.GetOfflineVisitorsRequest
+	101, // 75: classicfarm.ws.v1.WsEnvelope.get_offline_visitors_response:type_name -> classicfarm.ws.v1.GetOfflineVisitorsResponse
+	102, // 76: classicfarm.ws.v1.WsEnvelope.ack_offline_visitors_request:type_name -> classicfarm.ws.v1.AckOfflineVisitorsRequest
+	103, // 77: classicfarm.ws.v1.WsEnvelope.ack_offline_visitors_response:type_name -> classicfarm.ws.v1.AckOfflineVisitorsResponse
+	2,   // 78: classicfarm.ws.v1.Error.code:type_name -> classicfarm.ws.v1.ErrorCode
+	9,   // 79: classicfarm.ws.v1.Error.params:type_name -> classicfarm.ws.v1.ErrorParam
+	17,  // 80: classicfarm.ws.v1.Error.latest_shop_entry:type_name -> classicfarm.ws.v1.ShopEntryView
+	26,  // 81: classicfarm.ws.v1.Error.current_plot:type_name -> classicfarm.ws.v1.PlotView
+	17,  // 82: classicfarm.ws.v1.GetShopResponse.entries:type_name -> classicfarm.ws.v1.ShopEntryView
+	23,  // 83: classicfarm.ws.v1.GetShopResponse.crops:type_name -> classicfarm.ws.v1.CropCatalogEntryView
+	20,  // 84: classicfarm.ws.v1.GetPlayerSnapshotResponse.snapshot:type_name -> classicfarm.ws.v1.PlayerSnapshot
+	24,  // 85: classicfarm.ws.v1.PlayerSnapshot.inventory:type_name -> classicfarm.ws.v1.ItemStackView
+	26,  // 86: classicfarm.ws.v1.PlayerSnapshot.plots:type_name -> classicfarm.ws.v1.PlotView
+	27,  // 87: classicfarm.ws.v1.PlayerSnapshot.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
+	21,  // 88: classicfarm.ws.v1.PlayerSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
+	22,  // 89: classicfarm.ws.v1.PlayerSnapshot.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
+	104, // 90: classicfarm.ws.v1.PlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
+	25,  // 91: classicfarm.ws.v1.PlotView.fertilizer_effect:type_name -> classicfarm.ws.v1.EffectView
+	25,  // 92: classicfarm.ws.v1.PlotView.pest_effect:type_name -> classicfarm.ws.v1.EffectView
+	105, // 93: classicfarm.ws.v1.ChapterView.status:type_name -> classicfarm.ws.v1.chapter.ChapterStatus
+	28,  // 94: classicfarm.ws.v1.ChapterView.tasks:type_name -> classicfarm.ws.v1.TaskProgressView
+	24,  // 95: classicfarm.ws.v1.PlayerStatePatch.inventory_upserts:type_name -> classicfarm.ws.v1.ItemStackView
+	26,  // 96: classicfarm.ws.v1.PlayerStatePatch.plot_upserts:type_name -> classicfarm.ws.v1.PlotView
+	27,  // 97: classicfarm.ws.v1.PlayerStatePatch.current_chapter:type_name -> classicfarm.ws.v1.ChapterView
+	21,  // 98: classicfarm.ws.v1.PlayerStatePatch.career:type_name -> classicfarm.ws.v1.PlayerCareerView
+	22,  // 99: classicfarm.ws.v1.PlayerStatePatch.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
+	29,  // 100: classicfarm.ws.v1.BuySeedsResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 101: classicfarm.ws.v1.BuyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 102: classicfarm.ws.v1.PlantResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 103: classicfarm.ws.v1.ApplyFertilizerResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 104: classicfarm.ws.v1.HarvestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 105: classicfarm.ws.v1.CleanPlotResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 106: classicfarm.ws.v1.CatchPestResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	29,  // 107: classicfarm.ws.v1.SellCropResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	24,  // 108: classicfarm.ws.v1.ClaimChapterRewardResponse.items_added_to_inventory:type_name -> classicfarm.ws.v1.ItemStackView
+	24,  // 109: classicfarm.ws.v1.ClaimChapterRewardResponse.items_pending_mail:type_name -> classicfarm.ws.v1.ItemStackView
+	29,  // 110: classicfarm.ws.v1.ClaimChapterRewardResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	106, // 111: classicfarm.ws.v1.PlayerStateChangedPush.reason:type_name -> classicfarm.ws.v1.reason.StateChangeReason
+	29,  // 112: classicfarm.ws.v1.PlayerStateChangedPush.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	55,  // 113: classicfarm.ws.v1.RedeemFriendCodeResponse.friend:type_name -> classicfarm.ws.v1.FriendView
+	55,  // 114: classicfarm.ws.v1.ListFriendsResponse.friends:type_name -> classicfarm.ws.v1.FriendView
+	104, // 115: classicfarm.ws.v1.PublicPlotView.plot_state:type_name -> classicfarm.ws.v1.plot.PlotState
+	56,  // 116: classicfarm.ws.v1.FarmVisitSnapshot.version:type_name -> classicfarm.ws.v1.FarmViewVersion
+	57,  // 117: classicfarm.ws.v1.FarmVisitSnapshot.plots:type_name -> classicfarm.ws.v1.PublicPlotView
+	21,  // 118: classicfarm.ws.v1.FarmVisitSnapshot.career:type_name -> classicfarm.ws.v1.PlayerCareerView
+	58,  // 119: classicfarm.ws.v1.FarmVisitSnapshot.pet:type_name -> classicfarm.ws.v1.PublicPetView
+	22,  // 120: classicfarm.ws.v1.FarmVisitSnapshot.crop_compendium:type_name -> classicfarm.ws.v1.CropCompendiumView
+	56,  // 121: classicfarm.ws.v1.FarmViewPatch.version:type_name -> classicfarm.ws.v1.FarmViewVersion
+	57,  // 122: classicfarm.ws.v1.FarmViewPatch.plot_upserts:type_name -> classicfarm.ws.v1.PublicPlotView
+	3,   // 123: classicfarm.ws.v1.FarmPresencePush.kind:type_name -> classicfarm.ws.v1.FarmPresenceKind
+	4,   // 124: classicfarm.ws.v1.RedDotChangedPush.category:type_name -> classicfarm.ws.v1.RedDotCategory
+	5,   // 125: classicfarm.ws.v1.RedDotChangedPush.operation:type_name -> classicfarm.ws.v1.RedDotOperation
+	59,  // 126: classicfarm.ws.v1.EnterFriendFarmResponse.snapshot:type_name -> classicfarm.ws.v1.FarmVisitSnapshot
+	29,  // 127: classicfarm.ws.v1.FriendActionResponse.visitor_patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	60,  // 128: classicfarm.ws.v1.FriendActionResponse.farm_patch:type_name -> classicfarm.ws.v1.FarmViewPatch
+	74,  // 129: classicfarm.ws.v1.FriendActionResponse.steal_guard:type_name -> classicfarm.ws.v1.StealGuardOutcome
+	75,  // 130: classicfarm.ws.v1.PetPanelView.pets:type_name -> classicfarm.ws.v1.PetShopEntryView
+	76,  // 131: classicfarm.ws.v1.PetPanelView.pet_food:type_name -> classicfarm.ws.v1.PetFoodShopView
+	77,  // 132: classicfarm.ws.v1.GetPetPanelResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 133: classicfarm.ws.v1.BuyPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 134: classicfarm.ws.v1.BuyPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 135: classicfarm.ws.v1.DeployPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 136: classicfarm.ws.v1.DeployPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 137: classicfarm.ws.v1.BuyPetFoodResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 138: classicfarm.ws.v1.BuyPetFoodResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 139: classicfarm.ws.v1.FeedPetResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	77,  // 140: classicfarm.ws.v1.FeedPetResponse.panel:type_name -> classicfarm.ws.v1.PetPanelView
+	29,  // 141: classicfarm.ws.v1.SendFriendGiftResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	24,  // 142: classicfarm.ws.v1.ClaimMailResponse.items_added:type_name -> classicfarm.ws.v1.ItemStackView
+	29,  // 143: classicfarm.ws.v1.ClaimMailResponse.patch:type_name -> classicfarm.ws.v1.PlayerStatePatch
+	6,   // 144: classicfarm.ws.v1.MailView.kind:type_name -> classicfarm.ws.v1.MailKind
+	92,  // 145: classicfarm.ws.v1.MailView.attachments:type_name -> classicfarm.ws.v1.MailAttachmentView
+	93,  // 146: classicfarm.ws.v1.OpenMailboxResponse.mails:type_name -> classicfarm.ws.v1.MailView
+	55,  // 147: classicfarm.ws.v1.GetOfflineVisitorsResponse.visitors:type_name -> classicfarm.ws.v1.FriendView
+	148, // [148:148] is the sub-list for method output_type
+	148, // [148:148] is the sub-list for method input_type
+	148, // [148:148] is the sub-list for extension type_name
+	148, // [148:148] is the sub-list for extension extendee
+	0,   // [0:148] is the sub-list for field type_name
 }
 
 func init() { file_classicfarm_v1_ws_ws_proto_init() }
@@ -8647,6 +8997,10 @@ func file_classicfarm_v1_ws_ws_proto_init() {
 		(*WsEnvelope_MarkMailReadResponse)(nil),
 		(*WsEnvelope_CheckMailboxIndicatorRequest)(nil),
 		(*WsEnvelope_CheckMailboxIndicatorResponse)(nil),
+		(*WsEnvelope_GetOfflineVisitorsRequest)(nil),
+		(*WsEnvelope_GetOfflineVisitorsResponse)(nil),
+		(*WsEnvelope_AckOfflineVisitorsRequest)(nil),
+		(*WsEnvelope_AckOfflineVisitorsResponse)(nil),
 	}
 	file_classicfarm_v1_ws_ws_proto_msgTypes[3].OneofWrappers = []any{}
 	file_classicfarm_v1_ws_ws_proto_msgTypes[18].OneofWrappers = []any{}
@@ -8664,7 +9018,7 @@ func file_classicfarm_v1_ws_ws_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_classicfarm_v1_ws_ws_proto_rawDesc), len(file_classicfarm_v1_ws_ws_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   93,
+			NumMessages:   97,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
