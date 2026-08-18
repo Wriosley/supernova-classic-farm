@@ -88,6 +88,9 @@ func run() error {
 		}
 		logger.Info("using MySQL auth store; registration creates account and Session only")
 	}
+	if err := auth.ApplyTicketHMACKeyFromEnv(store); err != nil {
+		return err
+	}
 	handler, err := auth.NewHandler(store, auth.HandlerConfig{
 		Origin:          envOr("H5_ORIGIN", "http://localhost:5173"),
 		GatewayID:       envOr("GATEWAY_ID", "local-gateway"),

@@ -1,13 +1,12 @@
-// Package auth implements the explicitly development-only in-memory account,
-// Session, CSRF, and one-time WebSocket ticket path used by LoginSvr.
+// Package auth implements LoginSvr account, Session, CSRF, and WS ticket paths.
 //
-// Nothing in this package is durable: process restart loses registrations and
-// invalidates every Session and ticket. It must not be used as registration
-// durability evidence.
+// Account/Session may be durable (Tcaplus/MySQL). CSRF remains process-local.
+// WS tickets are HMAC-signed and verifiable by any Login replica that shares
+// the ticket key; one-time consumption is tracked in process memory (best-effort
+// across replicas within the short ticket TTL).
 package auth
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -58,7 +57,7 @@ type csrfRecord struct {
 }
 
 type ticketRecord struct {
-	Digest        [32]byte
+	Raw           string
 	SessionDigest [32]byte
 	PlayerID      uint64
 	Generation    uint64
@@ -75,8 +74,8 @@ type Store struct {
 	accounts   map[string]*Account
 	sessions   map[[32]byte]*Session
 	csrf       map[string]csrfRecord
-	tickets    map[[32]byte]*ticketRecord
 	issues     map[[32]byte]map[string]*ticketRecord
+	consumed   map[string]time.Time // issueID -> expires, one-time guard
 	ticketKey  [32]byte
 	nextPlayer uint64
 }
@@ -95,14 +94,27 @@ func NewStore() (*Store, error) {
 		accounts:   make(map[string]*Account),
 		sessions:   make(map[[32]byte]*Session),
 		csrf:       make(map[string]csrfRecord),
-		tickets:    make(map[[32]byte]*ticketRecord),
 		issues:     make(map[[32]byte]map[string]*ticketRecord),
+		consumed:   make(map[string]time.Time),
 		nextPlayer: 1,
 	}
 	if _, err := rand.Read(store.ticketKey[:]); err != nil {
 		return nil, err
 	}
 	return store, nil
+}
+
+// ConfigureTicketHMACKey installs a shared ticket key so every Login replica
+// can verify tickets issued by any other replica.
+func (s *Store) ConfigureTicketHMACKey(raw []byte) error {
+	key, err := normalizeTicketHMACKey(raw)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.ticketKey = key
+	s.mu.Unlock()
+	return nil
 }
 
 func ValidateCredentials(name, password string) bool {
@@ -193,11 +205,7 @@ func (s *Store) Login(name, password string) (string, *Session, error) {
 		raw, session, err := s.durable.login(name, password, s.now())
 		if err == nil {
 			s.mu.Lock()
-			for _, ticket := range s.tickets {
-				if ticket.PlayerID == session.PlayerID && !ticket.Consumed {
-					ticket.Consumed = true
-				}
-			}
+			s.invalidateTicketsForPlayerLocked(session.PlayerID)
 			s.mu.Unlock()
 		}
 		return raw, session, err
@@ -317,6 +325,13 @@ func (s *Store) IssueTicket(session *Session, issueID, gatewayID string) (string
 			return "", time.Time{}, ErrUnauthenticated
 		}
 	}
+	s.purgeExpiredTicketStateLocked()
+	if expiresAt, consumed := s.consumed[issueID]; consumed {
+		if s.now().Before(expiresAt) {
+			return "", time.Time{}, ErrTicketReplay
+		}
+		delete(s.consumed, issueID)
+	}
 	byIssue := s.issues[session.Digest]
 	if byIssue == nil {
 		byIssue = make(map[string]*ticketRecord)
@@ -329,41 +344,50 @@ func (s *Store) IssueTicket(session *Session, issueID, gatewayID string) (string
 		if prior.Consumed || !s.now().Before(prior.ExpiresAt) {
 			return "", time.Time{}, ErrTicketReplay
 		}
-		return s.deriveTicket(session.Digest, issueID, gatewayID), prior.ExpiresAt, nil
+		return prior.Raw, prior.ExpiresAt, nil
 	}
 	for _, old := range byIssue {
 		if !old.Consumed {
 			old.Consumed = true
+			s.consumed[old.IssueID] = old.ExpiresAt
 		}
 	}
-	raw := s.deriveTicket(session.Digest, issueID, gatewayID)
-	digest := sha256.Sum256([]byte(raw))
-	record := &ticketRecord{
-		Digest: digest, SessionDigest: session.Digest, PlayerID: session.PlayerID,
-		Generation: session.Generation, IssueID: issueID, GatewayID: gatewayID,
-		ExpiresAt: s.now().Add(30 * time.Second),
+	expiresAt := s.now().UTC().Add(ticketLifetimeDuration)
+	raw, err := encodeTicket(s.ticketKey[:], ticketClaims{
+		PlayerID: session.PlayerID, SessionDigest: session.Digest,
+		Generation: session.Generation, ExpiresAt: expiresAt,
+		GatewayID: gatewayID, IssueID: issueID,
+	})
+	if err != nil {
+		return "", time.Time{}, err
 	}
-	s.tickets[digest] = record
-	byIssue[issueID] = record
-	return raw, record.ExpiresAt, nil
+	byIssue[issueID] = &ticketRecord{
+		Raw: raw, SessionDigest: session.Digest, PlayerID: session.PlayerID,
+		Generation: session.Generation, IssueID: issueID, GatewayID: gatewayID,
+		ExpiresAt: expiresAt,
+	}
+	return raw, expiresAt, nil
 }
 
 func (s *Store) ConsumeTicket(raw, gatewayID string) (uint64, error) {
-	digest := sha256.Sum256([]byte(raw))
 	s.mu.Lock()
-	ticket := s.tickets[digest]
-	if ticket == nil || ticket.Consumed || !s.now().Before(ticket.ExpiresAt) ||
-		ticket.GatewayID != gatewayID {
-		s.mu.Unlock()
+	key := s.ticketKey
+	now := s.now()
+	s.mu.Unlock()
+	claims, err := decodeAndVerifyTicket(key[:], raw, now)
+	if err != nil {
+		if errors.Is(err, errMalformedTicket) {
+			return 0, ErrUnauthenticated
+		}
+		return 0, err
+	}
+	if claims.GatewayID != gatewayID {
 		return 0, ErrUnauthenticated
 	}
-	sessionDigest := ticket.SessionDigest
-	generation := ticket.Generation
-	s.mu.Unlock()
 	if s.durable != nil {
-		active, err := s.durable.sessionActive(sessionDigest, generation, s.now())
-		if err != nil {
-			return 0, err
+		active, activeErr := s.durable.sessionActive(claims.SessionDigest, claims.Generation, now)
+		if activeErr != nil {
+			return 0, activeErr
 		}
 		if !active {
 			return 0, ErrUnauthenticated
@@ -371,19 +395,32 @@ func (s *Store) ConsumeTicket(raw, gatewayID string) (uint64, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ticket = s.tickets[digest]
-	if ticket == nil || ticket.Consumed || !s.now().Before(ticket.ExpiresAt) ||
-		ticket.GatewayID != gatewayID {
+	s.purgeExpiredTicketStateLocked()
+	if expiresAt, ok := s.consumed[claims.IssueID]; ok && s.now().Before(expiresAt) {
 		return 0, ErrUnauthenticated
 	}
 	if s.durable == nil {
-		session := s.sessions[ticket.SessionDigest]
-		if !s.sessionActiveLocked(session) || session.Generation != ticket.Generation {
+		session := s.sessions[claims.SessionDigest]
+		if !s.sessionActiveLocked(session) || session.Generation != claims.Generation {
 			return 0, ErrUnauthenticated
 		}
 	}
-	ticket.Consumed = true
-	return ticket.PlayerID, nil
+	s.consumed[claims.IssueID] = claims.ExpiresAt
+	if byIssue := s.issues[claims.SessionDigest]; byIssue != nil {
+		if record := byIssue[claims.IssueID]; record != nil {
+			record.Consumed = true
+		}
+	}
+	return claims.PlayerID, nil
+}
+
+func (s *Store) purgeExpiredTicketStateLocked() {
+	now := s.now()
+	for issueID, expiresAt := range s.consumed {
+		if !now.Before(expiresAt) {
+			delete(s.consumed, issueID)
+		}
+	}
 }
 
 func (s *Store) sessionActiveLocked(session *Session) bool {
@@ -395,21 +432,25 @@ func (s *Store) sessionActiveLocked(session *Session) bool {
 }
 
 func (s *Store) invalidateTicketsLocked(sessionDigest [32]byte) {
-	for _, ticket := range s.tickets {
-		if ticket.SessionDigest == sessionDigest && !ticket.Consumed {
-			ticket.Consumed = true
+	if byIssue := s.issues[sessionDigest]; byIssue != nil {
+		for issueID, ticket := range byIssue {
+			if ticket != nil && !ticket.Consumed {
+				ticket.Consumed = true
+				s.consumed[issueID] = ticket.ExpiresAt
+			}
 		}
 	}
 }
 
-func (s *Store) deriveTicket(session [32]byte, issueID, gatewayID string) string {
-	mac := hmac.New(sha256.New, s.ticketKey[:])
-	_, _ = mac.Write(session[:])
-	_, _ = mac.Write([]byte{0})
-	_, _ = mac.Write([]byte(issueID))
-	_, _ = mac.Write([]byte{0})
-	_, _ = mac.Write([]byte(gatewayID))
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+func (s *Store) invalidateTicketsForPlayerLocked(playerID uint64) {
+	for _, byIssue := range s.issues {
+		for issueID, ticket := range byIssue {
+			if ticket != nil && ticket.PlayerID == playerID && !ticket.Consumed {
+				ticket.Consumed = true
+				s.consumed[issueID] = ticket.ExpiresAt
+			}
+		}
+	}
 }
 
 func randomToken() (string, error) {
