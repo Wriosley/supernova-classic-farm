@@ -71,9 +71,10 @@ spec:
             failureThreshold: 3
             periodSeconds: 10
           resources:
+            # First-pass loadtest: keep 8 replicas; do not raise further on 16G node.
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
             limits:
               cpu: "1"
-              memory: 512Mi
+              memory: 1Gi

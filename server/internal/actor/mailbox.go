@@ -17,6 +17,20 @@ type job struct {
 	done chan struct{}
 }
 
+// AwaitHandle coordinates a suspended mailbox job and its eventual
+// continuation. It lets the worker release the mailbox between the initial
+// step and the resumed step.
+type AwaitHandle struct {
+	mailbox *Mailbox
+	done    chan struct{}
+
+	mu        sync.Mutex
+	suspended bool
+	resumed   bool
+	completed bool
+	err       error
+}
+
 // Mailbox owns one worker goroutine. Jobs submitted to the same mailbox execute
 // in arrival order, while independent mailboxes have independent workers.
 type Mailbox struct {
@@ -38,6 +52,127 @@ func NewMailbox(queueSize int) *Mailbox {
 	}
 	go m.loop()
 	return m
+}
+
+// BeginAwait runs fn on the mailbox worker. fn may call Suspend to indicate
+// that completion will happen later and may call Resume from another goroutine
+// to enqueue the continuation back onto the same mailbox. The returned handle
+// becomes ready when the final step completes or fails.
+func (m *Mailbox) BeginAwait(ctx context.Context, fn func(*AwaitHandle) error) (*AwaitHandle, error) {
+	if fn == nil {
+		return nil, errors.New("await function is required")
+	}
+	handle := &AwaitHandle{
+		mailbox: m,
+		done:    make(chan struct{}),
+	}
+	err := m.Do(ctx, func() {
+		runErr := fn(handle)
+		handle.mu.Lock()
+		suspended := handle.suspended
+		completed := handle.completed
+		handle.mu.Unlock()
+		switch {
+		case runErr != nil:
+			handle.Complete(runErr)
+		case !suspended && !completed:
+			handle.Complete(nil)
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	return handle, nil
+}
+
+// Suspend marks the current await as waiting for an external result. It is
+// safe to call once from the initial mailbox step before the resume goroutine
+// is launched.
+func (h *AwaitHandle) Suspend() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if !h.completed {
+		h.suspended = true
+	}
+	h.mu.Unlock()
+}
+
+// Resume enqueues the continuation onto the original mailbox. The continuation
+// runs serially with all other jobs in the same mailbox. Resume must be called
+// after Suspend.
+func (h *AwaitHandle) Resume(ctx context.Context, cont func() error) error {
+	if h == nil {
+		return ErrClosed
+	}
+	if cont == nil {
+		return errors.New("await continuation is required")
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	h.mu.Lock()
+	switch {
+	case h.completed:
+		h.mu.Unlock()
+		return ErrClosed
+	case !h.suspended:
+		h.mu.Unlock()
+		return errors.New("await handle is not suspended")
+	case h.resumed:
+		h.mu.Unlock()
+		return errors.New("await handle already resumed")
+	}
+	h.resumed = true
+	h.mu.Unlock()
+	if err := h.mailbox.Submit(func() {
+		if err := cont(); err != nil {
+			h.Complete(err)
+			return
+		}
+		h.Complete(nil)
+	}); err != nil {
+		h.mu.Lock()
+		h.resumed = false
+		h.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
+// Complete finalizes the await with err. It is idempotent; later calls are
+// ignored.
+func (h *AwaitHandle) Complete(err error) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if h.completed {
+		h.mu.Unlock()
+		return
+	}
+	h.completed = true
+	h.err = err
+	close(h.done)
+	h.mu.Unlock()
+}
+
+// Wait blocks until the await completes or ctx is canceled.
+func (h *AwaitHandle) Wait(ctx context.Context) error {
+	if h == nil {
+		return ErrClosed
+	}
+	select {
+	case <-h.done:
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return h.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (m *Mailbox) loop() {

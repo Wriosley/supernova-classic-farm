@@ -6,6 +6,9 @@ metadata:
 data:
   APP_ENV: development
   LOG_LEVEL: info
+  # Set to "1" during load tests to expose /internal/debug/pprof/ on Gate/Zone.
+  # Keep "0" (or unset) when the HTTP ports are reachable from untrusted networks.
+  ENABLE_PPROF: "0"
   STORAGE_MODE: tcaplus
   INTERNAL_NETWORK_MODE: kubernetes
   ROUTING_MODE: static-dual-zone

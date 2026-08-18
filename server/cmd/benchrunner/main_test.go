@@ -14,9 +14,29 @@ func TestParseConcurrencies(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("parseConcurrencies() = %v, want %v", got, want)
 	}
-	for _, raw := range []string{"", "0", "129", "x"} {
+	for _, raw := range []string{"", "0", "20001", "x"} {
 		if _, err := parseConcurrencies(raw); err == nil {
 			t.Fatalf("parseConcurrencies(%q) succeeded", raw)
+		}
+	}
+}
+
+func TestParseTargetQPSs(t *testing.T) {
+	got, err := parseTargetQPSs("4000, 2000,2000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []float64{2000, 4000}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseTargetQPSs() = %v, want %v", got, want)
+	}
+	empty, err := parseTargetQPSs("")
+	if err != nil || empty != nil {
+		t.Fatalf("empty parseTargetQPSs = %v, %v", empty, err)
+	}
+	for _, raw := range []string{"0", "-1", "x"} {
+		if _, err := parseTargetQPSs(raw); err == nil {
+			t.Fatalf("parseTargetQPSs(%q) succeeded", raw)
 		}
 	}
 }

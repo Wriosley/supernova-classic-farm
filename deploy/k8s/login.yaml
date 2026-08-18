@@ -4,7 +4,7 @@ metadata:
   name: login
   namespace: classic-farm
 spec:
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       app.kubernetes.io/name: login
@@ -51,8 +51,8 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
+              cpu: 100m
               memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

@@ -22,6 +22,10 @@ spec:
   selector:
     app.kubernetes.io/name: login
   type: LoadBalancer
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
   ports:
     - name: http
       port: 8080

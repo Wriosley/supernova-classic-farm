@@ -17,6 +17,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/outbox"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/database"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/debugpprof"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
@@ -69,8 +70,6 @@ func main() {
 	gatewayID := environmentOr("GATEWAY_ID", "local-gateway")
 
 	var runtime *player.Runtime
-	var tcaplusClient *tcaplusdb.Client
-	var tcaplusZoneID uint32
 	storageMode := strings.TrimSpace(os.Getenv("STORAGE_MODE"))
 	if storageMode == "tcaplus" {
 		if dsn != "" {
@@ -118,8 +117,6 @@ func main() {
 			log.Fatal(openErr)
 		}
 		defer client.Close()
-		tcaplusClient = client
-		tcaplusZoneID = config.ZoneID
 		checkpoints, storeErr := player.NewTcaplusCheckpointStoreWithClient(
 			client, config.ZoneID,
 		)
@@ -310,35 +307,16 @@ func main() {
 		logger.Warn("outbound routes unavailable; friend-farm red dots disabled")
 	}
 
-	var giftNotifier giftOutboxNotifier
-	if tcaplusClient != nil {
-		mailURL := strings.TrimSpace(os.Getenv("MAIL_RPC_URL"))
-		if mailURL == "" {
-			logger.Warn("MAIL_RPC_URL unset; gift Outbox relay disabled")
-		} else {
-			mailClient, mailErr := outbox.NewMailClient(rpcKey, rpcauth.ZoneService, mailURL)
-			if mailErr != nil {
-				log.Fatal(mailErr)
-			}
-			defer func() { _ = mailClient.Close() }()
-			outboxStore, storeErr := outbox.NewTcaplusStore(tcaplusClient, tcaplusZoneID)
-			if storeErr != nil {
-				log.Fatal(storeErr)
-			}
-			relay, relayErr := outbox.NewRelay(
-				outboxStore,
-				mailClient,
-				authorizationShardOwner{auth: authorization, zoneID: ownerZoneID},
-				time.Now,
-				logger,
-			)
-			if relayErr != nil {
-				log.Fatal(relayErr)
-			}
-			giftNotifier = relay
-			go relay.Run(ctx)
-			logger.Info("gift Outbox relay started", "mail_rpc_url", mailURL)
+	if mailURL := strings.TrimSpace(os.Getenv("MAIL_RPC_URL")); mailURL == "" {
+		logger.Warn("MAIL_RPC_URL unset; synchronous gift mail delivery disabled")
+	} else {
+		mailClient, mailErr := outbox.NewMailClient(rpcKey, rpcauth.ZoneService, mailURL)
+		if mailErr != nil {
+			log.Fatal(mailErr)
 		}
+		defer func() { _ = mailClient.Close() }()
+		runtime.SetGiftMailer(mailClient)
+		logger.Info("gift mail client started", "mail_rpc_url", mailURL)
 	}
 
 	mux := http.NewServeMux()
@@ -354,6 +332,7 @@ func main() {
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
 	mux.Handle("GET /internal/v1/zone-identity", newZoneIdentityHandler(identity))
+	debugpprof.MaybeMount(mux, logger)
 	rpcInterceptor, err := rpcauth.NewServerUnaryInterceptor(rpcauth.ServerConfig{
 		Key: rpcKey,
 		AllowedCallers: map[string][]string{
@@ -387,7 +366,6 @@ func main() {
 	gameCommandServer := newGameCommandRPCServer(
 		runtime, authorization, gates, time.Now, gatewayID, logger,
 	)
-	gameCommandServer.withGiftOutboxNotifier(giftNotifier)
 	rpcv1.RegisterGameCommandServiceServer(grpcServer, gameCommandServer)
 	rpcv1.RegisterPlayerSocialServiceServer(
 		grpcServer,

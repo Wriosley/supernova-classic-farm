@@ -238,17 +238,19 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
   intranet Admin Bearer APIs, registration-time public-mail filtering, and
   fail-open InfoSvr red-dot notify on private create. Evidence:
   `../evidence/2026-08-12-mailsvr-query.md`.
-- Final delivery sprint **04-3B friend gift Outbox** is complete: Gate checks
-  mutual friendship, the sender Actor deducts crop inventory and appends a
-  deterministic `CREATE_GIFT_MAIL` Outbox in one commit, and the Zone Relay
-  delivers to MailSvr `CreateGiftMail` with `source_event_id` dedup +
-  fail-open Info red-dot. Evidence:
+- Final delivery sprint **04-3B friend gift** is now implemented as direct
+  synchronous MailSvr submission: Gate checks mutual friendship, the sender
+  Actor deducts crop inventory only after `CreateGiftMail` returns, and the
+  result is recorded as a normal idempotent player command response rather than
+  an Outbox relay event. Evidence:
   `../evidence/2026-08-12-friend-gift-outbox.md`.
-- Friend-gift delivery now wakes the owning Zone Relay by durable Outbox event
-  ID after the command commit; the 2-second full-table scan remains recovery
-  only. The direct Tcaplus read retries a bounded 500 ms only while an inserted
-  row is temporarily not visible. A live single sample reduced post-response
-  mail red-dot latency from 2.779 s to 1.160 s; this is not a percentile claim.
+- Friend-gift delivery no longer wakes a Zone Outbox relay. `zone` injects a
+  direct `MailSvr.CreateGiftMail` client into the Player Runtime, and the
+  sender Actor now uses mailbox await/continue to suspend while MailSvr
+  returns before committing the sender state. The direct Tcaplus read retries
+  a bounded 500 ms only while an inserted row is temporarily not visible. A
+  live single sample reduced post-response mail red-dot latency from 2.779 s
+  to 1.160 s; this is not a percentile claim.
   Evidence: `../evidence/2026-08-14-friend-action-mail-red-dot-latency.md`.
 - Mail/friend-farm red-dot routing has passed its offline cutover gate:
   MailSvr now owns a Coordinator SDK subscriber and sends mail indicators

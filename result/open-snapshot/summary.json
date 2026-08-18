@@ -1,0 +1,67 @@
+{
+  "run_id": "20260817_064923",
+  "scenario": "snapshot",
+  "generated_at": "2026-08-17T06:49:23Z",
+  "parameters": {
+    "concurrency": "200",
+    "duration": "1m0s",
+    "gate_url": "ws://127.0.0.1:32591/ws",
+    "login_url": "http://127.0.0.1:31238",
+    "max_samples": "1000000",
+    "mode": "open",
+    "origin": "http://21.130.223.195:1616",
+    "ping_interval": "30s",
+    "target_qps": "2000,4000,6000",
+    "timeout": "5s",
+    "warmup": "10s"
+  },
+  "results": [
+    {
+      "concurrency": 200,
+      "target_qps": 2000,
+      "offered_count": 120001,
+      "duration_ms": 60015,
+      "success_count": 120001,
+      "error_count": 0,
+      "error_kinds": {},
+      "dropped_sample_count": 0,
+      "qps": 1999.503455047961,
+      "p50_us": 11087,
+      "p95_us": 47496,
+      "p99_us": 84662,
+      "max_us": 331570
+    },
+    {
+      "concurrency": 200,
+      "target_qps": 4000,
+      "offered_count": 240001,
+      "shed_count": 84153,
+      "duration_ms": 60280,
+      "success_count": 155848,
+      "error_count": 0,
+      "error_kinds": {},
+      "dropped_sample_count": 0,
+      "qps": 2585.3930424438895,
+      "p50_us": 72517,
+      "p95_us": 146785,
+      "p99_us": 189748,
+      "max_us": 352393
+    },
+    {
+      "concurrency": 200,
+      "target_qps": 6000,
+      "offered_count": 359995,
+      "shed_count": 201628,
+      "duration_ms": 60266,
+      "success_count": 158367,
+      "error_count": 0,
+      "error_kinds": {},
+      "dropped_sample_count": 0,
+      "qps": 2627.7624978477834,
+      "p50_us": 71494,
+      "p95_us": 143228,
+      "p99_us": 184784,
+      "max_us": 342102
+    }
+  ]
+}

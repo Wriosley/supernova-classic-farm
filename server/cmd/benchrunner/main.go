@@ -38,14 +38,27 @@ const (
 	benchmarkPassword = "benchmark-password-2026"
 )
 
+// Production cluster defaults (overridable via flags).
+// CLB IP 21.214.142.172 maps to Login:8080 and Gate:8081.
+const (
+	clusterLoginURL = "http://21.214.142.172:8080"
+	clusterGateURL  = "ws://21.214.142.172:8081/ws"
+	clusterOrigin   = "http://21.130.223.195:1616"
+)
+
 type options struct {
 	scenario        string
 	loginURL        string
+	gateURL         string
 	origin          string
+	mode            string // closed | open
 	concurrencies   []int
+	targetQPSs      []float64
+	connectWorkers  int
 	warmup          time.Duration
 	duration        time.Duration
 	timeout         time.Duration
+	pingInterval    time.Duration
 	runID           string
 	outputDirectory string
 	maxSamples      int
@@ -66,6 +79,9 @@ type runSummary struct {
 
 type result struct {
 	Concurrency        int              `json:"concurrency"`
+	TargetQPS          float64          `json:"target_qps,omitempty"`
+	OfferedCount       int64            `json:"offered_count,omitempty"`
+	ShedCount          int64            `json:"shed_count,omitempty"`
 	DurationMS         int64            `json:"duration_ms"`
 	SuccessCount       int64            `json:"success_count"`
 	ErrorCount         int64            `json:"error_count"`
@@ -106,8 +122,8 @@ func (e *httpStatusError) Error() string {
 
 func main() {
 	opts := parseOptions()
-	if opts.scenario != "snapshot" {
-		exitf("unsupported scenario %q; the first baseline supports snapshot", opts.scenario)
+	if !validScenario(opts.scenario) {
+		exitf("unsupported scenario %q; valid: snapshot, player_loop, connect_hold, friend_interaction, mail_operations, mixed", opts.scenario)
 	}
 	if err := os.MkdirAll(opts.outputDirectory, 0o755); err != nil {
 		exitf("create output directory: %v", err)
@@ -127,20 +143,40 @@ func main() {
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339), Parameters: parameterMap(opts),
 	}
 	allSamples := make([]sample, 0)
-	for _, concurrency := range opts.concurrencies {
-		fmt.Printf("run=%s scenario=%s concurrency=%d warmup=%s duration=%s\n",
-			opts.runID, opts.scenario, concurrency, opts.warmup, opts.duration)
-		current, samples, err := runSnapshot(opts, concurrency)
-		if err != nil {
-			exitf("concurrency %d: %v", concurrency, err)
+	if opts.mode == "open" {
+		pool := opts.concurrencies[0]
+		for _, targetQPS := range opts.targetQPSs {
+			fmt.Printf("run=%s scenario=%s mode=open pool=%d target_qps=%.0f warmup=%s duration=%s\n",
+				opts.runID, opts.scenario, pool, targetQPS, opts.warmup, opts.duration)
+			current, samples, err := runSnapshotOpen(opts, pool, targetQPS)
+			if err != nil {
+				exitf("target_qps %.0f: %v", targetQPS, err)
+			}
+			summary.Results = append(summary.Results, current)
+			allSamples = append(allSamples, samples...)
+			if err := writeArtifacts(opts.outputDirectory, summary, allSamples); err != nil {
+				exitf("write partial results: %v", err)
+			}
+			fmt.Printf("pool=%d target_qps=%.0f achieved_qps=%.2f shed=%d p50=%dus p99=%dus errors=%d\n",
+				current.Concurrency, current.TargetQPS, current.QPS, current.ShedCount,
+				current.P50US, current.P99US, current.ErrorCount)
 		}
-		summary.Results = append(summary.Results, current)
-		allSamples = append(allSamples, samples...)
-		if err := writeArtifacts(opts.outputDirectory, summary, allSamples); err != nil {
-			exitf("write partial results: %v", err)
+	} else {
+		for _, concurrency := range opts.concurrencies {
+			fmt.Printf("run=%s scenario=%s mode=closed concurrency=%d warmup=%s duration=%s\n",
+				opts.runID, opts.scenario, concurrency, opts.warmup, opts.duration)
+			current, samples, err := runScenario(opts, concurrency)
+			if err != nil {
+				exitf("concurrency %d: %v", concurrency, err)
+			}
+			summary.Results = append(summary.Results, current)
+			allSamples = append(allSamples, samples...)
+			if err := writeArtifacts(opts.outputDirectory, summary, allSamples); err != nil {
+				exitf("write partial results: %v", err)
+			}
+			fmt.Printf("concurrency=%d qps=%.2f p50=%dus p95=%dus p99=%dus errors=%d\n",
+				current.Concurrency, current.QPS, current.P50US, current.P95US, current.P99US, current.ErrorCount)
 		}
-		fmt.Printf("concurrency=%d qps=%.2f p50=%dus p95=%dus p99=%dus errors=%d\n",
-			current.Concurrency, current.QPS, current.P50US, current.P95US, current.P99US, current.ErrorCount)
 	}
 	fmt.Printf("results written to %s\n", opts.outputDirectory)
 }
@@ -148,21 +184,62 @@ func main() {
 func parseOptions() options {
 	scenario := flag.String("scenario", "snapshot", "benchmark scenario")
 	loginURL := flag.String("login-url", defaultLoginURL, "LoginSvr base URL")
+	gateURL := flag.String("gate-url", "", "override Gate WebSocket URL (empty = use bootstrap response)")
 	origin := flag.String("origin", defaultOrigin, "H5 Origin header")
-	concurrency := flag.String("concurrency", "1,10,25,50,100", "comma-separated virtual users")
+	mode := flag.String("mode", "closed", "load mode: closed (wait for response) or open (pace by -target-qps)")
+	concurrency := flag.String("concurrency", "1,10,25,50,100", "comma-separated virtual users / open-mode connection pool size")
+	targetQPS := flag.String("target-qps", "", "open mode only: comma-separated offered QPS steps (e.g. 2000,4000,6000)")
+	connectWorkers := flag.Int("connect-workers", 64, "parallel login/WebSocket handshakes during setup")
 	warmup := flag.Duration("warmup", 10*time.Second, "warmup duration")
 	duration := flag.Duration("duration", 60*time.Second, "measurement duration")
 	timeout := flag.Duration("timeout", 5*time.Second, "per HTTP/WebSocket operation timeout")
+	pingInterval := flag.Duration("ping-interval", 30*time.Second, "PING interval for connect_hold scenario")
 	runID := flag.String("run-id", time.Now().UTC().Format("20060102_150405"), "unique local run identifier")
 	output := flag.String("output", "", "output directory (default benchmark/results/<run-id>)")
 	maxSamples := flag.Int("max-samples", 1_000_000, "maximum retained latency samples per run")
+	cluster := flag.Bool("cluster", false, "use production cluster defaults (CLB 21.214.142.172)")
 	flag.Parse()
+	if *cluster {
+		if *loginURL == defaultLoginURL {
+			*loginURL = clusterLoginURL
+		}
+		if *gateURL == "" {
+			*gateURL = clusterGateURL
+		}
+		if *origin == defaultOrigin {
+			*origin = clusterOrigin
+		}
+	}
 	values, err := parseConcurrencies(*concurrency)
 	if err != nil {
 		exitf("invalid -concurrency: %v", err)
 	}
+	rates, err := parseTargetQPSs(*targetQPS)
+	if err != nil {
+		exitf("invalid -target-qps: %v", err)
+	}
+	normalizedMode := strings.ToLower(strings.TrimSpace(*mode))
+	switch normalizedMode {
+	case "closed", "open":
+	default:
+		exitf("unsupported -mode %q; valid: closed, open", *mode)
+	}
+	if normalizedMode == "open" {
+		if *scenario != "snapshot" {
+			exitf("open mode currently supports only -scenario snapshot")
+		}
+		if len(values) != 1 {
+			exitf("open mode requires a single -concurrency value (connection pool size)")
+		}
+		if len(rates) == 0 {
+			exitf("open mode requires -target-qps (e.g. -target-qps 2000,4000,6000)")
+		}
+	}
 	if *warmup < 0 || *duration <= 0 || *timeout <= 0 || *maxSamples <= 0 {
 		exitf("warmup must be >= 0; duration, timeout and max-samples must be positive")
+	}
+	if *connectWorkers <= 0 || *connectWorkers > 1024 {
+		exitf("connect-workers must be in 1..1024")
 	}
 	if !validRunID(*runID) {
 		exitf("run-id must be 1..18 lowercase letters, digits or underscores")
@@ -176,32 +253,86 @@ func parseOptions() options {
 		resolvedOutput = filepath.Join(root, "benchmark", "results", *runID)
 	}
 	return options{
-		scenario: *scenario, loginURL: strings.TrimRight(*loginURL, "/"), origin: *origin,
-		concurrencies: values, warmup: *warmup, duration: *duration, timeout: *timeout,
+		scenario: *scenario, loginURL: strings.TrimRight(*loginURL, "/"), gateURL: *gateURL, origin: *origin,
+		mode: normalizedMode, concurrencies: values, targetQPSs: rates, connectWorkers: *connectWorkers,
+		warmup: *warmup, duration: *duration, timeout: *timeout, pingInterval: *pingInterval,
 		runID: *runID, outputDirectory: resolvedOutput, maxSamples: *maxSamples,
 	}
 }
 
-func runSnapshot(opts options, concurrency int) (result, []sample, error) {
-	clients := make([]*benchClient, concurrency)
-	for index := range clients {
-		accountName := fmt.Sprintf("bench_%s_%03d", opts.runID, index+1)
-		client, err := authenticate(opts, accountName)
-		if err != nil {
-			for _, connected := range clients {
-				if connected != nil {
-					_ = connected.conn.CloseNow()
-				}
-			}
-			return result{}, nil, fmt.Errorf("authenticate %s: %w", accountName, err)
-		}
-		clients[index] = client
+func benchAccountNames(runID string, count int) []string {
+	names := make([]string, count)
+	for index := range names {
+		names[index] = fmt.Sprintf("bench_%s_%03d", runID, index+1)
 	}
-	defer func() {
-		for _, client := range clients {
-			_ = client.conn.CloseNow()
-		}
-	}()
+	return names
+}
+
+// authenticateAll performs the login and WebSocket handshakes for every account
+// in parallel, bounded by -connect-workers. Setup is otherwise the dominant cost
+// at high connection counts.
+func authenticateAll(opts options, names []string) ([]*benchClient, error) {
+	clients := make([]*benchClient, len(names))
+	limit := opts.connectWorkers
+	if limit <= 0 {
+		limit = 1
+	}
+	if limit > len(names) {
+		limit = len(names)
+	}
+	semaphore := make(chan struct{}, limit)
+	var group sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+	var connected int
+	start := time.Now()
+	progressStep := len(names) / 10
+	if progressStep < 100 {
+		progressStep = 100
+	}
+	for index, name := range names {
+		group.Add(1)
+		go func(index int, name string) {
+			defer group.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			mu.Lock()
+			aborted := firstErr != nil
+			mu.Unlock()
+			if aborted {
+				return
+			}
+			client, err := authenticate(opts, name)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("authenticate %s: %w", name, err)
+				}
+				return
+			}
+			clients[index] = client
+			connected++
+			if connected%progressStep == 0 || connected == len(names) {
+				fmt.Printf("connected %d/%d in %s\n",
+					connected, len(names), time.Since(start).Truncate(time.Millisecond))
+			}
+		}(index, name)
+	}
+	group.Wait()
+	if firstErr != nil {
+		closeClients(clients)
+		return nil, firstErr
+	}
+	return clients, nil
+}
+
+func runSnapshot(opts options, concurrency int) (result, []sample, error) {
+	clients, err := authenticateAll(opts, benchAccountNames(opts.runID, concurrency))
+	if err != nil {
+		return result{}, nil, err
+	}
+	defer closeClients(clients)
 
 	warmupUntil := time.Now().Add(opts.warmup)
 	for time.Now().Before(warmupUntil) {
@@ -247,6 +378,101 @@ func runSnapshot(opts options, concurrency int) (result, []sample, error) {
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
 	return result{
 		Concurrency: concurrency, DurationMS: elapsed.Milliseconds(), SuccessCount: successes,
+		ErrorCount: failures, ErrorKinds: errorKinds, DroppedSampleCount: dropped,
+		QPS:   float64(successes) / elapsed.Seconds(),
+		P50US: percentile(latencies, 50), P95US: percentile(latencies, 95),
+		P99US: percentile(latencies, 99), MaxUS: percentile(latencies, 100),
+	}, samples, nil
+}
+
+// runSnapshotOpen paces GET_PLAYER_SNAPSHOT at targetQPS across a fixed connection
+// pool. The pacer never waits for responses; if the pool is saturated beyond
+// poolSize*4 outstanding starts, arrivals are shed (open-loop overload signal).
+func runSnapshotOpen(opts options, poolSize int, targetQPS float64) (result, []sample, error) {
+	if targetQPS <= 0 {
+		return result{}, nil, fmt.Errorf("target qps must be positive")
+	}
+	clients, err := authenticateAll(opts, benchAccountNames(opts.runID, poolSize))
+	if err != nil {
+		return result{}, nil, err
+	}
+	defer closeClients(clients)
+
+	warmupUntil := time.Now().Add(opts.warmup)
+	for time.Now().Before(warmupUntil) {
+		for _, client := range clients {
+			_, _ = client.snapshot()
+		}
+	}
+
+	clientPool := make(chan *benchClient, poolSize)
+	for _, client := range clients {
+		clientPool <- client
+	}
+	maxOutstanding := poolSize * 4
+	if maxOutstanding < 32 {
+		maxOutstanding = 32
+	}
+	outstanding := make(chan struct{}, maxOutstanding)
+
+	start := time.Now()
+	deadline := start.Add(opts.duration)
+	var mu sync.Mutex
+	latencies := make([]int64, 0)
+	samples := make([]sample, 0)
+	var successes, failures, dropped, offered, shed int64
+	errorKinds := make(map[string]int64)
+	var workers sync.WaitGroup
+
+	interval := time.Duration(float64(time.Second) / targetQPS)
+	if interval <= 0 {
+		interval = time.Microsecond
+	}
+	next := time.Now()
+	for time.Now().Before(deadline) {
+		now := time.Now()
+		if delay := next.Sub(now); delay > 0 {
+			time.Sleep(delay)
+		}
+		next = next.Add(interval)
+		offered++
+
+		select {
+		case outstanding <- struct{}{}:
+		default:
+			shed++
+			continue
+		}
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			defer func() { <-outstanding }()
+			client := <-clientPool
+			latency, err := client.snapshot()
+			clientPool <- client
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				failures++
+				errorKinds[classifyError(err)]++
+				return
+			}
+			successes++
+			if len(latencies) < opts.maxSamples {
+				us := latency.Microseconds()
+				latencies = append(latencies, us)
+				samples = append(samples, sample{Concurrency: poolSize, LatencyUS: us})
+			} else {
+				dropped++
+			}
+		}()
+	}
+	workers.Wait()
+	elapsed := time.Since(start)
+	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+	return result{
+		Concurrency: poolSize, TargetQPS: targetQPS, OfferedCount: offered, ShedCount: shed,
+		DurationMS: elapsed.Milliseconds(), SuccessCount: successes,
 		ErrorCount: failures, ErrorKinds: errorKinds, DroppedSampleCount: dropped,
 		QPS:   float64(successes) / elapsed.Seconds(),
 		P50US: percentile(latencies, 50), P95US: percentile(latencies, 95),
@@ -304,9 +530,14 @@ func authenticate(opts options, accountName string) (*benchClient, error) {
 		csrf, http.StatusCreated, ticket); err != nil {
 		return nil, err
 	}
+	wsURL := gateway.GetWebsocketUrl()
+	if opts.gateURL != "" {
+		wsURL = opts.gateURL
+		fmt.Printf("override gate url: %s\n", wsURL)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, gateway.GetWebsocketUrl(), &websocket.DialOptions{
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
 		HTTPHeader: http.Header{"Origin": []string{opts.origin}},
 	})
 	if err != nil {
@@ -349,18 +580,24 @@ func (c *benchClient) snapshot() (time.Duration, error) {
 	}); err != nil {
 		return 0, err
 	}
-	response, err := c.read()
-	if err != nil {
-		return 0, err
+	for {
+		response, err := c.read()
+		if err != nil {
+			return 0, err
+		}
+		if response.GetError() != nil {
+			return 0, fmt.Errorf("snapshot_error_code_%d", response.GetError().GetCode())
+		}
+		// Skip PUSH messages.
+		if response.GetMessageKind() == wsv1.MessageKind_PUSH {
+			continue
+		}
+		if response.GetAction() != wsv1.Action_GET_PLAYER_SNAPSHOT ||
+			response.GetRequestId() != requestID || response.GetGetPlayerSnapshotResponse().GetSnapshot().GetPlayerId() != c.playerID {
+			return 0, fmt.Errorf("invalid snapshot response: %+v", response)
+		}
+		return time.Since(start), nil
 	}
-	if response.GetError() != nil {
-		return 0, fmt.Errorf("snapshot_error_code_%d", response.GetError().GetCode())
-	}
-	if response.GetAction() != wsv1.Action_GET_PLAYER_SNAPSHOT ||
-		response.GetRequestId() != requestID || response.GetGetPlayerSnapshotResponse().GetSnapshot().GetPlayerId() != c.playerID {
-		return 0, fmt.Errorf("invalid snapshot response: %+v", response)
-	}
-	return time.Since(start), nil
 }
 
 func (c *benchClient) write(envelope *wsv1.WsEnvelope) error {
@@ -448,8 +685,8 @@ func parseConcurrencies(raw string) ([]int, error) {
 	var values []int
 	for _, item := range strings.Split(raw, ",") {
 		value, err := strconv.Atoi(strings.TrimSpace(item))
-		if err != nil || value <= 0 || value > 128 {
-			return nil, fmt.Errorf("%q must be an integer in 1..128", item)
+		if err != nil || value <= 0 || value > 20000 {
+			return nil, fmt.Errorf("%q must be an integer in 1..20000", item)
 		}
 		if _, exists := seen[value]; !exists {
 			seen[value] = struct{}{}
@@ -460,6 +697,27 @@ func parseConcurrencies(raw string) ([]int, error) {
 		return nil, errors.New("at least one concurrency is required")
 	}
 	sort.Ints(values)
+	return values, nil
+}
+
+func parseTargetQPSs(raw string) ([]float64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	seen := map[float64]struct{}{}
+	var values []float64
+	for _, item := range strings.Split(raw, ",") {
+		value, err := strconv.ParseFloat(strings.TrimSpace(item), 64)
+		if err != nil || value <= 0 || value > 1_000_000 {
+			return nil, fmt.Errorf("%q must be a number in (0, 1000000]", item)
+		}
+		if _, exists := seen[value]; !exists {
+			seen[value] = struct{}{}
+			values = append(values, value)
+		}
+	}
+	sort.Float64s(values)
 	return values, nil
 }
 
@@ -506,17 +764,30 @@ func percentile(sorted []int64, percent int) int64 {
 }
 
 func parameterMap(opts options) map[string]string {
-	return map[string]string{
-		"login_url": opts.loginURL, "origin": opts.origin, "concurrency": joinInts(opts.concurrencies),
-		"warmup": opts.warmup.String(), "duration": opts.duration.String(), "timeout": opts.timeout.String(),
-		"max_samples": strconv.Itoa(opts.maxSamples),
+	params := map[string]string{
+		"mode": opts.mode, "login_url": opts.loginURL, "gate_url": opts.gateURL, "origin": opts.origin,
+		"concurrency": joinInts(opts.concurrencies),
+		"warmup":      opts.warmup.String(), "duration": opts.duration.String(), "timeout": opts.timeout.String(),
+		"ping_interval": opts.pingInterval.String(), "max_samples": strconv.Itoa(opts.maxSamples),
 	}
+	if len(opts.targetQPSs) > 0 {
+		params["target_qps"] = joinFloats(opts.targetQPSs)
+	}
+	return params
 }
 
 func joinInts(values []int) string {
 	parts := make([]string, len(values))
 	for index, value := range values {
 		parts[index] = strconv.Itoa(value)
+	}
+	return strings.Join(parts, ",")
+}
+
+func joinFloats(values []float64) string {
+	parts := make([]string, len(values))
+	for index, value := range values {
+		parts[index] = strconv.FormatFloat(value, 'f', -1, 64)
 	}
 	return strings.Join(parts, ",")
 }
@@ -590,19 +861,41 @@ func writeReport(path string, summary runSummary) error {
 	var body strings.Builder
 	fmt.Fprintf(&body, "# R3 snapshot benchmark: %s\n\n", summary.RunID)
 	body.WriteString("This is a local single-instance baseline, not a production capacity claim.\n\n")
-	body.WriteString("| concurrency | QPS | P50 (ms) | P95 (ms) | P99 (ms) | max (ms) | errors |\n")
-	body.WriteString("|---:|---:|---:|---:|---:|---:|---:|\n")
+	openMode := false
 	for _, item := range summary.Results {
-		fmt.Fprintf(&body, "| %d | %.2f | %.3f | %.3f | %.3f | %.3f | %d |\n",
-			item.Concurrency, item.QPS, float64(item.P50US)/1000, float64(item.P95US)/1000,
-			float64(item.P99US)/1000, float64(item.MaxUS)/1000, item.ErrorCount)
+		if item.TargetQPS > 0 {
+			openMode = true
+			break
+		}
+	}
+	if openMode {
+		body.WriteString("| pool | target QPS | achieved QPS | shed | P50 (ms) | P95 (ms) | P99 (ms) | max (ms) | errors |\n")
+		body.WriteString("|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+		for _, item := range summary.Results {
+			fmt.Fprintf(&body, "| %d | %.0f | %.2f | %d | %.3f | %.3f | %.3f | %.3f | %d |\n",
+				item.Concurrency, item.TargetQPS, item.QPS, item.ShedCount,
+				float64(item.P50US)/1000, float64(item.P95US)/1000,
+				float64(item.P99US)/1000, float64(item.MaxUS)/1000, item.ErrorCount)
+		}
+	} else {
+		body.WriteString("| concurrency | QPS | P50 (ms) | P95 (ms) | P99 (ms) | max (ms) | errors |\n")
+		body.WriteString("|---:|---:|---:|---:|---:|---:|---:|\n")
+		for _, item := range summary.Results {
+			fmt.Fprintf(&body, "| %d | %.2f | %.3f | %.3f | %.3f | %.3f | %d |\n",
+				item.Concurrency, item.QPS, float64(item.P50US)/1000, float64(item.P95US)/1000,
+				float64(item.P99US)/1000, float64(item.MaxUS)/1000, item.ErrorCount)
+		}
 	}
 	body.WriteString("\n## Error categories\n\n")
 	for _, item := range summary.Results {
 		if len(item.ErrorKinds) == 0 {
 			continue
 		}
-		fmt.Fprintf(&body, "- concurrency %d: ", item.Concurrency)
+		if item.TargetQPS > 0 {
+			fmt.Fprintf(&body, "- pool %d target_qps %.0f: ", item.Concurrency, item.TargetQPS)
+		} else {
+			fmt.Fprintf(&body, "- concurrency %d: ", item.Concurrency)
+		}
 		keys := make([]string, 0, len(item.ErrorKinds))
 		for key := range item.ErrorKinds {
 			keys = append(keys, key)
@@ -617,8 +910,13 @@ func writeReport(path string, summary runSummary) error {
 		body.WriteByte('\n')
 	}
 	body.WriteString("\n## Parameters\n\n")
-	for key, value := range summary.Parameters {
-		fmt.Fprintf(&body, "- `%s`: `%s`\n", key, value)
+	keys := make([]string, 0, len(summary.Parameters))
+	for key := range summary.Parameters {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(&body, "- `%s`: `%s`\n", key, summary.Parameters[key])
 	}
 	return os.WriteFile(path, []byte(body.String()), 0o644)
 }

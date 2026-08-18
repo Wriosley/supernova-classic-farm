@@ -6,7 +6,7 @@ metadata:
 spec:
   serviceName: gate-headless
   podManagementPolicy: Parallel
-  replicas: 3
+  replicas: 6
   selector:
     matchLabels:
       app.kubernetes.io/name: gate
@@ -50,6 +50,9 @@ spec:
               value: http://login:8080/internal/v1/ws-tickets/consume
             - name: CLIENT_CONFIG_URL
               value: http://login:8080/v1/client-config/1
+            # First-pass loadtest budget on 8C/16G with gate×6 + zone×8.
+            - name: GOMEMLIMIT
+              value: "900MiB"
           ports:
             - name: http
               containerPort: 8081
@@ -71,8 +74,8 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
+              cpu: 400m
+              memory: 512Mi
             limits:
               cpu: "1"
-              memory: 256Mi
+              memory: 1Gi

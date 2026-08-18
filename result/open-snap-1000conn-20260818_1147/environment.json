@@ -1,0 +1,22 @@
+{
+  "run_id": "20260817_071649",
+  "generated_at": "2026-08-18T03:48:01Z",
+  "hostname": "VM-142-255-tencentos",
+  "go_version": "go1.26.5",
+  "os": "linux",
+  "arch": "amd64",
+  "cpus": 8,
+  "parameters": {
+    "concurrency": "1000",
+    "duration": "1m30s",
+    "gate_url": "ws://127.0.0.1:32591/ws",
+    "login_url": "http://127.0.0.1:31238",
+    "max_samples": "1000000",
+    "mode": "open",
+    "origin": "http://21.130.223.195:1616",
+    "ping_interval": "30s",
+    "target_qps": "2500",
+    "timeout": "15s",
+    "warmup": "10s"
+  }
+}

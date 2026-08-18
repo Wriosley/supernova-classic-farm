@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
+	mailv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/mail"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/actor"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
@@ -52,6 +55,11 @@ type FarmViewDispatcher interface {
 // Failures must not roll back Actor authority.
 type StealableNotifier interface {
 	NotifyOwnerPlotStealable(ctx context.Context, ownerPlayerID uint64, plotID uint32, notificationID string) error
+}
+
+// GiftMailer creates gift mails for SendFriendGift.
+type GiftMailer interface {
+	CreateGiftMail(ctx context.Context, request *mailv1.CreateGiftMailRequest) (*mailv1.CreateGiftMailResponse, error)
 }
 
 // PlayerPresence reports whether a player still has a live Gate connection.
@@ -114,6 +122,7 @@ type Runtime struct {
 	pushForwarder PushForwarder
 	farmView      FarmViewDispatcher
 	stealable     StealableNotifier
+	giftMailer    GiftMailer
 	accountNamer  AccountNamer
 	presence      PlayerPresence
 	observers     FarmObservers
@@ -213,6 +222,12 @@ func (r *Runtime) SetFarmViewDispatcher(dispatcher FarmViewDispatcher) error {
 func (r *Runtime) SetStealableNotifier(notifier StealableNotifier) {
 	r.mu.Lock()
 	r.stealable = notifier
+	r.mu.Unlock()
+}
+
+func (r *Runtime) SetGiftMailer(mailer GiftMailer) {
+	r.mu.Lock()
+	r.giftMailer = mailer
 	r.mu.Unlock()
 }
 
@@ -728,6 +743,11 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 			}
 		}
 	}
+	if isSendFriendGift {
+		return r.handleSendFriendGiftAwait(
+			ctx, a, callerPlayerID, request, config, giftSenderName, serverNow,
+		)
+	}
 	var response *wsv1.WsEnvelope
 	var dirty bool
 	var dirtyRevision uint64
@@ -900,6 +920,158 @@ func (r *Runtime) Handle(ctx context.Context, callerPlayerID, ownerEpoch uint64,
 	}
 	// DomainChanges 已在 mailbox 内收集：成熟地块 + 成功业务报告的地块。
 	// 失败/重放命令返回空变化，不会产生错误的公开事件。
+	r.publishFarmViewChanges(ctx, a, callerPlayerID, domainChanges)
+	r.refreshActorDeadline(callerPlayerID, a)
+	return response, nil
+}
+
+func (r *Runtime) handleSendFriendGiftAwait(
+	ctx context.Context,
+	a *runtimeActor,
+	callerPlayerID uint64,
+	request *wsv1.WsEnvelope,
+	config *ConfigSnapshot,
+	giftSenderName string,
+	serverNow time.Time,
+) (*wsv1.WsEnvelope, error) {
+	var response *wsv1.WsEnvelope
+	var dirty bool
+	var dirtyRevision uint64
+	var executionErr error
+	var maturityEvents []MaturityEvent
+	var domainChanges DomainChanges
+	var draft *preparedFriendGift
+
+	handle, err := a.mailbox.BeginAwait(ctx, func(h *actor.AwaitHandle) error {
+		var maturityErr error
+		maturityEvents, maturityErr = a.state.materializeDueMaturities(serverNow)
+		if maturityErr != nil {
+			executionErr = maturityErr
+			return maturityErr
+		}
+		if len(maturityEvents) > 0 {
+			dirty = true
+			dirtyRevision = a.state.CheckpointRevision
+			domainChanges = domainChanges.Merge(DomainChangesFromPlotIDs(maturedPlotIDs(maturityEvents)))
+		}
+
+		requestID, parseErr := parseRequestID(request.RequestId)
+		if parseErr != nil {
+			response = errorEnvelope(request, a.state, serverNow,
+				&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT})
+			return nil
+		}
+		gift := request.GetSendFriendGiftRequest()
+		fingerprint := sendFriendGiftFingerprint(callerPlayerID, request, gift)
+		for _, stored := range a.state.RecentResults {
+			if stored.CallerPlayerId != callerPlayerID || !bytes.Equal(stored.RequestId, requestID) {
+				continue
+			}
+			if stored.FingerprintSchemaVersion != idempotencyFingerprintSchemaVersion ||
+				stored.ProtocolVersion != request.ProtocolVersion ||
+				stored.Action != uint32(request.Action) ||
+				stored.TargetPlayerId != request.TargetPlayerId ||
+				!bytes.Equal(stored.PayloadFingerprintSha256, fingerprint[:]) {
+				response = errorEnvelope(request, a.state, serverNow,
+					&wsv1.Error{Code: wsv1.ErrorCode_REQUEST_ID_CONFLICT})
+				return nil
+			}
+			response = replaySendFriendGift(request, stored, serverNow)
+			return nil
+		}
+		if gift == nil || gift.RecipientPlayerId == 0 || gift.CropItemId == 0 ||
+			gift.Quantity < minFriendGiftQuantity || gift.Quantity > maxFriendGiftQuantity {
+			response = r.storeSendFriendGiftFailure(a, request, requestID, fingerprint, config.Version(), serverNow,
+				&wsv1.Error{Code: wsv1.ErrorCode_INVALID_ARGUMENT})
+			dirty = true
+			dirtyRevision = a.state.CheckpointRevision
+			return nil
+		}
+		if gift.RecipientPlayerId == callerPlayerID {
+			response = r.storeSendFriendGiftFailure(a, request, requestID, fingerprint, config.Version(), serverNow,
+				&wsv1.Error{Code: wsv1.ErrorCode_CANNOT_FRIEND_SELF})
+			dirty = true
+			dirtyRevision = a.state.CheckpointRevision
+			return nil
+		}
+		if !config.IsCropItem(gift.CropItemId) {
+			response = r.storeSendFriendGiftFailure(a, request, requestID, fingerprint, config.Version(), serverNow,
+				&wsv1.Error{Code: wsv1.ErrorCode_ITEM_NOT_SELLABLE})
+			dirty = true
+			dirtyRevision = a.state.CheckpointRevision
+			return nil
+		}
+		currentQuantity := a.state.Inventory[gift.CropItemId]
+		if gift.Quantity > currentQuantity {
+			response = r.storeSendFriendGiftFailure(a, request, requestID, fingerprint, config.Version(), serverNow,
+				&wsv1.Error{Code: wsv1.ErrorCode_INSUFFICIENT_ITEM_QUANTITY})
+			dirty = true
+			dirtyRevision = a.state.CheckpointRevision
+			return nil
+		}
+
+		displayName := strings.TrimSpace(giftSenderName)
+		if displayName == "" {
+			displayName = defaultGiftSenderName
+		}
+		if utf8.RuneCountInString(displayName) > 32 {
+			displayName = string([]rune(displayName)[:32])
+		}
+		draft, response, dirty = r.prepareSendFriendGift(
+			a, callerPlayerID, request, config, serverNow, displayName, gift, requestID, fingerprint, currentQuantity,
+		)
+		if response != nil || draft == nil {
+			if dirty {
+				dirtyRevision = a.state.CheckpointRevision
+			}
+			return nil
+		}
+		if r.giftMailer == nil {
+			response = errorEnvelope(request, a.state, serverNow,
+				&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true})
+			return nil
+		}
+		h.Suspend()
+		go func() {
+			mailCtx, cancel := context.WithTimeout(r.backgroundCtx, 3*time.Second)
+			mailResponse, mailErr := r.giftMailer.CreateGiftMail(mailCtx, draft.mailRequest)
+			cancel()
+			if mailErr != nil || (mailResponse != nil && mailResponse.GetError() != nil) {
+				response = errorEnvelope(request, a.state, serverNow,
+					&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true})
+				h.Complete(nil)
+				return
+			}
+			if err := h.Resume(r.backgroundCtx, func() error {
+				response, dirty = r.commitSendFriendGift(a, callerPlayerID, request, config, serverNow, draft)
+				dirtyRevision = a.state.CheckpointRevision
+				return nil
+			}); err != nil {
+				response = errorEnvelope(request, a.state, serverNow,
+					&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true})
+				h.Complete(nil)
+			}
+		}()
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("execute player mailbox: %w", err)
+	}
+	if executionErr != nil {
+		return nil, fmt.Errorf("materialize player maturity: %w", executionErr)
+	}
+	if err := handle.Wait(ctx); err != nil {
+		return nil, err
+	}
+	if response == nil {
+		return nil, fmt.Errorf("gift await completed without response")
+	}
+	if dirty {
+		r.markDirty(callerPlayerID, dirtyRevision)
+	}
+	if !response.GetReplayed() && len(maturityEvents) > 0 {
+		_ = r.forwardMaturityEvents(ctx, maturityEvents)
+	}
 	r.publishFarmViewChanges(ctx, a, callerPlayerID, domainChanges)
 	r.refreshActorDeadline(callerPlayerID, a)
 	return response, nil

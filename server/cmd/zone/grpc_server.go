@@ -7,7 +7,6 @@ import (
 	"time"
 
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
-	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/player"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"google.golang.org/grpc/codes"
@@ -23,11 +22,6 @@ type gameCommandRPCServer struct {
 	gates         *shardExecutionGates
 	now           func() time.Time
 	logger        *slog.Logger
-	giftNotifier  giftOutboxNotifier
-}
-
-type giftOutboxNotifier interface {
-	Notify(eventID []byte)
 }
 
 func newGameCommandRPCServer(
@@ -48,22 +42,6 @@ func newGameCommandRPCServer(
 		runtime: runtime, authorization: authorization, gates: gates, now: now,
 		logger: logger,
 	}
-}
-
-func (s *gameCommandRPCServer) withGiftOutboxNotifier(notifier giftOutboxNotifier) {
-	s.giftNotifier = notifier
-}
-
-func notifyGiftOutbox(notifier giftOutboxNotifier, response *wsv1.WsEnvelope) {
-	if notifier == nil || response == nil || response.GetError() != nil ||
-		response.GetAction() != wsv1.Action_SEND_FRIEND_GIFT {
-		return
-	}
-	eventID := response.GetSendFriendGiftResponse().GetOutboxEventId()
-	if len(eventID) == 0 {
-		return
-	}
-	notifier.Notify(eventID)
 }
 
 func (s *gameCommandRPCServer) ExecutePlayerCommand(
@@ -121,7 +99,6 @@ func (s *gameCommandRPCServer) ExecutePlayerCommand(
 	case response == nil:
 		return nil, status.Error(codes.Internal, "game command returned no response")
 	default:
-		notifyGiftOutbox(s.giftNotifier, response)
 		return &rpcv1.ExecutePlayerCommandResponse{Envelope: response}, nil
 	}
 }

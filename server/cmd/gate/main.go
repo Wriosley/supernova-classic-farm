@@ -19,6 +19,7 @@ import (
 	"github.com/Wriosley/supernova-classic-farm/server/internal/coordinatorclient"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/config"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/debugpprof"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/health"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/logging"
@@ -156,6 +157,7 @@ func run() error {
 	healthHandler := health.NewHandler()
 	mux.Handle("GET /livez", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
+	debugpprof.MaybeMount(mux, logger)
 	pushServer, err := gateway.NewGRPCPushServer(wsHandler, gateInstanceID)
 	if err != nil {
 		return err

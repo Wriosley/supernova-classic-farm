@@ -1,5 +1,6 @@
-// Coordinator is the local single-node, Coordinator-compatible control plane.
-// It intentionally does not implement consensus or high availability.
+// Coordinator is the control-plane process for ShardMap publication and
+// migration. With COORDINATOR_ELECTION_ENABLED=1 exactly one replica mutates;
+// every replica may serve Coordinator SDK Watch/Get from durable-aligned state.
 package main
 
 import (
@@ -80,6 +81,10 @@ func run() error {
 		return err
 	}
 	workerConfig, err := migrationWorkerConfigFromEnvironment()
+	if err != nil {
+		return err
+	}
+	electionCfg, err := electionConfigFromEnvironment()
 	if err != nil {
 		return err
 	}
@@ -349,16 +354,29 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := startPlanner(ctx, routes, membershipRuntime, migrationTasks, plannerConfig, logger); err != nil {
-		return err
+	var lead *leaderRuntime
+	if electionCfg.Enabled {
+		lead = newLeaderRuntime(
+			routes, membershipRuntime, migrationTasks, migrationProgressBackend,
+			durableRouteStore, migrationFences, routePublisher, leaseDuration,
+			plannerConfig, workerConfig, logger,
+		)
+		if err := startElection(ctx, electionCfg, lead, logger); err != nil {
+			return err
+		}
+		startFollowerRouteSync(ctx, electionCfg, lead, routes, durableRouteStore, routePublisher, logger)
+	} else {
+		if err := startPlanner(ctx, routes, membershipRuntime, migrationTasks, plannerConfig, logger); err != nil {
+			return err
+		}
+		if err := startMigrationWorker(ctx, workerConfig, migrationTasks, migrationProgressBackend, routes,
+			durableRouteStore, migrationFences, routePublisher, &http.Client{Timeout: 5 * time.Second}, leaseDuration, logger); err != nil {
+			return err
+		}
 	}
 	if migrations != nil {
 		migrations.routePublisher = routePublisher
 		migrations.availabilityVersion = func() uint64 { return membershipRuntime.registry.Snapshot().AvailabilityVersion }
-	}
-	if err := startMigrationWorker(ctx, workerConfig, migrationTasks, migrationProgressBackend, routes,
-		durableRouteStore, migrationFences, routePublisher, &http.Client{Timeout: 5 * time.Second}, leaseDuration, logger); err != nil {
-		return err
 	}
 	coordinatorService, err := publisher.NewGRPCServer(routes, routePublisher, publisher.GRPCConfig{})
 	if err != nil {
@@ -379,9 +397,10 @@ func run() error {
 		mux.Handle("/internal/v1/", routing.NewHTTPHandler(routes, time.Now))
 	}
 	if mode == routingModeStaticDualZone && migrations != nil {
+		onlyLeader := requireLeader(lead)
 		mux.HandleFunc(
 			"POST /internal/v1/shards/{shard_id}/move",
-			migrations.move,
+			onlyLeader(migrations.move),
 		)
 		mux.HandleFunc(
 			"GET /internal/v1/shards/{shard_id}/migration",
@@ -396,13 +415,14 @@ func run() error {
 		// synchronous flow whose Zone calls predate the transition contract.
 		mux.HandleFunc(
 			"POST /internal/v1/shards/{shard_id}/migration/abandon",
-			migrations.abandonMigration,
+			onlyLeader(migrations.abandonMigration),
 		)
 	}
 	if len(membershipConfig.DrainingZoneIDs) > 0 {
 		mux.HandleFunc("GET /internal/v1/zones/drain", drainStatusHandler(routes, migrationTasks, migrationProgressBackend, membershipConfig.DrainingZoneIDs))
 	}
 	mux.HandleFunc("GET /internal/v1/debug/route-subscribers", subscriberDiagnosticsHandler(routePublisher))
+	mux.HandleFunc("GET /internal/v1/leader", leaderStatusHandler(lead))
 	mux.Handle("/", health.NewHandler(health.Check{
 		Name: "shard_map",
 		Run: func(context.Context) error {
@@ -432,15 +452,15 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 	logger.Info(
-		"single-node coordinator listening",
+		"coordinator listening",
 		"address", cfg.HTTPAddress,
 		"routing_mode", mode,
 		"shard_count", routing.ShardCount,
 		"zone_count", len(zones),
 		"membership_source", membershipConfig.Source,
 		"lease_duration", leaseDuration.String(),
-		"consensus", false,
-		"high_availability", false,
+		"election_enabled", electionCfg.Enabled,
+		"sdk_any_replica", true,
 	)
 	return shutdown.Serve(ctx, server, cfg.ShutdownTimeout, logger)
 }

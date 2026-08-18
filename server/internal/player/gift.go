@@ -2,15 +2,15 @@ package player
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	datav1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/data"
-	eventv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/event"
+	mailv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/mail"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
 	"google.golang.org/protobuf/proto"
 )
@@ -20,6 +20,15 @@ const (
 	maxFriendGiftQuantity = 10
 	defaultGiftSenderName = "好友"
 )
+
+type preparedFriendGift struct {
+	requestID       []byte
+	fingerprint     [sha256.Size]byte
+	requestSourceID []byte
+	mailRequest     *mailv1.CreateGiftMailRequest
+	gift            *wsv1.SendFriendGiftRequest
+	currentQuantity uint32
+}
 
 func (r *Runtime) sendFriendGift(
 	a *runtimeActor,
@@ -78,54 +87,125 @@ func (r *Runtime) sendFriendGift(
 		displayName = string([]rune(displayName)[:32])
 	}
 
-	nextPlayerSeq := a.state.PlayerSeq + 1
-	pendingRecord, err := buildGiftMailOutbox(
-		callerPlayerID, displayName, gift.RecipientPlayerId,
-		gift.CropItemId, gift.Quantity, requestID,
-		a.state.OwnerEpoch, nextPlayerSeq, now,
+	draft, response, dirty := r.prepareSendFriendGift(
+		a, callerPlayerID, request, config, now, displayName, gift, requestID, fingerprint, currentQuantity,
 	)
-	if err != nil {
-		return r.storeSendFriendGiftFailure(a, request, requestID, fingerprint, config.Version(), now,
+	if response != nil || draft == nil {
+		return response, dirty
+	}
+	if r.giftMailer == nil {
+		return errorEnvelope(request, a.state, now,
 			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
 	}
+	ctx, cancel := context.WithTimeout(r.backgroundCtx, 3*time.Second)
+	mailResponse, mailErr := r.giftMailer.CreateGiftMail(ctx, draft.mailRequest)
+	cancel()
+	if mailErr != nil {
+		return errorEnvelope(request, a.state, now,
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+	}
+	if mailResponse != nil && mailResponse.GetError() != nil {
+		return errorEnvelope(request, a.state, now,
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+	}
+	return r.commitSendFriendGift(a, callerPlayerID, request, config, now, draft)
+}
 
-	remaining := currentQuantity - gift.Quantity
+func buildGiftMailRequest(
+	senderPlayerID uint64,
+	senderDisplayName string,
+	recipientPlayerID uint64,
+	cropItemID, quantity uint32,
+	requestID []byte,
+	now time.Time,
+) ([]byte, *mailv1.CreateGiftMailRequest, error) {
+	sourceEventID := giftMailEventID(senderPlayerID, requestID)
+	request := &mailv1.CreateGiftMailRequest{
+		SourceEventId:     append([]byte(nil), sourceEventID...),
+		SenderPlayerId:    senderPlayerID,
+		SenderDisplayName: senderDisplayName,
+		RecipientPlayerId: recipientPlayerID,
+		CropItemId:        cropItemID,
+		Quantity:          quantity,
+		CreatedAtMs:       now.UnixMilli(),
+	}
+	return sourceEventID, request, nil
+}
+
+func (r *Runtime) prepareSendFriendGift(
+	a *runtimeActor,
+	callerPlayerID uint64,
+	request *wsv1.WsEnvelope,
+	config *ConfigSnapshot,
+	now time.Time,
+	displayName string,
+	gift *wsv1.SendFriendGiftRequest,
+	requestID []byte,
+	fingerprint [sha256.Size]byte,
+	currentQuantity uint32,
+) (*preparedFriendGift, *wsv1.WsEnvelope, bool) {
+	requestSourceID, mailRequest, err := buildGiftMailRequest(
+		callerPlayerID, displayName, gift.RecipientPlayerId,
+		gift.CropItemId, gift.Quantity, requestID, now,
+	)
+	if err != nil {
+		return nil, errorEnvelope(request, a.state, now,
+			&wsv1.Error{Code: wsv1.ErrorCode_CONFIG_UNAVAILABLE, Retryable: true}), true
+	}
+	return &preparedFriendGift{
+		requestID:       append([]byte(nil), requestID...),
+		fingerprint:     fingerprint,
+		requestSourceID: requestSourceID,
+		mailRequest:     mailRequest,
+		gift:            gift,
+		currentQuantity: currentQuantity,
+	}, nil, false
+}
+
+func (r *Runtime) commitSendFriendGift(
+	a *runtimeActor,
+	callerPlayerID uint64,
+	request *wsv1.WsEnvelope,
+	config *ConfigSnapshot,
+	now time.Time,
+	draft *preparedFriendGift,
+) (*wsv1.WsEnvelope, bool) {
+	nextPlayerSeq := a.state.PlayerSeq + 1
+	remaining := draft.currentQuantity - draft.gift.Quantity
 	if remaining == 0 {
-		delete(a.state.Inventory, gift.CropItemId)
+		delete(a.state.Inventory, draft.gift.CropItemId)
 	} else {
-		a.state.Inventory[gift.CropItemId] = remaining
+		a.state.Inventory[draft.gift.CropItemId] = remaining
 	}
 	a.state.PlayerSeq = nextPlayerSeq
 	a.state.CheckpointRevision++
 	a.state.ConfigVersion = config.Version()
 	a.state.UpdatedAtMS = now.UnixMilli()
-	a.state.PendingOutbox = append(a.state.PendingOutbox, pendingRecord)
 
 	patch := &wsv1.PlayerStatePatch{}
 	if remaining == 0 {
-		patch.InventoryRemovedItemIds = []uint32{gift.CropItemId}
+		patch.InventoryRemovedItemIds = []uint32{draft.gift.CropItemId}
 	} else {
 		patch.InventoryUpserts = []*wsv1.ItemStackView{{
-			ItemId: gift.CropItemId, Quantity: remaining,
+			ItemId: draft.gift.CropItemId, Quantity: remaining,
 		}}
 	}
 	payload := &wsv1.SendFriendGiftResponse{
-		OutboxEventId: append([]byte(nil), pendingRecord.EventId...),
-		CropItemId:    gift.CropItemId,
-		Quantity:      gift.Quantity,
+		OutboxEventId: append([]byte(nil), draft.requestSourceID...),
+		CropItemId:    draft.gift.CropItemId,
+		Quantity:      draft.gift.Quantity,
 		Patch:         patch,
 	}
 	body, _ := proto.MarshalOptions{Deterministic: true}.Marshal(payload)
 	a.state.appendResult(&datav1.IdempotencyResultRecord{
-		CallerPlayerId: callerPlayerID, RequestId: requestID,
+		CallerPlayerId: callerPlayerID, RequestId: draft.requestID,
 		FingerprintSchemaVersion: idempotencyFingerprintSchemaVersion,
 		ProtocolVersion:          request.ProtocolVersion, Action: uint32(request.Action),
-		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: fingerprint[:],
+		TargetPlayerId: request.TargetPlayerId, PayloadFingerprintSha256: draft.fingerprint[:],
 		CompletedAtMs: now.UnixMilli(), Success: true, ResultOwnerEpoch: a.state.OwnerEpoch,
 		ResultPlayerSeq:     a.state.PlayerSeq,
 		ResponsePayloadType: uint32(wsv1.Action_SEND_FRIEND_GIFT),
 		ResponsePayload:     body,
-		OutboxIds:           [][]byte{append([]byte(nil), pendingRecord.EventId...)},
 	}, now)
 	return &wsv1.WsEnvelope{
 		ProtocolVersion: ProtocolVersion, MessageKind: wsv1.MessageKind_RESPONSE,
@@ -136,45 +216,6 @@ func (r *Runtime) sendFriendGift(
 			SendFriendGiftResponse: payload,
 		},
 	}, true
-}
-
-func buildGiftMailOutbox(
-	senderPlayerID uint64,
-	senderDisplayName string,
-	recipientPlayerID uint64,
-	cropItemID, quantity uint32,
-	requestID []byte,
-	ownerEpoch, playerSeq uint64,
-	now time.Time,
-) (*datav1.PendingOutboxRecord, error) {
-	payload := &eventv1.CreateGiftMailV1{
-		SenderPlayerId:     senderPlayerID,
-		SenderDisplayName:  senderDisplayName,
-		RecipientPlayerId:  recipientPlayerID,
-		CropItemId:         cropItemID,
-		Quantity:           quantity,
-		CreatedAtMs:        now.UnixMilli(),
-	}
-	body, err := proto.MarshalOptions{Deterministic: true}.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	if len(body) > 48<<10 {
-		return nil, errors.New("gift mail payload exceeds 48 KiB")
-	}
-	digest := sha256.Sum256(body)
-	return &datav1.PendingOutboxRecord{
-		EventId:              giftMailEventID(senderPlayerID, requestID),
-		EventType:            datav1.OutboxEventType_CREATE_GIFT_MAIL,
-		EventContractVersion: 1,
-		AggregatePlayerId:    senderPlayerID,
-		CausedByRequestId:    append([]byte(nil), requestID...),
-		CreatedOwnerEpoch:    ownerEpoch,
-		CreatedPlayerSeq:     playerSeq,
-		CreatedAtMs:          now.UnixMilli(),
-		Payload:              body,
-		PayloadSha256:        digest[:],
-	}, nil
 }
 
 func giftMailEventID(senderPlayerID uint64, requestID []byte) []byte {
