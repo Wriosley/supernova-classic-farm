@@ -75,6 +75,10 @@ type Config struct {
 	ClientConfigSHA   []byte
 	OriginPatterns    []string
 	Now               func() time.Time
+	// SkipAuth bypasses ticket consumption for load testing. When true, the
+	// caller is taken directly from the AUTH request's TargetPlayerId and no
+	// login round-trip happens. MUST stay false in production.
+	SkipAuth bool
 }
 
 type Handler struct {
@@ -93,6 +97,7 @@ type Handler struct {
 	clientConfigSHA   []byte
 	originPatterns    []string
 	now               func() time.Time
+	skipAuth          bool
 	pushHub           *PushHub
 	failureStats      *commandFailureStats
 }
@@ -152,6 +157,7 @@ func NewHandler(cfg Config) (*Handler, error) {
 		clientConfigSHA:   append([]byte(nil), cfg.ClientConfigSHA...),
 		originPatterns:    append([]string(nil), cfg.OriginPatterns...),
 		now:               cfg.Now,
+		skipAuth:          cfg.SkipAuth,
 		pushHub:           newPushHub(),
 		failureStats: &commandFailureStats{
 			counts: make(map[string]uint64), lastErrors: make(map[string]string),
@@ -288,11 +294,22 @@ func (h *Handler) serveConnection(parent context.Context, conn *websocket.Conn) 
 				_ = conn.Close(websocket.StatusCode(4401), "AUTH must be first non-heartbeat request")
 				break
 			}
-			authCtx, authCancel := context.WithDeadline(ctx, authDeadline)
-			playerID, err := h.tickets.Consume(authCtx, request.GetAuthRequest().GetWsTicket())
-			authCancel()
-			if err != nil || playerID == 0 {
-				_ = conn.Close(websocket.StatusCode(4401), "invalid authentication ticket")
+			var playerID uint64
+			if h.skipAuth {
+				// Load-test bypass: trust TargetPlayerId from the AUTH request.
+				playerID = request.TargetPlayerId
+			} else {
+				authCtx, authCancel := context.WithDeadline(ctx, authDeadline)
+				id, err := h.tickets.Consume(authCtx, request.GetAuthRequest().GetWsTicket())
+				authCancel()
+				if err != nil || id == 0 {
+					_ = conn.Close(websocket.StatusCode(4401), "invalid authentication ticket")
+					break
+				}
+				playerID = id
+			}
+			if playerID == 0 {
+				_ = conn.Close(websocket.StatusCode(4401), "authentication produced no player id")
 				break
 			}
 			caller = playerID
@@ -592,7 +609,7 @@ func (h *Handler) handleGame(
 				} else {
 					_ = writer.write(parent, response)
 					if connectionID != "" {
-						h.syncPlayerConnection(parent, caller, connectionID, "refresh")
+						go h.syncPlayerConnection(parent, caller, connectionID, "refresh")
 					}
 					return
 				}

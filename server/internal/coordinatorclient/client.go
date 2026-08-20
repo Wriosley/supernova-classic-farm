@@ -126,6 +126,7 @@ func (c *Client) ResolvePlayer(playerID uint64) (routing.RouteEntry, error) {
 func (c *Client) ResolveShard(shardID uint32) (routing.RouteEntry, error) {
 	return c.cache.resolveShard(shardID)
 }
+func (c *Client) MapVersion() uint64         { return c.cache.mapVersion() }
 func (c *Client) Snapshot() routing.Snapshot { return c.cache.getSnapshot() }
 func (c *Client) notifySnapshot() error {
 	if c.cfg.OnSnapshot == nil {

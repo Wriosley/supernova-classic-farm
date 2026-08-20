@@ -178,24 +178,37 @@ func (s *visitorZoneRPCServer) executeFriendActionDirect(
 	if !ok {
 		return nil, status.Error(codes.Unavailable, "ownership is unavailable")
 	}
-	ownerResp, err := s.owner.ApplyVisitorAction(ctx, &rpcv1.ApplyVisitorActionRequest{
-		OwnerPlayerId: request.OwnerPlayerId, VisitorPlayerId: request.CallerPlayerId,
-		VisitId: request.VisitId, InteractionId: interactionID,
-		Action: request.Action, PlotId: request.PlotId, PestId: request.PestId,
-		ExpectedCropItemId: request.GetExpectedCropItemId(),
-		FarmViewEpoch:      request.GetFarmViewEpoch(),
-		FarmViewSeq:        request.GetFarmViewSeq(),
-	})
+	var ownerResp *rpcv1.ApplyVisitorActionResponse
+	ownerPayload, err := s.runtime.AwaitFriendOwnerCall(ctx, request.CallerPlayerId, entry.OwnerEpoch,
+		func(ownerCtx context.Context) ([]byte, error) {
+			callCtx, cancel := context.WithTimeout(ownerCtx, 3*time.Second)
+			defer cancel()
+			var callErr error
+			ownerResp, callErr = s.owner.ApplyVisitorAction(callCtx, &rpcv1.ApplyVisitorActionRequest{
+				OwnerPlayerId: request.OwnerPlayerId, VisitorPlayerId: request.CallerPlayerId,
+				VisitId: request.VisitId, InteractionId: interactionID,
+				Action: request.Action, PlotId: request.PlotId, PestId: request.PestId,
+				ExpectedCropItemId: request.GetExpectedCropItemId(),
+				FarmViewEpoch:      request.GetFarmViewEpoch(),
+				FarmViewSeq:        request.GetFarmViewSeq(),
+			})
+			if callErr != nil {
+				return nil, callErr
+			}
+			return ownerResp.GetResultPayload(), nil
+		})
 	if err != nil {
 		if errors.Is(err, player.ErrNotOwner) {
 			return nil, status.Error(codes.FailedPrecondition, "not shard owner")
 		}
 		return nil, status.Error(codes.Internal, "execute friend action failed")
 	}
+	if ownerResp == nil {
+		return nil, status.Error(codes.Internal, "friend owner await returned no response")
+	}
 	if wsErr := ownerResp.GetError(); wsErr != nil {
 		return &rpcv1.ExecuteFriendActionResponse{Error: wsErr}, nil
 	}
-	ownerPayload := ownerResp.GetResultPayload()
 	visitorResult, _, sideErr := s.runtime.ApplyVisitorFriendSideEffect(
 		ctx, request.CallerPlayerId, entry.OwnerEpoch, interactionID, request.Action, ownerPayload,
 	)

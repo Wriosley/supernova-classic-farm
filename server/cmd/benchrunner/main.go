@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -27,6 +28,7 @@ import (
 
 	httpv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/http"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"github.com/coder/websocket"
 	"google.golang.org/protobuf/proto"
 )
@@ -49,7 +51,9 @@ const (
 type options struct {
 	scenario        string
 	loginURL        string
+	loginURLs       []string
 	gateURL         string
+	gateURLs        []string
 	origin          string
 	mode            string // closed | open
 	concurrencies   []int
@@ -62,6 +66,8 @@ type options struct {
 	runID           string
 	outputDirectory string
 	maxSamples      int
+	accountFile     string
+	identityOutput  string
 }
 
 type sample struct {
@@ -78,20 +84,32 @@ type runSummary struct {
 }
 
 type result struct {
-	Concurrency        int              `json:"concurrency"`
-	TargetQPS          float64          `json:"target_qps,omitempty"`
-	OfferedCount       int64            `json:"offered_count,omitempty"`
-	ShedCount          int64            `json:"shed_count,omitempty"`
-	DurationMS         int64            `json:"duration_ms"`
-	SuccessCount       int64            `json:"success_count"`
-	ErrorCount         int64            `json:"error_count"`
-	ErrorKinds         map[string]int64 `json:"error_kinds"`
-	DroppedSampleCount int64            `json:"dropped_sample_count"`
-	QPS                float64          `json:"qps"`
-	P50US              int64            `json:"p50_us"`
-	P95US              int64            `json:"p95_us"`
-	P99US              int64            `json:"p99_us"`
-	MaxUS              int64            `json:"max_us"`
+	Concurrency        int                     `json:"concurrency"`
+	AttemptCount       int64                   `json:"attempt_count,omitempty"`
+	TargetQPS          float64                 `json:"target_qps,omitempty"`
+	OfferedCount       int64                   `json:"offered_count,omitempty"`
+	ShedCount          int64                   `json:"shed_count,omitempty"`
+	DurationMS         int64                   `json:"duration_ms"`
+	SuccessCount       int64                   `json:"success_count"`
+	RejectedCount      int64                   `json:"rejected_count,omitempty"`
+	ErrorCount         int64                   `json:"error_count"`
+	ErrorKinds         map[string]int64        `json:"error_kinds"`
+	DroppedSampleCount int64                   `json:"dropped_sample_count"`
+	QPS                float64                 `json:"qps"`
+	P50US              int64                   `json:"p50_us"`
+	P95US              int64                   `json:"p95_us"`
+	P99US              int64                   `json:"p99_us"`
+	MaxUS              int64                   `json:"max_us"`
+	Actions            map[string]actionResult `json:"actions,omitempty"`
+}
+
+type actionResult struct {
+	SuccessCount int64 `json:"success_count"`
+	ErrorCount   int64 `json:"error_count"`
+	P50US        int64 `json:"p50_us"`
+	P95US        int64 `json:"p95_us"`
+	P99US        int64 `json:"p99_us"`
+	MaxUS        int64 `json:"max_us"`
 }
 
 type environment struct {
@@ -106,24 +124,32 @@ type environment struct {
 }
 
 type benchClient struct {
-	playerID uint64
-	conn     *websocket.Conn
-	timeout  time.Duration
+	accountName string
+	playerID    uint64
+	conn        *websocket.Conn
+	timeout     time.Duration
 }
 
 type httpStatusError struct {
-	status int
-	code   string
+	method    string
+	endpoint  string
+	requestID string
+	status    int
+	code      string
 }
 
 func (e *httpStatusError) Error() string {
-	return fmt.Sprintf("unexpected HTTP status=%d error=%s", e.status, e.code)
+	return fmt.Sprintf("%s %s: unexpected HTTP status=%d error=%s request_id=%s",
+		e.method, e.endpoint, e.status, e.code, e.requestID)
 }
 
 func main() {
 	opts := parseOptions()
+	if opts.gateURL != "" {
+		fmt.Printf("override gate url: %s\n", opts.gateURL)
+	}
 	if !validScenario(opts.scenario) {
-		exitf("unsupported scenario %q; valid: snapshot, player_loop, connect_hold, friend_interaction, mail_operations, mixed", opts.scenario)
+		exitf("unsupported scenario %q; valid: snapshot, player_loop, connect_hold, friend_interaction, friend_steal, mail_operations, mixed", opts.scenario)
 	}
 	if err := os.MkdirAll(opts.outputDirectory, 0o755); err != nil {
 		exitf("create output directory: %v", err)
@@ -183,8 +209,8 @@ func main() {
 
 func parseOptions() options {
 	scenario := flag.String("scenario", "snapshot", "benchmark scenario")
-	loginURL := flag.String("login-url", defaultLoginURL, "LoginSvr base URL")
-	gateURL := flag.String("gate-url", "", "override Gate WebSocket URL (empty = use bootstrap response)")
+	loginURL := flag.String("login-url", defaultLoginURL, "LoginSvr base URL, or comma-separated sticky per-user URLs")
+	gateURL := flag.String("gate-url", "", "override Gate WebSocket URL, or comma-separated sticky per-user URLs (empty = use bootstrap response)")
 	origin := flag.String("origin", defaultOrigin, "H5 Origin header")
 	mode := flag.String("mode", "closed", "load mode: closed (wait for response) or open (pace by -target-qps)")
 	concurrency := flag.String("concurrency", "1,10,25,50,100", "comma-separated virtual users / open-mode connection pool size")
@@ -197,6 +223,8 @@ func parseOptions() options {
 	runID := flag.String("run-id", time.Now().UTC().Format("20060102_150405"), "unique local run identifier")
 	output := flag.String("output", "", "output directory (default benchmark/results/<run-id>)")
 	maxSamples := flag.Int("max-samples", 1_000_000, "maximum retained latency samples per run")
+	accountFile := flag.String("account-file", "", "optional newline/CSV account-name file; first column is used")
+	identityOutput := flag.String("identity-output", "", "optional safe CSV output: account_name,player_id,shard_id")
 	cluster := flag.Bool("cluster", false, "use production cluster defaults (CLB 21.214.142.172)")
 	flag.Parse()
 	if *cluster {
@@ -252,11 +280,25 @@ func parseOptions() options {
 		}
 		resolvedOutput = filepath.Join(root, "benchmark", "results", *runID)
 	}
+	loginURLs, err := parseLoginURLs(*loginURL)
+	if err != nil {
+		exitf("invalid -login-url: %v", err)
+	}
+	gateURLs, err := parseGateURLs(*gateURL)
+	if err != nil {
+		exitf("invalid -gate-url: %v", err)
+	}
+	primaryGateURL := ""
+	if len(gateURLs) > 0 {
+		primaryGateURL = gateURLs[0]
+	}
 	return options{
-		scenario: *scenario, loginURL: strings.TrimRight(*loginURL, "/"), gateURL: *gateURL, origin: *origin,
+		scenario: *scenario, loginURL: loginURLs[0], loginURLs: loginURLs,
+		gateURL: primaryGateURL, gateURLs: gateURLs, origin: *origin,
 		mode: normalizedMode, concurrencies: values, targetQPSs: rates, connectWorkers: *connectWorkers,
 		warmup: *warmup, duration: *duration, timeout: *timeout, pingInterval: *pingInterval,
 		runID: *runID, outputDirectory: resolvedOutput, maxSamples: *maxSamples,
+		accountFile: *accountFile, identityOutput: *identityOutput,
 	}
 }
 
@@ -266,6 +308,53 @@ func benchAccountNames(runID string, count int) []string {
 		names[index] = fmt.Sprintf("bench_%s_%03d", runID, index+1)
 	}
 	return names
+}
+
+func accountNamesForRun(opts options, count int) ([]string, error) {
+	if opts.accountFile == "" {
+		return benchAccountNames(opts.runID, count), nil
+	}
+	body, err := os.ReadFile(opts.accountFile)
+	if err != nil {
+		return nil, fmt.Errorf("read account file: %w", err)
+	}
+	var names []string
+	seen := make(map[string]struct{})
+	for lineNumber, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name := strings.TrimSpace(strings.SplitN(line, ",", 2)[0])
+		if lineNumber == 0 && name == "account_name" {
+			continue
+		}
+		if !ValidateBenchmarkAccountName(name) {
+			return nil, fmt.Errorf("account file line %d has invalid account name %q", lineNumber+1, name)
+		}
+		if _, ok := seen[name]; ok {
+			return nil, fmt.Errorf("account file contains duplicate account %q", name)
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	if len(names) < count {
+		return nil, fmt.Errorf("account file has %d accounts, need %d", len(names), count)
+	}
+	return names[:count], nil
+}
+
+func ValidateBenchmarkAccountName(name string) bool {
+	if len(name) < 3 || len(name) > 32 || name[0] < 'a' || name[0] > 'z' {
+		return false
+	}
+	for index := 1; index < len(name); index++ {
+		value := name[index]
+		if !((value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') || value == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // authenticateAll performs the login and WebSocket handshakes for every account
@@ -324,11 +413,55 @@ func authenticateAll(opts options, names []string) ([]*benchClient, error) {
 		closeClients(clients)
 		return nil, firstErr
 	}
+	if opts.identityOutput != "" {
+		if err := writeIdentityCSV(opts.identityOutput, clients); err != nil {
+			closeClients(clients)
+			return nil, err
+		}
+	}
 	return clients, nil
 }
 
+func writeIdentityCSV(path string, clients []*benchClient) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create identity output directory: %w", err)
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create identity output: %w", err)
+	}
+	writer := csv.NewWriter(file)
+	writeErr := writer.Write([]string{"account_name", "player_id", "shard_id"})
+	for _, client := range clients {
+		if writeErr != nil || client == nil {
+			continue
+		}
+		writeErr = writer.Write([]string{
+			client.accountName,
+			strconv.FormatUint(client.playerID, 10),
+			strconv.FormatUint(uint64(routing.ShardForPlayer(client.playerID)), 10),
+		})
+	}
+	writer.Flush()
+	if writeErr == nil {
+		writeErr = writer.Error()
+	}
+	closeErr := file.Close()
+	if writeErr != nil {
+		return fmt.Errorf("write identity output: %w", writeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close identity output: %w", closeErr)
+	}
+	return nil
+}
+
 func runSnapshot(opts options, concurrency int) (result, []sample, error) {
-	clients, err := authenticateAll(opts, benchAccountNames(opts.runID, concurrency))
+	names, err := accountNamesForRun(opts, concurrency)
+	if err != nil {
+		return result{}, nil, err
+	}
+	clients, err := authenticateAll(opts, names)
 	if err != nil {
 		return result{}, nil, err
 	}
@@ -392,7 +525,11 @@ func runSnapshotOpen(opts options, poolSize int, targetQPS float64) (result, []s
 	if targetQPS <= 0 {
 		return result{}, nil, fmt.Errorf("target qps must be positive")
 	}
-	clients, err := authenticateAll(opts, benchAccountNames(opts.runID, poolSize))
+	accountNames, err := accountNamesForRun(opts, poolSize)
+	if err != nil {
+		return result{}, nil, err
+	}
+	clients, err := authenticateAll(opts, accountNames)
 	if err != nil {
 		return result{}, nil, err
 	}
@@ -481,6 +618,10 @@ func runSnapshotOpen(opts options, poolSize int, targetQPS float64) (result, []s
 }
 
 func authenticate(opts options, accountName string) (*benchClient, error) {
+	opts.loginURL = selectLoginURL(opts.loginURLs, accountName)
+	if len(opts.gateURLs) > 0 {
+		opts.gateURL = selectLoginURL(opts.gateURLs, accountName)
+	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
@@ -495,7 +636,7 @@ func authenticate(opts options, accountName string) (*benchClient, error) {
 		&httpv1.RegisterRequest{AccountName: accountName, Password: benchmarkPassword}, csrf, http.StatusCreated, register); err != nil {
 		var statusError *httpStatusError
 		if !errors.As(err, &statusError) || statusError.status != http.StatusConflict {
-			return nil, err
+			return nil, fmt.Errorf("register: %w", err)
 		}
 		csrf, err = getCSRF(httpClient, opts)
 		if err != nil {
@@ -504,7 +645,7 @@ func authenticate(opts options, accountName string) (*benchClient, error) {
 		login := &httpv1.LoginResponse{}
 		if err := doProto(httpClient, opts, http.MethodPost, opts.loginURL+"/v1/auth/login",
 			&httpv1.LoginRequest{AccountName: accountName, Password: benchmarkPassword}, csrf, http.StatusOK, login); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("login: %w", err)
 		}
 		register.Session = login.GetSession()
 	}
@@ -518,7 +659,7 @@ func authenticate(opts options, accountName string) (*benchClient, error) {
 	}
 	bootstrap := &httpv1.ClientBootstrapResponse{}
 	if err := doProto(httpClient, opts, http.MethodGet, opts.loginURL+"/v1/bootstrap", nil, "", http.StatusOK, bootstrap); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("bootstrap: %w", err)
 	}
 	if len(bootstrap.GetGateways()) != 1 {
 		return nil, fmt.Errorf("bootstrap gateways=%d, want 1", len(bootstrap.GetGateways()))
@@ -528,12 +669,11 @@ func authenticate(opts options, accountName string) (*benchClient, error) {
 	if err := doProto(httpClient, opts, http.MethodPost, opts.loginURL+"/v1/ws-tickets",
 		&httpv1.WsTicketRequest{TicketRequestId: newUUID(), GatewayId: gateway.GetGatewayId()},
 		csrf, http.StatusCreated, ticket); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("issue ticket: %w", err)
 	}
 	wsURL := gateway.GetWebsocketUrl()
 	if opts.gateURL != "" {
 		wsURL = opts.gateURL
-		fmt.Printf("override gate url: %s\n", wsURL)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
 	defer cancel()
@@ -543,12 +683,60 @@ func authenticate(opts options, accountName string) (*benchClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &benchClient{playerID: playerID, conn: conn, timeout: opts.timeout}
+	client := &benchClient{accountName: accountName, playerID: playerID, conn: conn, timeout: opts.timeout}
 	if err := client.auth(ticket.GetWsTicket()); err != nil {
 		_ = conn.CloseNow()
 		return nil, err
 	}
 	return client, nil
+}
+
+func parseLoginURLs(raw string) ([]string, error) {
+	var urls []string
+	seen := make(map[string]struct{})
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimRight(strings.TrimSpace(item), "/")
+		if item == "" || (!strings.HasPrefix(item, "http://") && !strings.HasPrefix(item, "https://")) {
+			return nil, fmt.Errorf("%q must be an absolute HTTP(S) URL", item)
+		}
+		if _, ok := seen[item]; !ok {
+			seen[item] = struct{}{}
+			urls = append(urls, item)
+		}
+	}
+	if len(urls) == 0 {
+		return nil, errors.New("at least one LoginSvr URL is required")
+	}
+	return urls, nil
+}
+
+func parseGateURLs(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var urls []string
+	seen := make(map[string]struct{})
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" || (!strings.HasPrefix(item, "ws://") && !strings.HasPrefix(item, "wss://")) {
+			return nil, fmt.Errorf("%q must be an absolute WebSocket URL", item)
+		}
+		if _, ok := seen[item]; !ok {
+			seen[item] = struct{}{}
+			urls = append(urls, item)
+		}
+	}
+	return urls, nil
+}
+
+func selectLoginURL(urls []string, accountName string) string {
+	if len(urls) <= 1 {
+		return urls[0]
+	}
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(accountName))
+	return urls[int(hash.Sum32()%uint32(len(urls)))]
 }
 
 func (c *benchClient) auth(ticket string) error {
@@ -630,7 +818,7 @@ func (c *benchClient) read() (*wsv1.WsEnvelope, error) {
 func getCSRF(client *http.Client, opts options) (string, error) {
 	response := &httpv1.CsrfResponse{}
 	if err := doProto(client, opts, http.MethodGet, opts.loginURL+"/v1/auth/csrf", nil, "", http.StatusOK, response); err != nil {
-		return "", err
+		return "", fmt.Errorf("get csrf: %w", err)
 	}
 	if response.GetCsrfToken() == "" {
 		return "", errors.New("empty CSRF token")
@@ -673,8 +861,10 @@ func doProto(client *http.Client, opts options, method, endpoint string, request
 		failure := &httpv1.HttpError{}
 		_ = proto.Unmarshal(bodyBytes, failure)
 		return &httpStatusError{
-			status: httpResponse.StatusCode,
-			code:   strconv.FormatInt(int64(failure.GetCode()), 10),
+			method: method, endpoint: httpRequest.URL.Path,
+			requestID: httpResponse.Header.Get("X-Request-ID"),
+			status:    httpResponse.StatusCode,
+			code:      strconv.FormatInt(int64(failure.GetCode()), 10),
 		}
 	}
 	return proto.Unmarshal(bodyBytes, response)
@@ -765,13 +955,19 @@ func percentile(sorted []int64, percent int) int64 {
 
 func parameterMap(opts options) map[string]string {
 	params := map[string]string{
-		"mode": opts.mode, "login_url": opts.loginURL, "gate_url": opts.gateURL, "origin": opts.origin,
+		"mode": opts.mode, "login_url": strings.Join(opts.loginURLs, ","), "gate_url": strings.Join(opts.gateURLs, ","), "origin": opts.origin,
 		"concurrency": joinInts(opts.concurrencies),
 		"warmup":      opts.warmup.String(), "duration": opts.duration.String(), "timeout": opts.timeout.String(),
 		"ping_interval": opts.pingInterval.String(), "max_samples": strconv.Itoa(opts.maxSamples),
 	}
 	if len(opts.targetQPSs) > 0 {
 		params["target_qps"] = joinFloats(opts.targetQPSs)
+	}
+	if opts.accountFile != "" {
+		params["account_file"] = opts.accountFile
+	}
+	if opts.identityOutput != "" {
+		params["identity_output"] = opts.identityOutput
 	}
 	return params
 }

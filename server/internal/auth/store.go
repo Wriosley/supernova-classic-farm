@@ -381,9 +381,8 @@ func (s *Store) ConsumeTicket(raw, gatewayID string) (uint64, error) {
 		}
 		return 0, err
 	}
-	if claims.GatewayID != gatewayID {
-		return 0, ErrUnauthenticated
-	}
+	// Stateless tickets: any gate can consume a ticket issued by any gate.
+	// The gatewayID parameter is retained for API compatibility but not enforced.
 	if s.durable != nil {
 		active, activeErr := s.durable.sessionActive(claims.SessionDigest, claims.Generation, now)
 		if activeErr != nil {

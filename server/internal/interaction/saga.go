@@ -103,10 +103,10 @@ type OwnerFarmClient interface {
 // at create time so Resume never re-derives them from ConfigSnapshot.
 //
 // OwnerRoute is advisory: the production OwnerFarmClient
-// (visit.ZoneOwnerFarmClient) re-resolves the owner's live route from
-// OwnerPlayerID through the Coordinator on every call and overwrites it, so
-// callers that always go through that client (cmd/zone, the Reconciler) may
-// leave it nil or stale.
+// (visit.ZoneOwnerFarmClient) resolves the owner's live route from the Zone's
+// Coordinator SDK snapshot and overwrites it. A stale-owner rejection
+// invalidates that version and performs one bounded re-resolution, so callers
+// that use this client (cmd/zone, the Reconciler) may leave it nil or stale.
 type StealRequest struct {
 	InteractionID     []byte
 	VisitorPlayerID   uint64

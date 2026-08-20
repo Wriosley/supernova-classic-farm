@@ -20,6 +20,81 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 
 ## Snapshot at handoff
 
+- 2026-08-19 三 Gate spread snapshot 短校准完成。benchrunner 支持逗号分隔 Gate
+  URL 并按账号固定哈希；三个 loadtest-only NodePort 分别直达 gate-0/1/2，同窗
+  10k profile 的 30 秒 CPU 为 18.50/21.56/19.84 秒，证明分流均匀。spread-800
+  固定分流下，20k/25k 均完整承接、0 shed/0 error，P99 34.934/69.290ms；30k
+  只完成 27,553.10 QPS、shed 70,519、P99 83.717ms。但三 Gate 峰值仅
+  1.522–1.590/3 核，八 Zone 峰值 0.737–0.799/2 核，benchrunner 约 2.5–2.65
+  核且 system/wait 较高，因此 27.5k 是生成器/串行连接池与服务组合平台，不能称为
+  Gate 上限。当前只可声称三 Gate 至少健康承载 25k snapshot QPS。下一步先测
+  `connect_hold` 长连接容量，再扩充/复用生成器连接寻找 Gate 请求上限。Evidence:
+  `../evidence/2026-08-19-gate-spread-calibration.md`。
+
+- 2026-08-19 Zone 8k/12k 对照 profiling 已完成。真实 hotspot open-loop 8k 完成
+  7,999.91 QPS、0 shed、P99 23.961ms；12k offered 只完成 10,511.14 QPS、
+  shed 133,687、P99 25.712ms。30 秒 CPU 从 53.74 秒增至 57.89 秒（1.79→1.93
+  核），Zone 峰值 1.944 核。CPU 主要消耗在 H2C/HTTP2 response syscall、gRPC
+  unary transport、protobuf、分配/GC 与 rpcauth；Player/Actor 整体约 4.6%，
+  `State.Snapshot` 和 `materializeDueMaturities` 各约 2%，不是第一瓶颈。首选待验证
+  优化是将内部 gRPC 从 `grpc.Server.ServeHTTP`+H2C 改为原生 gRPC listener，
+  health/pprof 分端口；其次是在不放松校验的前提下降低 rpcauth 和 Snapshot 分配。
+  Evidence: `../evidence/2026-08-19-zone-bottleneck-pprof-comparison.md`。
+
+- 2026-08-19 单 Zone hotspot 第一阶段与 Gate 路由热路径优化已完成。100 个固定
+  账号全部命中 `zone-pool-6`；优化前 closed-loop 10/25/50/100 阶梯为
+  5,096.91/6,542.10/7,396.34/8,194.05 QPS，均 0 错误。pprof 发现 Gate 每条
+  游戏请求仅为读取 `MapVersion` 就复制 4096 条路由，约占 Gate 累计分配 97%。
+  改为 atomic snapshot 的 O(1) `MapVersion()` 后，同参数 c100 从 8,194.05 提升
+  至 10,662.80 QPS（+30.1%），P99 从 31.056 ms 降至 25.174 ms（-18.9%），
+  仍 0 错误；新 Gate profile 中整表复制热点消失，三个 Gate 峰值均低于 0.83 核。
+  热点 Zone 的 30 秒 profile 达 58.07 CPU 秒，已接近 2 CPU limit，说明当前
+  snapshot 主瓶颈已转移到 Zone。修复 open 模式忽略 `-account-file` 的工具缺陷
+  后，真实单 Zone open-loop 8k/10k/12k offered QPS 分别完成
+  7,999.86/9,975.24/10,569.08 QPS；shed 为 0/1,354/85,493，服务错误均为 0，
+  Zone 峰值 1.938 核而三个 Gate 峰值不超过 0.885 核。当前 snapshot 饱和平台约
+  10.5k QPS，8k 可作为待长稳/混合场景复核的首版保守水位。下一步用 spread
+  cohort 与资源充足 Zone 测 Gate。Evidence:
+  `../evidence/2026-08-19-zone-hotspot-route-copy-optimization.md`。
+
+- 2026-08-19 Zone 压测 cohort 已建立：benchrunner snapshot 支持安全导出
+  `account_name/player_id/shard_id` 及从 CSV 固定加载账号。复用 reg1000 账号、四
+  Login 固定 endpoint、4 setup worker 和正常 HMAC ticket 后，1000/1000 在
+  3m2.98s 建连。按 Coordinator `map_version=12317` 生成 `spread-800`（8 Owner
+  各 100）与 `hotspot-100`（全部 zone-pool-6），完整材料在
+  `/data/workspace/yace/cohorts/`。2 秒 hotspot 消费检查为 7988.12 QPS、P99
+  31.651ms、0 错误；zone-pool-6 为 213m CPU，其余 Zone 31–32m，证明流量集中
+  生效，但不是容量结论。正式测试前若 map version 改变必须重建 cohort。当前 live
+  Gate 已关闭不可用的 `GATE_SKIP_AUTH` 绕过并恢复正常 ticket 路径。
+  Evidence: `../evidence/2026-08-19-zone-loadtest-cohorts.md`。
+
+- 2026-08-19 压测前 Gate 三副本健康基线已恢复：live StatefulSet 模板显式设置
+  `GATE_PORT=""`，不再误读 Kubernetes 注入的 `GATE_PORT=tcp://...`。三 Pod
+  滚动完成后 `gate-0/1/2` 均 Ready、restart=0、镜像统一，EndpointSlice 有三个
+  Ready 地址；每个实例以独立 UID 和 StatefulSet DNS endpoint 正常监听。延迟复查
+  的空闲用量为 1–2m CPU、35–45Mi 内存。该证据只确认可以开始压测校准，不是容量
+  结论。Evidence: `../evidence/2026-08-19-gate-three-replica-recovery.md`。
+
+- 2026-08-19 benchrunner 的 50 连接失败已定位为认证 setup 问题而非
+  Gate/Zone 的 50 并发容量结论：实际 Login Service 有 4 个 Ready Pod 但
+  `sessionAffinity: None`，短复现明确得到 register `HTTP 403 / CSRF_REJECTED
+  (203)`；此前的 `HTTP 500 / code 501` 表示 Login 内部错误，不能解释为
+  CSRF。同期 `gate-2` 因部署模板未覆盖 Kubernetes 注入的 `GATE_PORT=tcp://...`
+  而 CrashLoop，Gate Service 只有两个 Ready endpoint。benchrunner 现会安全输出
+  认证阶段、HTTP path 和 request-id；Go 聚焦测试/构建通过。压测必须先修复
+  Login 请求亲和与三 Gate 健康，再把认证 setup 与 Gate/Zone 稳态测量分开。
+  benchrunner 另已支持逗号分隔的多 Login URL，并按账号稳定哈希选择 endpoint：
+  单个虚拟用户的 CSRF/Session/Ticket 请求不跨 Login，不同用户则可均摊 Login，
+  避免单压测源使用 Service `ClientIP` 时把所有认证压到一个 Pod。四 Login 短复现
+  进一步确认 16 个 setup worker 会在新账号注册的共享 Tcaplus
+  `PlayerIdCounter` 八次无退避 CAS 上得到 register `500/501`；复用账号并降为 4 个
+  setup worker 后，50/50 连接在 9.581 秒完成，5 秒 snapshot 得到 22,465 成功、
+  0 错误、4482.15 QPS、P99 25.421ms。该结果使用 Service port-forward、仅 5 秒且
+  第三个 Gate 未 Ready，只证明原失败不是 Gate/Zone 的 50 并发容量边界，不是正式
+  多 Gate 容量结论。完整压测计划、采集脚本与原始结果在
+  `/data/workspace/yace/`。
+  Evidence: `../evidence/2026-08-19-benchrunner-auth-setup-diagnosis.md`。
+
 - Eight-Zone pool/static A/B retirement has migrated all 4096 authoritative
   routes to eight pool owners. At live `map_version=12317`, all routes were
   ACTIVE and A/B each owned zero Shards before deletion. A final recovery race
@@ -852,8 +927,47 @@ The auth DDL and local values `AUTO_INCREMENT player_id`, `db_shard_id = 0`, ini
   Coordinator restart recovery, explicit 4096-row endpoint reinitialize and a
   passing kind dual-Zone active-migration E2E. Gate/Info/Zone now default to
   the SDK in kind while retaining HTTP/poll rollback switches.
+- `../evidence/2026-08-19-cross-zone-friend-loadtest.md` records the balanced
+  cross-Zone friend visit lifecycle benchmark. Throughput plateaued near
+  223--229 complete enter/heartbeat/exit cycles per second while latency
+  doubled from 50 to 100 pairs. Coordinator reached its 500m CPU limit because
+  every visitor command synchronously performs a per-Shard HTTP route lookup;
+  Gate, Friend and Zone CPU remained below their limits. The next performance
+  step is an isolated route-cache/control-plane experiment, not a higher pair
+  count or a Zone Actor optimization.
+- `../evidence/2026-08-19-zone-friend-sdk-routing.md` records the code-level
+  fix that makes `ZoneOwnerFarmClient` reuse the Zone's existing versioned
+  Coordinator SDK/cached resolver. Normal friend visit/action commands no
+  longer perform per-command Coordinator HTTP lookup; stale Owner rejection
+  invalidates the exact route version and permits one fallback re-resolution.
+  Full Go tests pass. The Zone-only image rollout is live on all eight pool
+  Pods with zero restarts. A/B verification improved 50-pair lifecycle QPS
+  from 227.07 to 1227.26 and reduced P99 from 388.59ms to 52.65ms; at 100
+  pairs it reached 1881.51/s with 77.43ms P99. Coordinator remained at
+  42--56m rather than its former 499m/500m saturation. At 200 pairs the run
+  reached 2528.24 cycles/s with zero errors, but Info reached 501m/500m while
+  the busiest Zone was 822m/1000m, so this is not a Zone capacity ceiling.
+- `../plans/2026-08-19-friend-steal-actor-await-plan.md` remains the proposed
+  production design. A deliberately small experimental `AwaitFriendOwnerCall`
+  path is now live on all eight Zone Pods for performance testing only; it
+  releases the Visitor Actor mailbox during the Owner RPC but has no durable
+  pending receipt, UNKNOWN reconciliation, duplicate protection, or
+  migration/eviction gate.
+- `../evidence/2026-08-19-friend-steal-no-await-baseline.md` records the first
+  real steal benchmark. `friend_steal` prepares mature farms outside the timed
+  section and reports attempt QPS, success QPS, business rejects, and system
+  errors separately. The no-Await baseline used 610 finite targets: 610
+-  successes, 0 rejects/errors, 5,589.34 attempt and success QPS, successful
+  P99 62.40ms. The experimental Await run used the same 100-pair cohort but
+  prepared 1,600 targets: 1,600 successes, 0 rejects/errors, 6,057.59 QPS,
+  successful P99 51.72ms. Target counts differ, so this is validation and a
+  directional signal only, not a controlled performance claim. Details are in
+  `../evidence/2026-08-19-friend-steal-await-experiment.md`.
 
 ## Next actions
+
+- 2026-08-19 全局性能报告已生成：`../evidence/2026-08-19-classic-farm-performance-report.md`，汇总 Zone/Gate/Friend/偷菜压测、pprof 结论和 3000 万 DAU 规划边界；独立交付目录为 `/data/workspace/yace/reports/classic-farm-performance-2026-08-19/`，包含 Markdown 报告与 SVG 火焰图。报告结论是“架构方向可继续支撑目标，但当前原型尚不能声称已实际支撑 3000 万 DAU”。
+- 最终交付包已整理为 `/data/workspace/yace/bechreport-2026-08-19.zip`，解压目录 `/data/workspace/yace/bechreport/`，含正式总报告、4 张 SVG 火焰图、6 份核心证据摘要和材料清单；报告插图路径统一为 `/workspace/bechreport/flamegraphs/`。
 
 The eight-pool Zone drain is currently **paused** in the live Deployment. Its
 first run found a `MigrationProgress` comparison bug caused by historical

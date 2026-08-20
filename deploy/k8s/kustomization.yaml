@@ -8,7 +8,6 @@ resources:
   - coordinator-rbac.yaml
   - login.yaml
   - gate.yaml
-  - zone.yaml
   - zone-pool.yaml
   - friend.yaml
   - info.yaml

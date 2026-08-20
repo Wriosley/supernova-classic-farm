@@ -4,7 +4,10 @@ metadata:
   name: login
   namespace: classic-farm
 spec:
-  replicas: 4
+  # WS tickets are HMAC-signed with a shared key (INTERNAL_GRPC_HMAC_KEY).
+  # CSRF is still process-local, so ClientIP sessionAffinity on Service is
+  # recommended when replicas > 1.
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: login
@@ -23,6 +26,8 @@ spec:
                 name: classic-farm-runtime
             - secretRef:
                 name: classic-farm-tcaplus
+            - secretRef:
+                name: classic-farm-internal-rpc
           env:
             - name: LOGIN_PORT
               value: ""

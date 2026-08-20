@@ -136,34 +136,6 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: zone-a
-  namespace: classic-farm
-spec:
-  selector:
-    app.kubernetes.io/name: zone
-    classic-farm/zone-id: zone-a
-  ports:
-    - name: http
-      port: 8082
-      targetPort: http
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: zone-b
-  namespace: classic-farm
-spec:
-  selector:
-    app.kubernetes.io/name: zone
-    classic-farm/zone-id: zone-b
-  ports:
-    - name: http
-      port: 8082
-      targetPort: http
----
-apiVersion: v1
-kind: Service
-metadata:
   name: zone-headless
   namespace: classic-farm
 spec:

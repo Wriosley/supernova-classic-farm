@@ -2,24 +2,20 @@ package visit
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
 	"sync"
-	"time"
 
 	rpcv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/rpc"
 	wsv1 "github.com/Wriosley/supernova-classic-farm/server/gen/classicfarm/v1/ws"
-	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/internalnet"
+	"github.com/Wriosley/supernova-classic-farm/server/internal/gateway"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcauth"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/platform/rpcnet"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/routing"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 // OwnerFarmClient is the visitor Zone's view of the Owner Zone's
@@ -69,8 +65,7 @@ type TargetedOwnerFarmClient interface {
 // Coordinator and calls OwnerFarmService on whichever Zone currently owns
 // it, exactly like friend.ZoneTaskCreditClient does for PlayerSocialService.
 type ZoneOwnerFarmClient struct {
-	httpClient     *http.Client
-	coordinatorURL string
+	routes gateway.RouteResolver
 
 	mu       sync.Mutex
 	conns    map[string]*grpc.ClientConn
@@ -81,11 +76,10 @@ type ZoneOwnerFarmClient struct {
 func NewZoneOwnerFarmClient(
 	key []byte,
 	serviceName string,
-	coordinatorURL string,
-	httpClient *http.Client,
+	routes gateway.RouteResolver,
 ) (*ZoneOwnerFarmClient, error) {
-	if strings.TrimSpace(coordinatorURL) == "" {
-		return nil, errors.New("Coordinator URL is required")
+	if routes == nil {
+		return nil, errors.New("route resolver is required")
 	}
 	interceptor, err := rpcauth.NewClientUnaryInterceptor(rpcauth.ClientConfig{
 		Service: serviceName, Key: key,
@@ -93,12 +87,9 @@ func NewZoneOwnerFarmClient(
 	if err != nil {
 		return nil, err
 	}
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 5 * time.Second}
-	}
 	return &ZoneOwnerFarmClient{
-		httpClient: httpClient, coordinatorURL: strings.TrimRight(coordinatorURL, "/"),
-		conns: make(map[string]*grpc.ClientConn), clients: make(map[string]rpcv1.OwnerFarmServiceClient),
+		routes: routes,
+		conns:  make(map[string]*grpc.ClientConn), clients: make(map[string]rpcv1.OwnerFarmServiceClient),
 		dialOpts: []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithUnaryInterceptor(interceptor),
@@ -141,18 +132,36 @@ func (z *ZoneOwnerFarmClient) EnterVisitorAt(
 	ctx context.Context, ownerPlayerID, visitorPlayerID uint64, gateID, gateEndpoint string,
 	relationID []byte, requestID string,
 ) ([]byte, int64, *wsv1.FarmVisitSnapshot, *wsv1.Error, error) {
-	client, route, err := z.resolve(ctx, ownerPlayerID)
+	route, err := z.resolve(ctx, ownerPlayerID)
 	if err != nil {
 		return nil, 0, nil, nil, err
 	}
-	response, err := client.EnterVisitor(ctx, &rpcv1.EnterVisitorRequest{
-		OwnerRoute: route, OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
-		GateId: gateID, GateEndpoint: gateEndpoint, RelationId: relationID, RequestId: requestID,
-	})
+	response, err := z.enterVisitorOnce(ctx, route, ownerPlayerID, visitorPlayerID, gateID, gateEndpoint, relationID, requestID)
+	if status.Code(err) == codes.FailedPrecondition && z.invalidate(route) {
+		route, err = z.resolve(ctx, ownerPlayerID)
+		if err == nil {
+			response, err = z.enterVisitorOnce(ctx, route, ownerPlayerID, visitorPlayerID, gateID, gateEndpoint, relationID, requestID)
+		}
+	}
 	if err != nil {
 		return nil, 0, nil, nil, fmt.Errorf("Owner Zone EnterVisitor gRPC call: %w", err)
 	}
 	return response.GetVisitId(), response.GetExpiresAtMs(), response.GetSnapshot(), response.GetError(), nil
+}
+
+func (z *ZoneOwnerFarmClient) enterVisitorOnce(
+	ctx context.Context, route gateway.Route, ownerPlayerID, visitorPlayerID uint64,
+	gateID, gateEndpoint string, relationID []byte, requestID string,
+) (*rpcv1.EnterVisitorResponse, error) {
+	client, err := z.client(route.OwnerEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.EnterVisitor(ctx, &rpcv1.EnterVisitorRequest{
+		OwnerRoute: committedRoute(route), OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
+		GateId: gateID, GateEndpoint: gateEndpoint, RelationId: relationID, RequestId: requestID,
+	})
+	return response, err
 }
 
 func (z *ZoneOwnerFarmClient) RefreshVisitorHeartbeat(
@@ -167,18 +176,36 @@ func (z *ZoneOwnerFarmClient) RefreshVisitorHeartbeat(
 func (z *ZoneOwnerFarmClient) RefreshVisitorHeartbeatAt(
 	ctx context.Context, ownerPlayerID, visitorPlayerID uint64, visitID []byte, gateID, gateEndpoint string,
 ) (int64, *wsv1.Error, error) {
-	client, route, err := z.resolve(ctx, ownerPlayerID)
+	route, err := z.resolve(ctx, ownerPlayerID)
 	if err != nil {
 		return 0, nil, err
 	}
-	response, err := client.RefreshVisitorHeartbeat(ctx, &rpcv1.RefreshVisitorHeartbeatRequest{
-		OwnerRoute: route, OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
-		VisitId: visitID, GateId: gateID, GateEndpoint: gateEndpoint,
-	})
+	response, err := z.refreshVisitorHeartbeatOnce(ctx, route, ownerPlayerID, visitorPlayerID, visitID, gateID, gateEndpoint)
+	if status.Code(err) == codes.FailedPrecondition && z.invalidate(route) {
+		route, err = z.resolve(ctx, ownerPlayerID)
+		if err == nil {
+			response, err = z.refreshVisitorHeartbeatOnce(ctx, route, ownerPlayerID, visitorPlayerID, visitID, gateID, gateEndpoint)
+		}
+	}
 	if err != nil {
 		return 0, nil, fmt.Errorf("Owner Zone RefreshVisitorHeartbeat gRPC call: %w", err)
 	}
 	return response.GetExpiresAtMs(), response.GetError(), nil
+}
+
+func (z *ZoneOwnerFarmClient) refreshVisitorHeartbeatOnce(
+	ctx context.Context, route gateway.Route, ownerPlayerID, visitorPlayerID uint64,
+	visitID []byte, gateID, gateEndpoint string,
+) (*rpcv1.RefreshVisitorHeartbeatResponse, error) {
+	client, err := z.client(route.OwnerEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.RefreshVisitorHeartbeat(ctx, &rpcv1.RefreshVisitorHeartbeatRequest{
+		OwnerRoute: committedRoute(route), OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
+		VisitId: visitID, GateId: gateID, GateEndpoint: gateEndpoint,
+	})
+	return response, err
 }
 
 func (z *ZoneOwnerFarmClient) ExitVisitor(
@@ -186,18 +213,35 @@ func (z *ZoneOwnerFarmClient) ExitVisitor(
 	ownerPlayerID, visitorPlayerID uint64,
 	visitID []byte,
 ) (*wsv1.Error, error) {
-	client, route, err := z.resolve(ctx, ownerPlayerID)
+	route, err := z.resolve(ctx, ownerPlayerID)
 	if err != nil {
 		return nil, err
 	}
-	response, err := client.ExitVisitor(ctx, &rpcv1.ExitVisitorRequest{
-		OwnerRoute: route, OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
-		VisitId: visitID,
-	})
+	response, err := z.exitVisitorOnce(ctx, route, ownerPlayerID, visitorPlayerID, visitID)
+	if status.Code(err) == codes.FailedPrecondition && z.invalidate(route) {
+		route, err = z.resolve(ctx, ownerPlayerID)
+		if err == nil {
+			response, err = z.exitVisitorOnce(ctx, route, ownerPlayerID, visitorPlayerID, visitID)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Owner Zone ExitVisitor gRPC call: %w", err)
 	}
 	return response.GetError(), nil
+}
+
+func (z *ZoneOwnerFarmClient) exitVisitorOnce(
+	ctx context.Context, route gateway.Route, ownerPlayerID, visitorPlayerID uint64, visitID []byte,
+) (*rpcv1.ExitVisitorResponse, error) {
+	client, err := z.client(route.OwnerEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.ExitVisitor(ctx, &rpcv1.ExitVisitorRequest{
+		OwnerRoute: committedRoute(route), OwnerPlayerId: ownerPlayerID, VisitorPlayerId: visitorPlayerID,
+		VisitId: visitID,
+	})
+	return response, err
 }
 
 // ApplyVisitorAction resolves request.OwnerPlayerId's current route,
@@ -212,33 +256,57 @@ func (z *ZoneOwnerFarmClient) ApplyVisitorAction(
 	if request == nil {
 		return nil, errors.New("apply visitor action request is required")
 	}
-	client, route, err := z.resolve(ctx, request.OwnerPlayerId)
+	route, err := z.resolve(ctx, request.OwnerPlayerId)
 	if err != nil {
 		return nil, err
 	}
-	request.OwnerRoute = route
-	response, err := client.ApplyVisitorAction(ctx, request)
+	response, err := z.applyVisitorActionOnce(ctx, route, request)
+	if status.Code(err) == codes.FailedPrecondition && z.invalidate(route) {
+		route, err = z.resolve(ctx, request.OwnerPlayerId)
+		if err == nil {
+			response, err = z.applyVisitorActionOnce(ctx, route, request)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Owner Zone ApplyVisitorAction gRPC call: %w", err)
 	}
 	return response, nil
 }
 
+func (z *ZoneOwnerFarmClient) applyVisitorActionOnce(
+	ctx context.Context, route gateway.Route, request *rpcv1.ApplyVisitorActionRequest,
+) (*rpcv1.ApplyVisitorActionResponse, error) {
+	client, err := z.client(route.OwnerEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	request.OwnerRoute = committedRoute(route)
+	return client.ApplyVisitorAction(ctx, request)
+}
+
 func (z *ZoneOwnerFarmClient) resolve(
 	ctx context.Context, ownerPlayerID uint64,
-) (rpcv1.OwnerFarmServiceClient, *rpcv1.CommittedRoute, error) {
-	route, err := z.resolveRoute(ctx, routing.ShardForPlayer(ownerPlayerID))
+) (gateway.Route, error) {
+	route, err := z.routes.Resolve(ctx, routing.ShardForPlayer(ownerPlayerID))
 	if err != nil {
-		return nil, nil, fmt.Errorf("resolve Owner farm route: %w", err)
+		return gateway.Route{}, fmt.Errorf("resolve Owner farm route: %w", err)
 	}
-	client, err := z.client(route.ownerEndpoint)
-	if err != nil {
-		return nil, nil, err
+	return route, nil
+}
+
+func (z *ZoneOwnerFarmClient) invalidate(route gateway.Route) bool {
+	invalidator, ok := z.routes.(gateway.RouteInvalidator)
+	if ok {
+		invalidator.InvalidateIfVersion(route.ShardID, route.RouteVersion)
 	}
-	return client, &rpcv1.CommittedRoute{
-		LogicalShardId: route.shardID, OwnerZoneId: route.ownerZoneID,
-		OwnerEpoch: route.ownerEpoch, RouteVersion: route.routeVersion,
-	}, nil
+	return ok
+}
+
+func committedRoute(route gateway.Route) *rpcv1.CommittedRoute {
+	return &rpcv1.CommittedRoute{
+		LogicalShardId: route.ShardID, OwnerZoneId: route.OwnerZoneID,
+		OwnerEpoch: route.OwnerEpoch, RouteVersion: route.RouteVersion,
+	}
 }
 
 func (z *ZoneOwnerFarmClient) client(endpoint string) (rpcv1.OwnerFarmServiceClient, error) {
@@ -259,62 +327,4 @@ func (z *ZoneOwnerFarmClient) client(endpoint string) (rpcv1.OwnerFarmServiceCli
 	z.conns[target] = conn
 	z.clients[target] = client
 	return client, nil
-}
-
-type ownerTargetRoute struct {
-	shardID       uint32
-	ownerZoneID   string
-	ownerEndpoint string
-	ownerEpoch    uint64
-	routeVersion  uint64
-}
-
-// resolveRoute mirrors friend.ZoneTaskCreditClient.resolveRoute exactly: it
-// looks up one shard's committed route via the Coordinator's
-// GET /internal/v1/routes/{shard}.
-func (z *ZoneOwnerFarmClient) resolveRoute(ctx context.Context, shardID uint32) (ownerTargetRoute, error) {
-	request, err := http.NewRequestWithContext(
-		ctx, http.MethodGet,
-		z.coordinatorURL+"/internal/v1/routes/"+strconv.FormatUint(uint64(shardID), 10),
-		nil,
-	)
-	if err != nil {
-		return ownerTargetRoute{}, err
-	}
-	response, err := z.httpClient.Do(request)
-	if err != nil {
-		return ownerTargetRoute{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return ownerTargetRoute{}, fmt.Errorf("route lookup returned %s", response.Status)
-	}
-	var result struct {
-		ShardID       uint32 `json:"shard_id"`
-		OwnerZoneID   string `json:"owner_zone_id"`
-		OwnerEndpoint string `json:"owner_endpoint"`
-		OwnerEpoch    string `json:"owner_epoch"`
-		RouteVersion  string `json:"route_version"`
-		State         string `json:"state"`
-		Routable      bool   `json:"routable"`
-	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 16<<10))
-	if err := decoder.Decode(&result); err != nil {
-		return ownerTargetRoute{}, fmt.Errorf("decode route response: %w", err)
-	}
-	epoch, epochErr := strconv.ParseUint(result.OwnerEpoch, 10, 64)
-	routeVersion, routeErr := strconv.ParseUint(result.RouteVersion, 10, 64)
-	if epochErr != nil || routeErr != nil || epoch == 0 || routeVersion == 0 ||
-		result.ShardID != shardID || result.State != string(routing.RouteStateActive) ||
-		!result.Routable || result.OwnerZoneID == "" || result.OwnerEndpoint == "" {
-		return ownerTargetRoute{}, errors.New("route is not a routable ACTIVE owner")
-	}
-	if err := internalnet.ValidateHTTPURL(result.OwnerEndpoint); err != nil {
-		return ownerTargetRoute{}, fmt.Errorf("invalid owner endpoint: %w", err)
-	}
-	return ownerTargetRoute{
-		shardID: result.ShardID, ownerZoneID: result.OwnerZoneID,
-		ownerEndpoint: result.OwnerEndpoint, ownerEpoch: epoch, routeVersion: routeVersion,
-	}, nil
 }

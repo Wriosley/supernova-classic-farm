@@ -206,7 +206,8 @@ func main() {
 				log.Fatalf("start Coordinator SDK: %v", sdkErr)
 			}
 			defer sdk.Close()
-			outboundRoutes, sdkErr = gateway.NewCoordinatorRouteResolver(sdk, nil)
+			httpRoutes := &gateway.HTTPRouteResolver{Client: client, BaseURL: coordinatorURL}
+			outboundRoutes, sdkErr = gateway.NewCoordinatorRouteResolver(sdk, httpRoutes)
 			if sdkErr != nil {
 				log.Fatal(sdkErr)
 			}
@@ -235,7 +236,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ownerFarmClient, err := visit.NewZoneOwnerFarmClient(rpcKey, rpcauth.ZoneService, coordinatorURL, nil)
+	if outboundRoutes == nil {
+		outboundRoutes = &gateway.HTTPRouteResolver{Client: &http.Client{Timeout: 5 * time.Second}, BaseURL: coordinatorURL}
+	}
+	ownerFarmClient, err := visit.NewZoneOwnerFarmClient(rpcKey, rpcauth.ZoneService, outboundRoutes)
 	if err != nil {
 		log.Fatal(err)
 	}

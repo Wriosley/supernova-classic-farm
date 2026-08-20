@@ -12,7 +12,7 @@ import (
 
 // actorIdleTimeout is the continuous idle window required before an Actor may
 // be safely recycled. Tests inject time rather than sleeping.
-const actorIdleTimeout = 60 * time.Second
+const actorIdleTimeout = 10 * time.Minute
 
 func (a *runtimeActor) touchAccess(now time.Time) {
 	if a == nil || now.IsZero() {

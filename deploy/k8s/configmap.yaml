@@ -27,10 +27,10 @@ data:
   FRIEND_RPC_URL: dns:///friend-headless.classic-farm.svc.cluster.local:8085
   INFO_RPC_URL: http://info:8086
   MAIL_RPC_URL: dns:///mail-headless.classic-farm.svc.cluster.local:8087
-  H5_ORIGIN: http://21.130.223.195:1616
-  GATEWAY_URL: ws://21.214.142.172:8081/ws
-  CLIENT_CONFIG_URL: http://21.214.142.172:8080/v1/client-config/1
-  CLIENT_CONFIG_PUBLIC_URL: http://21.214.142.172:8080/v1/client-config/1
+  H5_ORIGIN: http://localhost:5173
+  GATEWAY_URL: ws://127.0.0.1:8081/ws
+  CLIENT_CONFIG_URL: http://127.0.0.1:18080/v1/client-config/1
+  CLIENT_CONFIG_PUBLIC_URL: http://127.0.0.1:18080/v1/client-config/1
   TCAPLUS_CHECKPOINT_TABLE: PlayerCheckpoint
   TCAPLUS_PLAYER_ID_COUNTER_TABLE: PlayerIdCounter
   TCAPLUS_ACCOUNT_BY_NAME_TABLE: AccountByName
@@ -54,7 +54,7 @@ data:
   TCAPLUS_FRIEND_LINK_SAGA_TABLE: FriendLinkSaga
   TCAPLUS_FRIEND_INTERACTION_TABLE: FriendInteraction
   TCAPLUS_FIRST_FRIEND_REWARD_TABLE: FirstFriendReward
-  PUBLIC_WEB_BASE_URL: http://21.130.223.195:1616
+  PUBLIC_WEB_BASE_URL: http://localhost:5173
   TCAPLUS_PUBLIC_MAIL_TABLE: PublicMail
   TCAPLUS_PRIVATE_MAIL_TABLE: PrivateMail
   TCAPLUS_PLAYER_MAILBOX_CURSOR_TABLE: PlayerMailboxCursor

@@ -29,13 +29,19 @@ kubectl apply -k deploy/k8s
 
 echo "==> rollout restart"
 kubectl -n "${NAMESPACE}" rollout restart \
-  deploy/coordinator deploy/login deploy/zone-a deploy/zone-b \
-  deploy/gate deploy/friend deploy/info deploy/mail
+  deploy/coordinator deploy/login \
+  deploy/friend deploy/info deploy/mail
+kubectl -n "${NAMESPACE}" rollout restart statefulset/gate
+kubectl -n "${NAMESPACE}" rollout restart statefulset/zone-pool
 
-for d in coordinator login zone-a zone-b gate friend info mail; do
+for d in coordinator login friend info mail; do
   echo "---- wait ${d}"
   kubectl -n "${NAMESPACE}" rollout status "deploy/${d}" --timeout=300s
 done
+echo "---- wait gate"
+kubectl -n "${NAMESPACE}" rollout status statefulset/gate --timeout=300s
+echo "---- wait zone-pool"
+kubectl -n "${NAMESPACE}" rollout status statefulset/zone-pool --timeout=300s
 
 echo "==> pods"
 kubectl -n "${NAMESPACE}" get pods -o wide

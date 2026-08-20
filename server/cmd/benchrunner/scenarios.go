@@ -25,8 +25,12 @@ func runScenario(opts options, concurrency int) (result, []sample, error) {
 		return runConnectHold(opts, concurrency)
 	case "friend_interaction":
 		return runFriendInteraction(opts, concurrency)
+	case "friend_steal":
+		return runFriendSteal(opts, concurrency)
 	case "mail_operations":
 		return runMailOperations(opts, concurrency)
+	case "buy_seeds":
+		return runBuySeeds(opts, concurrency)
 	case "mixed":
 		return runMixed(opts, concurrency)
 	default:
@@ -36,7 +40,7 @@ func runScenario(opts options, concurrency int) (result, []sample, error) {
 
 func validScenario(name string) bool {
 	switch name {
-	case "snapshot", "player_loop", "connect_hold", "friend_interaction", "mail_operations", "mixed":
+	case "snapshot", "player_loop", "connect_hold", "friend_interaction", "friend_steal", "mail_operations", "mixed", "buy_seeds":
 		return true
 	}
 	return false
@@ -511,6 +515,10 @@ func runFriendInteraction(opts options, concurrency int) (result, []sample, erro
 		return result{}, nil, fmt.Errorf("friend_interaction requires even concurrency (got %d)", concurrency)
 	}
 	pairCount := concurrency / 2
+	accountNames, err := accountNamesForRun(opts, concurrency)
+	if err != nil {
+		return result{}, nil, err
+	}
 	pairs := make([]*friendPair, pairCount)
 	limit := opts.connectWorkers
 	if limit <= 0 {
@@ -539,8 +547,8 @@ func runFriendInteraction(opts options, concurrency int) (result, []sample, erro
 				}
 				mu.Unlock()
 			}
-			visitorName := fmt.Sprintf("bench_%s_v%03d", opts.runID, index+1)
-			ownerName := fmt.Sprintf("bench_%s_o%03d", opts.runID, index+1)
+			visitorName := accountNames[index*2]
+			ownerName := accountNames[index*2+1]
 			visitor, err := authenticate(opts, visitorName)
 			if err != nil {
 				fail(fmt.Errorf("authenticate visitor %s: %w", visitorName, err))
@@ -576,26 +584,137 @@ func runFriendInteraction(opts options, concurrency int) (result, []sample, erro
 		return result{}, nil, firstErr
 	}
 	defer closeFriendPairs(pairs)
+	fmt.Printf("friend setup complete: pairs=%d; warmup starting\n", pairCount)
 
-	return runWorkers(opts, concurrency, len(pairs), func(worker int) (time.Duration, error) {
-		return friendVisitStep(pairs[worker])
-	})
+	if opts.warmup > 0 {
+		warmupDeadline := time.Now().Add(opts.warmup)
+		var warmup sync.WaitGroup
+		var warmupMu sync.Mutex
+		var warmupErr error
+		for index := range pairs {
+			warmup.Add(1)
+			go func(index int) {
+				defer warmup.Done()
+				for time.Now().Before(warmupDeadline) {
+					if _, err := friendVisitStep(pairs[index]); err != nil {
+						warmupMu.Lock()
+						if warmupErr == nil {
+							warmupErr = err
+						}
+						warmupMu.Unlock()
+						return
+					}
+				}
+			}(index)
+		}
+		warmup.Wait()
+		if warmupErr != nil {
+			return result{}, nil, fmt.Errorf("friend warmup: %w", warmupErr)
+		}
+	}
+	fmt.Printf("friend warmup complete: measurement starting; duration=%s\n", opts.duration)
+	return runFriendWorkers(opts, concurrency, pairs)
 }
 
-func friendVisitStep(pair *friendPair) (time.Duration, error) {
-	var total time.Duration
+type friendStepLatency struct {
+	enter, heartbeat, exit time.Duration
+}
+
+func (latency friendStepLatency) total() time.Duration {
+	return latency.enter + latency.heartbeat + latency.exit
+}
+
+func friendVisitStep(pair *friendPair) (friendStepLatency, error) {
+	var latency friendStepLatency
 	visitID, enterLat, err := enterFriendFarmTimed(pair.visitor, pair.owner.playerID)
-	total += enterLat
+	latency.enter = enterLat
 	if err != nil {
-		return total, err
+		return latency, err
 	}
 	pair.visitID = visitID
 	hbLat, err := farmHeartbeat(pair.visitor, pair.owner.playerID, visitID)
-	total += hbLat
+	latency.heartbeat = hbLat
 	if err != nil {
-		return total, err
+		return latency, err
 	}
-	return total, nil
+	exitLat, err := exitFriendFarm(pair.visitor, pair.owner.playerID, visitID)
+	latency.exit = exitLat
+	return latency, err
+}
+
+func runFriendWorkers(opts options, concurrency int, pairs []*friendPair) (result, []sample, error) {
+	start := time.Now()
+	deadline := start.Add(opts.duration)
+	var mu sync.Mutex
+	cycles := make([]int64, 0)
+	actions := map[string][]int64{"enter": {}, "heartbeat": {}, "exit": {}}
+	actionErrors := map[string]int64{"enter": 0, "heartbeat": 0, "exit": 0}
+	errorKinds := make(map[string]int64)
+	var successes, failures, dropped int64
+	var workers sync.WaitGroup
+	for index := range pairs {
+		workers.Add(1)
+		go func(index int) {
+			defer workers.Done()
+			for time.Now().Before(deadline) {
+				latency, err := friendVisitStep(pairs[index])
+				mu.Lock()
+				if latency.enter > 0 {
+					actions["enter"] = append(actions["enter"], latency.enter.Microseconds())
+				}
+				if latency.heartbeat > 0 {
+					actions["heartbeat"] = append(actions["heartbeat"], latency.heartbeat.Microseconds())
+				}
+				if latency.exit > 0 {
+					actions["exit"] = append(actions["exit"], latency.exit.Microseconds())
+				}
+				if err != nil {
+					failures++
+					errorKinds[classifyError(err)]++
+					switch {
+					case latency.enter == 0 || (latency.heartbeat == 0 && latency.exit == 0):
+						actionErrors["enter"]++
+					case latency.exit == 0:
+						actionErrors["heartbeat"]++
+					default:
+						actionErrors["exit"]++
+					}
+					mu.Unlock()
+					return
+				}
+				successes++
+				if len(cycles) < opts.maxSamples {
+					cycles = append(cycles, latency.total().Microseconds())
+				} else {
+					dropped++
+				}
+				mu.Unlock()
+			}
+		}(index)
+	}
+	workers.Wait()
+	elapsed := time.Since(start)
+	sortLatencies(cycles)
+	samples := make([]sample, len(cycles))
+	for index, latencyUS := range cycles {
+		samples[index] = sample{Concurrency: concurrency, LatencyUS: latencyUS}
+	}
+	actionResults := make(map[string]actionResult, len(actions))
+	for name, latencies := range actions {
+		sortLatencies(latencies)
+		actionResults[name] = actionResult{
+			SuccessCount: int64(len(latencies)), ErrorCount: actionErrors[name],
+			P50US: percentile(latencies, 50), P95US: percentile(latencies, 95),
+			P99US: percentile(latencies, 99), MaxUS: percentile(latencies, 100),
+		}
+	}
+	return result{
+		Concurrency: concurrency, DurationMS: elapsed.Milliseconds(), SuccessCount: successes,
+		ErrorCount: failures, ErrorKinds: errorKinds, DroppedSampleCount: dropped,
+		QPS:   float64(successes) / elapsed.Seconds(),
+		P50US: percentile(cycles, 50), P95US: percentile(cycles, 95),
+		P99US: percentile(cycles, 99), MaxUS: percentile(cycles, 100), Actions: actionResults,
+	}, samples, nil
 }
 
 func establishFriendship(visitor, owner *benchClient) error {
@@ -624,6 +743,14 @@ func enterFriendFarm(visitor *benchClient, ownerPlayerID uint64) ([]byte, error)
 }
 
 func enterFriendFarmTimed(visitor *benchClient, ownerPlayerID uint64) ([]byte, time.Duration, error) {
+	response, latency, err := enterFriendFarmViewTimed(visitor, ownerPlayerID)
+	if err != nil {
+		return nil, latency, err
+	}
+	return response.GetVisitId(), latency, nil
+}
+
+func enterFriendFarmViewTimed(visitor *benchClient, ownerPlayerID uint64) (*wsv1.EnterFriendFarmResponse, time.Duration, error) {
 	// TargetPlayerId must be the caller (visitor), not the owner.
 	// OwnerPlayerId is passed in the payload.
 	resp, lat, err := visitor.sendRequest(wsv1.Action_ENTER_FRIEND_FARM, visitor.playerID, &wsv1.WsEnvelope_EnterFriendFarmRequest{
@@ -632,12 +759,278 @@ func enterFriendFarmTimed(visitor *benchClient, ownerPlayerID uint64) ([]byte, t
 	if err != nil {
 		return nil, lat, err
 	}
-	return resp.GetEnterFriendFarmResponse().GetVisitId(), lat, nil
+	return resp.GetEnterFriendFarmResponse(), lat, nil
+}
+
+// ============================================================
+// 场景 4B: friend_steal — 有限成功偷菜工作集
+// ============================================================
+
+type stealTarget struct {
+	plotID     uint32
+	cropItemID uint32
+}
+
+type friendStealPair struct {
+	pair    *friendPair
+	version *wsv1.FarmViewVersion
+	targets []stealTarget
+}
+
+func runFriendSteal(opts options, concurrency int) (result, []sample, error) {
+	if concurrency%2 != 0 {
+		return result{}, nil, fmt.Errorf("friend_steal requires even concurrency (got %d)", concurrency)
+	}
+	pairCount := concurrency / 2
+	accountNames, err := accountNamesForRun(opts, concurrency)
+	if err != nil {
+		return result{}, nil, err
+	}
+	pairs := make([]*friendPair, pairCount)
+	ownerStates := make([]*playerLoopState, pairCount)
+	limit := opts.connectWorkers
+	if limit <= 0 {
+		limit = 1
+	}
+	semaphore := make(chan struct{}, limit)
+	var group sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+	for index := 0; index < pairCount; index++ {
+		group.Add(1)
+		go func(index int) {
+			defer group.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			visitor, authErr := authenticate(opts, accountNames[index*2])
+			if authErr != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("authenticate steal visitor %d: %w", index, authErr)
+				}
+				mu.Unlock()
+				return
+			}
+			owner, authErr := authenticate(opts, accountNames[index*2+1])
+			if authErr != nil {
+				_ = visitor.conn.CloseNow()
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("authenticate steal owner %d: %w", index, authErr)
+				}
+				mu.Unlock()
+				return
+			}
+			if authErr = establishFriendship(visitor, owner); authErr == nil {
+				ownerStates[index], authErr = initPlayerLoopState(owner)
+			}
+			if authErr != nil {
+				_ = visitor.conn.CloseNow()
+				_ = owner.conn.CloseNow()
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("initialize steal pair %d: %w", index, authErr)
+				}
+				mu.Unlock()
+				return
+			}
+			pairs[index] = &friendPair{visitor: visitor, owner: owner}
+		}(index)
+	}
+	group.Wait()
+	if firstErr != nil {
+		closeFriendPairs(pairs)
+		return result{}, nil, firstErr
+	}
+	defer closeFriendPairs(pairs)
+
+	fmt.Printf("friend_steal setup: resetting and planting %d owner farms\n", pairCount)
+	if err := prepareStealFarms(ownerStates); err != nil {
+		return result{}, nil, err
+	}
+
+	work := make([]*friendStealPair, pairCount)
+	for index, pair := range pairs {
+		entered, _, enterErr := enterFriendFarmViewTimed(pair.visitor, pair.owner.playerID)
+		if enterErr != nil {
+			return result{}, nil, fmt.Errorf("enter prepared steal farm %d: %w", index, enterErr)
+		}
+		pair.visitID = entered.GetVisitId()
+		farm := entered.GetSnapshot()
+		if farm == nil || farm.GetVersion() == nil || len(farm.GetVersion().GetFarmViewEpoch()) != 16 {
+			return result{}, nil, fmt.Errorf("prepared steal farm %d has no valid public snapshot", index)
+		}
+		state := &friendStealPair{pair: pair, version: farm.GetVersion()}
+		for _, plot := range farm.GetPlots() {
+			if plot.GetCanSteal() {
+				state.targets = append(state.targets, stealTarget{plotID: plot.GetPlotId(), cropItemID: plot.GetCropItemId()})
+			}
+		}
+		if len(state.targets) == 0 {
+			return result{}, nil, fmt.Errorf("prepared steal farm %d has no stealable plots", index)
+		}
+		work[index] = state
+	}
+	fmt.Printf("friend_steal measurement starting: pairs=%d attempts=%d\n", pairCount, countStealTargets(work))
+	return runFriendStealWorkers(concurrency, work, opts.maxSamples)
+}
+
+func prepareStealFarms(states []*playerLoopState) error {
+	var group sync.WaitGroup
+	errCh := make(chan error, len(states))
+	for _, state := range states {
+		group.Add(1)
+		go func(state *playerLoopState) {
+			defer group.Done()
+			if err := resetAndPlantStealFarm(state); err != nil {
+				errCh <- fmt.Errorf("prepare owner %d: %w", state.client.playerID, err)
+			}
+		}(state)
+	}
+	group.Wait()
+	close(errCh)
+	for err := range errCh {
+		return err
+	}
+	deadline := time.Now().Add(states[0].maturityWait)
+	for time.Now().Before(deadline) {
+		ready := 0
+		for _, state := range states {
+			snapshot, _, err := loadSnapshot(state.client)
+			if err != nil {
+				continue
+			}
+			maturePlots := 0
+			growingPlots := 0
+			for _, plot := range snapshot.GetPlots() {
+				switch plot.GetPlotState() {
+				case plotv1.PlotState_MATURE:
+					maturePlots++
+				case plotv1.PlotState_GROWING:
+					growingPlots++
+				}
+			}
+			if maturePlots > 0 && growingPlots == 0 {
+				ready++
+			}
+		}
+		if ready == len(states) {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return errors.New("steal farm preparation timed out before every owner had a mature plot")
+}
+
+func resetAndPlantStealFarm(state *playerLoopState) error {
+	// Free crop inventory before harvesting the previous round.
+	_, _, _ = state.client.sendRequest(wsv1.Action_SELL_CROP, state.client.playerID, &wsv1.WsEnvelope_SellCropRequest{
+		SellCropRequest: &wsv1.SellCropRequest{CropItemId: state.cropItemID, ExpectedPriceVersion: state.sellVersion, Amount: &wsv1.SellCropRequest_SellAll{SellAll: true}},
+	})
+	snapshot, _, err := loadSnapshot(state.client)
+	if err != nil {
+		return err
+	}
+	for _, plot := range snapshot.GetPlots() {
+		if plot.GetPlotState() == plotv1.PlotState_MATURE {
+			_, _, harvestErr := state.client.sendRequest(wsv1.Action_HARVEST, state.client.playerID, &wsv1.WsEnvelope_HarvestRequest{HarvestRequest: &wsv1.HarvestRequest{PlotId: plot.GetPlotId()}})
+			if harvestErr != nil && !isBusinessError(harvestErr) {
+				return harvestErr
+			}
+		}
+	}
+	_, _, _ = state.client.sendRequest(wsv1.Action_SELL_CROP, state.client.playerID, &wsv1.WsEnvelope_SellCropRequest{
+		SellCropRequest: &wsv1.SellCropRequest{CropItemId: state.cropItemID, ExpectedPriceVersion: state.sellVersion, Amount: &wsv1.SellCropRequest_SellAll{SellAll: true}},
+	})
+	snapshot, _, err = loadSnapshot(state.client)
+	if err != nil {
+		return err
+	}
+	for _, plot := range snapshot.GetPlots() {
+		if plot.GetPlotState() == plotv1.PlotState_NEED_CLEANUP {
+			_, _, cleanErr := state.client.sendRequest(wsv1.Action_CLEAN_PLOT, state.client.playerID, &wsv1.WsEnvelope_CleanPlotRequest{CleanPlotRequest: &wsv1.CleanPlotRequest{PlotId: plot.GetPlotId()}})
+			if cleanErr != nil && !isBusinessError(cleanErr) {
+				return cleanErr
+			}
+		}
+	}
+	return plantEmptyPlots(state)
+}
+
+func countStealTargets(work []*friendStealPair) int {
+	total := 0
+	for _, state := range work {
+		total += len(state.targets)
+	}
+	return total
+}
+
+func runFriendStealWorkers(concurrency int, work []*friendStealPair, maxSamples int) (result, []sample, error) {
+	start := time.Now()
+	latencies := make([]int64, 0, countStealTargets(work))
+	errorKinds := make(map[string]int64)
+	var attempts, successes, rejects, failures, dropped int64
+	var mu sync.Mutex
+	var group sync.WaitGroup
+	for _, state := range work {
+		group.Add(1)
+		go func(state *friendStealPair) {
+			defer group.Done()
+			for _, target := range state.targets {
+				_, latency, err := state.pair.visitor.sendRequest(wsv1.Action_STEAL_FRIEND_CROP, state.pair.visitor.playerID, &wsv1.WsEnvelope_StealFriendCropRequest{
+					StealFriendCropRequest: &wsv1.StealFriendCropRequest{
+						OwnerPlayerId: state.pair.owner.playerID, VisitId: state.pair.visitID,
+						PlotId: target.plotID, ExpectedCropItemId: target.cropItemID,
+						FarmViewEpoch: state.version.GetFarmViewEpoch(), FarmViewSeq: state.version.GetFarmViewSeq(),
+					},
+				})
+				mu.Lock()
+				attempts++
+				if err == nil {
+					successes++
+					if len(latencies) < maxSamples {
+						latencies = append(latencies, latency.Microseconds())
+					} else {
+						dropped++
+					}
+				} else if isBusinessError(err) {
+					rejects++
+					errorKinds["business_reject"]++
+				} else {
+					failures++
+					errorKinds[classifyError(err)]++
+				}
+				mu.Unlock()
+			}
+		}(state)
+	}
+	group.Wait()
+	elapsed := time.Since(start)
+	sortLatencies(latencies)
+	samples := make([]sample, len(latencies))
+	for index, latencyUS := range latencies {
+		samples[index] = sample{Concurrency: concurrency, LatencyUS: latencyUS}
+	}
+	return result{
+		Concurrency: concurrency, AttemptCount: attempts, DurationMS: elapsed.Milliseconds(), SuccessCount: successes,
+		ErrorCount: failures, RejectedCount: rejects, ErrorKinds: errorKinds, DroppedSampleCount: dropped,
+		// For friend_steal, QPS is attempted interaction QPS. SuccessCount and
+		// RejectedCount keep successful and business-rejected interactions separate.
+		QPS: float64(attempts) / elapsed.Seconds(), P50US: percentile(latencies, 50),
+		P95US: percentile(latencies, 95), P99US: percentile(latencies, 99), MaxUS: percentile(latencies, 100),
+	}, samples, nil
 }
 
 func farmHeartbeat(visitor *benchClient, ownerPlayerID uint64, visitID []byte) (time.Duration, error) {
 	_, latency, err := visitor.sendRequest(wsv1.Action_FARM_HEARTBEAT, visitor.playerID, &wsv1.WsEnvelope_FarmHeartbeatRequest{
 		FarmHeartbeatRequest: &wsv1.FarmHeartbeatRequest{OwnerPlayerId: ownerPlayerID, VisitId: visitID},
+	})
+	return latency, err
+}
+
+func exitFriendFarm(visitor *benchClient, ownerPlayerID uint64, visitID []byte) (time.Duration, error) {
+	_, latency, err := visitor.sendRequest(wsv1.Action_EXIT_FRIEND_FARM, visitor.playerID, &wsv1.WsEnvelope_ExitFriendFarmRequest{
+		ExitFriendFarmRequest: &wsv1.ExitFriendFarmRequest{OwnerPlayerId: ownerPlayerID, VisitId: visitID},
 	})
 	return latency, err
 }
@@ -659,9 +1052,9 @@ func runMailOperations(opts options, concurrency int) (result, []sample, error) 
 	pairCount := concurrency / 2
 	states := make([]*mailBenchState, pairCount)
 	type prepResult struct {
-		index  int
-		state  *mailBenchState
-		err    error
+		index int
+		state *mailBenchState
+		err   error
 	}
 	results := make(chan prepResult, pairCount)
 	var prepWG sync.WaitGroup
@@ -927,6 +1320,8 @@ func assignPayload(envelope *wsv1.WsEnvelope, payload any) error {
 		envelope.Payload = p
 	case *wsv1.WsEnvelope_FarmHeartbeatRequest:
 		envelope.Payload = p
+	case *wsv1.WsEnvelope_ExitFriendFarmRequest:
+		envelope.Payload = p
 	case *wsv1.WsEnvelope_StealFriendCropRequest:
 		envelope.Payload = p
 	case *wsv1.WsEnvelope_SendFriendGiftRequest:
@@ -950,4 +1345,105 @@ func sortLatencies(latencies []int64) {
 			latencies[j], latencies[j-1] = latencies[j-1], latencies[j]
 		}
 	}
+}
+
+// ============================================================
+// buy_seeds: 登录后购买 3 个胡萝卜种子，测写路径 QPS
+// 包含预热阶段：先发 GET_PLAYER_SNAPSHOT 确保 actor 加载到内存
+// 购买失败（金币不足等业务错误）也算一次成功请求
+// ============================================================
+
+func runBuySeeds(opts options, concurrency int) (result, []sample, error) {
+	clients, err := authenticateAll(opts, benchAccountNames(opts.runID, concurrency))
+	if err != nil {
+		return result{}, nil, err
+	}
+	defer closeClients(clients)
+
+	// 初始化每个 client 的 shop 信息
+	type buySeedsState struct {
+		client       *benchClient
+		shopEntryID  uint32
+		seedItemID   uint32
+		priceVersion uint64
+	}
+	states := make([]*buySeedsState, len(clients))
+	var firstErr error
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for i, client := range clients {
+		wg.Add(1)
+		go func(i int, client *benchClient) {
+			defer wg.Done()
+			state := &buySeedsState{client: client}
+
+			// 预热 1: GET_PLAYER_SNAPSHOT 确保 actor 加载到内存
+			_, _, err := client.sendRequest(wsv1.Action_GET_PLAYER_SNAPSHOT, client.playerID, &wsv1.WsEnvelope_GetPlayerSnapshotRequest{
+				GetPlayerSnapshotRequest: &wsv1.GetPlayerSnapshotRequest{},
+			})
+			if err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("warmup snapshot for player %d: %w", client.playerID, err)
+				}
+				mu.Unlock()
+				return
+			}
+
+			// 预热 2: GET_SHOP 获取商店信息
+			resp, _, err := client.sendRequest(wsv1.Action_GET_SHOP, client.playerID, &wsv1.WsEnvelope_GetShopRequest{
+				GetShopRequest: &wsv1.GetShopRequest{},
+			})
+			if err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("get shop for player %d: %w", client.playerID, err)
+				}
+				mu.Unlock()
+				return
+			}
+			shop := resp.GetGetShopResponse()
+			for _, entry := range shop.GetEntries() {
+				if entry.GetItemId() == 1001 && entry.GetEnabled() {
+					state.shopEntryID = entry.GetShopEntryId()
+					state.seedItemID = entry.GetItemId()
+					state.priceVersion = entry.GetPriceVersion()
+					break
+				}
+			}
+			if state.shopEntryID == 0 {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("no seed shop entry found for player %d", client.playerID)
+				}
+				mu.Unlock()
+				return
+			}
+			states[i] = state
+		}(i, client)
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return result{}, nil, firstErr
+	}
+
+	fmt.Printf("all %d actors warmed up, starting buy_seeds benchmark\n", len(states))
+
+	// 压测循环：每次购买 3 个种子
+	// 业务错误（金币不足等）不计为失败，仍然记录延迟
+	return runWorkers(opts, concurrency, len(states), func(worker int) (time.Duration, error) {
+		state := states[worker]
+		_, lat, err := state.client.sendRequest(wsv1.Action_BUY_SEEDS, state.client.playerID, &wsv1.WsEnvelope_BuySeedsRequest{
+			BuySeedsRequest: &wsv1.BuySeedsRequest{
+				ShopEntryId:          state.shopEntryID,
+				Quantity:             3,
+				ExpectedPriceVersion: state.priceVersion,
+			},
+		})
+		// 业务错误（如金币不足）仍然算一次成功请求，只记录延迟
+		if err != nil && isBusinessError(err) {
+			return lat, nil
+		}
+		return lat, err
+	})
 }

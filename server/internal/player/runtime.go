@@ -267,7 +267,7 @@ func (r *Runtime) markDirty(playerID, checkpointRevision uint64) {
 
 func (r *Runtime) runDirtyFlusher(ctx context.Context) {
 	defer r.wg.Done()
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {

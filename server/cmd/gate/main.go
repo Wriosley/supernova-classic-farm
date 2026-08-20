@@ -146,6 +146,7 @@ func run() error {
 		ClientConfigURL: publicConfigURL,
 		ClientConfigSHA: configSHA,
 		OriginPatterns:  []string{originPattern},
+		SkipAuth:        envBool("GATE_SKIP_AUTH", false),
 	})
 	if err != nil {
 		return err
@@ -252,4 +253,19 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }

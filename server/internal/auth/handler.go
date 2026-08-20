@@ -420,7 +420,7 @@ func (h *Handler) optionalSession(r *http.Request) (string, *Session) {
 func (h *Handler) establishSession(w http.ResponseWriter, raw string, session *Session) {
 	http.SetCookie(w, &http.Cookie{
 		Name: SessionCookieName, Value: raw, Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteStrictMode, Expires: session.AbsoluteExpiresAt,
+		SameSite: http.SameSiteLaxMode, Expires: session.AbsoluteExpiresAt,
 	})
 	token, expires, err := h.store.NewCSRF(session)
 	if err == nil {
@@ -463,19 +463,19 @@ func sessionView(session *Session) *httpv1.SessionView {
 
 func setCSRFCookie(w http.ResponseWriter, token string, expires time.Time) {
 	http.SetCookie(w, &http.Cookie{
-		Name: CSRFCookieName, Value: token, Path: "/", SameSite: http.SameSiteStrictMode, Expires: expires,
+		Name: CSRFCookieName, Value: token, Path: "/", SameSite: http.SameSiteLaxMode, Expires: expires,
 	})
 }
 
 func clearSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: SessionCookieName, Value: "", Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteStrictMode, MaxAge: -1,
+		SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	})
 }
 
 func clearCSRFCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: CSRFCookieName, Value: "", Path: "/", SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: CSRFCookieName, Value: "", Path: "/", SameSite: http.SameSiteLaxMode, MaxAge: -1})
 }
 
 func requestID(w http.ResponseWriter) string { return w.Header().Get("X-Request-ID") }

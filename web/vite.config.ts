@@ -60,12 +60,15 @@ async function fetchProxy(
   headers.set('origin', origin)
   headers.set('accept-encoding', 'identity')
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
   const upstream = await fetch(new URL(request.url || '/', target), {
     method: request.method,
     headers,
     body: await readBody(request),
     redirect: 'manual',
-  })
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout))
   const body = Buffer.from(await upstream.arrayBuffer())
   response.statusCode = upstream.status
   response.statusMessage = upstream.statusText
@@ -137,6 +140,10 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Gate binds and is advertised loopback-only, so a browser on another
         // host reaches it through this proxy instead of dialing it directly.
+          '/v1': {
+        target: loginProxyTarget,
+        changeOrigin: true,
+      },
         '/ws': {
           target: gateProxyTarget,
           ws: true,

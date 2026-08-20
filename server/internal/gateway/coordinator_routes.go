@@ -10,7 +10,7 @@ import (
 
 type CoordinatorRouteSDK interface {
 	ResolveShard(uint32) (routing.RouteEntry, error)
-	Snapshot() routing.Snapshot
+	MapVersion() uint64
 	ForceResync()
 }
 type CoordinatorRouteResolver struct {
@@ -40,8 +40,7 @@ func (r *CoordinatorRouteResolver) Resolve(ctx context.Context, shardID uint32) 
 	if invalid && r.fallback != nil {
 		return r.fallback.Resolve(ctx, shardID)
 	}
-	snapshot := r.sdk.Snapshot()
-	return Route{ShardID: entry.ShardID, OwnerZoneID: entry.OwnerZoneID, OwnerEndpoint: entry.OwnerEndpoint, OwnerEpoch: entry.OwnerEpoch, RouteVersion: entry.RouteVersion, MapVersion: snapshot.MapVersion, LeaseExpiresAt: entry.LeaseExpiresAt}, nil
+	return Route{ShardID: entry.ShardID, OwnerZoneID: entry.OwnerZoneID, OwnerEndpoint: entry.OwnerEndpoint, OwnerEpoch: entry.OwnerEpoch, RouteVersion: entry.RouteVersion, MapVersion: r.sdk.MapVersion(), LeaseExpiresAt: entry.LeaseExpiresAt}, nil
 }
 func (r *CoordinatorRouteResolver) InvalidateIfVersion(shardID uint32, routeVersion uint64) {
 	if shardID >= routing.ShardCount || routeVersion == 0 {

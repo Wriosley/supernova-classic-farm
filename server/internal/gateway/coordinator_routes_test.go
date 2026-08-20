@@ -10,7 +10,7 @@ import (
 
 func TestCoordinatorRouteResolverConvertsAndFallsBackAfterInvalidation(t *testing.T) {
 	entry := routing.RouteEntry{ShardID: 42, OwnerZoneID: "zone-a", OwnerEndpoint: "http://127.0.0.1:8082", OwnerEpoch: 2, RouteVersion: 3, State: routing.RouteStateActive, LeaseExpiresAt: time.Now().Add(time.Minute)}
-	sdk := &fakeCoordinatorSDK{entry: entry, snapshot: routing.Snapshot{MapVersion: 9}}
+	sdk := &fakeCoordinatorSDK{entry: entry, mapVersion: 9}
 	fallback := routeFunc(func(context.Context, uint32) (Route, error) {
 		return Route{ShardID: 42, OwnerZoneID: "zone-b", OwnerEndpoint: "http://127.0.0.1:8084", OwnerEpoch: 3, RouteVersion: 4, MapVersion: 10, LeaseExpiresAt: time.Now().Add(time.Minute)}, nil
 	})
@@ -30,11 +30,11 @@ func TestCoordinatorRouteResolverConvertsAndFallsBackAfterInvalidation(t *testin
 }
 
 type fakeCoordinatorSDK struct {
-	entry    routing.RouteEntry
-	snapshot routing.Snapshot
-	resyncs  int
+	entry      routing.RouteEntry
+	mapVersion uint64
+	resyncs    int
 }
 
 func (f *fakeCoordinatorSDK) ResolveShard(uint32) (routing.RouteEntry, error) { return f.entry, nil }
-func (f *fakeCoordinatorSDK) Snapshot() routing.Snapshot                      { return f.snapshot }
+func (f *fakeCoordinatorSDK) MapVersion() uint64                              { return f.mapVersion }
 func (f *fakeCoordinatorSDK) ForceResync()                                    { f.resyncs++ }

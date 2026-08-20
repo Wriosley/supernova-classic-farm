@@ -156,6 +156,14 @@ func (c *routeCache) getSnapshot() routing.Snapshot {
 	return copy
 }
 
+func (c *routeCache) mapVersion() uint64 {
+	current := c.snapshot.Load()
+	if current == nil {
+		return 0
+	}
+	return current.MapVersion
+}
+
 func (c *routeCache) effectiveSnapshot() routing.Snapshot {
 	snapshot := c.getSnapshot()
 	expiry := time.UnixMilli(c.freshUntil.Load()).UTC()
