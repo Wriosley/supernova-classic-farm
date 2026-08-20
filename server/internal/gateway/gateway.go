@@ -266,7 +266,7 @@ func (h *Handler) serveConnection(parent context.Context, conn *websocket.Conn) 
 			_ = conn.Close(websocket.StatusCode(4406), "unsupported protocol version")
 			break
 		}
-		if err := validateRequestTuple(request); errors.Is(err, errUnknownAction) {
+		if err := validateRequestTupleForAuthMode(request, h.skipAuth); errors.Is(err, errUnknownAction) {
 			if !authenticated {
 				_ = conn.Close(websocket.StatusCode(4401), "AUTH must be first non-heartbeat request")
 				break
@@ -342,6 +342,10 @@ func (h *Handler) serveConnection(parent context.Context, conn *websocket.Conn) 
 }
 
 func validateRequestTuple(request *wsv1.WsEnvelope) error {
+	return validateRequestTupleForAuthMode(request, false)
+}
+
+func validateRequestTupleForAuthMode(request *wsv1.WsEnvelope, skipAuth bool) error {
 	if request.MessageKind != wsv1.MessageKind_REQUEST || request.RequestId == "" ||
 		request.StateVersion != nil || request.Error != nil || request.Replayed ||
 		request.ServerTimeMs != 0 {
@@ -349,8 +353,9 @@ func validateRequestTuple(request *wsv1.WsEnvelope) error {
 	}
 	switch request.Action {
 	case wsv1.Action_AUTH:
-		if request.TargetPlayerId != 0 || request.GetAuthRequest() == nil ||
-			request.GetAuthRequest().GetWsTicket() == "" {
+		if request.GetAuthRequest() == nil ||
+			(!skipAuth && (request.TargetPlayerId != 0 || request.GetAuthRequest().GetWsTicket() == "")) ||
+			(skipAuth && request.TargetPlayerId == 0) {
 			return errors.New("invalid AUTH")
 		}
 	case wsv1.Action_PING:

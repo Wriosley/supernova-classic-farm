@@ -50,6 +50,7 @@ const (
 
 type options struct {
 	scenario        string
+	authMode        string // login | gate-skip
 	loginURL        string
 	loginURLs       []string
 	gateURL         string
@@ -68,6 +69,7 @@ type options struct {
 	maxSamples      int
 	accountFile     string
 	identityOutput  string
+	playerIDs       map[string]uint64
 }
 
 type sample struct {
@@ -209,6 +211,7 @@ func main() {
 
 func parseOptions() options {
 	scenario := flag.String("scenario", "snapshot", "benchmark scenario")
+	authMode := flag.String("auth-mode", "login", "authentication mode: login or gate-skip (load test only)")
 	loginURL := flag.String("login-url", defaultLoginURL, "LoginSvr base URL, or comma-separated sticky per-user URLs")
 	gateURL := flag.String("gate-url", "", "override Gate WebSocket URL, or comma-separated sticky per-user URLs (empty = use bootstrap response)")
 	origin := flag.String("origin", defaultOrigin, "H5 Origin header")
@@ -263,6 +266,24 @@ func parseOptions() options {
 			exitf("open mode requires -target-qps (e.g. -target-qps 2000,4000,6000)")
 		}
 	}
+	normalizedAuthMode := strings.ToLower(strings.TrimSpace(*authMode))
+	if normalizedAuthMode != "login" && normalizedAuthMode != "gate-skip" {
+		exitf("unsupported -auth-mode %q; valid: login, gate-skip", *authMode)
+	}
+	var playerIDs map[string]uint64
+	if normalizedAuthMode == "gate-skip" {
+		if *accountFile == "" {
+			exitf("-auth-mode gate-skip requires -account-file with account_name,player_id")
+		}
+		if strings.TrimSpace(*gateURL) == "" {
+			exitf("-auth-mode gate-skip requires an explicit -gate-url")
+		}
+		var identityErr error
+		playerIDs, identityErr = readPlayerIDs(*accountFile)
+		if identityErr != nil {
+			exitf("read gate-skip identities: %v", identityErr)
+		}
+	}
 	if *warmup < 0 || *duration <= 0 || *timeout <= 0 || *maxSamples <= 0 {
 		exitf("warmup must be >= 0; duration, timeout and max-samples must be positive")
 	}
@@ -293,13 +314,44 @@ func parseOptions() options {
 		primaryGateURL = gateURLs[0]
 	}
 	return options{
-		scenario: *scenario, loginURL: loginURLs[0], loginURLs: loginURLs,
+		scenario: *scenario, authMode: normalizedAuthMode, loginURL: loginURLs[0], loginURLs: loginURLs,
 		gateURL: primaryGateURL, gateURLs: gateURLs, origin: *origin,
 		mode: normalizedMode, concurrencies: values, targetQPSs: rates, connectWorkers: *connectWorkers,
 		warmup: *warmup, duration: *duration, timeout: *timeout, pingInterval: *pingInterval,
 		runID: *runID, outputDirectory: resolvedOutput, maxSamples: *maxSamples,
-		accountFile: *accountFile, identityOutput: *identityOutput,
+		accountFile: *accountFile, identityOutput: *identityOutput, playerIDs: playerIDs,
 	}
+}
+
+func readPlayerIDs(path string) (map[string]uint64, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	rows, err := csv.NewReader(file).ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("parse CSV: %w", err)
+	}
+	if len(rows) < 2 || len(rows[0]) < 2 || strings.TrimSpace(rows[0][0]) != "account_name" || strings.TrimSpace(rows[0][1]) != "player_id" {
+		return nil, errors.New("CSV must start with account_name,player_id")
+	}
+	identities := make(map[string]uint64, len(rows)-1)
+	for index, row := range rows[1:] {
+		if len(row) < 2 {
+			return nil, fmt.Errorf("line %d must contain account_name,player_id", index+2)
+		}
+		name := strings.TrimSpace(row[0])
+		playerID, parseErr := strconv.ParseUint(strings.TrimSpace(row[1]), 10, 64)
+		if !ValidateBenchmarkAccountName(name) || parseErr != nil || playerID == 0 {
+			return nil, fmt.Errorf("line %d has invalid account_name or player_id", index+2)
+		}
+		if _, exists := identities[name]; exists {
+			return nil, fmt.Errorf("duplicate account %q", name)
+		}
+		identities[name] = playerID
+	}
+	return identities, nil
 }
 
 func benchAccountNames(runID string, count int) []string {
@@ -622,6 +674,26 @@ func authenticate(opts options, accountName string) (*benchClient, error) {
 	if len(opts.gateURLs) > 0 {
 		opts.gateURL = selectLoginURL(opts.gateURLs, accountName)
 	}
+	if opts.authMode == "gate-skip" {
+		playerID := opts.playerIDs[accountName]
+		if playerID == 0 {
+			return nil, fmt.Errorf("account %q has no player_id in -account-file", accountName)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
+		defer cancel()
+		conn, _, err := websocket.Dial(ctx, opts.gateURL, &websocket.DialOptions{
+			HTTPHeader: http.Header{"Origin": []string{opts.origin}},
+		})
+		if err != nil {
+			return nil, err
+		}
+		client := &benchClient{accountName: accountName, playerID: playerID, conn: conn, timeout: opts.timeout}
+		if err := client.auth(""); err != nil {
+			_ = conn.CloseNow()
+			return nil, err
+		}
+		return client, nil
+	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
@@ -741,9 +813,14 @@ func selectLoginURL(urls []string, accountName string) string {
 
 func (c *benchClient) auth(ticket string) error {
 	requestID := newUUID()
+	targetPlayerID := uint64(0)
+	if ticket == "" {
+		targetPlayerID = c.playerID
+	}
 	if err := c.write(&wsv1.WsEnvelope{
 		ProtocolVersion: 1, MessageKind: wsv1.MessageKind_REQUEST, Action: wsv1.Action_AUTH,
-		RequestId: requestID, Payload: &wsv1.WsEnvelope_AuthRequest{AuthRequest: &wsv1.AuthRequest{WsTicket: ticket}},
+		RequestId: requestID, TargetPlayerId: targetPlayerID,
+		Payload: &wsv1.WsEnvelope_AuthRequest{AuthRequest: &wsv1.AuthRequest{WsTicket: ticket}},
 	}); err != nil {
 		return err
 	}
@@ -955,7 +1032,7 @@ func percentile(sorted []int64, percent int) int64 {
 
 func parameterMap(opts options) map[string]string {
 	params := map[string]string{
-		"mode": opts.mode, "login_url": strings.Join(opts.loginURLs, ","), "gate_url": strings.Join(opts.gateURLs, ","), "origin": opts.origin,
+		"mode": opts.mode, "auth_mode": opts.authMode, "login_url": strings.Join(opts.loginURLs, ","), "gate_url": strings.Join(opts.gateURLs, ","), "origin": opts.origin,
 		"concurrency": joinInts(opts.concurrencies),
 		"warmup":      opts.warmup.String(), "duration": opts.duration.String(), "timeout": opts.timeout.String(),
 		"ping_interval": opts.pingInterval.String(), "max_samples": strconv.Itoa(opts.maxSamples),

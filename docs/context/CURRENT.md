@@ -20,6 +20,15 @@ Do not resume V1 or V2 as the implementation target. Do not read every ADR as if
 
 ## Snapshot at handoff
 
+- 2026-08-20 新一轮容量模型已完成离线工具改造：benchrunner 新增
+  `-auth-mode gate-skip`，可从 `account_name,player_id` cohort 直接连接 Gate，
+  跳过 Login/CSRF/Session/Ticket；Gate 仅在 `GATE_SKIP_AUTH=true` 时接受
+  `TargetPlayerId` 压测 AUTH，默认 ticket 校验保持不变。`connect_hold` 改为每个
+  已建连接只执行一次 snapshot，随后仅保持连接和 PING，避免重复 snapshot QPS
+  失真。3 Gate 下有效单 Zone hotspot 与三 Zone spread 的对照计划见
+  `../plans/2026-08-20-zone-scalability-loadtest.md`。全量 Go 测试和 benchrunner
+  构建通过；尚未部署新 Gate/benchrunner，也未执行正式 1/3 Zone 对照。
+
 - 2026-08-19 三 Gate spread snapshot 短校准完成。benchrunner 支持逗号分隔 Gate
   URL 并按账号固定哈希；三个 loadtest-only NodePort 分别直达 gate-0/1/2，同窗
   10k profile 的 30 秒 CPU 为 18.50/21.56/19.84 秒，证明分流均匀。spread-800

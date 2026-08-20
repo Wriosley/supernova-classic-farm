@@ -472,25 +472,83 @@ func playerLoopStep(state *playerLoopState) (time.Duration, error) {
 // ============================================================
 
 func runConnectHold(opts options, concurrency int) (result, []sample, error) {
-	clients, err := authenticateAll(opts, benchAccountNames(opts.runID, concurrency))
+	names, err := accountNamesForRun(opts, concurrency)
+	if err != nil {
+		return result{}, nil, err
+	}
+	clients, err := authenticateAll(opts, names)
 	if err != nil {
 		return result{}, nil, err
 	}
 	defer closeClients(clients)
 
+	// Measure exactly one representative request per established player. The
+	// following hold window measures connection/heartbeat stability and does
+	// not inflate the reported business QPS with repeated snapshots.
+	start := time.Now()
+	var mu sync.Mutex
+	latencies := make([]int64, 0, len(clients))
+	samples := make([]sample, 0, len(clients))
+	var successes, failures int64
+	errorKinds := make(map[string]int64)
+	var wg sync.WaitGroup
+	for _, client := range clients {
+		wg.Add(1)
+		go func(client *benchClient) {
+			defer wg.Done()
+			_, latency, requestErr := loadSnapshot(client)
+			mu.Lock()
+			defer mu.Unlock()
+			if requestErr != nil {
+				failures++
+				errorKinds[classifyError(requestErr)]++
+				return
+			}
+			successes++
+			us := latency.Microseconds()
+			latencies = append(latencies, us)
+			samples = append(samples, sample{Concurrency: concurrency, LatencyUS: us})
+		}(client)
+	}
+	wg.Wait()
+	requestElapsed := time.Since(start)
+
 	pingInterval := opts.pingInterval
 	if pingInterval <= 0 {
 		pingInterval = 30 * time.Second
 	}
-	return runWorkers(opts, concurrency, len(clients), func(worker int) (time.Duration, error) {
-		latency, err := clients[worker].ping(uint64(time.Now().UnixNano()))
-		if err != nil {
-			return latency, err
+	holdDeadline := time.Now().Add(opts.duration)
+	for time.Now().Before(holdDeadline) {
+		wait := time.Until(holdDeadline)
+		if wait > pingInterval {
+			wait = pingInterval
 		}
-		wait := pingInterval
 		time.Sleep(wait)
-		return latency, nil
-	})
+		if time.Now().After(holdDeadline) {
+			break
+		}
+		var pingWG sync.WaitGroup
+		for _, client := range clients {
+			pingWG.Add(1)
+			go func(client *benchClient) {
+				defer pingWG.Done()
+				if _, pingErr := client.ping(uint64(time.Now().UnixNano())); pingErr != nil {
+					mu.Lock()
+					failures++
+					errorKinds["hold_"+classifyError(pingErr)]++
+					mu.Unlock()
+				}
+			}(client)
+		}
+		pingWG.Wait()
+	}
+	sortLatencies(latencies)
+	return result{
+		Concurrency: concurrency, DurationMS: requestElapsed.Milliseconds(), SuccessCount: successes,
+		ErrorCount: failures, ErrorKinds: errorKinds, QPS: float64(successes) / requestElapsed.Seconds(),
+		P50US: percentile(latencies, 50), P95US: percentile(latencies, 95),
+		P99US: percentile(latencies, 99), MaxUS: percentile(latencies, 100),
+	}, samples, nil
 }
 
 func (c *benchClient) ping(pingID uint64) (time.Duration, error) {

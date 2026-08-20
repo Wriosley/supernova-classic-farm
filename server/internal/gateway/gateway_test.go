@@ -25,6 +25,25 @@ func (f ticketFunc) Consume(ctx context.Context, ticket string) (uint64, error) 
 	return f(ctx, ticket)
 }
 
+func TestValidateRequestTupleAllowsTargetPlayerOnlyInSkipAuthMode(t *testing.T) {
+	request := &wsv1.WsEnvelope{
+		ProtocolVersion: 1,
+		MessageKind:     wsv1.MessageKind_REQUEST,
+		Action:          wsv1.Action_AUTH,
+		RequestId:       "loadtest-auth",
+		TargetPlayerId:  42,
+		Payload: &wsv1.WsEnvelope_AuthRequest{
+			AuthRequest: &wsv1.AuthRequest{},
+		},
+	}
+	if err := validateRequestTupleForAuthMode(request, true); err != nil {
+		t.Fatalf("skip-auth request rejected: %v", err)
+	}
+	if err := validateRequestTuple(request); err == nil {
+		t.Fatal("production validation accepted target-player AUTH without ticket")
+	}
+}
+
 type routeFunc func(context.Context, uint32) (Route, error)
 
 func (f routeFunc) Resolve(ctx context.Context, shard uint32) (Route, error) {

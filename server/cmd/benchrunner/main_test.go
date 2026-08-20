@@ -24,6 +24,20 @@ func TestAccountNamesForRunReadsCSV(t *testing.T) {
 	}
 }
 
+func TestReadPlayerIDsForGateSkip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "accounts.csv")
+	if err := os.WriteFile(path, []byte("account_name,player_id,shard_id\nbench_a,42,41\nbench_b,99,98\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := readPlayerIDs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if identities["bench_a"] != 42 || identities["bench_b"] != 99 {
+		t.Fatalf("identities = %v", identities)
+	}
+}
+
 func TestAccountNamesForRunRejectsTooFewAccountsForPool(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "accounts.csv")
 	if err := os.WriteFile(path, []byte("account_name,player_id\nonly_one,1\n"), 0o600); err != nil {
