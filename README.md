@@ -29,7 +29,6 @@ web/           Vue 3 H5客户端
 deploy/        Kubernetes、kind和本地依赖配置
 tests/         跨模块和端到端测试
 docs/          当前交付文档、证据和历史归档
-yace/          压测原始结果、监控采样和profiling材料
 ```
 
 ## 快速启动

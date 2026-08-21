@@ -15,6 +15,11 @@ web/dist/
 
 # Local benchmark outputs
 benchmark/results/
+yace/
+.tmp/
+server/gate
+result/chart*.png
+result/pprof-*/
 
 # Local test platform
 tests/platform/web/node_modules/
