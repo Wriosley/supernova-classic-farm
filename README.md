@@ -8,6 +8,8 @@ Classic Farm 是一个使用 Go 后端和 Vue 3 H5 实现的经典农场游戏�
 普通状态异步写回 Tcaplus；Coordinator 管理4096个逻辑Shard、lease、epoch和
 动态迁移；Gate使用本地路由快照把WebSocket命令转发到当前Owner Zone。
 
+项目视频展示：[农场游戏展示备份](https://www.bilibili.com/video/BV1bU8T6mE41/?share_source=copy_web&vd_source=cd107d1d2700f531f354277cf09bc86e)
+
 ## 文档入口
 
 - [最终交付文档](docs/delivery/README.md)：负责人、评审和答辩的推荐入口；
