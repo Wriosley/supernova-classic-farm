@@ -5,7 +5,7 @@ updated: 2026-07-30
 owners:
   - project-owner
 supersedes:
-  - stateful-zone-v2-architecture.md
+  - ../archive/architecture-v1-v2/stateful-zone-v2-architecture.md
 related:
   - ../decisions/ADR-0003-stateful-player-actor-zone.md
   - ../decisions/ADR-0006-async-dirty-writeback.md
@@ -23,7 +23,7 @@ V3 保留 Player Actor、逻辑 Shard、唯一 Active Owner、租约和 epoch fe
 ```text
 V1：无状态 Zone，每条命令依赖数据库事务
 → V2：Player Actor，响应前提交 Journal
-→ V3：Player Actor，先修改内存并响应，后台批量写 MySQL
+→ V3：Player Actor，先修改内存并响应，后台批量写 Tcaplus Checkpoint
 ```
 
 V3 明确接受：Zone 异常退出时，最近尚未落库的普通游戏状态可能回退。正常停机、Actor 回收和可控迁移必须先刷完 Dirty。
@@ -44,8 +44,8 @@ flowchart LR
     R["Shard Router<br/>缓存 committed ShardMap"]
     CO["Coordinator Cluster<br/>Placement、多数派授权、租约"]
     Z["ZoneSvr<br/>Player Actor、Dirty Queue"]
-    CFG["ConfigSvr<br/>完整版本化配置"]
-    DB["MySQL Shards<br/>玩家检查点、幂等窗口、Outbox"]
+    CFG["版本化业务配置<br/>随Zone发布"]
+    DB["Tcaplus<br/>Checkpoint、Fence、路由、Outbox"]
     E["Event Bus"]
     ASYNC["Friend / Mail / 跨玩家消费者"]
 
@@ -71,7 +71,7 @@ Client WebSocket
 → Player Actor Mailbox 串行执行
 → 修改内存、player_seq++、保存幂等结果和 Outbox
 → 标记 Dirty 并响应
-→ Flusher 后台批量写 MySQL
+→ Flusher 后台批量写 Tcaplus
 ```
 
 ## 3. 模块边界
@@ -84,8 +84,8 @@ Client WebSocket
 | Placement Planner | 根据哈希、负载和故障域提出候选 Zone |
 | Coordinator | 多数派提交 ShardMap、Owner 租约、`owner_epoch` 和迁移状态 |
 | ZoneSvr | Player Actor、命令串行、配置快照、Dirty Queue、批量写回 |
-| ConfigSvr | 全服配置权威，向 Zone 发布完整版本化快照 |
-| MySQL Shards | 最近持久化玩家检查点、fence、幂等窗口和 Outbox |
+| 版本化业务配置 | 当前随Zone发布；生产目标可由独立配置服务发布完整版本快照 |
+| Tcaplus | 最近持久化玩家Checkpoint、Fence、路由、幂等窗口和Outbox |
 | Event Bus | 承载邮件、好友和跨玩家异步副作用，不作为玩家恢复 Journal |
 
 ## 4. 登录与连接
@@ -129,13 +129,13 @@ Placement 提出候选
 → 多数派提交 PREPARING(epoch=N+1)
 → 旧 Owner 停止接收新命令
 → 正常迁移时刷完 Dirty；故障时等待旧租约过期
-→ CAS 更新 MySQL shard_fence
+→ CAS 更新 Tcaplus ShardFence
 → 新 Owner 加载最近玩家检查点并 Ready
 → 多数派提交 ACTIVE
 → GateSvr 获得新路由
 ```
 
-MySQL fence 无法更新时，不激活新 Owner，优先避免双写。旧 epoch 的请求和 Dirty 写入必须被拒绝。
+Tcaplus Fence 无法更新时，不激活新 Owner，优先避免双写。旧 epoch 的请求和 Dirty 写入必须被拒绝。
 
 ## 6. Player Actor
 
@@ -171,9 +171,9 @@ Validate current state
 
 第一条业务纵向闭环见 [单玩家业务架构](single-player-vertical-loop-business-architecture.md)。
 
-## 7. ConfigSvr 与命令配置快照
+## 7. 版本化业务配置
 
-- ConfigSvr 是全服配置权威；
+- 当前原型将版本化业务配置随Zone发布；生产目标可由独立ConfigSvr作为全服配置权威；
 - Zone 缓存带 `config_version` 的完整快照；
 - Zone 原子替换整份快照；
 - 一条命令开始时固定一个配置快照，执行过程中不得混用版本；
@@ -225,7 +225,7 @@ Flusher 复制 `checkpoint_revision=R` 的待保存快照：
 
 ### 9.1 Zone 异常退出
 
-新 Owner 只加载 MySQL 最近检查点，不重放 Journal。未落库状态允许回退。客户端看到更高 `owner_epoch` 后，必须用完整权威快照替换本地视图。
+新 Owner 只加载 Tcaplus 最近Checkpoint，不重放Journal。未落库状态允许回退。客户端看到更高 `owner_epoch` 后，必须用完整权威快照替换本地视图。
 
 ### 9.2 Actor 回收
 
@@ -276,7 +276,7 @@ Dirty Actor 必须先刷盘成功；失败则继续驻留并重试。
 - 后续推送携带连续版本；
 - 版本缺口触发补发或完整重同步；
 - Owner epoch 变化强制完整快照；
-- MySQL 不是在线实时事实。
+- Tcaplus Checkpoint不是在线实时事实；活跃Actor内存才是当前在线权威状态。
 
 ## 12. 规划值与验证边界
 

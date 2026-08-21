@@ -44,6 +44,21 @@ func TestValidateRequestTupleAllowsTargetPlayerOnlyInSkipAuthMode(t *testing.T) 
 	}
 }
 
+func TestNewHandlerCarriesLoadTestConnectionSyncBypass(t *testing.T) {
+	handler, err := NewHandler(Config{
+		Tickets:            ticketFunc(func(context.Context, string) (uint64, error) { return 1, nil }),
+		Routes:             routeFunc(func(context.Context, uint32) (Route, error) { return Route{}, nil }),
+		Zone:               zoneFunc(func(context.Context, Route, uint64, []byte) ([]byte, error) { return nil, nil }),
+		SkipConnectionSync: true,
+	})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+	if !handler.skipConnectionSync {
+		t.Fatal("load-test connection sync bypass was not carried into handler")
+	}
+}
+
 type routeFunc func(context.Context, uint32) (Route, error)
 
 func (f routeFunc) Resolve(ctx context.Context, shard uint32) (Route, error) {

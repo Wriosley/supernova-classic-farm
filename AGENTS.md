@@ -32,8 +32,8 @@ Do not treat chat history, `ai-context`, UC backend notes, or pre-opening predic
 - The accepted production target is stateful Player Actor Zone V3 in `docs/architecture/stateful-zone-v3-architecture.md`, with ADR-0003, ADR-0006, ADR-0008, and ADR-0009.
 - The accepted first-slice business rules are in `docs/architecture/single-player-vertical-loop-business-architecture.md`.
 - First-stage HTTP, Protobuf WebSocket, idempotency/error, logical data-model and minimum reward-mail event contracts are frozen under `docs/contracts/`; Chinese reading copies use the `.zh-CN.md` suffix.
-- The immediate 2026-08-02 milestone and its itemized status are authoritative in `docs/context/CURRENT.md`. The next task is the bounded implementation plan, followed by the smallest Go + Vue 3 authenticated command path.
-- Keep business code modular, but make the local prototype exercise the smallest V3 path: WebSocket routing, Actor serialization, in-Actor task progress, Dirty batching, MySQL recovery, a single-node Coordinator-compatible control plane, leases, and epoch rejection.
+- The final implemented capability, deployment baseline, measured performance and remaining limitations are authoritative in `docs/context/CURRENT.md`.
+- Keep business code modular. The local prototype exercises WebSocket routing, Actor serialization, in-Actor task progress, Dirty batching, Tcaplus recovery, a single-node Coordinator-compatible control plane, dynamic Zone discovery, leases, migration and epoch rejection.
 - The current technical baseline is Go for the backend and a minimal Vue 3 H5 client.
 - The final demonstration only needs to run locally; it validates mechanisms and measured single-instance baselines, not an actual 30-million-DAU deployment.
 
@@ -60,9 +60,9 @@ For each task:
 - `docs/modules/`: business ownership, capabilities, invariants, and module flows.
 - `docs/contracts/`: precise implementation-facing HTTP, WebSocket, event, data, error, and idempotency rules.
 - `docs/decisions/`: significant decisions and tradeoffs.
-- `docs/plans/`: execution plans.
+- `docs/archive/development/plans/`: execution plans.
 - `docs/evidence/`: reproducible tests, measurements, and result summaries.
-- `docs/ai-workflow/`: concise AI work records suitable for the defense.
+- `docs/archive/development/ai-workflow/`: concise AI work records suitable for the defense.
 
 Do not copy full chat transcripts into project documentation. Record only decisions, reasoning changes, evidence, unresolved questions, and links or IDs needed for traceability.
 

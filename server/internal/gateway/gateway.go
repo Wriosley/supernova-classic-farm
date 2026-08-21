@@ -79,27 +79,33 @@ type Config struct {
 	// caller is taken directly from the AUTH request's TargetPlayerId and no
 	// login round-trip happens. MUST stay false in production.
 	SkipAuth bool
+	// SkipConnectionSync bypasses Zone connection register/refresh/unregister
+	// calls for load tests that isolate the core Gate -> Zone command path.
+	// MUST stay false in production because online presence and push routing rely
+	// on the connection lifecycle records.
+	SkipConnectionSync bool
 }
 
 type Handler struct {
-	tickets           TicketConsumer
-	routes            RouteResolver
-	zone              ZoneCommander
-	visitor           VisitorZoneClient
-	friends           FriendClient
-	mail              MailClient
-	connections       PlayerConnectionClient
-	gatewayID         string
-	authTimeout       time.Duration
-	commandTimeout    time.Duration
-	heartbeatInterval time.Duration
-	clientConfigURL   string
-	clientConfigSHA   []byte
-	originPatterns    []string
-	now               func() time.Time
-	skipAuth          bool
-	pushHub           *PushHub
-	failureStats      *commandFailureStats
+	tickets            TicketConsumer
+	routes             RouteResolver
+	zone               ZoneCommander
+	visitor            VisitorZoneClient
+	friends            FriendClient
+	mail               MailClient
+	connections        PlayerConnectionClient
+	gatewayID          string
+	authTimeout        time.Duration
+	commandTimeout     time.Duration
+	heartbeatInterval  time.Duration
+	clientConfigURL    string
+	clientConfigSHA    []byte
+	originPatterns     []string
+	now                func() time.Time
+	skipAuth           bool
+	skipConnectionSync bool
+	pushHub            *PushHub
+	failureStats       *commandFailureStats
 }
 
 type commandFailureStats struct {
@@ -152,13 +158,14 @@ func NewHandler(cfg Config) (*Handler, error) {
 		visitor: cfg.Visitor, friends: cfg.Friends, mail: cfg.Mail, connections: cfg.Connections,
 		gatewayID:   cfg.GatewayID,
 		authTimeout: cfg.AuthTimeout, commandTimeout: cfg.CommandTimeout,
-		heartbeatInterval: cfg.HeartbeatInterval,
-		clientConfigURL:   cfg.ClientConfigURL,
-		clientConfigSHA:   append([]byte(nil), cfg.ClientConfigSHA...),
-		originPatterns:    append([]string(nil), cfg.OriginPatterns...),
-		now:               cfg.Now,
-		skipAuth:          cfg.SkipAuth,
-		pushHub:           newPushHub(),
+		heartbeatInterval:  cfg.HeartbeatInterval,
+		clientConfigURL:    cfg.ClientConfigURL,
+		clientConfigSHA:    append([]byte(nil), cfg.ClientConfigSHA...),
+		originPatterns:     append([]string(nil), cfg.OriginPatterns...),
+		now:                cfg.Now,
+		skipAuth:           cfg.SkipAuth,
+		skipConnectionSync: cfg.SkipConnectionSync,
+		pushHub:            newPushHub(),
 		failureStats: &commandFailureStats{
 			counts: make(map[string]uint64), lastErrors: make(map[string]string),
 		},
@@ -316,10 +323,12 @@ func (h *Handler) serveConnection(parent context.Context, conn *websocket.Conn) 
 			authenticated = true
 			subscription = h.pushHub.subscribe(playerID, writer, ctx)
 			authTimer.Stop()
-			if id, idErr := newConnectionID(); idErr == nil {
-				connectionID = id
-				h.syncPlayerConnection(ctx, caller, connectionID, "register")
-				stopConnectionRefresh = h.startConnectionRefresh(ctx, caller, connectionID)
+			if !h.skipConnectionSync {
+				if id, idErr := newConnectionID(); idErr == nil {
+					connectionID = id
+					h.syncPlayerConnection(ctx, caller, connectionID, "register")
+					stopConnectionRefresh = h.startConnectionRefresh(ctx, caller, connectionID)
+				}
 			}
 			if writer.write(ctx, marshalResponse(h.authResponse(request, playerID))) != nil {
 				break

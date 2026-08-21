@@ -1,0 +1,281 @@
+# Supernova Classic Farm
+
+经典农场小游戏：个人完成的超新星后台课题。
+
+## 项目介绍
+
+Supernova Classic Farm 是一个使用 Go 后端和 Vue 3 H5 客户端实现的经典农场
+游戏原型，覆盖登录认证、农场种植/成熟/收获、商店与仓库、任务奖励、好友农场
+访问及好友交互等核心链路。
+
+系统采用 Stateful Player Actor + Zone 架构：同一玩家的命令在 Actor 内串行执行，
+Coordinator 管理 4096 个逻辑 Shard，Gate 根据版本化路由快照转发请求，Zone 使用
+Tcaplus 保存账号、Session、Checkpoint、Fence、迁移和 Outbox 数据。跨 Zone 好友
+访问和偷菜链路通过内部 gRPC/HMAC 及 Owner epoch fencing 保证路由和所有权安全。
+
+Kubernetes 部署使用 `zone-pool` StatefulSet 和 Coordinator Kubernetes discovery：
+Zone Pod 以动态身份加入池，Coordinator 根据健康状态和路由版本分配 Shard，扩容时
+增加 `zone-pool` 副本即可，不依赖固定的 `zone-a`/`zone-b` 服务名。
+
+## 文档入口
+
+- `docs/delivery/README.md`：负责人、评审和最终答辩的精简阅读入口。
+- `AGENTS.md`：所有 AI 和开发者共同遵守的工作规则。
+- `docs/README.md`：文档地图、阅读顺序和事实来源规则。
+- `docs/context/PROJECT.md`：稳定的项目目标、边界与事实。
+- `docs/context/CURRENT.md`：当前进度、问题和下一步。
+- `docs/architecture/`：系统总览与跨模块设计。
+- `docs/modules/`：业务模块所有权、能力和不变量。
+- `docs/contracts/`：HTTP、WebSocket、事件、数据和幂等契约。
+- `docs/decisions/`：架构决策记录。
+- `docs/archive/development/plans/`：内部开放问题看板和实施计划，不属于最终交付阅读路线。
+- `docs/evidence/`：测试、压测和故障实验证据。
+- `docs/archive/`：旧架构及非交付历史资料。
+
+## 项目目录
+
+- `server/`：Go 后端。
+- `web/`：Vue H5 客户端。
+- `tests/`：跨模块和端到端测试。
+- `loadtest/`：压测脚本与负载模型。
+- `deploy/`：本地部署及后续演进配置。
+
+## 本地启动
+
+### Linux 本地后端
+
+首次启动先创建本地配置并填写密码、端口：
+
+```bash
+cp .env.example .env
+```
+
+后端和 Vite H5 都读取仓库根目录这份 `.env`。Linux 脚本适用于单机开发闭环；
+需要多 Zone 动态分配和 Coordinator discovery 时，应使用下面的 Kubernetes
+启动方式，而不是给每个固定 Zone 手工配置端口。
+
+单机快速启动（开发内存或单 Zone 调试）：
+
+```bash
+./start-servers.sh
+```
+
+后端只监听回环地址，也只对外广播回环 URL。从另一台机器用局域网 IP
+打开 Vite 页面时，`/v1` 与 `/ws` 都由 Vite 代理转发到本机后端，浏览器
+不直连 LoginSvr 和 Gate；因此无需（也不应）把服务改成监听 `0.0.0.0`。
+注意浏览器只在 `https` 或 `localhost` 下提供 WebCrypto，H5 已对摘要与
+UUID 提供等价兜底实现，用明文 IP 访问不会退化。
+
+Kubernetes 多 Zone 动态启动见下文“本机 H5 连接 kind 集群”。
+
+### Kubernetes 多 Zone 动态启动与本机 H5
+
+Kubernetes 启动使用 `zone-pool` StatefulSet。Coordinator 通过 Kubernetes
+discovery 发现健康 Zone，并按照 ShardMap、lease 和 owner epoch 动态分配玩家，
+不需要手工启动或配置 `zone-a`、`zone-b`。
+
+首次部署或更新清单：
+
+```bash
+kubectl apply -k deploy/k8s
+kubectl -n classic-farm get pods -l 'classic-farm/zone-pool=dynamic' -o wide
+kubectl -n classic-farm rollout status statefulset/zone-pool --timeout=300s
+kubectl -n classic-farm get endpoints zone-discovery zone-headless
+```
+
+默认启动 8 个动态 Zone；需要调整池大小时修改 StatefulSet 副本数：
+
+```bash
+kubectl -n classic-farm scale statefulset/zone-pool --replicas=8
+kubectl -n classic-farm rollout status statefulset/zone-pool --timeout=300s
+```
+
+扩缩容后由 Coordinator 规划器逐步发布路由并迁移 Shard。不要把客户端直接绑定
+到某个 `zone-pool-N` 地址；客户端始终连接 Login 和 Gate，由 Gate 使用路由快照
+转发到当前 Owner Zone。
+
+当 H5 使用 `npm run dev` 在宿主机运行时，Vite 需要两条本机转发：`/v1`
+HTTP 请求发往 Login，`/ws` WebSocket 请求发往 Gate。
+
+先确认集群和服务可用：
+
+```bash
+kubectl config current-context
+kubectl -n classic-farm get pods
+kubectl -n classic-farm get service login gate
+```
+
+保持第一个终端运行，将 Login HTTP 转发到 `.env` 默认使用的 `18080`：
+
+```bash
+kubectl -n classic-farm port-forward service/login 18080:8080
+```
+
+保持第二个终端运行，将 Gate WebSocket 转发到 `.env` 默认使用的
+`8081`：
+
+```bash
+kubectl -n classic-farm port-forward service/gate 8081:8081
+```
+
+仓库根目录 `.env` 应包含与上述端口一致的配置：
+
+```dotenv
+LOGIN_PORT=18080
+GATE_PORT=8081
+```
+
+第三个终端启动 H5：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+浏览器访问 `http://localhost:5173`。可以先验证 HTTP 转发：
+
+```bash
+curl -i -H 'Origin: http://localhost:5173' \
+  http://127.0.0.1:18080/v1/auth/csrf
+```
+
+返回 `HTTP/1.1 200 OK` 表示 Login HTTP 路径可用。WebSocket 由浏览器经
+Vite 的 `/ws` 代理访问 `127.0.0.1:8081`；不需要转发 Coordinator，也
+不应让浏览器直接连接 Zone。
+
+两条 `kubectl port-forward` 都是前台长驻进程，任意一个终端退出都会
+中断对应连接。常见错误含义：
+
+- `/v1/auth/csrf` 出现 `ECONNREFUSED 127.0.0.1:18080`：Login 转发未运行；
+- Vite 出现 `ws proxy error` 或 `ECONNREFUSED 127.0.0.1:8081`：Gate
+  WebSocket 转发未运行；
+- 提示 `address already in use`：对应端口已有进程监听，先验证现有转发，
+  不要重复启动；
+- WebSocket 在认证前以 `1006` 关闭：优先检查 `8081` 转发以及 Gate Pod
+  是否 Ready。
+
+如果 H5 部署在另一台服务器上，应在那台服务器上配置可访问集群的
+`kubectl`/kubeconfig，并在那里运行上述转发和 Vite；这只是开发方式。
+长期对外部署应改用 Ingress 或受控的反向代理，而不是长期依赖
+`kubectl port-forward`。
+
+### 手动更新 kind 集群中的服务
+
+默认协作边界是：AI 修改代码并运行离线测试，集群镜像构建、加载和滚动
+更新由项目负责人手动执行。每次代码交付应明确列出受影响的服务；只更新
+这些服务即可，不必重建整个集群。
+
+以更新 Zone 为例，在仓库根目录执行：
+
+```bash
+docker build --build-arg SERVICE=zone -t classic-farm/zone:dev .
+kind load docker-image classic-farm/zone:dev --name classic-farm
+kubectl -n classic-farm rollout restart statefulset/zone-pool
+kubectl -n classic-farm rollout status statefulset/zone-pool --timeout=300s
+```
+
+更新其他 Go 服务时，将服务名同时用于 Docker 构建参数、镜像名和
+Deployment 名。例如更新 MailSvr：
+
+```bash
+docker build --build-arg SERVICE=mail -t classic-farm/mail:dev .
+kind load docker-image classic-farm/mail:dev --name classic-farm
+kubectl -n classic-farm rollout restart deployment/mail
+kubectl -n classic-farm rollout status deployment/mail --timeout=300s
+```
+
+可用的后端镜像名是 `login`、`gate`、`coordinator`、`zone`、`friend`、
+`info` 和 `mail`。共享协议或公共 Go 包发生变化时，可能需要更新多个服务，
+以每次代码交付列出的影响范围为准。
+
+修改了 `deploy/k8s/` 清单后，先应用清单，再滚动受影响的服务：
+
+```bash
+kubectl apply -k deploy/k8s
+```
+
+更新后检查运行状态和日志：
+
+```bash
+kubectl -n classic-farm get pods -o wide
+kubectl -n classic-farm get deployments,statefulsets
+kubectl -n classic-farm logs deployment/mail --tail=100
+kubectl -n classic-farm logs statefulset/zone-pool --tail=100
+```
+
+只修改 `web/` 下的 Vue H5 时，本地 `npm run dev` 会热更新，不需要滚动
+任何集群服务。Tcaplus schema 变化不能通过重启服务完成；交付说明会单独
+列出需要更新的 Proto 和表。
+
+MySQL 仅作为保留的基线和回退路径。需要运行该基线时，启动 MySQL
+并应用迁移：
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d mysql
+./deploy/migrate.sh
+```
+
+启动 Linux MySQL 开发基线：
+
+```bash
+./start-servers.sh --mysql
+```
+
+脚本优先读取进程中的 `MYSQL_DSN`；未提供时，使用仓库根目录 `.env`
+里的 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER` 和
+`MYSQL_PASSWORD` 构造本地连接。脚本不会打印 DSN 或密码。按 `Ctrl+C`
+会向后端发送正常终止信号，并等待 Zone 最终刷 Dirty。
+
+另开一个终端启动 H5：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+### Windows
+
+启动全部 Go 后端（Login、Gate、Zone、Coordinator）：
+
+```powershell
+.\start-servers.ps1
+```
+
+不传 `MYSQL_DSN` 时脚本使用开发内存适配器。按 `Ctrl+C` 会停止全部后端进程。
+
+使用 Docker 时，可启动 MySQL 并应用迁移：
+
+```powershell
+Copy-Item .env.example .env
+.\dev.ps1 -Action migrate
+```
+
+MySQL 模式下，注册会在一个事务内提交账号、Session 和初始
+`PlayerCheckpointV1`；Zone 首次激活 Actor 时从该 Checkpoint 加载，
+后续 Actor 命令通过异步 Dirty flusher 写回；奖励溢出的 checkpoint
+与 `player_outbox` 行在同一个 MySQL 事务提交。
+
+已安装本机 MySQL 并执行迁移后，可运行会安全提示输入应用密码的 E2E：
+
+```powershell
+.\tests\e2e\run-mysql-authenticated-snapshot.ps1
+.\tests\e2e\run-mysql-restart-recovery.ps1
+```
+
+另开一个 PowerShell 启动 H5：
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+浏览器访问 `http://localhost:5173`。
+
+运行可自动清理进程的协议端到端验证：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\e2e\run-authenticated-snapshot.ps1
+```

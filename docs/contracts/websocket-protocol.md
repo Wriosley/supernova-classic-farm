@@ -7,7 +7,7 @@ owners:
 related:
   - ../architecture/stateful-zone-v3-architecture.md
   - ../architecture/single-player-vertical-loop-business-architecture.md
-  - ../plans/2026-07-30-minimum-websocket-contract-decisions.md
+  - ../archive/development/plans/2026-07-30-minimum-websocket-contract-decisions.md
   - idempotency-and-errors.md
 ---
 

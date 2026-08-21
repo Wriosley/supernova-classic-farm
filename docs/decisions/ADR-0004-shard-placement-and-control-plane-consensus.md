@@ -5,7 +5,7 @@ owners:
   - project-owner
 related:
   - ADR-0003-stateful-player-actor-zone.md
-  - ../architecture/stateful-zone-v2-architecture.md
+  - ../archive/architecture-v1-v2/stateful-zone-v2-architecture.md
 ---
 
 # ADR-0004：Shard 位置规划与控制面共识分离

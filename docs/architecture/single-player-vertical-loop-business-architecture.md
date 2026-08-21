@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-07-30
-updated: 2026-07-30
+updated: 2026-08-21
 owners:
   - project-owner
 related:
@@ -41,7 +41,7 @@ flowchart LR
     A["Player Actor<br/>金币、仓库、农田、任务、幂等、Outbox"]
     CFG["Zone Config Snapshot<br/>一个确定的 config_version"]
     D["Dirty Queue"]
-    DB["MySQL Checkpoint"]
+    DB["Tcaplus Checkpoint"]
     E["Outbox Relay / Event Bus"]
     M["Mail Service"]
 
@@ -114,9 +114,9 @@ Validate current state
 
 近期幂等结果每名玩家同时限制为最近 100 个和最长 24 小时。
 
-## 4. ConfigSvr 规则
+## 4. 版本化配置规则
 
-- ConfigSvr 是全服配置权威；
+- 当前原型将版本化业务配置随Zone发布；生产环境可由独立ConfigSvr作为全服权威；
 - Zone 原子替换带版本的完整配置快照；
 - 单条命令只能使用一个确定的快照；
 - 作物种植时固化成长阈值、基础速度和基础产量；

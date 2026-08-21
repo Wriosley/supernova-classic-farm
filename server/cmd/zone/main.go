@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -257,9 +259,18 @@ func main() {
 	}
 	go ownerFarmService.RunEvictionLoop(ctx)
 
-	quickInfoClient, err := newZoneQuickInfoClient(ctx, rpcKey, environmentOr("INFO_RPC_URL", "http://127.0.0.1:8086"), identity.LogicalZoneID, identity.IncarnationID, logger)
+	var quickInfoClient *zoneQuickInfoClient
+	quickInfoEnabled, err := environmentBool("ZONE_QUICK_INFO_ENABLED", true)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if quickInfoEnabled {
+		quickInfoClient, err = newZoneQuickInfoClient(ctx, rpcKey, environmentOr("INFO_RPC_URL", "http://127.0.0.1:8086"), identity.LogicalZoneID, identity.IncarnationID, logger)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		logger.Warn("Zone QuickInfo/Presence publishing disabled")
 	}
 	defer quickInfoClient.Close()
 	runtime.SetFarmQuickInfoNotifier(quickInfoClient)
@@ -581,4 +592,16 @@ func environmentOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func environmentBool(key string, fallback bool) (bool, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean: %w", key, err)
+	}
+	return parsed, nil
 }

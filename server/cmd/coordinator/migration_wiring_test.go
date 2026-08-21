@@ -13,6 +13,9 @@ import (
 )
 
 func TestMigrationWorkerConfigDefaultsDisabled(t *testing.T) {
+	t.Setenv("COORDINATOR_MIGRATION_GLOBAL_LIMIT", "")
+	t.Setenv("COORDINATOR_MIGRATION_PER_SOURCE_LIMIT", "")
+	t.Setenv("COORDINATOR_MIGRATION_PER_TARGET_LIMIT", "")
 	t.Setenv("COORDINATOR_MIGRATION_CRASH_AFTER", "")
 	t.Setenv("COORDINATOR_MIGRATION_CRASH_SHARD_ID", "")
 	t.Setenv("COORDINATOR_MIGRATION_WORKER_ENABLED", "")
@@ -28,6 +31,23 @@ func TestMigrationWorkerConfigDefaultsDisabled(t *testing.T) {
 	t.Setenv("COORDINATOR_MIGRATION_WORKER_ENABLED", "true")
 	if _, err := migrationWorkerConfigFromEnvironment(); err == nil {
 		t.Fatal("non-0/1 worker switch accepted")
+	}
+}
+
+func TestMigrationWorkerConfigReadsPositiveLimits(t *testing.T) {
+	t.Setenv("COORDINATOR_MIGRATION_GLOBAL_LIMIT", "8")
+	t.Setenv("COORDINATOR_MIGRATION_PER_SOURCE_LIMIT", "2")
+	t.Setenv("COORDINATOR_MIGRATION_PER_TARGET_LIMIT", "4")
+	config, err := migrationWorkerConfigFromEnvironment()
+	if err != nil || config.Limits != (coordinatormigration.Limits{Global: 8, PerSource: 2, PerTarget: 4}) {
+		t.Fatalf("config = %+v, err=%v", config, err)
+	}
+
+	for _, invalid := range []string{"0", "-1", "not-a-number"} {
+		t.Setenv("COORDINATOR_MIGRATION_PER_TARGET_LIMIT", invalid)
+		if _, err := migrationWorkerConfigFromEnvironment(); err == nil {
+			t.Fatalf("invalid per-target limit %q accepted", invalid)
+		}
 	}
 }
 

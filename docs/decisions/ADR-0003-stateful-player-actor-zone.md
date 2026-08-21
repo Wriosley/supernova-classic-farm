@@ -6,7 +6,7 @@ owners:
 supersedes:
   - ADR-0002-target-scale-hybrid-architecture
 related:
-  - ../architecture/stateful-zone-v2-architecture.md
+  - ../archive/architecture-v1-v2/stateful-zone-v2-architecture.md
 ---
 
 # ADR-0003：生产目标采用有状态 Player Actor Zone

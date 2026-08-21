@@ -1,33 +1,13 @@
-# Architecture
+# 当前架构文档
 
-Architecture documents explain how the whole system collaborates. They define topology, ownership, routing, consistency, realtime synchronization, capacity, and failure recovery without duplicating every DTO or table field.
+- [整体架构](architecture.md)：当前服务拓扑、职责、命令链路、路由迁移和部署边界；
+- [Stateful Zone V3](stateful-zone-v3-architecture.md)：Player Actor、Dirty写回、
+  lease、epoch、恢复和迁移专题；
+- [单人业务闭环](single-player-vertical-loop-business-architecture.md)：买种子至
+  清理地块的业务规则。
 
-## Current source of truth
+旧V1/V2和整理前的重复长文位于`../archive/architecture-v1-v2/`及
+`../archive/architecture-history/`，不属于当前架构。
 
-- `stateful-zone-v3-architecture.md`: current accepted production target. It defines stateful Player Actors, asynchronous Dirty checkpoint writeback, 4096 logical shards, majority-authorized ownership, epoch fencing, realtime routing, capacity assumptions, migration, and recovery. ADR-0003 provides the Actor/Zone foundation; ADR-0006 replaces the V2 Journal path; ADR-0008 defines the current V3 Coordinator; ADR-0009 locates current chapter tasks in the Player Actor.
-- `single-player-vertical-loop-business-architecture.md`: accepted first implementation slice from buying seeds through task reward and plot cleanup.
-- `architecture.md`: broader business-design overview and navigation. When an older distributed statement conflicts with V3, V3 wins.
-
-“Accepted target” means the owner selected this direction. It does not mean the system is implemented, measured, or proven to carry 30 million DAU.
-
-## Supporting and historical documents
-
-- `stateful-zone-v2-architecture.md`: superseded synchronous-Journal V2, retained for comparison and design-history evidence.
-- `target-30m-dau-architecture.md`: superseded stateless V1, retained only for comparison and design-history evidence.
-- `module-design-and-flows.md`: transitional combined module document; content moves into current architecture, `../modules/`, and `../contracts/` topic by topic.
-- `documentation-system.md`: documentation boundaries, lifecycle, and migration design.
-
-Do not combine V1, V2, and V3 mechanisms into one implementation. Start from `../context/CURRENT.md`, then read only the current architecture and task-specific historical material.
-
-## Planned topic documents
-
-Create these only after their design is discussed and confirmed:
-
-- `capacity-model.md`
-- `gateway-and-routing.md`
-- `realtime-sync.md`
-- `consistency-and-events.md`
-- `data-ownership-and-sharding.md`
-- `multi-az-and-disaster-recovery.md`
-
-Major tradeoffs link to ADRs in `../decisions/`; precise formats belong in `../contracts/`; measured claims belong in `../evidence/`.
+精确DTO、表结构和错误语义属于`../contracts/`；重要取舍属于`../decisions/`；
+性能数字属于`../evidence/`。

@@ -154,7 +154,7 @@ go test ./...
 - `server/internal/player/runtime.go` — `activateActor` 校验
 - `server/internal/player/gift.go` — 送礼追加 PendingOutbox
 - `server/internal/player/runtime_activation_test.go` — 回归
-- `docs/evidence/2026-08-12-friend-gift-outbox.md` — 赠礼 Outbox 设计背景
+- `docs/archive/evidence/historical/2026-08-12-friend-gift-outbox.md` — 赠礼 Outbox 设计背景
 
 ## 教训
 

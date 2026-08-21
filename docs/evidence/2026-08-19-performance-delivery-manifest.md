@@ -2,8 +2,8 @@
 
 ## 必交材料
 
-1. `report.md`：全局性能评估报告，包含摘要、测试方法、核心结果、pprof 分析、3000 万 DAU 容量对照和结论。
-2. `flamegraphs/`：4 组与报告结论直接相关的 PNG、SVG 和 pprof Flame Graph HTML；截图应使用同名 `.html` 页面，PNG/SVG 仅作静态图和原始图形留档。
+1. `2026-08-19-classic-farm-performance-report.md`：全局性能评估报告，包含摘要、测试方法、核心结果、pprof分析、玩家到达模型、3000万DAU容量对照和结论。
+2. `../delivery/assets/flamegraphs/`：4组与报告结论直接相关的PNG、SVG和pprof Flame Graph HTML；截图应使用同名`.html`页面，PNG/SVG用于静态插图和留档。
 3. `evidence/`：支撑报告核心结论的 6 份证据摘要，覆盖 Zone、Gate、好友路由和偷菜 Await 对照。
 
 ## 证据摘要范围
@@ -17,8 +17,8 @@
 
 ## 不纳入主交付包的材料
 
-原始 `latency.csv`、完整 `.pb.gz`、Pod 资源采样 CSV、压测脚本和全部历史 raw 目录保留在 `/data/workspace/yace/`，用于复核和答辩追问，不放入主阅读包，以控制包体积并避免将中间实验误认为最终结论。
+原始`latency.csv`、完整`.pb.gz`、Pod资源采样CSV、压测脚本和全部历史raw目录保留在仓库`../../yace/`，用于复核和答辩追问，不进入主阅读路线。
 
 ## 路径约定
 
-交付报告中的火焰图引用统一使用 `/workspace/bechreport/flamegraphs/`。将本目录挂载或解压到该路径后，Markdown 插图可直接显示。
+交付报告中的火焰图统一使用仓库相对路径`../delivery/assets/flamegraphs/`，移动或打包整个`docs`目录后仍可显示。

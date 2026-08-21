@@ -60,6 +60,7 @@ type options struct {
 	concurrencies   []int
 	targetQPSs      []float64
 	connectWorkers  int
+	connectRate     float64
 	warmup          time.Duration
 	duration        time.Duration
 	timeout         time.Duration
@@ -219,6 +220,7 @@ func parseOptions() options {
 	concurrency := flag.String("concurrency", "1,10,25,50,100", "comma-separated virtual users / open-mode connection pool size")
 	targetQPS := flag.String("target-qps", "", "open mode only: comma-separated offered QPS steps (e.g. 2000,4000,6000)")
 	connectWorkers := flag.Int("connect-workers", 64, "parallel login/WebSocket handshakes during setup")
+	connectRate := flag.Float64("connect-rate", 0, "connect_hold player arrivals per second; 0 keeps the synchronized legacy burst")
 	warmup := flag.Duration("warmup", 10*time.Second, "warmup duration")
 	duration := flag.Duration("duration", 60*time.Second, "measurement duration")
 	timeout := flag.Duration("timeout", 5*time.Second, "per HTTP/WebSocket operation timeout")
@@ -290,6 +292,12 @@ func parseOptions() options {
 	if *connectWorkers <= 0 || *connectWorkers > 1024 {
 		exitf("connect-workers must be in 1..1024")
 	}
+	if *connectRate < 0 {
+		exitf("connect-rate must be >= 0")
+	}
+	if *connectRate > 0 && *scenario != "connect_hold" {
+		exitf("connect-rate currently supports only -scenario connect_hold")
+	}
 	if !validRunID(*runID) {
 		exitf("run-id must be 1..18 lowercase letters, digits or underscores")
 	}
@@ -316,7 +324,7 @@ func parseOptions() options {
 	return options{
 		scenario: *scenario, authMode: normalizedAuthMode, loginURL: loginURLs[0], loginURLs: loginURLs,
 		gateURL: primaryGateURL, gateURLs: gateURLs, origin: *origin,
-		mode: normalizedMode, concurrencies: values, targetQPSs: rates, connectWorkers: *connectWorkers,
+		mode: normalizedMode, concurrencies: values, targetQPSs: rates, connectWorkers: *connectWorkers, connectRate: *connectRate,
 		warmup: *warmup, duration: *duration, timeout: *timeout, pingInterval: *pingInterval,
 		runID: *runID, outputDirectory: resolvedOutput, maxSamples: *maxSamples,
 		accountFile: *accountFile, identityOutput: *identityOutput, playerIDs: playerIDs,
@@ -1035,7 +1043,7 @@ func parameterMap(opts options) map[string]string {
 		"mode": opts.mode, "auth_mode": opts.authMode, "login_url": strings.Join(opts.loginURLs, ","), "gate_url": strings.Join(opts.gateURLs, ","), "origin": opts.origin,
 		"concurrency": joinInts(opts.concurrencies),
 		"warmup":      opts.warmup.String(), "duration": opts.duration.String(), "timeout": opts.timeout.String(),
-		"ping_interval": opts.pingInterval.String(), "max_samples": strconv.Itoa(opts.maxSamples),
+		"ping_interval": opts.pingInterval.String(), "connect_rate": strconv.FormatFloat(opts.connectRate, 'f', -1, 64), "max_samples": strconv.Itoa(opts.maxSamples),
 	}
 	if len(opts.targetQPSs) > 0 {
 		params["target_qps"] = joinFloats(opts.targetQPSs)
@@ -1158,6 +1166,26 @@ func writeReport(path string, summary runSummary) error {
 				item.Concurrency, item.QPS, float64(item.P50US)/1000, float64(item.P95US)/1000,
 				float64(item.P99US)/1000, float64(item.MaxUS)/1000, item.ErrorCount)
 		}
+	}
+	for _, item := range summary.Results {
+		if len(item.Actions) == 0 {
+			continue
+		}
+		body.WriteString("\n## Phase latency\n\n")
+		body.WriteString("| phase | P50 (ms) | P95 (ms) | P99 (ms) | max (ms) | samples |\n")
+		body.WriteString("|---|---:|---:|---:|---:|---:|\n")
+		keys := make([]string, 0, len(item.Actions))
+		for key := range item.Actions {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			phase := item.Actions[key]
+			fmt.Fprintf(&body, "| %s | %.3f | %.3f | %.3f | %.3f | %d |\n", key,
+				float64(phase.P50US)/1000, float64(phase.P95US)/1000,
+				float64(phase.P99US)/1000, float64(phase.MaxUS)/1000, phase.SuccessCount)
+		}
+		break
 	}
 	body.WriteString("\n## Error categories\n\n")
 	for _, item := range summary.Results {

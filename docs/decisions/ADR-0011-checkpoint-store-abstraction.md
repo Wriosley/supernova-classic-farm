@@ -10,8 +10,8 @@ related:
   - ADR-0008-v3-quorum-shard-coordinator.md
   - ../architecture/stateful-zone-v3-architecture.md
   - ../contracts/data-model.md
-  - ../plans/2026-08-04-k8s-tcaplus-minimum-cluster-plan.md
-  - ../evidence/2026-08-04-linux-dual-zone-mysql-baseline.md
+  - ../archive/development/plans/2026-08-04-k8s-tcaplus-minimum-cluster-plan.md
+  - ../archive/evidence/historical/2026-08-04-linux-dual-zone-mysql-baseline.md
 ---
 
 # ADR-0011：用 CheckpointStore 隔离玩家检查点与具体数据库

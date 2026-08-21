@@ -1,7 +1,29 @@
-# Requirements
+# 项目需求基线
 
-Store confirmed product requirements, acceptance criteria, and explicit non-goals here.
+## 必须交付
 
-The original assignment remains in the private Obsidian vault. Add a shareable, project-specific requirements baseline here after clarifying ambiguous items.
+- 可注册、登录并建立认证WebSocket连接；
+- 完成买种子、种植、成长、施肥、收获、出售和清理的农场闭环；
+- 提供商店、仓库、章节任务和奖励；
+- 支持好友添加、分享链接、好友列表和访问好友农场；
+- 支持最多三名玩家围绕一个农场进行状态同步和基础互动；
+- 提供H5客户端、Go后端、本机部署方法和可复核测试；
+- 说明面向3000万DAU的目标架构、容量估算、性能瓶颈和扩展方法；
+- 保留可用于答辩的AI辅助开发证据，但不公开完整聊天流水。
 
-Requirements state what the product must do; architecture and contracts state how the confirmed requirements are implemented.
+## 非功能要求
+
+- 同一玩家命令必须串行，重复请求不得重复发奖或重复扣减；
+- Shard迁移和Zone故障不能产生两个可写Owner；
+- 当前Owner、epoch、请求ID和错误语义必须能够诊断；
+- 性能报告必须区分规划、隔离实验和完整业务实测；
+- 不提交凭据、Cookie、真实玩家数据和公司内部代码资料。
+
+## 明确非目标
+
+- 本机实际部署3000万DAU规模；
+- 在原型中完成生产多可用区和三节点Coordinator高可用；
+- 将单一Snapshot QPS直接表述为混合业务容量；
+- 为最终演示实现完整商业化、美术资源和运营后台。
+
+验收实现状态见`../context/CURRENT.md`，精确交互语义见`../contracts/`。

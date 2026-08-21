@@ -28,6 +28,16 @@ type migrationWorkerConfig struct {
 
 func migrationWorkerConfigFromEnvironment() (migrationWorkerConfig, error) {
 	config := migrationWorkerConfig{Limits: coordinatormigration.Limits{Global: 8, PerSource: 2, PerTarget: 2}}
+	var err error
+	if config.Limits.Global, err = positiveIntEnvironment("COORDINATOR_MIGRATION_GLOBAL_LIMIT", config.Limits.Global); err != nil {
+		return config, err
+	}
+	if config.Limits.PerSource, err = positiveIntEnvironment("COORDINATOR_MIGRATION_PER_SOURCE_LIMIT", config.Limits.PerSource); err != nil {
+		return config, err
+	}
+	if config.Limits.PerTarget, err = positiveIntEnvironment("COORDINATOR_MIGRATION_PER_TARGET_LIMIT", config.Limits.PerTarget); err != nil {
+		return config, err
+	}
 	switch strings.TrimSpace(os.Getenv("COORDINATOR_MIGRATION_WORKER_ENABLED")) {
 	case "", "0":
 	case "1":
@@ -63,6 +73,18 @@ func migrationWorkerConfigFromEnvironment() (migrationWorkerConfig, error) {
 	}
 	config.CrashShardID = uint32(parsedShardID)
 	return config, nil
+}
+
+func positiveIntEnvironment(name string, fallback int) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return value, nil
 }
 
 func startMigrationWorker(

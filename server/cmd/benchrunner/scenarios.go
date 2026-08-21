@@ -476,6 +476,9 @@ func runConnectHold(opts options, concurrency int) (result, []sample, error) {
 	if err != nil {
 		return result{}, nil, err
 	}
+	if opts.connectRate > 0 {
+		return runPacedConnectHold(opts, concurrency, names)
+	}
 	clients, err := authenticateAll(opts, names)
 	if err != nil {
 		return result{}, nil, err
@@ -548,6 +551,128 @@ func runConnectHold(opts options, concurrency int) (result, []sample, error) {
 		ErrorCount: failures, ErrorKinds: errorKinds, QPS: float64(successes) / requestElapsed.Seconds(),
 		P50US: percentile(latencies, 50), P95US: percentile(latencies, 95),
 		P99US: percentile(latencies, 99), MaxUS: percentile(latencies, 100),
+	}, samples, nil
+}
+
+// runPacedConnectHold models independent player arrivals. Each player sends
+// its one Snapshot immediately after AUTH instead of waiting behind a global
+// barrier for every connection to finish setup.
+func runPacedConnectHold(opts options, concurrency int, names []string) (result, []sample, error) {
+	limit := opts.connectWorkers
+	if limit <= 0 {
+		limit = 1
+	}
+	semaphore := make(chan struct{}, limit)
+	clients := make([]*benchClient, 0, len(names))
+	latencies := make([]int64, 0, len(names))
+	queueLatencies := make([]int64, 0, len(names))
+	setupLatencies := make([]int64, 0, len(names))
+	endToEndLatencies := make([]int64, 0, len(names))
+	samples := make([]sample, 0, len(names))
+	errorKinds := make(map[string]int64)
+	var successes, failures int64
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	start := time.Now()
+	for index, name := range names {
+		due := start.Add(time.Duration(float64(index) / opts.connectRate * float64(time.Second)))
+		if wait := time.Until(due); wait > 0 {
+			time.Sleep(wait)
+		}
+		wg.Add(1)
+		go func(name string, due time.Time) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			acquired := time.Now()
+			queueLatency := acquired.Sub(due)
+			if queueLatency < 0 {
+				queueLatency = 0
+			}
+			setupStart := time.Now()
+			client, authErr := authenticate(opts, name)
+			setupLatency := time.Since(setupStart)
+			if authErr != nil {
+				mu.Lock()
+				failures++
+				errorKinds["connect_"+classifyError(authErr)]++
+				mu.Unlock()
+				return
+			}
+			_, latency, requestErr := loadSnapshot(client)
+			endToEndLatency := time.Since(due)
+			mu.Lock()
+			clients = append(clients, client)
+			queueLatencies = append(queueLatencies, queueLatency.Microseconds())
+			setupLatencies = append(setupLatencies, setupLatency.Microseconds())
+			endToEndLatencies = append(endToEndLatencies, endToEndLatency.Microseconds())
+			if requestErr != nil {
+				failures++
+				errorKinds[classifyError(requestErr)]++
+			} else {
+				successes++
+				us := latency.Microseconds()
+				latencies = append(latencies, us)
+				samples = append(samples, sample{Concurrency: concurrency, LatencyUS: us})
+			}
+			completed := successes + failures
+			mu.Unlock()
+			if completed > 0 && completed%int64(max(1, concurrency/10)) == 0 {
+				fmt.Printf("completed %d/%d arrivals in %s\n", completed, concurrency, time.Since(start).Round(time.Millisecond))
+			}
+		}(name, due)
+	}
+	wg.Wait()
+	requestElapsed := time.Since(start)
+	defer closeClients(clients)
+
+	pingInterval := opts.pingInterval
+	if pingInterval <= 0 {
+		pingInterval = 30 * time.Second
+	}
+	holdDeadline := time.Now().Add(opts.duration)
+	for time.Now().Before(holdDeadline) {
+		wait := time.Until(holdDeadline)
+		if wait > pingInterval {
+			wait = pingInterval
+		}
+		time.Sleep(wait)
+		if time.Now().After(holdDeadline) {
+			break
+		}
+		var pingWG sync.WaitGroup
+		for _, client := range clients {
+			pingWG.Add(1)
+			go func(client *benchClient) {
+				defer pingWG.Done()
+				if _, pingErr := client.ping(uint64(time.Now().UnixNano())); pingErr != nil {
+					mu.Lock()
+					failures++
+					errorKinds["hold_"+classifyError(pingErr)]++
+					mu.Unlock()
+				}
+			}(client)
+		}
+		pingWG.Wait()
+	}
+	sortLatencies(latencies)
+	actions := map[string]actionResult{}
+	for name, values := range map[string][]int64{
+		"worker_queue": queueLatencies,
+		"connect_auth": setupLatencies,
+		"end_to_end":   endToEndLatencies,
+	} {
+		sortLatencies(values)
+		actions[name] = actionResult{
+			SuccessCount: int64(len(values)), P50US: percentile(values, 50), P95US: percentile(values, 95),
+			P99US: percentile(values, 99), MaxUS: percentile(values, 100),
+		}
+	}
+	return result{
+		Concurrency: concurrency, DurationMS: requestElapsed.Milliseconds(), SuccessCount: successes,
+		ErrorCount: failures, ErrorKinds: errorKinds, QPS: float64(successes) / requestElapsed.Seconds(),
+		P50US: percentile(latencies, 50), P95US: percentile(latencies, 95),
+		P99US: percentile(latencies, 99), MaxUS: percentile(latencies, 100), Actions: actions,
 	}, samples, nil
 }
 

@@ -1,13 +1,14 @@
 ---
 status: measured-and-projected
 date: 2026-08-19
+updated: 2026-08-21
 ---
 
 # Classic Farm 全局性能评估报告
 
 ## 1. 摘要
 
-本报告汇总截至 2026 年 8 月 19 日在本地 Kind 集群完成的性能测试、资源采样和 pprof 分析结果，并与架构文档中的 3000 万 DAU 目标容量模型进行对照。
+本报告汇总截至 2026 年 8 月 20 日在本地 Kind 集群完成的性能测试、资源采样和 pprof 分析结果，并与架构文档中的 3000 万 DAU 目标容量模型进行对照。
 
 本次评估验证了路由 fencing、Player Actor、跨 Zone 好友访问、Coordinator SDK 路由缓存及好友交互链路，并形成了单实例性能基线。测试结果**不构成系统已具备 3000 万 DAU 承载能力的证明**，因为混合读写、长连接、Dirty 持久化、Tcaplus 故障恢复、跨可用区网络、消息积压、故障冗余以及大规模 Actor 内存等生产关键维度尚未完成验证。
 
@@ -18,6 +19,10 @@ date: 2026-08-19
 - Gate 路由快照 O(1) 优化使热点 c100 snapshot 从 8,194 提升到 10,663 QPS（+30.1%），瓶颈转移到 Zone。
 - 好友生命周期在 Coordinator SDK 路由后从 227/s 提升到 1,227/s（50 对，+5.4x），100/200 对分别达到 1,882/2,528 lifecycle/s；200 对时 Info 已触及 500m limit，不能把它称为 Zone 上限。
 - 实验版 Await 偷菜完成了 1,600/1,600 成功请求、6,057.59 QPS，但与无 Await 基线的 610 目标不等量，不能据此宣称 Await 提升。
+- 在“玩家按速率到达、AUTH后只请求一次Snapshot并保持连接”的模型中，完整连接
+  生命周期约800/s的平台来自Gate同步等待Zone连接注册；隔离该旁路后，单Zone核心
+  链路3000/s的Snapshot P99为7.534ms，4500/s升至49.366ms，6000/s升至
+  90.177ms。3000/s可作为该隔离模型的保守水位，但不代表完整登录和Presence容量。
 
 综上，项目已完成面向 3000 万 DAU 目标的关键架构机制验证和单实例性能测量，但尚未形成生产规模容量闭环证据。
 
@@ -29,7 +34,7 @@ date: 2026-08-19
 flowchart LR
   C[Benchrunner / H5] --> L[Login]
   C --> G[Gate x3]
-  G --> Z[Zone Pool x8]
+  G --> Z[Zone Pool dynamic]
   Z --> A[Player Actor]
   Z --> F[Friend / Owner RPC]
   Z --> K[Coordinator SDK route snapshot]
@@ -72,7 +77,7 @@ Gate 原始 pprof 发现每个请求为了读取 MapVersion 复制 4096 条 Rout
 
 当前第一候选优化是把 `grpc.Server.ServeHTTP` + H2C 改为原生 gRPC listener，并将 health/pprof 分端口；其次是保持 HMAC/replay/body 校验不变，降低认证和 Snapshot 临时分配。关闭认证只能做成本诊断，不能作为正式容量方案。
 
-![Zone 12k CPU flamegraph](/workspace/bechreport/flamegraphs/zone-12k-cpu.png)
+![Zone 12k CPU flamegraph](../delivery/assets/flamegraphs/zone-12k-cpu.png)
 
 ### 3.3 Friend：Coordinator SDK 路由缓存的效果
 
@@ -95,18 +100,46 @@ SDK 修复证明普通好友请求不再每次访问 Coordinator；但 200 对�
 
 Await 只释放 Visitor Actor mailbox 等待 Owner RPC；没有 durable pending receipt、UNKNOWN reconciliation、重复保护和迁移/驱逐协调。由于两次目标数不同，这组结果是链路验证和方向性信号，不是严格 A/B 性能结论。
 
+### 3.5 玩家到达与连接保持模型
+
+旧Snapshot基线在固定连接上持续重复请求，用于定位Zone CPU和请求处理上限；它
+不能代表真实玩家登录行为。新模型使用10,000个玩家按固定速率到达，每个玩家完成
+AUTH后只请求一次Snapshot，随后保持WebSocket并发送PING。
+
+阶段计时首先发现，1500/s offered时完整链路只完成803.73/s：`connect_auth` P99
+为911.977ms，worker queue P99为4815.710ms。将建连worker增至800后，AUTH P99
+接近2秒，匹配Gate到Zone连接注册RPC的deadline，说明瓶颈在同步连接生命周期，
+不是Snapshot Actor逻辑。
+
+为隔离Zone核心命令链路，压测显式启用`GATE_SKIP_CONNECTION_SYNC=true`，跳过
+register、refresh和unregister：
+
+| offered arrivals | achieved QPS | Snapshot P50 | Snapshot P95 | Snapshot P99 | errors |
+|---:|---:|---:|---:|---:|---:|
+| 1,500/s | 1,499.89 | 0.590ms | 1.216ms | 6.239ms | 0 |
+| 3,000/s | 2,998.94 | 0.690ms | 3.815ms | 7.534ms | 0 |
+| 4,500/s | 4,493.75 | 0.965ms | 14.524ms | 49.366ms | 0 |
+| 6,000/s | 5,994.57 | 2.561ms | 72.695ms | 90.177ms | 0 |
+
+这组结果显示延迟拐点在3000--4500/s之间。3000/s是当前P99明显低于50ms的Zone
+核心到达水位，6000/s只是零错误的短时压力点。由于该开关排除了Presence和精确
+Push路由语义，不能把5995 QPS表述为完整业务容量。1.7--6.7秒短脉冲也未被
+Metrics Server可靠捕获，因此不能据此声称2核CPU已经打满。
+
 ## 4. Profiling 证据目录
 
 报告附带的 PNG/SVG 是 pprof 调用关系图；真正的交互式 Flame Graph 已另存为 HTML，截图时应打开对应 HTML 页面：
 
-- `/workspace/bechreport/flamegraphs/zone-8k-cpu.svg`：Zone 8k CPU
-- `/workspace/bechreport/flamegraphs/zone-12k-cpu.svg`：Zone 12k CPU
-- `/workspace/bechreport/flamegraphs/zone-hotspot-optimized-cpu.svg`：Gate 路由优化后的热点 Zone
-- `/workspace/bechreport/flamegraphs/gate-baseline-cpu.svg`：Gate 路由复制优化前
+- `../delivery/assets/flamegraphs/zone-8k-cpu.svg`：Zone 8k CPU
+- `../delivery/assets/flamegraphs/zone-12k-cpu.svg`：Zone 12k CPU
+- `../delivery/assets/flamegraphs/zone-hotspot-optimized-cpu.svg`：Gate 路由优化后的热点 Zone
+- `../delivery/assets/flamegraphs/gate-baseline-cpu.svg`：Gate 路由复制优化前
 
-对应 Flame Graph 页面为同名 `.html` 文件，例如 `/workspace/bechreport/flamegraphs/zone-12k-cpu.html`。
+对应 Flame Graph 页面为同名 `.html` 文件，例如
+`../delivery/assets/flamegraphs/zone-12k-cpu.html`。
 
-原始 `.pb.gz`、top 文本、monitor CSV 和复现命令仍保留在 `/data/workspace/yace/profiles/`、`raw/`、`monitor/`，便于重新生成图。
+原始 `.pb.gz`、top文本、monitor CSV和复现命令仍保留在仓库
+`../../yace/profiles/`、`../../yace/raw/`和`../../yace/monitor/`，便于重新生成图。
 
 ## 5. 3000 万 DAU 目标容量对照
 
@@ -123,7 +156,11 @@ flowchart TB
   SAFE --> N[实例数 = 峰值 / 单实例安全容量 + 故障余量]
 ```
 
-将单 Zone 8k 保守水位线性乘以 60 个 Zone，可得到约 480k QPS 的数量级估算，但该计算仅用于说明扩展方向，不构成生产容量证明。当前 8k 结果来自 snapshot-only 场景，尚未覆盖长稳运行、混合写入、Dirty/Tcaplus 压力；生产容量还必须满足单可用区故障后的接管能力、Actor 内存、连接数、消息系统和存储吞吐要求。
+将重复Snapshot场景的单Zone 8k水位线性乘以60个Zone，可得到约480k QPS的
+场景化算术，但不构成生产容量证明。真实玩家到达模型的Zone核心保守水位目前是
+3000/s，并且排除了连接注册与Presence。两组数字服务于不同问题，不能互相替换。
+生产容量还必须覆盖长稳混合写入、Dirty/Tcaplus压力、单可用区故障接管、Actor
+内存、连接数、消息系统和存储吞吐。
 
 反过来看当前证据的价值：
 
@@ -164,6 +201,7 @@ flowchart TB
 - `docs/evidence/2026-08-19-zone-friend-sdk-routing.md`
 - `docs/evidence/2026-08-19-friend-steal-no-await-baseline.md`
 - `docs/evidence/2026-08-19-friend-steal-await-experiment.md`
-- `/data/workspace/yace/raw/`
-- `/data/workspace/yace/monitor/`
-- `/data/workspace/yace/profiles/`
+- `docs/evidence/2026-08-20-single-zone-connect-hold-baseline.md`
+- `yace/raw/`
+- `yace/monitor/`
+- `yace/profiles/`

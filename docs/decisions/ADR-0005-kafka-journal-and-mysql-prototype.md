@@ -6,7 +6,7 @@ owners:
 related:
   - ADR-0003-stateful-player-actor-zone.md
   - ADR-0004-shard-placement-and-control-plane-consensus.md
-  - ../architecture/stateful-zone-v2-architecture.md
+  - ../archive/architecture-v1-v2/stateful-zone-v2-architecture.md
 ---
 
 # ADR-0005：生产 Journal 采用分区写入层与 Kafka，原型采用 MySQL 追加表

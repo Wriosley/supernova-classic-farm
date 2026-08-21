@@ -8,7 +8,7 @@ superseded-by:
 related:
   - ../contracts/http-api.md
   - ../context/CURRENT.md
-  - ../plans/2026-08-03-remaining-roadmap-and-iterations.md
+  - ../archive/development/plans/2026-08-03-remaining-roadmap-and-iterations.md
 ---
 
 # ADR-0010: 本地原型冻结短命 WS Ticket / CSRF 重启丢失边界

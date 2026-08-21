@@ -83,7 +83,7 @@ Before implementation, this milestone requires frozen minimum contracts for HTTP
 The local prototype should exercise the smallest V3 path: WebSocket routing,
 Actor serialization, in-Actor task progress, Dirty batching, Tcaplus checkpoint
 recovery, a single-node Coordinator-compatible control plane, leases, epoch
-rejection, fixed dual-Zone Kubernetes deployment and the reviewed friend
+rejection, Kubernetes-discovered dynamic Zone deployment and the reviewed friend
 interaction slice.
 
 The production target and local prototype are separate claims. The prototype validates mechanisms and measured single-instance baselines; it does not claim to run 30 million DAU locally.

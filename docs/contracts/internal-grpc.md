@@ -7,7 +7,7 @@ owners:
 related:
   - websocket-protocol.md
   - idempotency-and-errors.md
-  - ../plans/friend_design_plan/04-gRPC协议与消息详细设计.md
+  - ../archive/development/plans/friend_design_plan/04-gRPC协议与消息详细设计.md
 ---
 
 # Internal gRPC Contract V1

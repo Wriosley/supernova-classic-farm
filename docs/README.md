@@ -1,85 +1,47 @@
-# Classic Farm Documentation
+# Classic Farm 文档地图
 
-This directory separates current project truth, design reasoning, executable contracts, work plans, and measured evidence.
+## 推荐入口
 
-## Start here
+- 负责人、评审和答辩：[最终交付文档](delivery/README.md)
+- 开发维护：[当前项目状态](context/CURRENT.md)
+- 系统设计：[当前整体架构](architecture/architecture.md)
+- 性能结论：[综合性能报告](evidence/2026-08-19-classic-farm-performance-report.md)
 
-1. Read `../AGENTS.md`.
-2. Read `context/PROJECT.md` for stable project facts.
-3. Read `context/CURRENT.md` for the actual current state and next actions.
-4. Read `architecture/stateful-zone-v3-architecture.md` for the current target architecture.
-5. For the first product slice, read `architecture/single-player-vertical-loop-business-architecture.md`.
-6. Read only the requirement, module, contract, ADR, plan, or evidence files relevant to the current task.
+## 当前事实来源
 
-## Current architecture
+| 内容 | 权威位置 |
+|---|---|
+| 项目目标和边界 | `context/PROJECT.md` |
+| 当前实现、部署和限制 | `context/CURRENT.md` |
+| 当前整体架构 | `architecture/architecture.md` |
+| Player Actor Zone V3专题 | `architecture/stateful-zone-v3-architecture.md` |
+| 产品需求 | `requirements/README.md` |
+| 模块职责 | `modules/README.md` |
+| 精确协议和数据语义 | `contracts/` |
+| 重要取舍 | `decisions/` |
+| 实测结论 | `evidence/` |
+| 启动与部署 | `project/deployment.md` |
 
-- Current production target: stateful Player Actor Zone V3 with asynchronous Dirty writeback.
-- Accepted active decisions: ADR-0003 for Player Actors, ADR-0006 for Dirty persistence, ADR-0008 for majority-authorized Shard ownership, and ADR-0009 for current-chapter task ownership.
-- Accepted first-slice business architecture: `architecture/single-player-vertical-loop-business-architecture.md`.
-- Accepted contracts: `contracts/http-api.md`, `contracts/websocket-protocol.md`, `contracts/idempotency-and-errors.md`, `contracts/data-model.md`, `contracts/event-contracts.md`, and `contracts/internal-grpc.md`.
-- Historical comparison only: synchronous-Journal V2, stateless V1, ADR-0004, ADR-0005, and their old plans.
-- Target numbers and component choices remain planning assumptions until supported by evidence.
+发生冲突时，当前事实、已接受ADR、合同和实测证据优先于历史计划与过程记录。
 
-## Current implementation boundary
+## 目录职责
 
-- The runnable product includes Login, Gate, Coordinator, two static Zone
-  Owners, shared Go/TypeScript Protobuf and the Vue H5.
-- The complete single-player loop is implemented through `player_seq=8`:
-  buy, plant, fertilize, mature, harvest, sell, claim and clean.
-- The current persistence target is pure Tcaplus. It stores accounts, Sessions,
-  Player checkpoints, Shard fences, migration progress and Outbox records.
-  MySQL remains a tested historical baseline and rollback adapter.
-- Static dual-Zone routing uses a committed 4096-entry ShardMap, immutable Gate
-  RouteCache, Zone authorization snapshots and epoch fencing. Inactive and
-  active migration, stale-owner rejection and post-migration restart pass live
-  Tcaplus E2E.
-- A local kind cluster runs Coordinator, Login, Gate, `zone-a` and `zone-b` as
-  five Ready Deployments. It uses fixed membership and does not implement
-  dynamic discovery, HPA, PDB, Ingress/TLS or Zone-level preStop Drain.
-- Default startup without a storage option remains development-only in-memory
-  mode. Tickets and CSRF nonce records remain process-local by ADR-0010.
-- Outbox relay, Mail Service, production Push delivery, abnormal Dirty-window
-  guarantees and production capacity evidence remain outside the prototype.
-- Friend phases 0–5 are complete: contracts are frozen, existing
-  Gate→Zone/Zone→Gate game traffic uses HMAC-authenticated gRPC, FriendSvr
-  plus authoritative friend relations/lists/task credit are live against
-  real friend Tcaplus tables, and Gate/Zone route `ENTER`/`HEARTBEAT`/
-  `EXIT_FRIEND_FARM` to a public farm snapshot with a minimal H5 friends
-  panel. Public plot mutations (plant, fertilize, harvest, clean, natural
-  maturity) now bump an independent `farm_view_seq` and broadcast an
-  incremental `FarmViewPatch` to the owner and every online visitor through
-  Gate; H5 replaces the full snapshot on an epoch change or seq gap. The
-  cross-Actor `FriendInteraction` Saga is live for `STEAL_FRIEND_CROP`:
-  frozen per-plot steal fields at plant, synchronous visitor
-  reserve/owner-apply/visitor-commit/release steps, a Tcaplus (or in-memory
-  dev) `FriendInteraction` store with CAS, and a 5-second reconciler ticker
-  that recovers all three crash windows; ordinary single-player commands
-  remain unaffected asynchronous Dirty writes. Phase 6 (pest/catch/help
-  interactions, reusing the same Saga infrastructure) is the next boundary.
-- Read `context/CURRENT.md` for the exact handoff and the dated files under `evidence/` for observed results and limitations.
+- `delivery/`：最终交付阅读入口和图片资产；
+- `project/`：启动、部署和项目操作说明；
+- `context/`：稳定项目事实与简洁当前状态；
+- `requirements/`：确认需求、验收边界和非目标；
+- `architecture/`：当前有效总体架构与专题设计；
+- `modules/`：服务和业务模块职责、数据归属与不变量；
+- `contracts/`：HTTP、WebSocket、gRPC、数据、事件、错误和幂等合同；
+- `decisions/`：重要架构决策记录；
+- `evidence/`：最终性能材料和代表性机制验收；
+- `bugs/`：值得保留的根因复盘；
+- `archive/`：旧架构、历史证据、开发计划、AI流水和个人工具配置。
 
-## Directory roles
+## 阅读规则
 
-- `requirements/`: confirmed or proposed product and non-functional requirements.
-- `architecture/`: current system topology and cross-cutting design.
-- `modules/`: business ownership, capabilities, invariants, and module flows.
-- `contracts/`: precise HTTP, WebSocket, event, data, error, and idempotency rules.
-- `decisions/`: major alternatives, decisions, costs, and validation methods.
-- `plans/`: unresolved-question boards and bounded execution plans.
-- `evidence/`: reproducible tests, measurements, and limitations.
-- `bugs/`: root-cause writeups for defects that locked players out or corrupted
-  state (phenomenon, cause, investigation, fix). Reference only; current
-  capability still lives in `context/CURRENT.md` and dated `evidence/`.
-- `context/`: stable project context and mutable current handoff.
-- `ai-workflow/`: concise AI collaboration records; never formal truth by itself.
-
-## Source-of-truth rules
-
-- Product scope comes from confirmed requirements.
-- Architecture tradeoffs come from the current architecture and latest accepted ADR.
-- Precise request, event, error, and storage formats come from contracts.
-- Actual capability and performance claims require evidence.
-- Plans and AI work records cannot override requirements, accepted decisions, contracts, or evidence.
-- `ai-context`, UC notes, and chat history are reference material; copy only reviewed conclusions into this repository.
-
-See `architecture/documentation-system.md` for the document lifecycle and migration rules.
+- V3是唯一当前目标架构；V1/V2只用于解释演进；
+- 3000万DAU是设计目标，不是本机实测能力；
+- 规划值、实验值和完整业务实测必须明确区分；
+- 归档材料不能覆盖当前合同、ADR或证据；
+- 不在文档中提交凭据、Cookie、玩家数据或公司内部实现资料。
