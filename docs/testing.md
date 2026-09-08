@@ -102,9 +102,20 @@ git diff --check
 
 已有验证记录覆盖上述核心步骤。
 
+## Qt 客户端
+
+源码在 `qt/`。`classic_farm_smoke` 对本机游戏服务做注册、快照、购买和欢迎邮件检查。构建目录必须是纯英文路径。
+
+```powershell
+$env:PATH = "C:\Qt\Tools\mingw1310_64\bin;C:\Qt\Tools\CMake_64\bin;C:\Qt\Tools\Ninja;C:\Qt\6.11.2\mingw_64\bin;" + $env:PATH
+cmake -G Ninja -DCMAKE_PREFIX_PATH=C:/Qt/6.11.2/mingw_64 -DCMAKE_BUILD_TYPE=Release -S .\qt -B C:\build\classic-farm-qt
+cmake --build C:\build\classic-farm-qt
+C:\build\classic-farm-qt\classic_farm_smoke.exe
+```
+
 ## 当前未覆盖范围
 
-- 尚无 Qt 客户端和自动化 Qt 测试。
+- 尚无 Qt GUI 自动化点击测试；当前 Qt 验证为编译与无界面冒烟。
 - 没有完整浏览器自动化套件，当前 UI 端到端检查为人工冒烟。
 - 没有覆盖 MySQL 提交结果未知的所有网络故障。
 - 没有公网安全、TLS、高可用和大规模性能测试。

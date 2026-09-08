@@ -13,6 +13,12 @@ coverage.out
 web/node_modules/
 web/dist/
 
+# Qt
+qt/build/
+qt/out/
+qt/cmake-build-*/
+qt/*.user
+
 # Local benchmark outputs
 benchmark/results/
 

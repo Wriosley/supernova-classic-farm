@@ -36,6 +36,8 @@ npm.cmd run dev
 访问 http://localhost:5173。开发代理把 `/api` 和 `/ws` 转发给 8080。
 `npm.cmd run build` 只生成静态文件，不自动提供后端代理；正式部署需另行配置同源反向代理。
 
+Windows 桌面客户端在 `qt/`。用 Qt Creator 打开 `qt/CMakeLists.txt`，Kit 选 **Desktop Qt 6.11.2 MinGW 64-bit**。`moc` 不能写到含中文的构建目录，请把构建目录设到纯英文路径，例如 `C:/build/classic-farm-qt`。先启动 Go 后端，再运行 `classic_farm`，默认连接 `127.0.0.1:8080`。
+
 ## 当前玩法
 
 4 块地、胡萝卜一种作物。初始 10 金币、1 份肥料。
