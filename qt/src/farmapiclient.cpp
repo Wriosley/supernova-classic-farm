@@ -8,6 +8,9 @@
 #include <QTimer>
 #include <QUuid>
 
+// 本文件实现 JSON HTTP 登录和 JSON WebSocket 游戏指令。
+// 成功写操作由服务端按 request_id 去重；客户端超时不能换新编号，否则会重复扣款。
+
 namespace {
 QString fromUtf8(const char *text)
 {
@@ -16,20 +19,21 @@ QString fromUtf8(const char *text)
 
 bool validUsername(const QString &username)
 {
+    // 与服务端 usernamePattern 一致：小写字母开头，3–32 位字母数字下划线。
     static const QRegularExpression re(QStringLiteral("^[a-z][a-z0-9_]{2,31}$"));
     return re.match(username).hasMatch();
 }
 
 bool validPassword(const QString &password)
 {
-    // 与协议一致：按 UTF-8 字节数计，服务端不会裁剪空格。
+    // 协议按 UTF-8 字节数计长度，服务端不会自动裁剪空格。
     const QByteArray bytes = password.toUtf8();
     return bytes.size() >= 8 && bytes.size() <= 128;
 }
 
 QString displayError(const QString &code, const QString &message)
 {
-    // 分支判断用 code；message 只给玩家看。
+    // 程序分支必须看 code。message 只是给人看的中文提示。
     if (!message.isEmpty())
         return message;
     if (code.isEmpty())
@@ -72,7 +76,7 @@ void FarmApiClient::setServerHostPort(const QString &hostPort)
         return;
     hostPort_ = trimmed;
     httpBase_ = QStringLiteral("http://") + trimmed;
-    wsBase_ = QStringLiteral("ws://") + trimmed;
+    wsBase_ = QStringLiteral("ws://") + trimmed; // Qt 直连 8080，不走 Vue 的 5173 代理
 }
 
 qint64 FarmApiClient::serverNowMs() const
@@ -110,6 +114,7 @@ void FarmApiClient::applyServerTime(const QJsonObject &obj)
 
 void FarmApiClient::registerAccount(const QString &username, const QString &password)
 {
+    // 注册只返回 player_id，thenLogin=true 会立刻再 POST /api/login 拿 token。
     postCredentials(QStringLiteral("/api/register"), 201, username, password, true);
 }
 
@@ -171,6 +176,7 @@ void FarmApiClient::handleHttpReply(QNetworkReply *reply, int okStatus, bool the
         emit errorMessage(fromUtf8("服务器未返回登录凭证"));
         return;
     }
+    // 同一玩家上次未确认的写操作跟账号走，换账号不会串号。
     unconfirmed_ = pendingStore_.load(playerId_);
     emit unconfirmedChanged();
     connectSocket();
@@ -217,6 +223,7 @@ void FarmApiClient::logout()
 void FarmApiClient::clearSession(bool keepPending)
 {
     token_.clear();
+    // keepPending=true：退出登录仍保留未确认指令，同一玩家下次登录还能重试。
     if (!keepPending)
         unconfirmed_ = {};
     hasSnapshot_ = false;
@@ -255,7 +262,7 @@ void FarmApiClient::retryUnconfirmed()
         emit errorMessage(fromUtf8("连接已断开，请重新连接"));
         return;
     }
-    sendCommand(unconfirmed_, true);
+    sendCommand(unconfirmed_, true); // 故意不 newRequestId，服务端按指纹去重
 }
 
 void FarmApiClient::getMailbox()
@@ -271,7 +278,7 @@ void FarmApiClient::readMail(const QString &mailId)
     Command command;
     command.requestId = newRequestId();
     command.action = QStringLiteral("READ_MAIL");
-    command.data.insert(QStringLiteral("mail_id"), mailId);
+    command.data.insert(QStringLiteral("mail_id"), mailId); // 仍用字符串，SQL 同时匹配当前玩家
     sendCommand(command, false);
 }
 
@@ -294,6 +301,7 @@ void FarmApiClient::sendCommand(const Command &command, bool write)
         {QStringLiteral("data"), command.data},
     };
     socket_.sendTextMessage(QString::fromUtf8(QJsonDocument(body).toJson(QJsonDocument::Compact)));
+    // 10 秒无响应视为结果未知。写操作会留下原 request_id，读操作直接丢掉。
     QTimer::singleShot(10'000, this, [this, id = command.requestId] {
         if (!inFlight_.contains(id))
             return;
@@ -325,7 +333,7 @@ void FarmApiClient::finishInFlight(const QString &requestId, const QJsonObject &
     }
     if (flight.write) {
         unconfirmed_ = {};
-        pendingStore_.clear(playerId_);
+        pendingStore_.clear(playerId_); // OK 或明确业务失败：这次编号已经结束
         emit unconfirmedChanged();
     }
     if (code != QLatin1String("OK"))
@@ -347,7 +355,7 @@ void FarmApiClient::handleTextMessage(const QString &text)
     QJsonParseError parseError;
     const QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        socket_.close();
+        socket_.close(); // 非法 JSON 与服务端约定：断开，不继续猜下一条
         return;
     }
     const QJsonObject obj = doc.object();
@@ -382,12 +390,12 @@ void FarmApiClient::handleTextMessage(const QString &text)
         Command snap;
         snap.requestId = newRequestId();
         snap.action = QStringLiteral("GET_PLAYER_SNAPSHOT");
-        sendCommand(snap, false);
+        sendCommand(snap, false); // AUTH 成功后立刻拉快照，不要等界面自己请求
     } else if (action == QLatin1String("GET_PLAYER_SNAPSHOT") && code == QLatin1String("OK") && !entered_) {
         entered_ = true;
         setConnected(true);
         heartbeat_.start();
-        emit enteredGame();
+        emit enteredGame(); // 主窗口这时才从登录页切到农场页
         emit statusMessage(fromUtf8("欢迎来到你的农场"));
     }
 
@@ -411,5 +419,6 @@ void FarmApiClient::handleDisconnected()
         emit errorMessage(fromUtf8("无法连接游戏服务器"));
         return;
     }
+    // token 还在：可以点重新连接。服务重启后 token 会失效，那时 AUTH 会要求重新登录。
     emit errorMessage(fromUtf8("连接已断开，请重新连接；登录过期时请退出后重新登录。"));
 }

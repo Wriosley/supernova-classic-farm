@@ -5,31 +5,34 @@
 #include <QString>
 #include <QVector>
 
-// 本文件把 JSON 合同转成 Qt 结构。数值只用于显示，不能再提交给服务器。
+// 本文件把 docs/contracts/json-api.md 里的 JSON 转成 Qt 结构。
+// 客户端只显示这些数值，不能把金币、成熟时间、产量再提交给服务器。
+// 成熟状态按 mature_at_ms 和服务器时间推导，读取快照不会增加 state_version。
 
 struct Plot {
-    int id = 0;
+    int id = 0;              // plot_id，1–4
     QString status;          // EMPTY / GROWING / MATURE / NEED_CLEANUP
     qint64 plantedAtMs = 0;  // Unix 毫秒；空地为 0
-    qint64 matureAtMs = 0;
-    bool fertilized = false;
+    qint64 matureAtMs = 0;   // 到点即成熟，无需后台每秒写库
+    bool fertilized = false; // 每株肥料只能用一次
 };
 
 struct Task {
-    QString action;
+    QString action; // 与写操作 action 同名，用来累加进度
     QString label;
     int current = 0;
     int target = 0;
 };
 
 struct Mail {
-    QString id; // 协议里是十进制字符串，避免当成 double 丢失精度
+    QString id; // mail_id 必须当字符串读，先转 double 会丢掉 BIGINT 精度
     QString title;
     QString content;
     bool isRead = false;
     qint64 createdAtMs = 0;
 };
 
+// 玩法参数由服务端权威给出；界面用这些字段显示价格，不要写死后再提交。
 struct Config {
     int seedPrice = 2;
     int fertilizerPrice = 2;
@@ -42,7 +45,7 @@ struct Config {
 
 struct Snapshot {
     QString playerId;
-    quint64 version = 0; // JSON 字段 state_version 是字符串
+    quint64 version = 0; // JSON 里是字符串 state_version
     int coins = 0;
     int seeds = 0;
     int fertilizer = 0;
@@ -52,13 +55,15 @@ struct Snapshot {
     QVector<Task> tasks;
 };
 
+// 发给 WebSocket 的一条指令。写操作必须固定 request_id，断线重试不能换新编号。
 struct Command {
     QString requestId;
     QString action;
     QJsonObject data;
 };
 
-// 写操作才会进入服务端去重记录；读快照、心跳、邮箱不保存 request_id。
+// 只有这些 action 会改农场存档并进入服务端去重表。
+// GET_PLAYER_SNAPSHOT、PING、GET_MAILBOX、READ_MAIL 不算写操作。
 inline bool commandIsWrite(const QString &action)
 {
     return action == QLatin1String("BUY_SEEDS")
@@ -165,7 +170,7 @@ inline bool tasksComplete(const Snapshot &s)
 
 inline qint64 remainingSeconds(const Plot &p, qint64 nowMs)
 {
-    // 成熟时间由服务端给出；客户端只做倒计时显示，不改状态。
+    // 倒计时只用于显示。真正能不能收获由服务端按 mature_at_ms 判断。
     const qint64 delta = p.matureAtMs - nowMs;
     if (delta <= 0)
         return 0;

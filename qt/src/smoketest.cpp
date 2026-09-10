@@ -6,7 +6,9 @@
 #include <QUuid>
 #include <cstdio>
 
-// 无界面冒烟：注册 → 快照 → 买 3 种子 → 读欢迎邮件。不要打印 token。
+// 无窗口冒烟测试，用来确认 Qt 能连上正在运行的 Go 服务器。
+// 流程：注册并自动登录 → 核对初始快照 → BUY_SEEDS 3 → GET_MAILBOX。
+// 不要打印 token 或密码。需要先启动 server/cmd/game（可用 -Memory）。
 static QString uniqueUser()
 {
     return QStringLiteral("qt") + QUuid::createUuid().toString(QUuid::Id128).left(10).toLower();
@@ -26,8 +28,9 @@ int main(int argc, char *argv[])
     int code = 2;
     QObject::connect(&client, &FarmApiClient::enteredGame, &loop, [&] {
         const Snapshot s = client.snapshot();
+        // 与服务端 NewState 对齐：10 金币、0 种子、1 肥料、4 块地。
         if (s.coins != 10 || s.seeds != 0 || s.fertilizer != 1 || s.plots.size() != 4) {
-            std::fprintf(stderr, "unexpected initial snapshot\n"); // 与 NewState 初始值对齐
+            std::fprintf(stderr, "unexpected initial snapshot\n");
             code = 3;
             loop.quit();
             return;
@@ -35,7 +38,7 @@ int main(int argc, char *argv[])
         QObject::connect(&client, &FarmApiClient::snapshotUpdated, &loop, [&] {
             const Snapshot after = client.snapshot();
             if (after.coins != 4 || after.seeds != 3)
-                return; // 等购买成功后的快照，忽略心跳带来的同余额刷新
+                return; // 忽略 PING/倒计时触发的同余额刷新，只认买种子成功后的快照
             QObject::connect(&client, &FarmApiClient::mailsUpdated, &loop, [&] {
                 if (client.mails().isEmpty() || client.mails().first().title.isEmpty()) {
                     std::fprintf(stderr, "welcome mail missing\n");

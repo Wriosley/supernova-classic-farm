@@ -3,6 +3,8 @@
 #include <QJsonDocument>
 #include <QSettings>
 
+// 本地只保留最多一条未确认写操作。QSettings 的组织名必须和 main.cpp 一致。
+
 namespace {
 QString keyFor(const QString &playerId)
 {

@@ -7,7 +7,7 @@ class QLineEdit;
 class QLabel;
 class QPushButton;
 
-// 只负责账号表单；网络全部走 FarmApiClient。
+// 登录/注册表单。网络、校验结果和进农场都由 FarmApiClient 发信号驱动。
 class LoginWindow : public QWidget
 {
     Q_OBJECT
@@ -21,7 +21,7 @@ private:
 
     FarmApiClient *client_;
     bool registerMode_ = false;
-    QLineEdit *hostEdit_ = nullptr;
+    QLineEdit *hostEdit_ = nullptr; // 默认 127.0.0.1:8080，局域网可改成服务器 IP
     QLineEdit *userEdit_ = nullptr;
     QLineEdit *passEdit_ = nullptr;
     QLabel *hintLabel_ = nullptr;

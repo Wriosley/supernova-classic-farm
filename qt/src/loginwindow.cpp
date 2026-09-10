@@ -10,7 +10,7 @@ namespace {
 QString u8(const char *text) { return QString::fromUtf8(text); }
 }
 
-// 登录页只收集账号密码；注册成功后由 FarmApiClient 自动再调登录。
+// 登录页只收集账号密码和服务器地址。注册成功后由 FarmApiClient 自动再登录。
 LoginWindow::LoginWindow(FarmApiClient *client, QWidget *parent)
     : QWidget(parent)
     , client_(client)
@@ -73,11 +73,12 @@ LoginWindow::LoginWindow(FarmApiClient *client, QWidget *parent)
         errorLabel_->setVisible(!text.isEmpty());
     });
     connect(client_, &FarmApiClient::busyChanged, this, &LoginWindow::refreshBusy);
-    connect(client_, &FarmApiClient::enteredGame, passEdit_, &QLineEdit::clear);
+    connect(client_, &FarmApiClient::enteredGame, passEdit_, &QLineEdit::clear); // 进农场后清掉明文密码框
 }
 
 void LoginWindow::toggleMode()
 {
+    // 同一套表单切换登录/注册，避免两套输入框状态不一致。
     registerMode_ = !registerMode_;
     hintLabel_->setText(registerMode_ ? u8("开启农场生活") : u8("回到你的农场"));
     submitButton_->setText(registerMode_ ? u8("注册并进入") : u8("登录农场"));
@@ -96,6 +97,7 @@ void LoginWindow::submit()
 {
     errorLabel_->hide();
     client_->setServerHostPort(hostEdit_->text());
+    // 密码不裁剪：协议按原始 UTF-8 字节校验，前后空格也算进长度。
     if (registerMode_)
         client_->registerAccount(userEdit_->text().trimmed(), passEdit_->text());
     else

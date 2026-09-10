@@ -1,6 +1,8 @@
 #include "mailboxdialog.h"
 #include "farmapiclient.h"
 
+// 打开时由 FarmWindow 先发 GET_MAILBOX。本对话框只负责展示和点未读。
+
 #include <QDateTime>
 #include <QLabel>
 #include <QListWidget>
@@ -47,8 +49,8 @@ void MailboxDialog::refresh()
         const QString text = QStringLiteral("%1\n%2\n%3\n%4")
             .arg(mail.isRead ? u8("已读") : u8("未读"), mail.title, stamp, mail.content);
         auto *item = new QListWidgetItem(text);
-        item->setData(Qt::UserRole, mail.id);
-        item->setData(Qt::UserRole + 1, mail.isRead);
+        item->setData(Qt::UserRole, mail.id);          // mail_id 保持字符串
+        item->setData(Qt::UserRole + 1, mail.isRead);  // 已读则不再发 READ_MAIL
         list_->addItem(item);
     }
 }

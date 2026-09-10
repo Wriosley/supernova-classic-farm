@@ -5,12 +5,15 @@
 #include <QApplication>
 #include <QStackedWidget>
 
+// 桌面入口：一个 FarmApiClient 同时驱动登录页和农场页。
+// 只有 AUTH + 首份快照成功才切到农场；token 失效或主动退出回到登录。
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Classic Farm"));
-    app.setOrganizationName(QStringLiteral("ClassicFarm"));
-    // 卡片内按钮不能设成 transparent，否则白字贴在白底上看不见。
+    app.setOrganizationName(QStringLiteral("ClassicFarm")); // 与 PendingStore 的 QSettings 组织名一致
+    // 卡片背景是白的，按钮必须保留绿色底。透明按钮会出现白底白字。
+    // 禁用态用实色 #9bb59f，不要用 opacity，否则 MinGW 下可能整颗按钮看不见。
     app.setStyleSheet(QString::fromUtf8(R"(
         QWidget { background: #f4f5ed; color: #253b2a; font-size: 14px; }
         QLabel#titleLabel { font-size: 28px; font-weight: 700; }

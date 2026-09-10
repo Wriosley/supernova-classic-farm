@@ -2,6 +2,9 @@
 #include "farmapiclient.h"
 #include "mailboxdialog.h"
 
+// 农场页只展示服务器快照。金币、成熟、产量都不在本地结算。
+// 忙碌、断线或存在未确认写操作时，所有写按钮一起禁用。
+
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -150,6 +153,7 @@ FarmWindow::FarmWindow(FarmApiClient *client, QWidget *parent)
     connect(reconnectButton_, &QPushButton::clicked, client_, &FarmApiClient::reconnect);
     connect(logoutButton_, &QPushButton::clicked, client_, &FarmApiClient::logout);
     connect(retryButton_, &QPushButton::clicked, client_, &FarmApiClient::retryUnconfirmed);
+    // 商店按钮只提交 action。扣金币、加库存都等 snapshot 回来再改数字。
     connect(buySeedsButton_, &QPushButton::clicked, this, [this] {
         client_->performWrite(QStringLiteral("BUY_SEEDS"), QJsonObject{{QStringLiteral("quantity"), quantitySpin_->value()}});
     });
@@ -160,6 +164,7 @@ FarmWindow::FarmWindow(FarmApiClient *client, QWidget *parent)
         const int crops = client_->snapshot().crops;
         if (crops < 1)
             return;
+        // 一次卖掉仓库里全部胡萝卜；数量以当前快照为准，不在本地累加。
         client_->performWrite(QStringLiteral("SELL_CROP"), QJsonObject{{QStringLiteral("quantity"), crops}});
     });
     connect(claimButton_, &QPushButton::clicked, this, [this] {
@@ -185,6 +190,7 @@ FarmWindow::FarmWindow(FarmApiClient *client, QWidget *parent)
 
 bool FarmWindow::actionsDisabled() const
 {
+    // 未确认写操作未清掉前禁止新操作，避免两条 request_id 并行改同一份存档。
     return client_->isBusy() || !client_->isConnected() || client_->hasUnconfirmed();
 }
 
@@ -199,6 +205,7 @@ void FarmWindow::refresh()
 {
     const Snapshot s = client_->snapshot();
     const Config cfg = client_->config();
+    // 数值全部来自最新 snapshot；断线时仍显示上一份，只把按钮关掉。
     accountLabel_->setText(QStringLiteral("%1 · %2").arg(client_->username(), client_->isConnected() ? u8("在线") : u8("离线")));
     reconnectButton_->setVisible(!client_->isConnected());
     reconnectButton_->setEnabled(!client_->isBusy());
@@ -285,6 +292,7 @@ void FarmWindow::refreshPlots()
         connect(plotCard.action, &QPushButton::clicked, this, [this, index] {
             if (index >= client_->snapshot().plots.size())
                 return;
+            // 点击瞬间再读快照：倒计时可能刚走完，按钮文案还没刷新到“收获”。
             const Plot plot = client_->snapshot().plots.at(index);
             const qint64 nowMs = client_->serverNowMs();
             if (plot.status == QLatin1String("EMPTY"))

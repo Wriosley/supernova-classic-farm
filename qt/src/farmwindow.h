@@ -10,6 +10,7 @@ class QPushButton;
 class QSpinBox;
 class QVBoxLayout;
 
+// 一块地对应一组固定控件。每秒只改文案，不销毁重建，避免按钮闪烁。
 struct PlotCard {
     QWidget *card = nullptr;
     QLabel *number = nullptr;
@@ -19,7 +20,8 @@ struct PlotCard {
     QPushButton *action = nullptr;
 };
 
-// 农场界面只读 snapshot 刷新；种植等写操作不在本地改金币。
+// 农场主界面：只根据 FarmApiClient 的 snapshot/config 刷新。
+// 点击按钮只发 action，不在本地减金币或改地块。
 class FarmWindow : public QWidget
 {
     Q_OBJECT

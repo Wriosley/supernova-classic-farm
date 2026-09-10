@@ -1,0 +1,20 @@
+﻿我的小农场 · Windows 客户端（中期课设）
+
+这个文件夹已经带上运行所需的 Qt / MinGW DLL，目标电脑不必再安装 Qt Creator。
+
+【怎么打开】
+1. 先在本机启动游戏服务器（默认 http://127.0.0.1:8080）。
+   在仓库 supernova-classic-farm 里执行：
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\start-servers.ps1 -Memory
+2. 双击本目录的 classic_farm.exe。
+3. 登录页「服务器」保持 127.0.0.1:8080。
+   若服务器在另一台电脑，改成那台电脑的局域网 IP，例如 192.168.1.8:8080。
+
+【不要】
+- 不要只拷 classic_farm.exe，必须连同旁边的 dll 和 platforms 文件夹一起带走。
+- 不要拷贝 C:\Qt 整个开发环境。
+- 客户端不会保存密码或 token。
+
+【说明】
+- 内存模式关服后账号和农场会丢失；MySQL 模式需要仓库里的 .env。
+- 本包不含 Go 服务器，也不含源码。

@@ -34,6 +34,7 @@ target_include_directories(classic_farm_smoke PRIVATE src)
 target_link_libraries(classic_farm_smoke PRIVATE
     Qt6::Core Qt6::Network Qt6::WebSockets)
 
+# 源码含中文注释和界面文案，强制 UTF-8，避免 Windows 默认代码页把字符串编坏。
 if (MINGW)
     target_compile_options(classic_farm PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
     target_compile_options(classic_farm_smoke PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
