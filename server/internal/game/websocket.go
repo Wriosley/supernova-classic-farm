@@ -63,6 +63,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			} else if command.Data.Token == "" || command.Data.PlotID != 0 || command.Data.Quantity != 0 || command.Data.MailID != "" {
 				err = ErrInvalid
 			} else {
+				// 根据 token 查询玩家身份。
 				token = command.Data.Token
 				playerID, err = s.identity(token)
 			}
@@ -73,6 +74,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 				_ = writeWS(ctx, c, response)
 				return
 			}
+			// 认证成功后保存连接。
 			s.mu.Lock()
 			old := s.connections[playerID]
 			s.connections[playerID] = connection{token, c}
