@@ -1,66 +1,66 @@
 #include "mailboxdialog.h"
 #include "farmapiclient.h"
 
-// 打开时由 FarmWindow 先发 GET_MAILBOX。本对话框只负责展示和点未读。
-
 #include <QDateTime>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QVBoxLayout>
 
-namespace {
-QString u8(const char *text) { return QString::fromUtf8(text); }
-}
-
 MailboxDialog::MailboxDialog(FarmApiClient *client, QWidget *parent)
     : QDialog(parent)
-    , client_(client)
+    , api(client)
 {
-    setWindowTitle(u8("邮箱"));
+    setWindowTitle(QString::fromUtf8("邮箱"));
     resize(460, 420);
-    list_ = new QListWidget;
-    auto *closeButton = new QPushButton(u8("关闭"));
-    auto *hint = new QLabel(u8("点击未读邮件标记已读。每次打开都会向服务器查询。"));
-    hint->setObjectName(QStringLiteral("mutedLabel"));
+    list = new QListWidget;
+    auto *closeButton = new QPushButton(QString::fromUtf8("关闭"));
+    auto *hint = new QLabel(QString::fromUtf8("点击未读邮件标记已读。每次打开都会向服务器查询。"));
     hint->setWordWrap(true);
+
     auto *layout = new QVBoxLayout(this);
     layout->addWidget(hint);
-    layout->addWidget(list_);
+    layout->addWidget(list);
     layout->addWidget(closeButton);
+
     connect(closeButton, &QPushButton::clicked, this, &MailboxDialog::accept);
-    connect(list_, &QListWidget::itemClicked, this, &MailboxDialog::openSelected);
-    connect(client_, &FarmApiClient::mailsUpdated, this, &MailboxDialog::refresh);
+    connect(list, &QListWidget::itemClicked, this, [this] {
+        auto *item = list->currentItem();
+        if (!item || item->data(Qt::UserRole).toString().isEmpty())
+            return;
+
+        if (item->data(Qt::UserRole + 1).toBool())
+            return;
+
+        api->readMail(item->data(Qt::UserRole).toString());
+    });
+    connect(api, &FarmApiClient::mailsUpdated, this, &MailboxDialog::refresh);
+
     refresh();
 }
 
 void MailboxDialog::refresh()
 {
-    list_->clear();
-    const auto mails = client_->mails();
+    list->clear();
+    const auto mails = api->mails();
+
     if (mails.isEmpty()) {
-        auto *item = new QListWidgetItem(u8("暂无邮件"));
+        auto *item = new QListWidgetItem(QString::fromUtf8("暂无邮件"));
         item->setFlags(Qt::NoItemFlags);
-        list_->addItem(item);
+        list->addItem(item);
         return;
     }
+
     for (const auto &mail : mails) {
         const QString stamp = QDateTime::fromMSecsSinceEpoch(mail.createdAtMs).toString(QStringLiteral("yyyy-MM-dd hh:mm"));
-        const QString text = QStringLiteral("%1\n%2\n%3\n%4")
-            .arg(mail.isRead ? u8("已读") : u8("未读"), mail.title, stamp, mail.content);
-        auto *item = new QListWidgetItem(text);
-        item->setData(Qt::UserRole, mail.id);          // mail_id 保持字符串
-        item->setData(Qt::UserRole + 1, mail.isRead);  // 已读则不再发 READ_MAIL
-        list_->addItem(item);
-    }
-}
 
-void MailboxDialog::openSelected()
-{
-    auto *item = list_->currentItem();
-    if (!item || item->data(Qt::UserRole).toString().isEmpty())
-        return;
-    if (item->data(Qt::UserRole + 1).toBool())
-        return; // 已读不再请求，避免把 READ_MAIL 当成可重试写操作
-    client_->readMail(item->data(Qt::UserRole).toString());
+        const QString text = QStringLiteral("%1\n%2\n%3\n%4")
+            .arg(mail.isRead ? QString::fromUtf8("已读") : QString::fromUtf8("未读"), mail.title, stamp, mail.content);
+        auto *item = new QListWidgetItem(text);
+
+        item->setData(Qt::UserRole, mail.id);
+        item->setData(Qt::UserRole + 1, mail.isRead);
+
+        list->addItem(item);
+    }
 }
