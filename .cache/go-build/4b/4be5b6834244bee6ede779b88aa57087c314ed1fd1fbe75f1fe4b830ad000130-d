@@ -1,0 +1,8 @@
+./friend.go
+./game.go
+./http.go
+./model.go
+./mysql.go
+./password.go
+./websocket.go
+./password_test.go

@@ -1,0 +1,22 @@
+# ninja log v6
+3	1095	8107511021931703	classic_farm_autogen/timestamp	e8f7c4f946c5958c
+3	1095	8107511021931703	classic_farm_autogen/mocs_compilation.cpp	e8f7c4f946c5958c
+3	1095	8107511021931703	F:/workspace/supernova-classic-farm/.cache/qt-env-check/classic_farm_autogen/timestamp	e8f7c4f946c5958c
+3	1095	8107511021931703	F:/workspace/supernova-classic-farm/.cache/qt-env-check/classic_farm_autogen/mocs_compilation.cpp	e8f7c4f946c5958c
+14	1140	8107511022051404	classic_farm_smoke_autogen/timestamp	a2aadb52d1e9c7bb
+14	1140	8107511022051404	classic_farm_smoke_autogen/mocs_compilation.cpp	a2aadb52d1e9c7bb
+14	1140	8107511022051404	F:/workspace/supernova-classic-farm/.cache/qt-env-check/classic_farm_smoke_autogen/timestamp	a2aadb52d1e9c7bb
+14	1140	8107511022051404	F:/workspace/supernova-classic-farm/.cache/qt-env-check/classic_farm_smoke_autogen/mocs_compilation.cpp	a2aadb52d1e9c7bb
+1116	4772	8107511022939016	CMakeFiles/classic_farm.dir/src/main.cpp.obj	90b0d585806249f0
+1128	5034	8107511023058704	CMakeFiles/classic_farm.dir/src/loginwindow.cpp.obj	6d54d2fbc910e0d1
+1102	5117	8107511022799382	CMakeFiles/classic_farm.dir/classic_farm_autogen/mocs_compilation.cpp.obj	89d378d9e62a27c6
+1141	6303	8107511023188365	CMakeFiles/classic_farm.dir/src/farmwindow.cpp.obj	9252f1a17c34759
+5034	7864	8107511062115334	CMakeFiles/classic_farm.dir/src/pendingstore.cpp.obj	e9d465c2b8280180
+4773	8929	8107511059509304	CMakeFiles/classic_farm.dir/src/mailboxdialog.cpp.obj	2e7a7e418738befe
+6303	9571	8107511074812606	CMakeFiles/classic_farm_smoke.dir/classic_farm_smoke_autogen/mocs_compilation.cpp.obj	3f5aaa3d2ddcf497
+5117	11099	8107511062949609	CMakeFiles/classic_farm.dir/src/farmapiclient.cpp.obj	972b7d5dc4f8187
+7864	11352	8107511090415300	CMakeFiles/classic_farm_smoke.dir/src/smoketest.cpp.obj	798058007dab469d
+11100	11372	8107511122772948	classic_farm.exe	4f5056e16926ad4
+8930	11813	8107511101073199	CMakeFiles/classic_farm_smoke.dir/src/pendingstore.cpp.obj	2996c611026af2f8
+9571	14715	8107511107490430	CMakeFiles/classic_farm_smoke.dir/src/farmapiclient.cpp.obj	d302db47df89d2f4
+14715	14862	8107511158930069	classic_farm_smoke.exe	6f64f3a903771426

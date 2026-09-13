@@ -1,0 +1,6 @@
+set(__QT_DEPLOY_TARGET_classic_farm_FILE F:/workspace/supernova-classic-farm/.cache/qt-env-check/classic_farm.exe)
+set(__QT_DEPLOY_TARGET_classic_farm_TYPE EXECUTABLE)
+set(__QT_DEPLOY_TARGET_classic_farm_RUNTIME_DLLS F:/Qt/6.11.2/mingw_64/bin/Qt6WebSockets.dll;F:/Qt/6.11.2/mingw_64/bin/Qt6Widgets.dll;F:/Qt/6.11.2/mingw_64/bin/Qt6Network.dll;F:/Qt/6.11.2/mingw_64/bin/Qt6Gui.dll;F:/Qt/6.11.2/mingw_64/bin/Qt6Core.dll)
+set(__QT_DEPLOY_TARGET_classic_farm_smoke_FILE F:/workspace/supernova-classic-farm/.cache/qt-env-check/classic_farm_smoke.exe)
+set(__QT_DEPLOY_TARGET_classic_farm_smoke_TYPE EXECUTABLE)
+set(__QT_DEPLOY_TARGET_classic_farm_smoke_RUNTIME_DLLS F:/Qt/6.11.2/mingw_64/bin/Qt6WebSockets.dll;F:/Qt/6.11.2/mingw_64/bin/Qt6Network.dll;F:/Qt/6.11.2/mingw_64/bin/Qt6Core.dll)

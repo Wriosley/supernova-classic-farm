@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"github.com/Wriosley/supernova-classic-farm/server/internal/game"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
@@ -20,34 +21,28 @@ func main() {
 	}
 }
 func run() error {
-	// 未配置 MYSQL_DSN 时使用内存模式，方便不安装数据库也能演示。
-	var store game.Store = game.NewMemoryStore()
-	if dsn := os.Getenv("MYSQL_DSN"); dsn != "" {
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			log.Print("Invalid MYSQL_DSN configuration")
-			return context.Canceled
-		}
-		defer db.Close()
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(3 * time.Minute)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err = db.PingContext(ctx); err != nil {
-			log.Print("Cannot connect to MySQL; check service, database and credentials")
-			return context.Canceled
-		}
-		mysqlStore := &game.MySQLStore{DB: db}
-		if err = mysqlStore.Init(ctx); err != nil {
-			return err
-		}
-		store = mysqlStore
-		log.Print("Data mode: MySQL; class_mid_* tables, synchronous transactions")
-	} else {
-		log.Print("Data mode: in-memory; data will be lost on exit")
+	dsn := os.Getenv("MYSQL_DSN")
+	if dsn == "" {
+		return errors.New("MYSQL_DSN is required")
 	}
-	app := game.NewServer(store)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return errors.New("invalid MYSQL_DSN")
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(3 * time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err = db.PingContext(ctx); err != nil {
+		return errors.New("cannot connect to MySQL")
+	}
+	if err = game.InitTables(ctx, db); err != nil {
+		return err
+	}
+	log.Print("Data mode: MySQL relational tables")
+	app := game.NewServer(db)
 	defer app.Close()
 	addr := os.Getenv("GAME_ADDR")
 	if addr == "" {

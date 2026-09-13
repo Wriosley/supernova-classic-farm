@@ -1,18 +1,16 @@
 package game
 
-// 本文件提供注册、登录、注销、健康检查和配置查询的 HTTP JSON 接口。
-
 import (
-	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/coder/websocket"
-	"io"
-	"mime"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 type session struct {
@@ -24,18 +22,17 @@ type connection struct {
 	Socket *websocket.Conn
 }
 
-// Server 持有业务引擎以及仅存在于进程内的 Session 和 WebSocket 连接表。
 type Server struct {
-	engine      Engine
+	db          *sql.DB
 	mu          sync.Mutex
 	sessions    map[string]session
 	connections map[string]connection
-	authSlots   chan struct{}
 }
 
-func NewServer(store Store) *Server {
-	return &Server{engine: Engine{Store: store, Now: time.Now}, sessions: map[string]session{}, connections: map[string]connection{}, authSlots: make(chan struct{}, 4)}
+func NewServer(db *sql.DB) *Server {
+	return &Server{db: db, sessions: map[string]session{}, connections: map[string]connection{}}
 }
+
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { s.reply(w, 200, Response{Code: "OK"}) })
@@ -46,18 +43,36 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/register", s.register)
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
+	mux.HandleFunc("GET /api/mailbox", s.mailboxHTTP)
+	mux.HandleFunc("POST /api/mailbox", s.mailboxHTTP)
+	mux.HandleFunc("POST /api/friends/add", s.addFriendHTTP)
+	mux.HandleFunc("GET /api/friends", s.listFriendsHTTP)
+	mux.HandleFunc("GET /api/friends/{id}/farm", s.friendFarmHTTP)
+	mux.HandleFunc("POST /api/friends/{id}/steal", s.stealHTTP)
+	mux.HandleFunc("POST /api/friends/{id}/mail", s.friendMailHTTP)
 	mux.HandleFunc("GET /ws", s.websocket)
 	return mux
 }
-func decodeJSON(body []byte, target any) error {
-	// 拒绝未知字段和第二个 JSON 值，让 Go、Vue 与 Qt 严格遵守同一合同。
-	dec := json.NewDecoder(bytes.NewReader(body))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(target); err != nil {
+
+// mailboxHTTP 给没有实现邮箱界面的测试客户端提供简单查询。
+func (s *Server) mailboxHTTP(w http.ResponseWriter, r *http.Request) {
+	playerID, ok := s.requirePlayer(w, r)
+	if !ok {
+		return
+	}
+	mails, err := listMails(r.Context(), s.db, playerID)
+	if err != nil {
+		s.failHTTP(w, err)
+		return
+	}
+	s.reply(w, http.StatusOK, Response{Code: "OK", Mails: mails})
+}
+
+func decodeJSON(r *http.Request, target any) error {
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		return ErrInvalid
 	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
+	if err := json.NewDecoder(http.MaxBytesReader(nil, r.Body, 4096)).Decode(target); err != nil {
 		return ErrInvalid
 	}
 	return nil
@@ -68,108 +83,68 @@ type credentials struct {
 	Password string `json:"password"`
 }
 
-func readCredentials(w http.ResponseWriter, r *http.Request) (credentials, error) {
-	var c credentials
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" {
-		return c, ErrInvalid
-	}
-	b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
-	if err != nil {
-		return c, ErrInvalid
-	}
-	if err = decodeJSON(b, &c); err != nil {
-		return c, err
-	}
-	return c, ValidateCredentials(c.Username, c.Password)
-}
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
-	c, err := readCredentials(w, r)
+	var c credentials
+	if err := decodeJSON(r, &c); err != nil || validateCredentials(c.Username, c.Password) != nil {
+		s.failHTTP(w, ErrInvalid)
+		return
+	}
+	id, err := createPlayer(r.Context(), s.db, c.Username, c.Password)
 	if err != nil {
 		s.failHTTP(w, err)
 		return
 	}
-	select {
-	// 密码派生计算量较大，限制并发可防止登录请求拖垮课堂演示服务。
-	case s.authSlots <- struct{}{}:
-		defer func() { <-s.authSlots }()
-	default:
-		s.reply(w, 429, Response{Code: "SERVER_BUSY"})
-		return
-	}
-	hash, err := HashPassword(c.Password)
-	if err != nil {
-		s.failHTTP(w, err)
-		return
-	}
-	id, err := randomHex(16)
-	if err == nil {
-		err = s.engine.Store.Create(r.Context(), Account{ID: id, Username: c.Username, PasswordHash: hash}, NewState(id))
-	}
-	if err != nil {
-		s.failHTTP(w, err)
-		return
-	}
-	s.reply(w, 201, Response{Code: "OK", PlayerID: id})
+	s.reply(w, http.StatusCreated, Response{Code: "OK", PlayerID: id})
 }
+
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	c, err := readCredentials(w, r)
-	if err != nil {
-		s.failHTTP(w, err)
+	var c credentials
+	if err := decodeJSON(r, &c); err != nil || validateCredentials(c.Username, c.Password) != nil {
+		s.failHTTP(w, ErrInvalid)
 		return
 	}
-	select {
-	case s.authSlots <- struct{}{}:
-		defer func() { <-s.authSlots }()
-	default:
-		s.reply(w, 429, Response{Code: "SERVER_BUSY"})
-		return
-	}
-	a, err := s.engine.Store.Find(r.Context(), c.Username)
-	if errors.Is(err, ErrCredentials) {
-		// 账号不存在时仍执行一次密码派生，减少通过耗时判断账号是否存在的差异。
-		_, _ = HashPassword(c.Password)
+	a, err := findAccount(r.Context(), s.db, c.Username)
+	if err != nil || a.Password != encodePassword(c.Password) {
 		s.failHTTP(w, ErrCredentials)
 		return
 	}
+	token, err := randomHex(16)
 	if err != nil {
 		s.failHTTP(w, err)
 		return
 	}
-	if !VerifyPassword(a.PasswordHash, c.Password) {
-		s.failHTTP(w, ErrCredentials)
-		return
-	}
-	token, err := randomHex(32)
-	if err != nil {
-		s.failHTTP(w, err)
-		return
-	}
-	now := time.Now()
 	s.mu.Lock()
-	for key, value := range s.sessions {
-		if now.After(value.Expires) {
-			delete(s.sessions, key)
-		}
-	}
-	// Session 只保存在内存中并存活 24 小时，服务重启后需要重新登录。
-	s.sessions[token] = session{a.ID, now.Add(24 * time.Hour)}
+	s.sessions[token] = session{PlayerID: a.ID, Expires: time.Now().Add(24 * time.Hour)}
 	s.mu.Unlock()
-	s.reply(w, 200, Response{Code: "OK", Token: token, PlayerID: a.ID})
+	s.reply(w, http.StatusOK, Response{Code: "OK", Token: token, PlayerID: a.ID})
 }
+
 func (s *Server) identity(token string) (string, error) {
-	// 后续 WebSocket 操作只相信 token 绑定的玩家身份。
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	session, ok := s.sessions[token]
-	if !ok || !time.Now().Before(session.Expires) {
+	value, ok := s.sessions[token]
+	if !ok || time.Now().After(value.Expires) {
 		delete(s.sessions, token)
 		return "", ErrUnauthenticated
 	}
-	return session.PlayerID, nil
+	return value.PlayerID, nil
 }
+
+func bearerToken(r *http.Request) string {
+	return strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+}
+
+func (s *Server) requirePlayer(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id, err := s.identity(bearerToken(r))
+	if err != nil {
+		s.failHTTP(w, err)
+		return "", false
+	}
+	return id, true
+}
+
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	token := bearerToken(r)
 	id, err := s.identity(token)
 	if err != nil {
 		s.failHTTP(w, err)
@@ -187,6 +162,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	s.reply(w, 200, Response{Code: "OK"})
 }
+
 func (s *Server) Close() {
 	s.mu.Lock()
 	connections := s.connections
@@ -197,33 +173,45 @@ func (s *Server) Close() {
 		_ = c.Socket.CloseNow()
 	}
 }
+
 func (s *Server) reply(w http.ResponseWriter, status int, response Response) {
 	response.Type = "response"
 	response.ServerTimeMS = time.Now().UnixMilli()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(response)
 }
+
 func errorResponse(err error) Response {
-	messages := map[error]string{ErrInvalid: "参数格式不正确", ErrDuplicate: "账号已存在", ErrCredentials: "账号或密码错误", ErrUnauthenticated: "请重新登录", ErrCoins: "金币不足", ErrItems: "物品不足", ErrPlot: "地块状态不允许此操作", ErrNotMature: "作物尚未成熟", ErrCapacity: "仓库已满，请先出售作物", ErrTask: "请先完成全部章节任务", ErrRequestConflict: "同一个请求编号不能用于不同操作", ErrMailNotFound: "邮件不存在"}
+	messages := map[error]string{
+		ErrInvalid: "参数格式不正确", ErrDuplicate: "账号已存在", ErrCredentials: "账号或密码错误",
+		ErrUnauthenticated: "请重新登录", ErrCoins: "金币不足", ErrItems: "物品不足",
+		ErrPlot: "地块状态不允许此操作", ErrNotMature: "作物尚未成熟", ErrTask: "请先完成任务",
+		ErrMailNotFound: "邮件不存在", ErrFriendNotFound: "好友不存在", ErrAlreadyFriends: "已经是好友",
+	}
 	for code, message := range messages {
 		if errors.Is(err, code) {
 			return Response{Code: code.Error(), Message: message}
 		}
 	}
-	return Response{Code: "SERVICE_UNAVAILABLE", Message: "服务暂时不可用，操作结果可能未确认，请使用同一请求编号重试"}
+	return Response{Code: "SERVICE_UNAVAILABLE", Message: "服务暂时不可用"}
 }
+
 func (s *Server) failHTTP(w http.ResponseWriter, err error) {
 	response := errorResponse(err)
-	status := 400
-	switch response.Code {
-	case "INVALID_CREDENTIALS", "UNAUTHENTICATED":
-		status = 401
-	case "ACCOUNT_EXISTS":
-		status = 409
-	case "SERVICE_UNAVAILABLE":
-		status = 503
+	status := http.StatusBadRequest
+	if response.Code == "INVALID_CREDENTIALS" || response.Code == "UNAUTHENTICATED" {
+		status = http.StatusUnauthorized
+	}
+	if response.Code == "ACCOUNT_EXISTS" || response.Code == "ALREADY_FRIENDS" {
+		status = http.StatusConflict
+	}
+	if response.Code == "SERVICE_UNAVAILABLE" {
+		status = http.StatusServiceUnavailable
 	}
 	s.reply(w, status, response)
+}
+
+func operationContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, 5*time.Second)
 }

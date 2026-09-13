@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$MySQLDSN = $env:MYSQL_DSN, [switch]$Memory)
+param([string]$MySQLDSN = $env:MYSQL_DSN)
 $ErrorActionPreference = 'Stop'
 $taskRoot = $PSScriptRoot
 # Only import supported keys. Never print credentials or the resulting DSN.
@@ -16,15 +16,17 @@ if (Test-Path -LiteralPath $taskEnvPath) {
     }
 }
 if (-not $MySQLDSN) { $MySQLDSN = $env:MYSQL_DSN }
-if (-not $Memory -and -not $MySQLDSN -and $env:MYSQL_PASSWORD) {
+if (-not $MySQLDSN -and $env:MYSQL_PASSWORD) {
     $taskDbHost = if ($env:MYSQL_HOST) { $env:MYSQL_HOST } else { '127.0.0.1' }
     $taskDbPort = if ($env:MYSQL_PORT) { $env:MYSQL_PORT } else { '3306' }
     $taskDbName = if ($env:MYSQL_DATABASE) { $env:MYSQL_DATABASE } else { 'classicfarm' }
     $taskDbUser = if ($env:MYSQL_USER) { $env:MYSQL_USER } else { 'classicfarm' }
     $MySQLDSN = '{0}:{1}@tcp({2}:{3})/{4}?parseTime=true&charset=utf8mb4' -f $taskDbUser,$env:MYSQL_PASSWORD,$taskDbHost,$taskDbPort,$taskDbName
 }
-$env:MYSQL_DSN = if ($Memory) { '' } else { $MySQLDSN }
+if (-not $MySQLDSN) { throw 'MySQL is required. Configure MYSQL_DSN or MYSQL_PASSWORD in .env.' }
+$env:MYSQL_DSN = $MySQLDSN
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw 'Go is not on PATH. Add the Go bin directory and restart the terminal.' }
+if (-not $env:GOCACHE) { $env:GOCACHE = Join-Path $taskRoot '.cache\go-build' }
 Push-Location (Join-Path $taskRoot 'server')
 try {
     New-Item -ItemType Directory -Force -Path bin | Out-Null

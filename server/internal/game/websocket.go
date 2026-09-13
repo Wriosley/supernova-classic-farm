@@ -1,14 +1,13 @@
 package game
 
-// 本文件管理 WebSocket 生命周期、AUTH 身份绑定和 JSON 指令分发。
-
 import (
 	"context"
 	"encoding/json"
-	"github.com/coder/websocket"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 func writeWS(ctx context.Context, c *websocket.Conn, response Response) error {
@@ -22,8 +21,8 @@ func writeWS(ctx context.Context, c *websocket.Conn, response Response) error {
 	defer cancel()
 	return c.Write(writeCtx, websocket.MessageText, body)
 }
+
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
-	// 浏览器通过 Vite 同源代理连接；Qt 客户端可直接连接 8080。
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
@@ -39,10 +38,11 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Unlock()
 	}()
+
+	// 每个连接有自己的读取循环，同一连接内的命令按到达顺序执行。
 	for {
 		timeout := 60 * time.Second
 		if playerID == "" {
-			// 第一条消息必须在 5 秒内完成 AUTH，之后连接始终绑定这个玩家。
 			timeout = 5 * time.Second
 		}
 		readCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -51,19 +51,18 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
+
 		var command Command
-		if typ != websocket.MessageText || decodeJSON(body, &command) != nil || !requestPattern.MatchString(command.RequestID) {
+		if typ != websocket.MessageText || json.Unmarshal(body, &command) != nil || !requestPattern.MatchString(command.RequestID) {
 			_ = writeWS(ctx, c, errorResponse(ErrInvalid))
 			return
 		}
 		response := Response{Code: "OK", RequestID: command.RequestID, Action: command.Action}
+
 		if playerID == "" {
-			if command.Action != "AUTH" {
+			if command.Action != "AUTH" || command.Data.Token == "" {
 				err = ErrUnauthenticated
-			} else if command.Data.Token == "" || command.Data.PlotID != 0 || command.Data.Quantity != 0 || command.Data.MailID != "" {
-				err = ErrInvalid
 			} else {
-				// 根据 token 查询玩家身份。
 				token = command.Data.Token
 				playerID, err = s.identity(token)
 			}
@@ -74,13 +73,11 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 				_ = writeWS(ctx, c, response)
 				return
 			}
-			// 认证成功后保存连接。
 			s.mu.Lock()
 			old := s.connections[playerID]
-			s.connections[playerID] = connection{token, c}
+			s.connections[playerID] = connection{Token: token, Socket: c}
 			s.mu.Unlock()
 			if old.Socket != nil && old.Socket != c {
-				// 每个玩家只保留最新连接，避免两个界面同时操作造成理解困难。
 				_ = old.Socket.CloseNow()
 			}
 			response.PlayerID = playerID
@@ -88,42 +85,38 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			if _, err = s.identity(token); err != nil {
 				response = errorResponse(err)
 				response.RequestID = command.RequestID
+				response.Action = command.Action
 				_ = writeWS(ctx, c, response)
 				return
 			}
-			operationCtx, operationCancel := context.WithTimeout(ctx, 5*time.Second)
-			// playerID 只取自已认证连接，客户端不能指定要查询或修改的玩家。
+			opCtx, opCancel := operationContext(ctx)
 			switch command.Action {
 			case "GET_MAILBOX":
-				if command.Data != (Args{}) {
-					err = ErrInvalid
-				} else {
-					response.Mails, err = s.engine.Store.ListMails(operationCtx, playerID)
-				}
+				response.Mails, err = listMails(opCtx, s.db, playerID)
 			case "READ_MAIL":
 				_, parseErr := strconv.ParseUint(command.Data.MailID, 10, 64)
-				if parseErr != nil || command.Data.MailID == "0" || command.Data.PlotID != 0 || command.Data.Quantity != 0 || command.Data.Token != "" {
+				if parseErr != nil || command.Data.MailID == "0" {
 					err = ErrInvalid
 				} else {
-					response.Mails, err = s.engine.Store.MarkMailRead(operationCtx, playerID, command.Data.MailID)
+					response.Mails, err = markMailRead(opCtx, s.db, playerID, command.Data.MailID)
 				}
 			default:
 				var state State
-				state, err = s.engine.Execute(operationCtx, playerID, command)
+				state, err = executeGame(opCtx, s.db, playerID, command)
 				if err == nil {
 					response.Snapshot = &state
 					cfg := GameConfig()
 					response.Config = &cfg
 				}
 			}
-			operationCancel()
+			opCancel()
 			if err != nil {
 				response = errorResponse(err)
 				response.RequestID = command.RequestID
 				response.Action = command.Action
 			}
 		}
-		if err = writeWS(ctx, c, response); err != nil {
+		if writeWS(ctx, c, response) != nil {
 			return
 		}
 	}

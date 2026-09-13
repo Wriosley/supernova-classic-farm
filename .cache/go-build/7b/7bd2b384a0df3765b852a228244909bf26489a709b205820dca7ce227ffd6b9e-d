@@ -1,7 +1,0 @@
-./http.go
-./model.go
-./mysql.go
-./password.go
-./rules.go
-./store.go
-./websocket.go

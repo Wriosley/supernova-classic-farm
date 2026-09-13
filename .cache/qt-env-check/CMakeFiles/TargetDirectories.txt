@@ -1,0 +1,8 @@
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/classic_farm.dir
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/classic_farm_smoke.dir
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/edit_cache.dir
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/rebuild_cache.dir
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/classic_farm_autogen_timestamp_deps.dir
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/classic_farm_autogen.dir
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/classic_farm_smoke_autogen_timestamp_deps.dir
+F:/workspace/supernova-classic-farm/.cache/qt-env-check/CMakeFiles/classic_farm_smoke_autogen.dir
