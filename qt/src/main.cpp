@@ -9,27 +9,23 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    app.setApplicationName(QStringLiteral("Classic Farm"));
-    app.setOrganizationName(QStringLiteral("ClassicFarm"));
-
+    // 连接对象，登录页和农场页共用
     FarmApiClient client;
 
-    auto *stack = new QStackedWidget;
-    auto *login = new LoginWindow(&client);
-    auto *farm = new FarmWindow(&client);
+    QStackedWidget *stack = new QStackedWidget;
+    LoginWindow *login = new LoginWindow(&client);
+    FarmWindow *farm = new FarmWindow(&client);
     stack->addWidget(login);
     stack->addWidget(farm);
 
-    stack->setWindowTitle(QString::fromUtf8("农场"));
-    stack->resize(800, 650);
+    stack->setWindowTitle("课设QQ农场");
+    stack->resize(1000, 760);
 
-    QObject::connect(&client, &FarmApiClient::enteredGame, stack, [stack, farm] {
+    // 登录成功进入农场，退出或断线回到登录页
+    QObject::connect(&client, &FarmApiClient::entered, stack, [stack, farm] {
         stack->setCurrentWidget(farm);
     });
-    QObject::connect(&client, &FarmApiClient::loggedOut, stack, [stack, login] {
-        stack->setCurrentWidget(login);
-    });
-    QObject::connect(&client, &FarmApiClient::loginRequired, stack, [stack, login](const QString &) {
+    QObject::connect(&client, &FarmApiClient::back, stack, [stack, login] {
         stack->setCurrentWidget(login);
     });
 

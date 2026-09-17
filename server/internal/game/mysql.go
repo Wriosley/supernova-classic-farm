@@ -166,7 +166,7 @@ func loadPlots(ctx context.Context, db *sql.DB, playerID string) ([]Plot, error)
 }
 
 func listMails(ctx context.Context, db *sql.DB, playerID string) ([]Mail, error) {
-	rows, err := db.QueryContext(ctx, `SELECT mail_id,COALESCE(sender_id,0),title,content,is_read,created_at_ms FROM class_mid_mails WHERE receiver_id=? ORDER BY mail_id DESC`, playerID)
+	rows, err := db.QueryContext(ctx, `SELECT m.mail_id,COALESCE(m.sender_id,0),COALESCE(a.username,''),m.title,m.content,m.is_read,m.created_at_ms FROM class_mid_mails m LEFT JOIN class_mid_accounts a ON a.player_id=m.sender_id WHERE m.receiver_id=? ORDER BY m.mail_id DESC`, playerID)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func listMails(ctx context.Context, db *sql.DB, playerID string) ([]Mail, error)
 	var mails []Mail
 	for rows.Next() {
 		var m Mail
-		if err = rows.Scan(&m.ID, &m.SenderID, &m.Title, &m.Content, &m.IsRead, &m.CreatedAtMS); err != nil {
+		if err = rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.Title, &m.Content, &m.IsRead, &m.CreatedAtMS); err != nil {
 			return nil, err
 		}
 		if m.SenderID == "0" {

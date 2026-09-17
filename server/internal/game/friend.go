@@ -234,6 +234,6 @@ func sendFriendMail(ctx context.Context, db *sql.DB, playerID, friendID, title, 
 		return Mail{}, err
 	}
 	var mail Mail
-	err = db.QueryRowContext(ctx, `SELECT mail_id,sender_id,title,content,is_read,created_at_ms FROM class_mid_mails WHERE mail_id=? AND receiver_id=?`, id, friendID).Scan(&mail.ID, &mail.SenderID, &mail.Title, &mail.Content, &mail.IsRead, &mail.CreatedAtMS)
+	err = db.QueryRowContext(ctx, `SELECT m.mail_id,m.sender_id,a.username,m.title,m.content,m.is_read,m.created_at_ms FROM class_mid_mails m JOIN class_mid_accounts a ON a.player_id=m.sender_id WHERE m.mail_id=? AND m.receiver_id=?`, id, friendID).Scan(&mail.ID, &mail.SenderID, &mail.SenderUsername, &mail.Title, &mail.Content, &mail.IsRead, &mail.CreatedAtMS)
 	return mail, err
 }

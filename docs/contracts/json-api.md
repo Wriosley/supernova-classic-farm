@@ -11,7 +11,7 @@
 | `POST /api/register` | `username,password` | `player_id`，HTTP 201 |
 | `POST /api/login` | `username,password` | `player_id,token` |
 | `POST /api/logout` | Bearer token | `code` |
-| `GET/POST /api/mailbox` | Bearer token | `mails`；POST 供 PowerShell 演示脚本使用 |
+| `GET/POST /api/mailbox` | Bearer token | `mails`，玩家邮件含 `sender_id,sender_username`；POST 供 PowerShell 演示脚本使用 |
 | `POST /api/friends/add` | Bearer token；`username` | `friend_id` |
 | `GET /api/friends` | Bearer token | `friends` |
 | `GET /api/friends/{id}/farm` | Bearer token | `friend_id,plots` |
@@ -24,9 +24,9 @@
 {"username":"student_a","password":"Farm1234"}
 ```
 
-登录后保存 `token`。好友 HTTP 请求带请求头：`Authorization: Bearer <token>`。
+账号为 3–32 位小写字母、数字或下划线，以字母开头；密码为 6–20 位字母或数字。登录后保存 `token`。好友 HTTP 请求带请求头：`Authorization: Bearer <token>`。
 
-好友邮件标题和正文由客户端自定义；标题为 1–100 个字节，正文为 1–1000 个字节。发送成功后，B 可以通过 WebSocket `GET_MAILBOX` 查询邮件。
+好友邮件标题和正文由客户端自定义；标题为 1–100 个字节，正文为 1–1000 个字节。发送成功后，B 可以通过 WebSocket `GET_MAILBOX` 查询邮件。玩家邮件返回发送者 ID 和用户名，系统邮件不含这两个字段。
 
 ## WebSocket 接口
 
@@ -52,7 +52,9 @@
 | `GET_MAILBOX` | `{}` | 查询自己的邮件 |
 | `READ_MAIL` | `mail_id` | 标记自己的邮件已读 |
 
-成功响应含 `type,code,request_id,action,snapshot,config,server_time_ms`。`snapshot` 含 `coins,fertilizer,inventory,shop,plots,tasks`。为兼容现有 Qt，胡萝卜数量还会同时写入旧字段 `seeds,crops`。
+农场命令成功响应含 `type,code,request_id,action,snapshot,config,server_time_ms`；邮箱命令返回 `mails`，AUTH 不携带快照。`snapshot` 含 `coins,fertilizer,chapter,inventory,shop,plots,tasks`。为兼容旧客户端，胡萝卜数量还会同时写入 `seeds,crops`。
+
+购买数量为 1–100，出售数量为 1–200。没有邮件或好友时，对应数组可能省略，客户端按空列表处理。玩家 ID、好友 ID、邮件 ID 都使用 JSON 字符串；地块号和作物号为整数。
 
 ## 作物编号
 
@@ -65,4 +67,4 @@
 | 5 | 草莓 | 6 | 14 | 50 | 5 |
 | 6 | 南瓜 | 8 | 18 | 60 | 5 |
 
-常见错误码：`INVALID_ARGUMENT`、`INVALID_CREDENTIALS`、`UNAUTHENTICATED`、`DUPLICATE`、`NOT_ENOUGH_COINS`、`NOT_ENOUGH_ITEMS`、`INVALID_PLOT_STATE`、`NOT_MATURE`、`FRIEND_NOT_FOUND`、`ALREADY_FRIENDS`、`INTERNAL_ERROR`。
+常见错误码：`INVALID_ARGUMENT`、`INVALID_CREDENTIALS`、`UNAUTHENTICATED`、`ACCOUNT_EXISTS`、`INSUFFICIENT_COINS`、`INSUFFICIENT_ITEMS`、`PLOT_STATE_CONFLICT`、`CROP_NOT_MATURE`、`CHAPTER_NOT_CLAIMABLE`、`MAIL_NOT_FOUND`、`FRIEND_NOT_FOUND`、`ALREADY_FRIENDS`、`SERVICE_UNAVAILABLE`。这些名称对应当前 `server/internal/game/model.go` 和 `http.go`。

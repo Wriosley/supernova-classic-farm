@@ -1,67 +1,68 @@
 # Qt 新功能升级与接口对接
 
-本文只说明当前 Qt 客户端还缺少的功能。后端接口已经实现，Qt 组员无需修改数据库或复制 Go 业务逻辑。
+本文说明 2026-09-14 补齐的 Qt 功能与接口对应关系。Qt 使用服务端数据，不修改数据库或复制 Go 业务逻辑。
 
-## 1. Qt 需要新增什么
+## 1. 已加入的功能
 
-| 优先级 | 功能 | 当前情况 | 建议界面 |
+| 序号 | 功能 | 当前情况 | 界面 |
 |---|---|---|---|
-| 1 | 16 块地 | 主窗口能按数组显示，旧测试仍写死 4 块 | 4×4 按钮或列表 |
-| 2 | 六种作物商店 | 旧按钮默认只买胡萝卜 | 作物下拉框、数量框、购买按钮 |
-| 3 | 六种作物仓库 | 旧字段只显示胡萝卜 | 表格显示种子数、成品数、售价 |
-| 4 | 选择作物种植和出售 | 旧请求不发送 crop_id | 将选中作物 ID 放进 JSON |
-| 5 | 好友列表与添加好友 | 尚无界面 | `FriendDialog` |
-| 6 | 查看好友农场与偷菜 | 尚无界面 | `FriendFarmDialog` |
-| 7 | 给好友发邮件 | 尚无界面 | 标题输入框、正文输入框、发送按钮 |
-| 8 | 邮件发送人 | 旧邮件模型没有 sender_id | 邮箱列表增加发送者 ID |
+| 1 | 16 块地 | 按数组显示，刷新保留选择 | `QListWidget` |
+| 2 | 六种作物商店 | 显示名称、价格、成熟秒数、产量 | 作物下拉框、数量框、购买按钮 |
+| 3 | 六种作物仓库 | 显示各作物数量和售价 | 文字列表 |
+| 4 | 选择作物种植和出售 | 请求携带选中的 crop_id | 共用作物下拉框 |
+| 5 | 好友列表与添加好友 | 已加入 | `FriendDialog` |
+| 6 | 查看好友农场与偷菜 | 已加入 | 同一个 `FriendDialog` 中的地块列表 |
+| 7 | 给好友发邮件 | 已加入 | 同一窗口的标题、正文和发送按钮 |
+| 8 | 邮件发送人 | 已解析 sender_id 和 sender_username | 邮箱显示“系统”或发送者用户名 |
 
-推荐先完成多作物数据解析，再开发好友页面。好友接口都是普通 HTTP，不影响已经存在的农场 WebSocket。
+好友接口使用普通 HTTP，原有农场操作继续使用 WebSocket。沿用简单的成员变量、循环和信号槽，没有额外的页面框架。
 
 ## 2. 新增 C++ 数据结构
 
-在 `qt/src/models.h` 中增加：
+`qt/src/models.h` 中的数据结构：
 
 ```cpp
-struct CropInfo {
-    int cropId = 0;
+struct Crop {
+    int id = 0;
     QString name;
     int seedPrice = 0;
     int salePrice = 0;
-    int matureSeconds = 0;
-    int yieldCount = 0;
+    int seconds = 0;
+    int yield = 0;
 };
 
-struct InventoryItem {
-    int cropId = 0;
+struct Bag {
+    int id = 0;
     QString name;
-    int seedCount = 0;
-    int cropCount = 0;
+    int seeds = 0;
+    int crops = 0;
 };
 
-struct FriendInfo {
-    QString playerId;
-    QString username;
+struct Friend {
+    QString id;
+    QString name;
 };
 ```
 
-给现有 `Plot` 增加：
+`Plot` 中的作物字段：
 
 ```cpp
 int cropId = 0;
 QString cropName;
 ```
 
-给现有 `Mail` 增加：
+`Mail` 中的发送者字段：
 
 ```cpp
 QString senderId; // 系统欢迎邮件可能为空
+QString senderName;
 ```
 
-给 `Snapshot` 增加：
+`Farm` 中的数组：
 
 ```cpp
-QVector<CropInfo> shop;
-QVector<InventoryItem> inventory;
+QVector<Crop> shop;
+QVector<Bag> inventory;
 ```
 
 所有数据库 BIGINT ID 在 JSON 中都是字符串，Qt 使用 `QString`，不要先转成 `double`。
@@ -91,33 +92,33 @@ Qt 解析数组的写法：
 ```cpp
 for (const QJsonValue &value : object.value("inventory").toArray()) {
     const QJsonObject item = value.toObject();
-    InventoryItem data;
-    data.cropId = item.value("crop_id").toInt();
+    Bag data;
+    data.id = item.value("crop_id").toInt();
     data.name = item.value("crop_name").toString();
-    data.seedCount = item.value("seed_count").toInt();
-    data.cropCount = item.value("crop_count").toInt();
+    data.seeds = item.value("seed_count").toInt();
+    data.crops = item.value("crop_count").toInt();
     snapshot.inventory.append(data);
 }
 ```
 
-`shop` 使用相同方式解析。每次收到完整快照前先清空旧数组，避免重复追加。
+`shop` 使用相同方式解析。`readFarm()` 每次创建一个新的 `Farm` 并返回，再整体赋给客户端，避免重复追加。
 
 ## 4. 多作物游戏请求
 
-这些请求继续走现有 `QWebSocket` 和 `performWrite()`：
+这些请求继续走现有 `QWebSocket` 和 `game()`：
 
 ```cpp
-api->performWrite("BUY_SEEDS", {
+api->game("BUY_SEEDS", {
     {"crop_id", selectedCropId},
     {"quantity", quantity}
 });
 
-api->performWrite("PLANT", {
+api->game("PLANT", {
     {"plot_id", selectedPlotId},
     {"crop_id", selectedCropId}
 });
 
-api->performWrite("SELL_CROP", {
+api->game("SELL_CROP", {
     {"crop_id", selectedCropId},
     {"quantity", quantity}
 });
@@ -133,37 +134,25 @@ api->performWrite("SELL_CROP", {
 Authorization: Bearer 登录返回的 token
 ```
 
-建议在 `FarmApiClient` 增加：
+`FarmApiClient` 中的好友方法：
 
 ```cpp
-void addFriend(const QString &username);
-void getFriends();
-void getFriendFarm(const QString &friendId);
-void stealFromFriend(const QString &friendId, int plotId);
-void sendFriendMail(const QString &friendId,
-                    const QString &title,
-                    const QString &content);
+void add(QString username);
+void getList();
+void visit(QString friendId);
+void steal(QString friendId, int plotId);
+void send(QString friendId, QString title, QString content);
 ```
 
-建议增加信号：
+窗口接收以下信号：
 
 ```cpp
-void friendsUpdated();
-void friendFarmLoaded(const QString &friendId, const QVector<Plot> &plots);
-void friendMailSent(const QString &friendId);
+void listChanged();
+void visited(QString friendId, QVector<Plot> plots);
+void sent();
 ```
 
-可以写一个共用的认证请求函数：
-
-```cpp
-QNetworkRequest FarmApiClient::authorizedRequest(const QString &path)
-{
-    QNetworkRequest request(QUrl(baseHttpUrl + path));
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
-    return request;
-}
-```
+每个方法直接创建 `QNetworkRequest`、添加请求头，并在自己的完成回调中读取结果。这里保留少量重复代码，方便从一个函数顺着看完整个请求。
 
 ### 5.1 添加好友
 
@@ -216,7 +205,7 @@ POST /api/friends/26/steal
 {"plot_id":1}
 ```
 
-成功响应含偷取者自己的最新 `snapshot`。Qt 应刷新自己的金币和仓库，然后重新查询好友农田。作物未成熟返回 `NOT_MATURE`；空地、已收获或已被偷返回 `INVALID_PLOT_STATE`。
+成功响应含偷取者自己的最新 `snapshot`。Qt 刷新自己的金币和仓库，然后重新查询好友农田。作物未成熟返回 `CROP_NOT_MATURE`；空地、已收获或已被偷返回 `PLOT_STATE_CONFLICT`。
 
 当前规则：获得该作物完整产量和 1 金币，好友地块变为 `NEED_CLEANUP`。客户端只显示结果，不自行增加数量。
 
@@ -232,51 +221,20 @@ POST /api/friends/26/mail
 
 标题不能为空且最多 100 字节，正文不能为空且最多 1000 字节。成功响应含 `friend_id`，`mails` 只含服务端插入后按 B 的 ID 读回的新邮件，可用于联调确认，不会返回 B 的其他邮件。正式 Qt 只需提示发送成功；B 打开邮箱时仍通过现有 `GET_MAILBOX` 获得邮件。
 
-## 6. Qt 好友页面建议
+## 6. Qt 好友页面
 
 `FriendDialog`：
 
 - 顶部用户名输入框和“添加好友”按钮。
 - 中间 `QListWidget` 显示用户名，并把 `player_id` 放在 `Qt::UserRole`。
-- 底部“查看农场”和“发邮件”按钮。
-
-`FriendFarmDialog`：
-
-- 显示好友用户名或 ID。
-- 用 4×4 按钮或列表显示 16 块地。
+- 右侧列表显示该好友的 16 块地，点击“查看/刷新好友农场”查询。
 - 仅当状态为 `MATURE` 时启用“偷菜”。
 - 偷菜成功后使用响应 `snapshot` 刷新自己的主窗口，再重新请求好友农田。
 
-发邮件可使用 `QDialog`，包含 `QLineEdit` 标题、`QPlainTextEdit` 正文和发送按钮。前端先检查非空，最终长度和好友关系仍由服务端校验。
+同一窗口下方放 `QLineEdit` 标题、`QPlainTextEdit` 正文和发送按钮。发送前检查非空和 UTF-8 字节数，最终仍由服务端校验。发送成功只清空输入框并提示，不用响应中的 `mails` 覆盖自己的收件箱。
 
-## 7. HTTP POST 示例
 
-```cpp
-void FarmApiClient::sendFriendMail(const QString &friendId,
-                                   const QString &title,
-                                   const QString &content)
-{
-    QNetworkRequest request = authorizedRequest(
-        "/api/friends/" + friendId + "/mail");
-    QJsonObject body{{"title", title}, {"content", content}};
-    QNetworkReply *reply = network.post(
-        request, QJsonDocument(body).toJson(QJsonDocument::Compact));
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, friendId] {
-        const QJsonObject object =
-            QJsonDocument::fromJson(reply->readAll()).object();
-        reply->deleteLater();
-        if (object.value("code").toString() != "OK") {
-            emit requestFailed(object.value("code").toString(),
-                               object.value("message").toString());
-            return;
-        }
-        emit friendMailSent(friendId);
-    });
-}
-```
-
-GET 请求使用 `network.get(authorizedRequest(path))`，解析流程相同。
+GET 请求直接使用 `http.get(request)`，解析流程相同。HTTP 超时后显示错误；WebSocket 断线或超时后回登录页，不自动重发写操作。
 
 ## 8. 错误码处理
 
@@ -286,25 +244,25 @@ GET 请求使用 `network.get(authorizedRequest(path))`，解析流程相同。
 | `INVALID_CREDENTIALS` | 账号或密码错误 |
 | `UNAUTHENTICATED` | 清空 token，返回登录页 |
 | `ACCOUNT_EXISTS` | 用户名已存在 |
-| `NOT_ENOUGH_COINS` | 金币不足 |
-| `NOT_ENOUGH_ITEMS` | 种子、作物或肥料不足 |
-| `INVALID_PLOT_STATE` | 刷新农田并提示状态已改变 |
-| `NOT_MATURE` | 显示剩余成熟时间 |
+| `INSUFFICIENT_COINS` | 金币不足 |
+| `INSUFFICIENT_ITEMS` | 种子、作物或肥料不足 |
+| `PLOT_STATE_CONFLICT` | 提示地块状态不允许操作，可手动刷新 |
+| `CROP_NOT_MATURE` | 提示作物尚未成熟 |
+| `CHAPTER_NOT_CLAIMABLE` | 提示先完成任务 |
+| `MAIL_NOT_FOUND` | 邮件不存在 |
 | `FRIEND_NOT_FOUND` | 好友不存在或双方不是好友 |
 | `ALREADY_FRIENDS` | 已经是好友 |
-| `SERVICE_UNAVAILABLE` | 提示服务错误并重新查询状态 |
+| `SERVICE_UNAVAILABLE` | 提示服务错误，可手动刷新状态 |
 
 不要根据中文 `message` 编写程序分支，应判断稳定的 `code`。
 
-## 9. 推荐开发顺序与验收
+## 9. 代码阅读与验收
 
-1. 更新 `models.h`，解析 `shop`、`inventory`、地块作物和邮件发送者。
-2. 更新主界面，展示 16 块地和六种作物库存。
-3. 给购买、种植、出售请求增加 `crop_id`。
-4. 新增好友列表与添加好友。
-5. 新增好友农场与偷菜。
-6. 新增自定义邮件窗口。
-7. 修改 `smoketest.cpp` 的旧初始值，增加多作物解析断言。
-8. 增加一条好友 Qt 冒烟：A/B 注册、A 加 B、读取 16 块地、A 发信、B 查询邮箱。
+1. `models.h`：读取快照、库存和邮件。
+2. `farmwindow.cpp`：创建主窗口控件，按钮中发送 crop_id、plot_id 和 quantity。
+3. `farmapiclient.cpp`：HTTP/WS 请求及返回数据。
+4. `frienddialog.cpp`：添加好友、查看地块、偷菜和发信。
+5. `mailboxdialog.cpp`：显示发送者、正文和已读状态。
+6. 构建 `classic_farm`，再使用两个新玩家手动检查多作物、好友邮件和退出重登。
 
-联调时先启动后端，再在 Qt 日志中打印请求路径、HTTP 状态、`code` 和 `request_id`；不要打印 token 或密码。每完成一个页面，都用真实 MySQL 账号退出重登一次，确认数据不是只保存在 Qt 内存里。
+构建方法和手动检查范围见 [测试说明](testing.md)。

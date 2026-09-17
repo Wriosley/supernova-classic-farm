@@ -11,19 +11,22 @@ class LoginWindow : public QWidget
 {
     Q_OBJECT
 public:
-
-    explicit LoginWindow(FarmApiClient *client, QWidget *parent = nullptr);
+    LoginWindow(FarmApiClient *client, QWidget *parent = nullptr);
 
 private:
+    // 登录和注册用同一个提交函数，由 isRegister 决定
     void submit();
 
     FarmApiClient *api;
     bool isRegister = false;
-    QLineEdit *host = nullptr;
-    QLineEdit *user = nullptr;
-    QLineEdit *pass = nullptr;
-    QLabel *hint = nullptr;
-    QLabel *error = nullptr;
-    QPushButton *ok = nullptr;
-    QPushButton *change = nullptr;
+
+    QLineEdit *host;
+    QLineEdit *user;
+    QLineEdit *pass;
+
+    QLabel *hint;           // 登录提示文字
+    QLabel *error;
+
+    QPushButton *ok;
+    QPushButton *change;
 };

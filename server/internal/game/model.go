@@ -57,12 +57,13 @@ type Task struct {
 }
 
 type Mail struct {
-	ID          string `json:"mail_id"`
-	SenderID    string `json:"sender_id,omitempty"`
-	Title       string `json:"title"`
-	Content     string `json:"content"`
-	IsRead      bool   `json:"is_read"`
-	CreatedAtMS int64  `json:"created_at_ms"`
+	ID             string `json:"mail_id"`
+	SenderID       string `json:"sender_id,omitempty"`
+	SenderUsername string `json:"sender_username,omitempty"`
+	Title          string `json:"title"`
+	Content        string `json:"content"`
+	IsRead         bool   `json:"is_read"`
+	CreatedAtMS    int64  `json:"created_at_ms"`
 }
 
 type Friend struct {

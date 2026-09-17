@@ -1,6 +1,10 @@
 #include "farmwindow.h"
 #include "farmapiclient.h"
 #include "mailboxdialog.h"
+#include "frienddialog.h"
+
+#include <QComboBox>
+#include <QDateTime>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -12,22 +16,26 @@
 FarmWindow::FarmWindow(FarmApiClient *client, QWidget *parent)
     : QWidget(parent), api(client)
 {
+    // 显示数据控件
     info = new QLabel;
     msg = new QLabel;
-    msg->setWordWrap(true);
     bag = new QLabel;
     prices = new QLabel;
     tasks = new QLabel;
-    mail = new QPushButton("邮箱");
-    again = new QPushButton("重新连接");
-    exitBtn = new QPushButton("退出登录");
-    retry = new QPushButton("确认上次操作");
     land = new QListWidget;
+    stock = new QListWidget; //仓库
+    crop = new QComboBox;
     num = new QSpinBox;
-    num->setRange(1, 100);
+    num->setRange(1, 200);
+
+    // 交互按钮
+    mail = new QPushButton("邮箱");
+    exitBtn = new QPushButton("退出登录");
+    friendsBtn = new QPushButton("好友");
+    reload = new QPushButton("刷新农场");
     buy = new QPushButton("买种子");
     buy2 = new QPushButton("买肥料");
-    sell = new QPushButton("出售全部胡萝卜");
+    sell = new QPushButton("出售所选作物");
     plant = new QPushButton("种植");
     feed = new QPushButton("施肥");
     harvest = new QPushButton("收获");
@@ -35,26 +43,42 @@ FarmWindow::FarmWindow(FarmApiClient *client, QWidget *parent)
     reward = new QPushButton("领取任务奖励");
 
     QVBoxLayout *layout = new QVBoxLayout(this);
+
+    // 顶部：玩家信息、刷新、好友、邮箱、退出
     QHBoxLayout *top = new QHBoxLayout;
     top->addWidget(info);
+    top->addWidget(reload);
+    top->addWidget(friendsBtn);
     top->addWidget(mail);
-    top->addWidget(again);
     top->addWidget(exitBtn);
     layout->addLayout(top);
     layout->addWidget(msg);
-    layout->addWidget(retry);
-    layout->addWidget(bag);
-    layout->addWidget(new QLabel("选择地块，再点击下面的按钮："));
-    layout->addWidget(land);
+    layout->addWidget(bag);     //金币肥料
+    layout->addWidget(new QLabel("选择地块再操作："));
+
+    // 中间：农田、仓库 
+    QHBoxLayout *lists = new QHBoxLayout;
+    lists->addWidget(land);
+    QVBoxLayout *store = new QVBoxLayout;
+    store->addWidget(new QLabel("仓库（种子、成品、售价）"));
+    store->addWidget(stock);
+    lists->addLayout(store);
+    layout->addLayout(lists);
+
+    // 农田操作：种植、施肥、收获和清理
     QHBoxLayout *buttons = new QHBoxLayout;
     buttons->addWidget(plant);
     buttons->addWidget(feed);
     buttons->addWidget(harvest);
     buttons->addWidget(clean);
     layout->addLayout(buttons);
+    layout->addWidget(new QLabel("购买、种植、出售使用下面选中的作物："));
+    layout->addWidget(crop);
     layout->addWidget(prices);
+
+    // 商店操作：数量、购买种子、购买肥料和出售
     QHBoxLayout *shop = new QHBoxLayout;
-    shop->addWidget(new QLabel("购买数量"));
+    shop->addWidget(new QLabel("数量（购买最多100，出售最多200）"));
     shop->addWidget(num);
     shop->addWidget(buy);
     shop->addWidget(buy2);
@@ -63,115 +87,153 @@ FarmWindow::FarmWindow(FarmApiClient *client, QWidget *parent)
     layout->addWidget(tasks);
     layout->addWidget(reward);
 
+    // 绑定按钮和事件
+    // 邮箱和好友打开对话框
     connect(mail, &QPushButton::clicked, this, [this] {
-        api->getMailbox();
         MailboxDialog dialog(api, this);
+        api->game("GET_MAILBOX");
         dialog.exec();
     });
-    connect(again, &QPushButton::clicked, api, &FarmApiClient::reconnect);
+    connect(friendsBtn, &QPushButton::clicked, this, [this] {
+        FriendDialog dialog(api, this);
+        api->getList();
+        dialog.exec();
+    });
+    // 刷新
+    connect(reload, &QPushButton::clicked, this, [this] {
+        api->game("GET_PLAYER_SNAPSHOT");
+    });
+    connect(crop, &QComboBox::currentIndexChanged, this, &FarmWindow::refresh);
     connect(exitBtn, &QPushButton::clicked, api, &FarmApiClient::logout);
-    connect(retry, &QPushButton::clicked, api, &FarmApiClient::retryUnconfirmed);
+    
     connect(buy, &QPushButton::clicked, this, [this] {
-        api->performWrite("BUY_SEEDS", QJsonObject{{"quantity", num->value()}});
+        api->game("BUY_SEEDS", {{"crop_id", crop->currentData().toInt()}, {"quantity", num->value()}});
     });
     connect(buy2, &QPushButton::clicked, this, [this] {
-        api->performWrite("BUY_FERTILIZER", QJsonObject{{"quantity", num->value()}});
+        api->game("BUY_FERTILIZER", {{"quantity", num->value()}});
     });
     connect(sell, &QPushButton::clicked, this, [this] {
-        api->performWrite("SELL_CROP", QJsonObject{{"quantity", api->snapshot().crops}});
+        api->game("SELL_CROP", {{"crop_id", crop->currentData().toInt()}, {"quantity", num->value()}});
     });
-    // 每个按钮直接取出所选地块的编号，再发送对应操作。
+
     connect(plant, &QPushButton::clicked, this, [this] {
         if (!land->currentItem()) return;
+        //从当前选择的地块中获得地块ID，从crop获得作物ID
         int id = land->currentItem()->data(Qt::UserRole).toInt();
-        api->performWrite("PLANT", QJsonObject{{"plot_id", id}});
+        api->game("PLANT", {{"plot_id", id}, {"crop_id", crop->currentData().toInt()}});
     });
     connect(feed, &QPushButton::clicked, this, [this] {
         if (!land->currentItem()) return;
-        int id = land->currentItem()->data(Qt::UserRole).toInt();
-        api->performWrite("APPLY_FERTILIZER", QJsonObject{{"plot_id", id}});
+        int id = land->currentItem()->data(Qt::UserRole).toInt(); 
+        api->game("APPLY_FERTILIZER", {{"plot_id", id}});
     });
     connect(harvest, &QPushButton::clicked, this, [this] {
         if (!land->currentItem()) return;
-        int id = land->currentItem()->data(Qt::UserRole).toInt();
-        api->performWrite("HARVEST", QJsonObject{{"plot_id", id}});
+        int id = land->currentItem()->data(Qt::UserRole).toInt(); 
+        api->game("HARVEST", {{"plot_id", id}});
     });
     connect(clean, &QPushButton::clicked, this, [this] {
         if (!land->currentItem()) return;
         int id = land->currentItem()->data(Qt::UserRole).toInt();
-        api->performWrite("CLEAN_PLOT", QJsonObject{{"plot_id", id}});
+        api->game("CLEAN_PLOT", {{"plot_id", id}});
     });
     connect(reward, &QPushButton::clicked, this, [this] {
-        api->performWrite("CLAIM_CHAPTER_REWARD");
+        api->game("CLAIM_CHAPTER_REWARD");
     });
-    connect(api, &FarmApiClient::snapshotUpdated, this, &FarmWindow::refresh);
-    connect(api, &FarmApiClient::connectionChanged, this, &FarmWindow::refresh);
-    connect(api, &FarmApiClient::busyChanged, this, &FarmWindow::refresh);
-    connect(api, &FarmApiClient::unconfirmedChanged, this, &FarmWindow::refresh);
-    connect(api, &FarmApiClient::errorMessage, msg, &QLabel::setText);
-    connect(api, &FarmApiClient::statusMessage, msg, &QLabel::setText);
-    QTimer *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &FarmWindow::refresh);
-    timer->start(1000);
+
+    // 数据或网络状态改变时更新页面
+    connect(api, &FarmApiClient::farmChanged, this, &FarmWindow::refresh);
+    connect(api, &FarmApiClient::state, this, &FarmWindow::refresh);
+    connect(api, &FarmApiClient::error, msg, &QLabel::setText);
+    connect(api, &FarmApiClient::farmChanged, msg, &QLabel::clear);
+    // 计时器，负责更新剩余秒数,1秒刷新一次
+    QTimer *clock = new QTimer(this);
+    connect(clock, &QTimer::timeout, this, &FarmWindow::refresh);
+    clock->start(1000);
     refresh();
 }
 
 void FarmWindow::refresh()
 {
-    Snapshot s = api->snapshot();
-    Config c = api->config();
-    info->setText(api->username() + (api->isConnected() ? " 在线" : " 离线"));
-    bag->setText(QString("金币：%1   种子：%2   肥料：%3   胡萝卜：%4")
-        .arg(s.coins).arg(s.seeds).arg(s.fertilizer).arg(s.crops));
-    prices->setText(QString("种子 %1 金币，肥料 %2 金币，胡萝卜售价 %3 金币。仓库：%4/%5")
-        .arg(c.seedPrice).arg(c.fertilizerPrice).arg(c.cropPrice)
-        .arg(s.seeds + s.fertilizer + s.crops).arg(c.capacity));
+    // 拿当前快照
+    Farm s = api->farm();
+    info->setText(api->user());
+    bag->setText(QString("金币：%1   肥料：%2   肥料单价：%3 金币")
+        .arg(s.coins).arg(s.fertilizer).arg(api->price()));
 
-    // 每秒只更新文字，保留选中的地块。
-    while (land->count() > s.plots.size())
-        delete land->takeItem(land->count() - 1);
-    for (int i = 0; i < s.plots.size(); i++) {
-        Plot p = s.plots[i];
-        QString text = "空地";
-        if (p.status == "NEED_CLEANUP") {
-            text = "需要清理";
-        } else if (p.status == "MATURE") {
-            text = "胡萝卜已成熟";
-        } else if (p.status == "GROWING") {
-            qint64 seconds = (p.matureAtMs - api->serverNowMs() + 999) / 1000;
-            if (seconds <= 0)
-                text = "胡萝卜已成熟";
-            else
-                text = QString("胡萝卜生长中，剩余 %1 秒").arg(seconds);
-            if (p.fertilized) text += "，已施肥";
+    // 重新填下拉框前记住所选作物
+    if(crop->count()==0){
+        for (Crop item : s.shop)
+            crop->addItem(item.name, item.id);
+    }
+    int cropId = crop->currentData().toInt(); //先存下当前index防止后续刷新弹回第一项
+    crop->blockSignals(true);
+    crop->clear();
+    int index = crop->findData(cropId);
+    if (index >= 0) crop->setCurrentIndex(index);
+    crop->blockSignals(false);
+
+    // 在商店数组中找到当前作物价格和成熟时间
+    prices->clear();
+    for (Crop item : s.shop) {
+        if (item.id == crop->currentData().toInt())
+            prices->setText(QString("种子 %1 金币；%2 秒成熟；每块地产量 %3")
+                .arg(item.seedPrice).arg(item.seconds).arg(item.yield));
+    }
+
+    //设置一下仓库
+    stock->clear();
+    for (Bag item : s.inventory) {
+        int price = 0;
+        for (Crop shopItem : s.shop) {
+            if (shopItem.id == item.id) price = shopItem.salePrice;
         }
-        if (i >= land->count()) land->addItem("");
-        land->item(i)->setText(QString("%1 号地：%2").arg(p.id).arg(text));
-        land->item(i)->setData(Qt::UserRole, p.id);
+        stock->addItem(QString("%1：种子 %2，成品 %3，售价 %4 金币")
+            .arg(item.name).arg(item.seeds).arg(item.crops).arg(price));
     }
-    if (land->currentRow() < 0 && land->count() > 0) land->setCurrentRow(0);
 
-    QString text = QString("第 %1 章\n").arg(s.chapter);
-    for (int i = 0; i < s.tasks.size(); i++) {
-        Task t = s.tasks[i];
-        text += QString("%1：%2/%3\n").arg(t.label).arg(t.current).arg(t.target);
+    // 设置地块数据
+    int row = land->currentRow();
+    land->clear();
+    for (Plot p : s.plots) {
+        QString text = "空地";
+        // 生长中的地块算一下剩余成熟时间
+        if (p.status == "GROWING") {
+            long long seconds = (p.matureAtMs - QDateTime::currentMSecsSinceEpoch() + 999) / 1000;
+            if (seconds > 0)
+                text = QString("%1，生长中，剩余 %2 秒").arg(p.cropName).arg(seconds);
+            else
+                text = p.cropName + "，已成熟";
+        }
+        if (p.status == "MATURE") text = p.cropName + "，已成熟";
+        if (p.status == "NEED_CLEANUP") text = "需要清理";
+        if (p.fertilized) text += "，已施肥";
+
+        QListWidgetItem *item = new QListWidgetItem(
+            QString("%1 号地：%2").arg(p.id).arg(text));
+        item->setData(Qt::UserRole, p.id); //存一下地块ID到田地选项中
+        land->addItem(item);
     }
-    tasks->setText(text);
+    land->setCurrentRow(row);
 
-    // 库存、地块状态和领奖条件由服务器检查。
-    bool ready = api->isConnected() && !api->isBusy();
-    bool canWrite = ready && !api->hasUnconfirmed();
-    buy->setEnabled(canWrite);
-    buy2->setEnabled(canWrite);
-    sell->setEnabled(canWrite);
-    plant->setEnabled(canWrite && land->count() > 0);
-    feed->setEnabled(canWrite && land->count() > 0);
-    harvest->setEnabled(canWrite && land->count() > 0);
-    clean->setEnabled(canWrite && land->count() > 0);
-    reward->setEnabled(canWrite);
-    mail->setEnabled(ready);
-    again->setEnabled(!api->isConnected() && !api->isBusy());
-    exitBtn->setEnabled(!api->isBusy());
-    retry->setVisible(api->hasUnconfirmed());
-    retry->setEnabled(ready);
+    // 设置任务列表
+    QString taskText = QString("第 %1 章\n").arg(s.chapter);
+    for (Task t : s.tasks)
+        taskText += QString("%1：%2/%3\n").arg(t.label).arg(t.current).arg(t.target);
+    tasks->setText(taskText);
+
+    // 断线或请求未结束阻止操作
+    bool canUse = api->online() && !api->working();
+    mail->setEnabled(canUse);
+    friendsBtn->setEnabled(canUse);
+    reload->setEnabled(canUse);
+    buy->setEnabled(canUse && crop->count() > 0);
+    buy2->setEnabled(canUse);
+    sell->setEnabled(canUse && crop->count() > 0);
+    plant->setEnabled(canUse && crop->count() > 0 && land->count() > 0);
+    feed->setEnabled(canUse);
+    harvest->setEnabled(canUse);
+    clean->setEnabled(canUse);
+    reward->setEnabled(canUse);
+    exitBtn->setEnabled(!api->working());
 }
