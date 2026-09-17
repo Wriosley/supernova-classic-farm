@@ -162,13 +162,13 @@ void FarmWindow::refresh()
         .arg(s.coins).arg(s.fertilizer).arg(api->price()));
 
     // 重新填下拉框前记住所选作物
+    int cropId = crop->currentData().toInt(); //先存下当前index防止后续刷新弹回第一项
+    crop->blockSignals(true);
+    crop->clear();
     if(crop->count()==0){
         for (Crop item : s.shop)
             crop->addItem(item.name, item.id);
     }
-    int cropId = crop->currentData().toInt(); //先存下当前index防止后续刷新弹回第一项
-    crop->blockSignals(true);
-    crop->clear();
     int index = crop->findData(cropId);
     if (index >= 0) crop->setCurrentIndex(index);
     crop->blockSignals(false);
@@ -214,7 +214,9 @@ void FarmWindow::refresh()
         item->setData(Qt::UserRole, p.id); //存一下地块ID到田地选项中
         land->addItem(item);
     }
-    land->setCurrentRow(row);
+
+    // 一开始row是-1,这样会让下选框没选任何一项
+    land->setCurrentRow(row > 0 ? row : 0);
 
     // 设置任务列表
     QString taskText = QString("第 %1 章\n").arg(s.chapter);

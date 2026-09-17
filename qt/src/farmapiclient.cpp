@@ -269,6 +269,7 @@ void FarmApiClient::send(QString id, QString title, QString content)
     req.setTransferTimeout(10000);
     QJsonObject body{{"title", title}, {"content", content}};
     QNetworkReply *reply = http.post(req, QJsonDocument(body).toJson());
+    
     connect(reply, &QNetworkReply::finished, this, [this, reply] {
         QJsonObject result = QJsonDocument::fromJson(reply->readAll()).object();
         QString code = result.value("code").toString();
@@ -286,8 +287,7 @@ void FarmApiClient::send(QString id, QString title, QString content)
     });
 }
 
-// 处理WebSocket从后端接受的信息
-
+// 处理WebSocket从后端接受的信息,存到FarmApiClient类变量中
 void FarmApiClient::message(QString text)
 {
     // 读WebSocket 服务器返回的JSON对象

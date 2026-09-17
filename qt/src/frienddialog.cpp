@@ -157,7 +157,7 @@ FriendDialog::FriendDialog(FarmApiClient *client, QWidget *parent)
         int row = land->currentRow();
         farmId = id;
         land->clear();
-
+        
         for (Plot p : plots) {
             QString text = "空地";
             QString status = p.status;
@@ -183,7 +183,7 @@ FriendDialog::FriendDialog(FarmApiClient *client, QWidget *parent)
             item->setData(Qt::UserRole + 4, p.fertilized);
             land->addItem(item);
         }
-        land->setCurrentRow(row);
+        land->setCurrentRow(row>0?row:0);
         refresh();
     });
 
@@ -213,7 +213,8 @@ void FriendDialog::refresh()
         if (seconds > 0) {
             text = QString("%1 号地：%2，生长中，剩余 %3 秒")
                 .arg(item->data(Qt::UserRole).toInt())
-                .arg(item->data(Qt::UserRole + 3).toString()).arg(seconds);
+                .arg(item->data(Qt::UserRole + 3).toString())
+                .arg(seconds);
         } else {
             item->setData(Qt::UserRole + 1, "MATURE");
             text = QString("%1 号地：%2，已成熟")
